@@ -7,27 +7,19 @@
     "exchange_rate": [
         {
             "date": "0001-01-01 00:00:00",
-            "rate":200000
+            "rate":500
         },
         {
             "date": "2017-04-30 13:01:00",
-            "rate":300000
-        },
-        {
-            "date": "2017-04-30 23:21:00",
-            "rate":100000
-        },
-        {
-            "date": "2017-05-01 00:54:00",
-            "rate":400000
+            "rate":400
         }
     ],
     "monitor": {
         "check_period": 20
     },
     "node": {
-        "rpc_address": "127.0.0.1:7430",
-        "wallet_path": ""
+        "rpc_address": "127.0.0.1:6430",
+        "wallet_path": "/Users/heaven/.skycoin/wallets/skycoin-ico.wlt"
     },
     "deposit_coin": "bitcoin",
     "ico_coin": "skycoin"

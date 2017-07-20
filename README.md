@@ -39,14 +39,21 @@ The config.json file is located in the folder of `$GOPATH/src/github.com/skycoin
     "dial_timeout": 5,
     "ping_timeout": 5,
     "pong_timeout": 10,
-    "exchange_rate": 2500,
+    "exchange_rate": [
+        {
+            "date": "0001-01-01 00:00:00",
+            "rate":2500
+        },
+    ],
     "monitor": {
         "check_period": 20
     },
     "node": {
         "rpc_address": "127.0.0.1:7430",
         "wallet_path": "/skycoin/wallets/skycoin.wlt"
-    }
+    },
+    "deposit_coin": "bitcoin",
+    "ico_coin": "skycoin",
 }
 ```
 
