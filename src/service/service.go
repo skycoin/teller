@@ -24,7 +24,7 @@ const (
 	pongTimeout   = 10 * time.Second
 	dialTimeout   = 5 * time.Second
 
-	monitorCheckPeriod = 30 * time.Second
+	scanPeriod = 30 * time.Second
 
 	nodeRPCAddr = "127.0.0.1:7430"
 	nodeWltFile = ".skycoin/wallets/skycoin.wlt"
@@ -62,7 +62,7 @@ type config struct {
 	PongTimeout   time.Duration
 	DialTimeout   time.Duration
 
-	MonitorCheckPeriod time.Duration // monitor check period
+	ScanPeriod time.Duration // scan period
 
 	NodeRPCAddr  string // node's rpc address
 	NodeWltFile  string // ico coin's wallet path
@@ -89,15 +89,15 @@ func New(proxyAddr string, auth *daemon.Auth, db *bolt.DB, ops ...Option) (*Serv
 		reqc:      make(chan func(), 1),
 		log:       logger.NewLogger("", false),
 		cfg: config{
-			ReconnectTime:      reconnectTime,
-			PingTimeout:        pingTimeout,
-			PongTimeout:        pongTimeout,
-			DialTimeout:        dialTimeout,
-			MonitorCheckPeriod: monitorCheckPeriod,
-			NodeRPCAddr:        nodeRPCAddr,
-			NodeWltFile:        filepath.Join(cur.HomeDir, nodeWltFile),
-			DepositCoin:        depositCoin,
-			ICOCoin:            icoCoin,
+			ReconnectTime: reconnectTime,
+			PingTimeout:   pingTimeout,
+			PongTimeout:   pongTimeout,
+			DialTimeout:   dialTimeout,
+			ScanPeriod:    scanPeriod,
+			NodeRPCAddr:   nodeRPCAddr,
+			NodeWltFile:   filepath.Join(cur.HomeDir, nodeWltFile),
+			DepositCoin:   depositCoin,
+			ICOCoin:       icoCoin,
 		},
 	}
 
@@ -112,7 +112,7 @@ func New(proxyAddr string, auth *daemon.Auth, db *bolt.DB, ops ...Option) (*Serv
 		db:          db,
 		log:         s.log,
 		rateTable:   s.cfg.ExchangeRate,
-		checkPeriod: s.cfg.MonitorCheckPeriod,
+		checkPeriod: s.cfg.ScanPeriod,
 		nodeRPCAddr: s.cfg.NodeRPCAddr,
 		nodeWltFile: s.cfg.NodeWltFile,
 		depositCoin: s.cfg.DepositCoin,

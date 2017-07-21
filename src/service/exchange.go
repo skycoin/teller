@@ -51,7 +51,7 @@ type exchgConfig struct {
 	db          *bolt.DB
 	log         logger.Logger
 	rateTable   rateTable
-	checkPeriod time.Duration // monitor check period
+	checkPeriod time.Duration // scan period
 	nodeRPCAddr string        // the rpc address of node
 	nodeWltFile string        // the fullpath of specific wallet file
 	depositCoin string        // deposit coin name

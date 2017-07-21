@@ -61,14 +61,14 @@ type DepositValue struct {
 }
 
 // New creates scanner instance
-func New(cfg Config, btcrpcclient Btcrpcclient) (*Scanner, error) {
+func New(cfg Config, log logger.Logger, btcrpcclient Btcrpcclient) (*Scanner, error) {
 	s, err := newStore(cfg.DB)
 	if err != nil {
 		return nil, err
 	}
 	return &Scanner{
 		btcrpcclt: btcrpcclient,
-		Logger:    cfg.Log,
+		Logger:    log,
 		cfg:       cfg,
 		store:     s,
 		depositC:  make(chan DepositValue, cfg.DepositChanBufsize),

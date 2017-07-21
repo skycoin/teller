@@ -21,17 +21,19 @@ type Config struct {
 	PingTimeout   time.Duration `json:"ping_timeout"`
 	PongTimeout   time.Duration `json:"pong_timeout"`
 
-	Monitor Monitor `json:"monitor"`
-	Node    Node    `json:"node"`
+	Node Node `json:"node"`
 
 	ExchangeRate []ExchangeRate `json:"exchange_rate"`
 
 	DepositCoin string `json:"deposit_coin"`
 	ICOCoin     string `json:"ico_coin"`
+
+	Btcscan Btcscan `json:"btc_scan"`
+	Btcrpc  Btcrpc  `json:"btc_rpc"`
 }
 
-// Monitor represents  monitor related config
-type Monitor struct {
+// Btcscan config for scanner
+type Btcscan struct {
 	CheckPeriod time.Duration `json:"check_period"`
 }
 
@@ -61,4 +63,12 @@ func New(path string) (*Config, error) {
 type ExchangeRate struct {
 	Date string  `json:"date"`
 	Rate float64 `json:"rate"`
+}
+
+// Btcrpc config for btcrpc
+type Btcrpc struct {
+	Server string `json:"server"`
+	User   string `json:"user"`
+	Pass   string `json:"pass"`
+	Cert   string `json:"cert"`
 }

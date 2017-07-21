@@ -98,11 +98,10 @@ func TestScannerRun(t *testing.T) {
 	}
 
 	s, err := New(Config{
-		Log:                log,
 		DB:                 db,
 		ScanPeriod:         5,
 		DepositChanBufsize: 100,
-	}, rpcclient)
+	}, log, rpcclient)
 
 	require.Nil(t, err)
 

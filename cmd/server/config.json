@@ -14,13 +14,19 @@
             "rate":400
         }
     ],
-    "monitor": {
-        "check_period": 20
-    },
     "node": {
         "rpc_address": "127.0.0.1:6430",
         "wallet_path": "/Users/heaven/.skycoin/wallets/skycoin-ico.wlt"
     },
     "deposit_coin": "bitcoin",
-    "ico_coin": "skycoin"
+    "ico_coin": "skycoin",
+    "btc_scan": {
+        "check_period": 20
+    },
+    "btc_rpc": {
+        "server": "127.0.0.1:8334",
+        "user": "",
+        "pass": "",
+        "cert": "path to cert file"
+    }
 }

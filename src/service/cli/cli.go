@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -62,7 +63,7 @@ func (c *Cli) Send(recvAddr string, amount int64) (string, error) {
 	}
 
 	if err := json.NewDecoder(bytes.NewReader(v)).Decode(&rlt); err != nil {
-		return "", fmt.Errorf("Cli send command failed, err: %s", string(v))
+		return "", errors.New(string(v))
 	}
 
 	return rlt.Txid, nil
