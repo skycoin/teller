@@ -44,11 +44,11 @@ func newStore(db *bolt.DB) (*store, error) {
 // lastScanBlock struct in bucket
 type lastScanBlock struct {
 	Hash   string
-	Height int32
+	Height int64
 }
 
 // getLastScanBlock returns the last scanned block hash and height
-func (s *store) getLastScanBlock() (string, int32, error) {
+func (s *store) getLastScanBlock() (string, int64, error) {
 	var lsb lastScanBlock
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(scanMetaBkt)
@@ -66,15 +66,6 @@ func (s *store) getLastScanBlock() (string, int32, error) {
 	}); err != nil {
 		return "", 0, err
 	}
-
-	// if lsb.Hash == "" && lsb.Height == 0 {
-	// 	return "", 0, nil
-	// }
-
-	// hash, err := chainhash.NewHashFromStr(lsb.Hash)
-	// if err != nil {
-	// 	return nil, 0, err
-	// }
 
 	return lsb.Hash, lsb.Height, nil
 }

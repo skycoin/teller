@@ -5,6 +5,7 @@ import (
 	"math/rand"
 	"os"
 	"testing"
+	"time"
 
 	"encoding/json"
 
@@ -13,6 +14,7 @@ import (
 )
 
 func setupDB(t *testing.T) (*bolt.DB, func()) {
+	rand.Seed(int64(time.Now().Second()))
 	f := fmt.Sprintf("test%d.db", rand.Intn(1024))
 	db, err := bolt.Open(f, 0700, nil)
 	require.Nil(t, err)
@@ -46,7 +48,7 @@ func TestGetLastScanBlock(t *testing.T) {
 	hash, height, err := s.getLastScanBlock()
 	require.Nil(t, err)
 	require.Equal(t, "", hash)
-	require.Equal(t, int32(0), height)
+	require.Equal(t, int64(0), height)
 
 	scanBlock := lastScanBlock{
 		Hash:   "00000000000004509071260531df744090422d372d706cee907b2b5f2be8b8ff",

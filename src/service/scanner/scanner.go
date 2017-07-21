@@ -4,9 +4,9 @@
 package scanner
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 
 	"time"
 
@@ -17,11 +17,22 @@ import (
 	"github.com/skycoin/teller/src/logger"
 )
 
+var (
+	errBlockNotFound = errors.New("Block not found")
+)
+
+// Btcrpcclient rpcclient interface
+type Btcrpcclient interface {
+	GetBestBlock() (*chainhash.Hash, int32, error)
+	GetBlockVerboseTx(blockHash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
+	Shutdown()
+}
+
 // Scanner blockchain scanner to check if there're deposit coins
 type Scanner struct {
 	logger.Logger
 	cfg       Config
-	btcrpcclt *btcrpcclient.Client
+	btcrpcclt Btcrpcclient
 	store     *store
 	depositC  chan DepositValue // deposit value channel
 	quit      chan struct{}
@@ -32,52 +43,42 @@ type Config struct {
 	Log logger.Logger
 	DB  *bolt.DB
 
-	RPCServer          string // btcd rpc server address
-	RPCUser            string // btcd rpc user
-	RPCPass            string // btcd rpc pass
-	CertPath           string // cert file path
-	ScanPeriod         int64  // scan period in seconds
-	DepositChanBufsize int32  // deposit channel buffer size
+	// RPCServer          string // btcd rpc server address
+	// RPCUser            string // btcd rpc user
+	// RPCPass            string // btcd rpc pass
+	// CertPath           string // cert file path
+	ScanPeriod         int64 // scan period in seconds
+	DepositChanBufsize int32 // deposit channel buffer size
 }
 
 // DepositValue struct
 type DepositValue struct {
 	Address string  // deposit address
 	Value   float64 // deposit coins
+	Height  int64   // the block height
 	Tx      string  // the transaction id
 	N       uint32  // the index of vout in the tx
 }
 
 // New creates scanner instance
-func New(cfg Config) (*Scanner, error) {
+func New(cfg Config, btcrpcclient Btcrpcclient) (*Scanner, error) {
 	s, err := newStore(cfg.DB)
 	if err != nil {
 		return nil, err
 	}
 	return &Scanner{
-		Logger:   cfg.Log,
-		cfg:      cfg,
-		store:    s,
-		depositC: make(chan DepositValue, cfg.DepositChanBufsize),
-		quit:     make(chan struct{}),
+		btcrpcclt: btcrpcclient,
+		Logger:    cfg.Log,
+		cfg:       cfg,
+		store:     s,
+		depositC:  make(chan DepositValue, cfg.DepositChanBufsize),
+		quit:      make(chan struct{}),
 	}, nil
 }
 
 // Run starts the scanner
 func (scan *Scanner) Run() error {
 	scan.Println("Bitcoin blockchain scanner start...")
-
-	// connect to btcd
-	var err error
-	scan.btcrpcclt, err = connectBTCD(scan.cfg.RPCServer,
-		scan.cfg.RPCUser,
-		scan.cfg.RPCPass,
-		scan.cfg.CertPath)
-	if err != nil {
-		return fmt.Errorf("Connect to btcd failed: %v", err)
-	}
-
-	scan.Println("Connect to btcd success")
 
 	// get last scan block
 	hash, height, err := scan.getLastScanBlock()
@@ -95,12 +96,14 @@ func (scan *Scanner) Run() error {
 			return err
 		}
 
+		hash = block.Hash
+
 		if err := scan.scanBlock(block); err != nil {
 			return fmt.Errorf("Scan block %s failed: %v", block.Hash, err)
 		}
 	}
 
-	errC := make(chan error)
+	errC := make(chan error, 1)
 	go func() {
 		for {
 			nxtBlock, err := scan.getNextBlock(hash)
@@ -117,6 +120,9 @@ func (scan *Scanner) Run() error {
 
 			block = nxtBlock
 			hash = block.Hash
+			height = block.Height
+
+			scan.Printf("scan height: %v hash:%s\n", height, hash)
 			if err := scan.scanBlock(block); err != nil {
 				errC <- fmt.Errorf("Scan block %s failed: %v", block.Hash, err)
 				return
@@ -142,12 +148,19 @@ func (scan *Scanner) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 	for _, dv := range dvs {
 		select {
 		case scan.depositC <- dv:
+			// scan.Println("push dv:", dv)
 		case <-scan.quit:
 			// scanner was closed
 			return nil
 		}
 	}
-	return nil
+
+	hash, err := chainhash.NewHashFromStr(block.Hash)
+	if err != nil {
+		return err
+	}
+
+	return scan.setLastScanBlock(hash, block.Height)
 }
 
 // scanBlock scan the given block and returns the next block hash or error
@@ -159,12 +172,15 @@ func scanBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) []De
 
 	var dv []DepositValue
 	for _, tx := range block.RawTx {
+		// fmt.Println("tx:", tx.Txid)
 		for _, v := range tx.Vout {
 			for _, a := range v.ScriptPubKey.Addresses {
+				// fmt.Println("\taddr:", a)
 				if _, ok := addrMap[a]; ok {
 					dv = append(dv, DepositValue{
 						Address: a,
 						Value:   v.Value,
+						Height:  block.Height,
 						Tx:      tx.Txid,
 						N:       v.N,
 					})
@@ -189,12 +205,12 @@ func (scan *Scanner) getBestBlock() (*btcjson.GetBlockVerboseResult, error) {
 		return nil, err
 	}
 
-	return scan.btcrpcclt.GetBlockVerbose(hash)
+	return scan.getBlock(hash)
 }
 
 // getBlock returns block of given hash
 func (scan *Scanner) getBlock(hash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error) {
-	return scan.btcrpcclt.GetBlockVerbose(hash)
+	return scan.btcrpcclt.GetBlockVerboseTx(hash)
 }
 
 // getNextBlock returns the next block of given hash, return nil if next block does not exist
@@ -213,26 +229,16 @@ func (scan *Scanner) getNextBlock(hash string) (*btcjson.GetBlockVerboseResult, 
 		return nil, nil
 	}
 
-	nextHash, err := chainhash.NewHashFromStr(b.NextHash)
+	nxtHash, err := chainhash.NewHashFromStr(b.NextHash)
 	if err != nil {
 		return nil, err
 	}
 
-	return scan.getBlock(nextHash)
+	return scan.getBlock(nxtHash)
 }
 
-// getNextBlockByHashStr returns next block of given block hash string
-// func (scan *Scanner) getNextBlockByHashStr(hash string) (*btcjson.GetBlockVerboseResult, error) {
-// 	h, err := chainhash.NewHashFromStr(hash)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return scan.getNextBlock(h)
-// }
-
 // setLastScanBlock sets the last scan block hash and height
-func (scan *Scanner) setLastScanBlock(hash *chainhash.Hash, height int32) error {
+func (scan *Scanner) setLastScanBlock(hash *chainhash.Hash, height int64) error {
 	return scan.store.setLastScanBlock(lastScanBlock{
 		Hash:   hash.String(),
 		Height: height,
@@ -240,7 +246,7 @@ func (scan *Scanner) setLastScanBlock(hash *chainhash.Hash, height int32) error 
 }
 
 // getLastScanBlock returns the last scanned block hash and height
-func (scan *Scanner) getLastScanBlock() (string, int32, error) {
+func (scan *Scanner) getLastScanBlock() (string, int64, error) {
 	return scan.store.getLastScanBlock()
 }
 
@@ -255,14 +261,15 @@ func (scan *Scanner) Shutdown() {
 	close(scan.quit)
 }
 
-func connectBTCD(server, user, pass, certPath string) (*btcrpcclient.Client, error) {
+// ConnectBTCD connects to the btcd rpcserver
+func ConnectBTCD(server, user, pass, certPath string) (*btcrpcclient.Client, error) {
 	// connect to the btcd
 	certs, err := ioutil.ReadFile(certPath)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	connCfg := &btcrpcclient.ConnConfig{
-		Host:         "localhost:8334",
+		Host:         server,
 		Endpoint:     "ws",
 		User:         user,
 		Pass:         pass,
