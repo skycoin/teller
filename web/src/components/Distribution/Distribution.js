@@ -30,6 +30,10 @@ const Wrapper = styled.div`
   `}
 `;
 
+const Address = styled.div`
+  word-break: break-all;
+`;
+
 class Distribution extends React.Component {
   constructor() {
     super();
@@ -129,7 +133,7 @@ class Distribution extends React.Component {
             </Heading>
 
             <Heading as="p" color="black" fontSize={[2, 3]} my={[3, 5]}>
-              {this.state.btcAddress}
+              <Address>{this.state.btcAddress}</Address>
             </Heading>
           </Modal>
 
