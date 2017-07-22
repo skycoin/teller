@@ -97,7 +97,7 @@ func TestScannerRun(t *testing.T) {
 		Height: 235205,
 	}
 
-	s, err := New(Config{
+	s, err := NewService(Config{
 		DB:                 db,
 		ScanPeriod:         5,
 		DepositChanBufsize: 100,
@@ -105,14 +105,17 @@ func TestScannerRun(t *testing.T) {
 
 	require.Nil(t, err)
 
-	s.AddDepositAddress("1ATjE4kwZ5R1ww9SEi4eseYTCenVgaxPWu")
-	s.AddDepositAddress("1EYQ7Fnct6qu1f3WpTSib1UhDhxkrww1WH")
-	s.AddDepositAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
+	scr := NewScanner(s)
+
+	scr.AddDepositAddress("1ATjE4kwZ5R1ww9SEi4eseYTCenVgaxPWu")
+	scr.AddDepositAddress("1EYQ7Fnct6qu1f3WpTSib1UhDhxkrww1WH")
+	scr.AddDepositAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
+
 	go func() { require.Nil(t, s.Run()) }()
 
 	var i int
 	go func() {
-		for dv := range s.depositC {
+		for dv := range scr.GetDepositValue() {
 			i++
 			fmt.Println("get deposit:", dv)
 		}

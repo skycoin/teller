@@ -1,4 +1,4 @@
-// Package sender is the ico coin sender
+// Package sender provids send service for skycoin
 package sender
 
 import (
