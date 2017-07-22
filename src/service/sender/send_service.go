@@ -18,14 +18,13 @@ const sendCoinCheckTime = 3 * time.Second
 type Request struct {
 	Coins   int64            // coin number
 	Address string           // recv address
-	AckC    chan interface{} // ack
+	RspC    chan interface{} // response
 }
 
 // SendService is in charge of sending skycoin
 type SendService struct {
 	logger.Logger
-	cfg Config
-	// skycli  *cli.Cli
+	cfg     Config
 	skycli  skyclient
 	quit    chan struct{}
 	reqChan chan Request
@@ -57,14 +56,14 @@ func NewService(cfg Config, log logger.Logger, skycli skyclient) *SendService {
 
 // Run start the send service
 func (s *SendService) Run() error {
-	errC := make(chan error, 1)
 	go func() {
+		defer s.Println("Send service exit")
 		for {
 			select {
 			case req := <-s.reqChan:
 				// verify the request
 				if err := verifyRequest(req); err != nil {
-					s.Debugln("Invalid request:", err)
+					req.RspC <- sendRsp{err: fmt.Sprintf("Invalid request: %v", err)}
 					continue
 				}
 
@@ -76,7 +75,7 @@ func (s *SendService) Run() error {
 						if err == ErrServiceClosed {
 							// tx should be confirmed before shutdown
 							if txid != "" {
-								req.AckC <- txid
+								req.RspC <- sendRsp{txid: txid}
 							}
 							return
 						}
@@ -93,17 +92,18 @@ func (s *SendService) Run() error {
 							ok, err := s.isTxConfirmed(txid)
 							if err != nil {
 								s.Debugln(err)
+								time.Sleep(sendCoinCheckTime)
 								continue
 							}
 
 							if ok {
-								req.AckC <- txid
+								req.RspC <- sendRsp{txid: txid}
 								break sendLoop
 							}
 							time.Sleep(sendCoinCheckTime)
 						}
 					}
-					req.AckC <- txid
+					req.RspC <- sendRsp{txid: txid}
 					s.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
 					break
 				}
@@ -111,12 +111,8 @@ func (s *SendService) Run() error {
 		}
 	}()
 
-	select {
-	case err := <-errC:
-		return err
-	case <-s.quit:
-		return nil
-	}
+	<-s.quit
+	return nil
 }
 
 func verifyRequest(req Request) error {
@@ -159,13 +155,13 @@ func (s *SendService) sendCoin(addr string, coins int64) (string, error) {
 
 	select {
 	case err := <-errC:
-		return "", err
+		return txid, err
 	case <-okC:
 		return txid, nil
 	case <-s.quit:
 		// wait until the transaction is confirmed, otherwise the
 		<-okC
-		return "", ErrServiceClosed
+		return txid, ErrServiceClosed
 	}
 }
 

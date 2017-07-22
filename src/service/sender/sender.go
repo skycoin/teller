@@ -28,13 +28,18 @@ type SendOption struct {
 	Timeout time.Duration
 }
 
+type sendRsp struct {
+	err  string
+	txid string
+}
+
 // SendAsync send coins to dest address, should return immediately or timeout
 func (s *Sender) SendAsync(destAddr string, coins int64, opt *SendOption) (<-chan interface{}, error) {
-	ackC := make(chan interface{}, 1)
+	rspC := make(chan interface{}, 1)
 	req := Request{
 		Address: destAddr,
 		Coins:   coins,
-		AckC:    ackC,
+		RspC:    rspC,
 	}
 
 	timeout := time.Minute
@@ -45,10 +50,9 @@ func (s *Sender) SendAsync(destAddr string, coins int64, opt *SendOption) (<-cha
 	select {
 	case s.s.reqChan <- req:
 	case <-time.After(timeout):
-		return ackC, ErrSendBufferFull
-	case <-s.s.quit:
+		return rspC, ErrSendBufferFull
 	}
-	return ackC, nil
+	return rspC, nil
 }
 
 // Send send coins to dest address, won't return until the tx is confirmed
@@ -58,10 +62,11 @@ func (s *Sender) Send(destAddr string, coins int64, opt *SendOption) (string, er
 		return "", err
 	}
 
-	select {
-	case v := <-c:
-		return v.(string), nil
-	case <-s.s.quit:
-		return "", ErrServiceClosed
+	rsp := (<-c).(sendRsp)
+
+	if rsp.err != "" {
+		return "", errors.New(rsp.err)
 	}
+
+	return rsp.txid, nil
 }
