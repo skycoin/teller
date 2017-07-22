@@ -3,8 +3,6 @@ package daemon
 import (
 	"context"
 	"net"
-
-	"github.com/golang/glog"
 )
 
 // worker has one conn channel to recve the new coming connection,
@@ -32,22 +30,19 @@ func (w *worker) run(cxt context.Context, auth *Auth, mux *Mux, solicited bool) 
 		case <-cxt.Done():
 			return
 		case conn := <-w.c:
-			if err := w.process(cxt, conn, auth, mux, solicited); err != nil {
-				glog.Info("11", err)
-				select {
-				case w.wc <- w:
-				default:
-				}
+			if err := w.process(conn, auth, mux, solicited); err != nil {
+				// put this worker back to channel
+				w.wc <- w
 			}
 		}
 	}
 }
 
-func (w *worker) process(cxt context.Context, conn net.Conn, auth *Auth, mux *Mux, solicited bool) error {
+func (w *worker) process(conn net.Conn, auth *Auth, mux *Mux, solicited bool) error {
 	s, err := NewSession(conn, auth, mux, solicited)
 	if err != nil {
 		return err
 	}
 
-	return s.Run(cxt)
+	return s.Run()
 }

@@ -1,7 +1,6 @@
 package daemon
 
 import (
-	"context"
 	"errors"
 	"net"
 	"time"
@@ -100,23 +99,27 @@ func NewSession(conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Opti
 }
 
 // Run starts the session process loop
-func (sn *Session) Run(cxt context.Context) error {
-	// defer close the q to notify that this session is done.
-	defer close(sn.quit)
+func (sn *Session) Run() error {
 	msgChan := make(chan Messager)
 	errC := make(chan error, 1)
+
 	go func() {
 		// read message loop
 		defer sn.log.Debugln("Exit read message loop")
 		for {
 			msg, err := sn.ts.Read()
 			if err != nil {
+				// check if read fail was caused by session close
 				select {
-				case errC <- err:
-				case <-time.After(5 * time.Second):
+				case <-sn.quit:
+					return
+				default:
 				}
+
+				errC <- err
 				return
 			}
+
 			select {
 			case msgChan <- msg:
 			case <-time.After(5 * time.Second):
@@ -126,11 +129,12 @@ func (sn *Session) Run(cxt context.Context) error {
 		}
 	}()
 
+	// start the session subscribe id generator
 	go func() {
 		i := 1
 		for {
 			select {
-			case <-cxt.Done():
+			case <-sn.quit:
 				return
 			case sn.idGenC <- i:
 				i++
@@ -138,9 +142,10 @@ func (sn *Session) Run(cxt context.Context) error {
 			}
 		}
 	}()
+
 	for {
 		select {
-		case <-cxt.Done():
+		case <-sn.quit:
 			return nil
 		case err := <-errC:
 			sn.log.Debugln(err)
@@ -169,10 +174,11 @@ func (sn *Session) Run(cxt context.Context) error {
 
 // Close cancel the session
 func (sn *Session) Close() {
+	close(sn.quit)
+
 	if err := sn.ts.Close(); err != nil {
 		sn.log.Println(err)
 	}
-	<-sn.quit
 }
 
 // Write push the message into write channel.

@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -16,6 +15,8 @@ import (
 	"github.com/skycoin/teller/src/service/cli"
 	gconfig "github.com/skycoin/teller/src/service/config"
 	"github.com/skycoin/teller/src/service/monitor"
+	"github.com/skycoin/teller/src/service/scanner"
+	"github.com/skycoin/teller/src/service/sender"
 )
 
 var (
@@ -24,13 +25,27 @@ var (
 	unconfirmedTxsBktName = []byte("unconfirmed_txs")
 )
 
+// skySender provids apis for sending skycoin
+type skySender interface {
+	SendAsync(destAddr string, coins int64, opt *sender.SendOption) (<-chan interface{}, error)
+	Send(destAddr string, coins int64, opt *sender.SendOption) (string, error)
+}
+
+// skyScanner provids apis for interact with scan service
+type btcScanner interface {
+	AddDepositAddress(addr string) error
+	GetDepositValue() <-chan scanner.DepositValue
+}
+
 type exchange struct {
 	*exchgConfig
-	monitor          *monitor.Monitor
+	scanner          btcScanner // scanner provides apis to interact with scan service
+	sender           skySender  // sender provides apis to send skycoin
 	coinValue        *coinValueBucket
 	exchangeLogs     *exchangeLogBucket
 	unconfirmedTxids *unconfirmedTxids
 	cli              *cli.Cli
+	quit             chan struct{}
 }
 
 type coinValue struct {
@@ -64,70 +79,82 @@ func newExchange(cfg *exchgConfig) *exchange {
 		exchangeLogs:     newExchangeLogBucket(exchangeLogBktName, cfg.db),
 		unconfirmedTxids: newUnconfirmedTxids(unconfirmedTxsBktName, cfg.db),
 		exchgConfig:      cfg,
+		quit:             make(chan struct{}),
 	}
-	ex.monitor = monitor.New(cfg.depositCoin, ex,
-		monitor.Logger(cfg.log),
-		monitor.CheckPeriod(cfg.checkPeriod))
-	ex.cli = cli.New(cfg.nodeWltFile, cfg.nodeRPCAddr)
+	// ex.monitor = monitor.New(cfg.depositCoin, ex,
+	// 	monitor.Logger(cfg.log),
+	// 	monitor.CheckPeriod(cfg.checkPeriod))
+	// ex.cli = cli.New(cfg.nodeWltFile, cfg.nodeRPCAddr)
 	return ex
 }
 
 // Run starts the exchange process
-func (ec *exchange) Run(cxt context.Context) (errC chan error) {
-	errC = make(chan error, 1)
-	eventC := ec.monitor.Run(cxt)
+func (ec *exchange) Run() error {
+	errC := make(chan error, 1)
 
-	go func() {
-		defer ec.log.Debugln("Exchange exit")
-		for {
-			select {
-			case <-cxt.Done():
-				return
-			case e := <-eventC:
-				if err := ec.eventHandler(e); err != nil {
-					errC <- err
-					return
-				}
-			case <-time.After(8 * time.Second):
-				var toRemove []struct {
-					Txid  string
-					Logid int
-				}
-				if err := ec.unconfirmedTxids.forEach(func(txid string, logid int) {
-					// check if this transaction has been executed
-					tx, err := ec.cli.GetTransaction(txid)
-					if err != nil {
-						ec.log.Println("Get transaction failed, err:", err)
-						return
-					}
-					if tx.Transaction.Status.Confirmed {
-						ec.log.Printf("Tx %s is executed\n", txid)
-						toRemove = append(toRemove, struct {
-							Txid  string
-							Logid int
-						}{txid, logid})
-					}
-				}); err != nil {
-					ec.log.Println(err)
-					continue
-				}
+	for {
+		select {
+		case dv := <-ec.scanner.GetDepositValue():
+			// TODO: persist the deposit value so that when restart the service,
+			// can resend skycoins
 
-				for _, item := range toRemove {
-					// update the exchange log's tx status
-					if err := ec.exchangeLogs.update(item.Logid, func(log *daemon.ExchangeLog) {
-						log.Tx.Confirmed = true
-					}); err != nil {
-						ec.log.Println(err)
-					}
-
-					if err := ec.unconfirmedTxids.delete(item.Txid); err != nil {
-						ec.log.Println(err)
-					}
-				}
-			}
+			// send skycoins
+			// get binded skycoin address
 		}
-	}()
-	return
+	}
+
+	// eventC := ec.monitor.Run(cxt)
+
+	// go func() {
+	// defer ec.log.Debugln("Exchange exit")
+
+	// for {
+	// 	select {
+	// 	case dv := <-ec.scanner.GetDepositValue():
+	// 		if err := ec.eventHandler(e); err != nil {
+	// 			errC <- err
+	// 			return
+	// 		}
+	// 	case <-time.After(8 * time.Second):
+	// 		var toRemove []struct {
+	// 			Txid  string
+	// 			Logid int
+	// 		}
+	// 		if err := ec.unconfirmedTxids.forEach(func(txid string, logid int) {
+	// 			// check if this transaction has been executed
+	// 			tx, err := ec.cli.GetTransaction(txid)
+	// 			if err != nil {
+	// 				ec.log.Println("Get transaction failed, err:", err)
+	// 				return
+	// 			}
+	// 			if tx.Transaction.Status.Confirmed {
+	// 				ec.log.Printf("Tx %s is executed\n", txid)
+	// 				toRemove = append(toRemove, struct {
+	// 					Txid  string
+	// 					Logid int
+	// 				}{txid, logid})
+	// 			}
+	// 		}); err != nil {
+	// 			ec.log.Println(err)
+	// 			continue
+	// 		}
+
+	// 		for _, item := range toRemove {
+	// 			// update the exchange log's tx status
+	// 			if err := ec.exchangeLogs.update(item.Logid, func(log *daemon.ExchangeLog) {
+	// 				log.Tx.Confirmed = true
+	// 			}); err != nil {
+	// 				ec.log.Println(err)
+	// 			}
+
+	// 			if err := ec.unconfirmedTxids.delete(item.Txid); err != nil {
+	// 				ec.log.Println(err)
+	// 			}
+	// 		}
+	// 	}
+	// }
+	// }()
+	return nil
 }
 
 func (ec *exchange) AddMonitor(cv coinValue) error {

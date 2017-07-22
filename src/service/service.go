@@ -1,7 +1,6 @@
 package service
 
 import (
-	"context"
 	"errors"
 	"net"
 	"path/filepath"
@@ -40,19 +39,20 @@ var (
 // Service provides the ico service
 type Service struct {
 	log       logger.Logger
-	cfg       config          // service configuration info
-	session   *session        // connection is maintained in session, and when session done, means this connection is done.
-	proxyAddr string          // ico proxy address, format in host:port
-	auth      *daemon.Auth    // records the secrects for authentication,
-	mux       *daemon.Mux     // used for dispatching message to corresponding handler
-	cxt       context.Context // usually it's not recommand to record context as member variable, while in this case,
+	cfg       config       // service configuration info
+	session   *session     // connection is maintained in session, and when session done, means this connection is done.
+	proxyAddr string       // ico proxy address, format in host:port
+	auth      *daemon.Auth // records the secrects for authentication,
+	mux       *daemon.Mux  // used for dispatching message to corresponding handler
+	// cxt       context.Context // usually it's not recommand to record context as member variable, while in this case,
 	// we have to record it here, so that Run method can check it to exist the service loop.
 	reqc chan func() // reqeust function channel, requests go throught this channel can make the accessing of
 	// member variable thread safe.
 	exchange *exchange // exchange is in charge of monitoring deposit coin's balance, and send ico coins to given address.
 	gateway  *gateway  // gateway will be used in message handlers, provides methods to access service's resource
 	// in safe mode, and can also reduce the export methods number of service.
-	wg sync.WaitGroup // for making sure that all goroutine are returned before service exit.
+	wg   sync.WaitGroup // for making sure that all goroutine are returned before service exit.
+	quit chan struct{}
 }
 
 // config records the configurations of the service
@@ -76,16 +76,15 @@ type config struct {
 type Cancel func()
 
 // New creates a ico service
-func New(proxyAddr string, auth *daemon.Auth, db *bolt.DB, ops ...Option) (*Service, Cancel) {
+func New(proxyAddr string, auth *daemon.Auth, db *bolt.DB, ops ...Option) *Service {
 	cur, err := user.Current()
 	if err != nil {
 		panic(err)
 	}
-	cxt, cancel := context.WithCancel(context.Background())
+	// cxt, cancel := context.WithCancel(context.Background())
 	s := &Service{
 		proxyAddr: proxyAddr,
 		auth:      auth,
-		cxt:       cxt,
 		reqc:      make(chan func(), 1),
 		log:       logger.NewLogger("", false),
 		cfg: config{
@@ -99,6 +98,7 @@ func New(proxyAddr string, auth *daemon.Auth, db *bolt.DB, ops ...Option) (*Serv
 			DepositCoin:   depositCoin,
 			ICOCoin:       icoCoin,
 		},
+		quit: make(chan struct{}),
 	}
 
 	for _, op := range ops {
@@ -122,47 +122,57 @@ func New(proxyAddr string, auth *daemon.Auth, db *bolt.DB, ops ...Option) (*Serv
 	s.exchange = newExchange(&cfg)
 
 	bindHandlers(s)
-	return s, func() {
-		cancel()
-		s.wg.Wait()
-	}
+
+	return s
 }
 
 // Run starts the service
-func (s *Service) Run() {
-	s.wg.Add(1)
+func (s *Service) Run() error {
 	go func() {
 		defer func() {
-			s.wg.Done()
 			s.log.Println("Service exit")
 		}()
 
-		// start the btc monitor
-		exchgErrC := s.exchange.Run(s.cxt)
+		// start the exchange
+		exchgErrC := s.exchange.Run()
 
 		errC := make(chan error, 1)
-		s.newSession(errC)
+
+		// session err channel
+		serrC := make(chan error, 1)
+		go func() {
+			serrC <- s.newSession()
+		}()
+
 		for {
 			select {
-			case <-s.cxt.Done():
-				s.log.Debug(s.cxt.Err())
-				s.closeSession()
-				return
 			case err := <-exchgErrC:
 				s.log.Debugln("Exchange error:", err)
 				return
-			case err := <-errC:
+			case err := <-serrC:
 				s.log.Debugln("Session error:", err)
-				time.AfterFunc(s.cfg.ReconnectTime, func() {
-					s.newSession(errC)
-				})
-				continue
+				select {
+				case <-s.quit:
+					// service is closed
+					return
+				case <-time.After(s.cfg.ReconnectTime):
+					go func() {
+						errC <- s.newSession()
+					}()
+					continue
+				}
 			case req := <-s.reqc:
 				req()
 			}
 		}
-
 	}()
+	return nil
+}
+
+// Shutdown close the service
+func (s *Service) Shutdown() {
+	close(s.quit)
+	s.closeSession()
 }
 
 // HandleFunc adds handler for given message type to mux
@@ -170,57 +180,50 @@ func (s *Service) HandleFunc(tp daemon.MsgType, h daemon.Handler) {
 	s.mux.HandleFunc(tp, h)
 }
 
-func (s *Service) newSession(errC chan error) {
-	s.wg.Add(1)
+func (s *Service) newSession() error {
 	s.log.Debugln("New session")
+
+	defer s.log.Debugln("Session closed")
+	s.log.Println("Connect to", s.proxyAddr)
+
+	conn, err := net.DialTimeout("tcp", s.proxyAddr, s.cfg.DialTimeout)
+	if err != nil {
+		return err
+	}
+
+	sn, err := daemon.NewSession(conn, s.auth, s.mux, true, daemon.Logger(s.log))
+	if err != nil {
+		return err
+	}
+
+	s.session = &session{
+		pingTicker: time.NewTicker(s.cfg.PingTimeout),
+		pongTimer:  time.NewTimer(s.cfg.PongTimeout),
+		Session:    sn,
+	}
+
+	errC := make(chan error, 1)
 	go func() {
-		defer func() {
-			s.wg.Done()
-			s.log.Debugln("Session closed")
-		}()
-		s.log.Println("Connect to", s.proxyAddr)
-		conn, err := net.DialTimeout("tcp", s.proxyAddr, s.cfg.DialTimeout)
-		if err != nil {
-			errC <- err
-			return
-		}
-
-		sn, err := daemon.NewSession(conn, s.auth, s.mux, true, daemon.Logger(s.log))
-		if err != nil {
-			errC <- err
-			return
-		}
-
-		s.session = &session{
-			pingTicker: time.NewTicker(s.cfg.PingTimeout),
-			pongTimer:  time.NewTimer(s.cfg.PongTimeout),
-			Session:    sn,
-		}
-		ec := make(chan error, 1)
-		go func() {
-			ec <- s.session.Run(s.cxt)
-		}()
-
-		// send ping message
-		s.sendPing()
-		for {
-			select {
-			case e := <-ec:
-				errC <- e
-				return
-			case <-s.session.pongTimer.C:
-				s.log.Debugln("Pong message time out")
-				s.session.close()
-				errC <- ErrPongTimout
-				return
-			case <-s.session.pingTicker.C:
-				// send ping message
-				s.log.Debugln("Send ping message")
-				s.sendPing()
-			}
-		}
+		errC <- s.session.Run()
 	}()
-	return
+
+	// send ping message
+	s.sendPing()
+
+	for {
+		select {
+		case err := <-errC:
+			return err
+		case <-s.session.pongTimer.C:
+			s.log.Debugln("Pong message time out")
+			s.session.close()
+			return ErrPongTimout
+		case <-s.session.pingTicker.C:
+			// send ping message
+			s.log.Debugln("Send ping message")
+			s.sendPing()
+		}
+	}
 }
 
 func (s *Service) closeSession() {
