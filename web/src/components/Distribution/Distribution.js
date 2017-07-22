@@ -4,8 +4,7 @@ import { rem } from 'polished';
 import { Flex, Box } from 'grid-styled';
 
 import { COLORS, SPACE } from '@skycoin/config';
-import { checkStatus, getAddress } from '../../utils/distributionAPI';
-import { media } from '@skycoin/utils'
+import { media } from '@skycoin/utils';
 import Header from '@skycoin/header';
 import Footer from '@skycoin/footer';
 import Text from '@skycoin/text';
@@ -14,6 +13,8 @@ import Modal, { styles } from '@skycoin/modal';
 import Button from '@skycoin/button';
 import Input from '@skycoin/input';
 import Container from '@skycoin/container';
+
+import { checkStatus, getAddress } from '../../utils/distributionAPI';
 
 const Widget = styled.div`
   background-color: ${COLORS.gray[1]};
@@ -46,7 +47,7 @@ export default class Distribution extends React.Component {
       return alert('Please enter a SKY address');
     }
 
-    getAddress(this.state.skyAddress)
+    return getAddress(this.state.skyAddress)
       .then((res) => {
         this.setState({
           addressIsOpen: true,
@@ -76,7 +77,7 @@ export default class Distribution extends React.Component {
       return alert('Please enter a SKY address');
     }
 
-    checkStatus(this.state.skyAddress)
+    return checkStatus(this.state.skyAddress)
       .then((res) => {
         this.setState({
           statusIsOpen: true,
