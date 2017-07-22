@@ -11,7 +11,7 @@ import zh from 'react-intl/locale-data/zh';
 import ru from 'react-intl/locale-data/ru';
 
 import { COLORS, BREAKPOINTS, SPACE, FONT_SIZES, FLAGS } from '@skycoin/config';
-// import * as locales from 'locales';
+import * as locales from '../../locales';
 
 import Routes from '../Routes';
 
@@ -24,10 +24,8 @@ const theme = {
   fontSizes: FONT_SIZES,
 };
 
-// messages={flatten(locales[locale])}>
-
 const Root = ({ locale, ...props }) => (
-  <IntlProvider locale={locale}>
+  <IntlProvider locale={locale} messages={flatten(locales[locale])}>
     <div>
       <Helmet titleTemplate="%s &middot; Skycoin">
         <html lang={locale} />
