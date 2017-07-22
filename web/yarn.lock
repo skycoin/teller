@@ -2,17 +2,21 @@
 # yarn lockfile v1
 
 
+"@skycoin/base@^0.1.0":
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/@skycoin/base/-/base-0.1.0.tgz#fefd60411e974d3ecf803eeb0dde9d294e7f4b16"
+
 "@skycoin/button@^0.1.1":
   version "0.1.1"
   resolved "https://registry.yarnpkg.com/@skycoin/button/-/button-0.1.1.tgz#9f66ad220dc4da8f9778b2ccc4930b364ddee55b"
 
 "@skycoin/buy-buttons@^0.1.1":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@skycoin/buy-buttons/-/buy-buttons-0.1.1.tgz#7d133d8f4ec632d2701a3c80a7270556179a2d6a"
+  version "0.1.2"
+  resolved "https://registry.yarnpkg.com/@skycoin/buy-buttons/-/buy-buttons-0.1.2.tgz#aefd0bcd25f5f57562b28c957ddd3d30eb7e6003"
 
 "@skycoin/buy@^0.1.0":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@skycoin/buy/-/buy-0.1.1.tgz#ce4691046ddcbec9d4b4f38314df0cdc85a5db92"
+  version "0.1.2"
+  resolved "https://registry.yarnpkg.com/@skycoin/buy/-/buy-0.1.2.tgz#d643685ad028b420f4d5a91bc713a742dac1544b"
 
 "@skycoin/config@^0.1.0":
   version "0.1.0"
@@ -26,21 +30,25 @@
   version "0.1.1"
   resolved "https://registry.yarnpkg.com/@skycoin/footer/-/footer-0.1.1.tgz#c46ae40558603edc4d3425d353df4b781c6b6c11"
 
-"@skycoin/header@^0.1.0":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@skycoin/header/-/header-0.1.1.tgz#e9e45868e892897e58cd4f4a9d68b3d87f809446"
+"@skycoin/header@^0.1.1":
+  version "0.1.2"
+  resolved "https://registry.yarnpkg.com/@skycoin/header/-/header-0.1.2.tgz#6faf7a9cfa5356bdf2afac874cd21271d91de599"
 
 "@skycoin/heading@^0.1.1":
   version "0.1.1"
   resolved "https://registry.yarnpkg.com/@skycoin/heading/-/heading-0.1.1.tgz#17284bce0f197c3885f80c9532c958b219b136ff"
 
+"@skycoin/input@^0.1.1":
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/@skycoin/input/-/input-0.1.1.tgz#95f0e13970ac470fbffbbfb5d33b72b013cdede4"
+
 "@skycoin/link@^0.1.0":
   version "0.1.0"
   resolved "https://registry.yarnpkg.com/@skycoin/link/-/link-0.1.0.tgz#0b668c0e1ce934770ad1a57b270ba5c7b9d5487b"
 
-"@skycoin/logo@^0.1.0":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@skycoin/logo/-/logo-0.1.1.tgz#e4307f1cab2309756bafce52a11d3c414f9160aa"
+"@skycoin/logo@^0.1.1":
+  version "0.1.2"
+  resolved "https://registry.yarnpkg.com/@skycoin/logo/-/logo-0.1.2.tgz#75cd31b9a2cceee5c96c2d7a33fabc30f9f0afbe"
 
 "@skycoin/modal@^0.1.0":
   version "0.1.1"
@@ -1182,11 +1190,11 @@ browserslist@^1.3.6, browserslist@^1.5.2, browserslist@^1.7.6:
     electron-to-chromium "^1.2.7"
 
 browserslist@^2.1.2, browserslist@^2.1.3:
-  version "2.2.0"
-  resolved "https://registry.yarnpkg.com/browserslist/-/browserslist-2.2.0.tgz#5e35ec993e467c6464b8cb708447386891de9f50"
+  version "2.2.1"
+  resolved "https://registry.yarnpkg.com/browserslist/-/browserslist-2.2.1.tgz#709048c57bf3bf9b382105c396a737ad525d948e"
   dependencies:
-    caniuse-lite "^1.0.30000701"
-    electron-to-chromium "^1.3.15"
+    caniuse-lite "^1.0.30000704"
+    electron-to-chromium "^1.3.16"
 
 bser@1.0.2:
   version "1.0.2"
@@ -1292,7 +1300,7 @@ caniuse-db@^1.0.30000529, caniuse-db@^1.0.30000634, caniuse-db@^1.0.30000639:
   version "1.0.30000704"
   resolved "https://registry.yarnpkg.com/caniuse-db/-/caniuse-db-1.0.30000704.tgz#8c5aa6fed8058e65c70f2c1f5d63f7088650705c"
 
-caniuse-lite@^1.0.30000670, caniuse-lite@^1.0.30000701:
+caniuse-lite@^1.0.30000670, caniuse-lite@^1.0.30000704:
   version "1.0.30000704"
   resolved "https://registry.yarnpkg.com/caniuse-lite/-/caniuse-lite-1.0.30000704.tgz#adb6ea01134515663682db93abab291d4c02946b"
 
@@ -2043,7 +2051,7 @@ ee-first@1.1.1:
   version "1.1.1"
   resolved "https://registry.yarnpkg.com/ee-first/-/ee-first-1.1.1.tgz#590c61156b0ae2f4f0255732a158b266bc56b21d"
 
-electron-to-chromium@^1.2.7, electron-to-chromium@^1.3.15:
+electron-to-chromium@^1.2.7, electron-to-chromium@^1.3.16:
   version "1.3.16"
   resolved "https://registry.yarnpkg.com/electron-to-chromium/-/electron-to-chromium-1.3.16.tgz#d0e026735754770901ae301a21664cba45d92f7d"
 
@@ -2395,6 +2403,10 @@ exenv@1.2.0:
   version "1.2.0"
   resolved "https://registry.yarnpkg.com/exenv/-/exenv-1.2.0.tgz#3835f127abf075bfe082d0aed4484057c78e3c89"
 
+exenv@^1.2.1:
+  version "1.2.2"
+  resolved "https://registry.yarnpkg.com/exenv/-/exenv-1.2.2.tgz#2ae78e85d9894158670b03d47bec1f03bd91bb9d"
+
 exit-hook@^1.0.0:
   version "1.1.1"
   resolved "https://registry.yarnpkg.com/exit-hook/-/exit-hook-1.1.1.tgz#f05ca233b48c05d54fff07765df8507e95c02ff8"
@@ -2633,6 +2645,12 @@ flat-cache@^1.2.1:
     del "^2.0.2"
     graceful-fs "^4.1.2"
     write "^0.2.1"
+
+flat@^2.0.1:
+  version "2.0.1"
+  resolved "https://registry.yarnpkg.com/flat/-/flat-2.0.1.tgz#70e29188a74be0c3c89409eed1fa9577907ae32f"
+  dependencies:
+    is-buffer "~1.1.2"
 
 flatten@^1.0.2:
   version "1.0.2"
@@ -3257,7 +3275,7 @@ is-binary-path@^1.0.0:
   dependencies:
     binary-extensions "^1.0.0"
 
-is-buffer@^1.1.5:
+is-buffer@^1.1.5, is-buffer@~1.1.2:
   version "1.1.5"
   resolved "https://registry.yarnpkg.com/is-buffer/-/is-buffer-1.1.5.tgz#1f3b26ef613b214b88cbca23cc6c01d87961eecc"
 
@@ -4389,6 +4407,10 @@ normalize-url@^1.4.0:
     query-string "^4.1.0"
     sort-keys "^1.0.0"
 
+normalize.css@^7.0.0:
+  version "7.0.0"
+  resolved "https://registry.yarnpkg.com/normalize.css/-/normalize.css-7.0.0.tgz#abfb1dd82470674e0322b53ceb1aaf412938e4bf"
+
 npmlog@^4.0.2:
   version "4.1.2"
   resolved "https://registry.yarnpkg.com/npmlog/-/npmlog-4.1.2.tgz#08a7f2a8bf734604779a9efa4ad5cc717abb954b"
@@ -5209,6 +5231,15 @@ react-error-overlay@^1.0.9:
     settle-promise "1.0.0"
     source-map "0.5.6"
 
+react-helmet@^5.1.3:
+  version "5.1.3"
+  resolved "https://registry.yarnpkg.com/react-helmet/-/react-helmet-5.1.3.tgz#cd40626593a29eecf684b6d38d711f44c48188af"
+  dependencies:
+    deep-equal "^1.0.1"
+    object-assign "^4.1.1"
+    prop-types "^15.5.4"
+    react-side-effect "^1.1.0"
+
 react-html-attributes@^1.3.0:
   version "1.4.1"
   resolved "https://registry.yarnpkg.com/react-html-attributes/-/react-html-attributes-1.4.1.tgz#97b5ec710da68833598c8be6f89ac436216840a5"
@@ -5307,6 +5338,13 @@ react-scripts@1.0.10:
     whatwg-fetch "2.0.3"
   optionalDependencies:
     fsevents "1.1.2"
+
+react-side-effect@^1.1.0:
+  version "1.1.3"
+  resolved "https://registry.yarnpkg.com/react-side-effect/-/react-side-effect-1.1.3.tgz#512c25abe0dec172834c4001ec5c51e04d41bc5c"
+  dependencies:
+    exenv "^1.2.1"
+    shallowequal "^1.0.1"
 
 react@^15.5.4, react@^15.6.1:
   version "15.6.1"
@@ -5755,6 +5793,10 @@ sha.js@^2.4.0, sha.js@^2.4.8:
   resolved "https://registry.yarnpkg.com/sha.js/-/sha.js-2.4.8.tgz#37068c2c476b6baf402d14a49c67f597921f634f"
   dependencies:
     inherits "^2.0.1"
+
+shallowequal@^1.0.1:
+  version "1.0.2"
+  resolved "https://registry.yarnpkg.com/shallowequal/-/shallowequal-1.0.2.tgz#1561dbdefb8c01408100319085764da3fcf83f8f"
 
 shell-quote@1.6.1:
   version "1.6.1"
