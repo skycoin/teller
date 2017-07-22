@@ -19,16 +19,16 @@
   resolved "https://registry.yarnpkg.com/@skycoin/buy/-/buy-0.1.2.tgz#d643685ad028b420f4d5a91bc713a742dac1544b"
 
 "@skycoin/config@^0.1.0":
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/@skycoin/config/-/config-0.1.0.tgz#c0fcc56b8172afb6db96028fd7347fba0bfb12b9"
+  version "0.1.1"
+  resolved "https://registry.yarnpkg.com/@skycoin/config/-/config-0.1.1.tgz#014e71cf3029848c154d2affd70cab8fd6290ff8"
 
 "@skycoin/container@^0.1.0":
   version "0.1.1"
   resolved "https://registry.yarnpkg.com/@skycoin/container/-/container-0.1.1.tgz#b9a300878fc2ec41ae1157f2cf6deb596465a3c7"
 
 "@skycoin/footer@^0.1.0":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@skycoin/footer/-/footer-0.1.1.tgz#c46ae40558603edc4d3425d353df4b781c6b6c11"
+  version "0.1.2"
+  resolved "https://registry.yarnpkg.com/@skycoin/footer/-/footer-0.1.2.tgz#58269bf9820b7a5af77328ad47195e9241b60ba0"
 
 "@skycoin/header@^0.1.1":
   version "0.1.2"
@@ -59,8 +59,8 @@
   resolved "https://registry.yarnpkg.com/@skycoin/text/-/text-0.1.1.tgz#d412eb7499f31c3e31beecd805ceea51c6a83b0e"
 
 "@skycoin/utils@^0.1.0":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@skycoin/utils/-/utils-0.1.1.tgz#991ccc9800cf352d1a8133a6408fa05cc90088f4"
+  version "0.1.2"
+  resolved "https://registry.yarnpkg.com/@skycoin/utils/-/utils-0.1.2.tgz#52379b2f7080c7715dbc4a10bf4cc5fdbd410769"
 
 abab@^1.0.3:
   version "1.0.3"
@@ -3871,8 +3871,8 @@ jsesc@~0.5.0:
   resolved "https://registry.yarnpkg.com/jsesc/-/jsesc-0.5.0.tgz#e7dee66e35d6fc16f710fe91d5cf69f70f08911d"
 
 json-loader@^0.5.4:
-  version "0.5.5"
-  resolved "https://registry.yarnpkg.com/json-loader/-/json-loader-0.5.5.tgz#1147a469b24f4641520614312fea0c07af176974"
+  version "0.5.6"
+  resolved "https://registry.yarnpkg.com/json-loader/-/json-loader-0.5.6.tgz#51697650c63f7d17e21561582117282e1e711db8"
 
 json-schema-traverse@^0.3.0:
   version "0.3.1"
