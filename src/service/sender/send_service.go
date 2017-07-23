@@ -63,7 +63,7 @@ func (s *SendService) Run() error {
 			case req := <-s.reqChan:
 				// verify the request
 				if err := verifyRequest(req); err != nil {
-					req.RspC <- sendRsp{err: fmt.Sprintf("Invalid request: %v", err)}
+					req.RspC <- Response{Err: fmt.Sprintf("Invalid request: %v", err)}
 					continue
 				}
 
@@ -75,7 +75,7 @@ func (s *SendService) Run() error {
 						if err == ErrServiceClosed {
 							// tx should be confirmed before shutdown
 							if txid != "" {
-								req.RspC <- sendRsp{txid: txid}
+								req.RspC <- Response{Txid: txid}
 							}
 							return
 						}
@@ -97,13 +97,13 @@ func (s *SendService) Run() error {
 							}
 
 							if ok {
-								req.RspC <- sendRsp{txid: txid}
+								req.RspC <- Response{Txid: txid}
 								break sendLoop
 							}
 							time.Sleep(sendCoinCheckTime)
 						}
 					}
-					req.RspC <- sendRsp{txid: txid}
+					req.RspC <- Response{Txid: txid}
 					s.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
 					break
 				}

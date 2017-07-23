@@ -74,6 +74,17 @@ func TestSendService(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, "1111", txid)
 
+	fmt.Println("=== Run\tTest send with time option")
+	time.AfterFunc(time.Second, func() {
+		dsc.changeConfirmStatus(true)
+	})
+
+	txid, err = sdr.Send(addr, 10, &SendOption{
+		Timeout: 3 * time.Second,
+	})
+	require.Nil(t, err)
+	require.Equal(t, "1111", txid)
+
 	// test send coin failed
 	fmt.Println("=== Run\tTest send failed")
 	dsc.changeConfirmStatus(false)
