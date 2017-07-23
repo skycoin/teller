@@ -42,13 +42,6 @@ type store struct {
 	cache *cache
 }
 
-type cache struct {
-	sync.RWMutex
-	depositInfo         map[uint64]depositInfo
-	skyDepositSeqsIndex map[string][]uint64
-	bindAddress         map[string]string
-}
-
 // newStore creates a store instance
 func newStore(db *bolt.DB) (*store, error) {
 	if db == nil {
@@ -92,27 +85,6 @@ func newStore(db *bolt.DB) (*store, error) {
 	}, nil
 }
 
-// BindAddress binds deposit bitcoin address and skycoin address
-// func (s *store) BindAddress(btcAddr, skyAddr string) error {
-// 	return s.db.Update(func(tx *bolt.Tx) error {
-// 		bkt := tx.Bucket(bindAddressBkt)
-// 		if bkt == nil {
-// 			return fmt.Errorf("Bind address failed: bucket %s doesn't exist", bindAddressBkt)
-// 		}
-
-// 		if v := bkt.Get([]byte(btcAddr)); v != nil {
-// 			return fmt.Errorf("address %s already binded", btcAddr)
-// 		}
-
-// 		if err := bkt.Put([]byte(btcAddr), []byte(skyAddr)); err != nil {
-// 			return fmt.Errorf("Bind address failed: %v", err)
-// 		}
-
-// 		s.cache.setBindAddr(btcAddr, skyAddr)
-// 		return nil
-// 	})
-// }
-
 // GetBindAddress returns binded skycoin address of given bitcoin address
 func (s *store) GetBindAddress(btcAddr string) (string, bool) {
 	return s.cache.getBindAddr(btcAddr)
@@ -142,7 +114,7 @@ func (s *store) AddDepositInfo(dpinfo depositInfo) (uint64, error) {
 			return err
 		}
 
-		if err := bkt.Put(uint64ToBytes(dpinfo.Seq), v); err != nil {
+		if err := bkt.Put([]byte(dpinfo.BtcAddress), v); err != nil {
 			return err
 		}
 
@@ -152,16 +124,16 @@ func (s *store) AddDepositInfo(dpinfo depositInfo) (uint64, error) {
 			return bucketNotExistErr(skyDepositSeqsIndexBkt)
 		}
 
-		var seqs []uint64
-		seqsBytes := skyIndexBkt.Get([]byte(dpinfo.SkyAddress))
-		if seqsBytes != nil {
-			if err := json.Unmarshal(seqsBytes, &seqs); err != nil {
+		var addrs []string
+		addrsBytes := skyIndexBkt.Get([]byte(dpinfo.SkyAddress))
+		if addrsBytes != nil {
+			if err := json.Unmarshal(addrsBytes, &addrs); err != nil {
 				return err
 			}
 		}
 
-		seqs = append(seqs, dpinfo.Seq)
-		v, err = json.Marshal(seqs)
+		addrs = append(addrs, dpinfo.BtcAddress)
+		v, err = json.Marshal(addrs)
 		if err != nil {
 			return err
 		}
@@ -187,7 +159,7 @@ func (s *store) AddDepositInfo(dpinfo depositInfo) (uint64, error) {
 
 		// update the caches
 		s.cache.setDepositInfo(dpinfo)
-		s.cache.addSkyIndex(dpinfo.SkyAddress, dpinfo.Seq)
+		s.cache.addSkyIndex(dpinfo.SkyAddress, dpinfo.BtcAddress)
 		s.cache.setBindAddr(dpinfo.BtcAddress, dpinfo.SkyAddress)
 
 		return nil
@@ -199,26 +171,21 @@ func (s *store) AddDepositInfo(dpinfo depositInfo) (uint64, error) {
 }
 
 // UpdateDepositStatus updates deposit info
-func (s *store) UpdateDepositStatus(seq uint64, st status) error {
+func (s *store) UpdateDepositStatus(btcAddr string, st status) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(depositInfoBkt)
 		if bkt == nil {
 			return bucketNotExistErr(depositInfoBkt)
 		}
 
-		v := bkt.Get(uint64ToBytes(seq))
+		v := bkt.Get([]byte(btcAddr))
 		if v == nil {
-			return fmt.Errorf("DepositInfo of seq %d doesn't exist in db", seq)
+			return fmt.Errorf("DepositInfo of btc address %s doesn't exist in db", btcAddr)
 		}
 
 		var dpi depositInfo
 		if err := json.Unmarshal(v, &dpi); err != nil {
 			return err
-		}
-
-		if dpi.Seq != seq {
-			return fmt.Errorf("Get deposit info of seq %d from db"+
-				", but the seq in returned deposit info is %d", seq, dpi.Seq)
 		}
 
 		dpi.Status = st
@@ -229,7 +196,7 @@ func (s *store) UpdateDepositStatus(seq uint64, st status) error {
 			return err
 		}
 
-		if err := bkt.Put(uint64ToBytes(seq), d); err != nil {
+		if err := bkt.Put([]byte(btcAddr), d); err != nil {
 			return err
 		}
 
@@ -243,12 +210,12 @@ func (s *store) UpdateDepositStatus(seq uint64, st status) error {
 // GetDepositInfoOfSkyAddress returns all deposit info that are binded
 // to the given skycoin address
 func (s *store) GetDepositInfoOfSkyAddress(skyAddr string) ([]depositInfo, error) {
-	seqs := s.cache.getSkyIndex(skyAddr)
-	dpis := make([]depositInfo, 0, len(seqs))
-	for _, seq := range seqs {
-		dpi, ok := s.cache.getDepositInfo(seq)
+	btcAddrs := s.cache.getSkyIndex(skyAddr)
+	dpis := make([]depositInfo, 0, len(btcAddrs))
+	for _, btcAddr := range btcAddrs {
+		dpi, ok := s.cache.getDepositInfo(btcAddr)
 		if !ok {
-			return []depositInfo{}, fmt.Errorf("Get deposit info of seq %d from cache failed", seq)
+			return []depositInfo{}, fmt.Errorf("Get deposit info of btc addr %s from cache failed", btcAddr)
 		}
 
 		dpis = append(dpis, dpi)
@@ -257,10 +224,17 @@ func (s *store) GetDepositInfoOfSkyAddress(skyAddr string) ([]depositInfo, error
 	return dpis, nil
 }
 
+type cache struct {
+	sync.RWMutex
+	depositInfo         map[string]depositInfo
+	skyDepositSeqsIndex map[string][]string
+	bindAddress         map[string]string
+}
+
 func loadCache(db *bolt.DB) (*cache, error) {
 	c := cache{
-		depositInfo:         make(map[uint64]depositInfo),
-		skyDepositSeqsIndex: make(map[string][]uint64),
+		depositInfo:         make(map[string]depositInfo),
+		skyDepositSeqsIndex: make(map[string][]string),
 		bindAddress:         make(map[string]string),
 	}
 
@@ -272,13 +246,13 @@ func loadCache(db *bolt.DB) (*cache, error) {
 		}
 
 		if err := dpiBkt.ForEach(func(k, v []byte) error {
-			seq := bytesToUint64(k)
+			btcAddr := string(k)
 			var dpi depositInfo
 			if err := json.Unmarshal(v, &dpi); err != nil {
 				return err
 			}
 
-			c.depositInfo[seq] = dpi
+			c.depositInfo[btcAddr] = dpi
 			return nil
 		}); err != nil {
 			return err
@@ -292,11 +266,11 @@ func loadCache(db *bolt.DB) (*cache, error) {
 
 		if err := skyIndexBkt.ForEach(func(k, v []byte) error {
 			skyAddr := string(k)
-			var seqs []uint64
-			if err := json.Unmarshal(v, &seqs); err != nil {
+			var btcAddrs []string
+			if err := json.Unmarshal(v, &btcAddrs); err != nil {
 				return err
 			}
-			c.skyDepositSeqsIndex[skyAddr] = seqs
+			c.skyDepositSeqsIndex[skyAddr] = btcAddrs
 			return nil
 		}); err != nil {
 			return err
@@ -336,30 +310,30 @@ func (c *cache) getBindAddr(btcAddr string) (string, bool) {
 
 func (c *cache) setDepositInfo(dpi depositInfo) {
 	c.Lock()
-	c.depositInfo[dpi.Seq] = dpi
+	c.depositInfo[dpi.BtcAddress] = dpi
 	c.Unlock()
 }
 
-func (c *cache) getDepositInfo(seq uint64) (depositInfo, bool) {
+func (c *cache) getDepositInfo(btcAddr string) (depositInfo, bool) {
 	c.RLock()
 	defer c.RUnlock()
-	dpi, ok := c.depositInfo[seq]
+	dpi, ok := c.depositInfo[btcAddr]
 	return dpi, ok
 }
 
-func (c *cache) addSkyIndex(skyAddr string, seq uint64) {
+func (c *cache) addSkyIndex(skyAddr string, btcAddr string) {
 	c.Lock()
 	c.Unlock()
-	if seqs, ok := c.skyDepositSeqsIndex[skyAddr]; ok {
-		seqs = append(seqs, seq)
-		c.skyDepositSeqsIndex[skyAddr] = seqs
+	if btcAddrs, ok := c.skyDepositSeqsIndex[skyAddr]; ok {
+		btcAddrs = append(btcAddrs, btcAddr)
+		c.skyDepositSeqsIndex[skyAddr] = btcAddrs
 		return
 	}
 
-	c.skyDepositSeqsIndex[skyAddr] = []uint64{seq}
+	c.skyDepositSeqsIndex[skyAddr] = []string{btcAddr}
 }
 
-func (c *cache) getSkyIndex(skyAddr string) []uint64 {
+func (c *cache) getSkyIndex(skyAddr string) []string {
 	c.RLock()
 	c.RUnlock()
 	return c.skyDepositSeqsIndex[skyAddr]

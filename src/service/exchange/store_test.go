@@ -41,22 +41,6 @@ func TestNewStore(t *testing.T) {
 	})
 }
 
-// func TestBindAddress(t *testing.T) {
-// 	db, shutdown := setupDB(t)
-// 	defer shutdown()
-
-// 	s, err := newStore(db)
-// 	require.Nil(t, err)
-
-// 	// bind success
-// 	require.Nil(t, s.BindAddress("btcaddr1", "skyaddr1"))
-// 	require.Equal(t, s.cache.bindAddress["btcaddr1"], "skyaddr1")
-
-// 	// bind dup addr
-// 	err = s.BindAddress("btcaddr1", "skyaddr2")
-// 	require.Equal(t, errors.New("address btcaddr1 already binded"), err)
-// }
-
 func TestBytesUintConvert(t *testing.T) {
 	v := uint64(10)
 
@@ -82,7 +66,7 @@ func TestAddDepositInfo(t *testing.T) {
 	require.Equal(t, uint64(1), seq)
 
 	// check the deposit info cache
-	dpi, ok := s.cache.depositInfo[seq]
+	dpi, ok := s.cache.depositInfo["btcaddr1"]
 	require.True(t, ok)
 	require.Equal(t, seq, dpi.Seq)
 	require.Equal(t, "skyaddr1", dpi.SkyAddress)
@@ -96,13 +80,13 @@ func TestAddDepositInfo(t *testing.T) {
 	require.Equal(t, "skyaddr1", skyAddr)
 
 	// check sky index cache
-	seqs := s.cache.skyDepositSeqsIndex["skyaddr1"]
-	require.Equal(t, 1, len(seqs))
-	require.Equal(t, seq, seqs[0])
+	btcAddrs := s.cache.skyDepositSeqsIndex["skyaddr1"]
+	require.Equal(t, 1, len(btcAddrs))
+	require.Equal(t, "btcaddr1", btcAddrs[0])
 
 	// check in db
 	db.View(func(tx *bolt.Tx) error {
-		v := tx.Bucket(depositInfoBkt).Get(uint64ToBytes(seq))
+		v := tx.Bucket(depositInfoBkt).Get([]byte("btcaddr1"))
 		require.NotNil(t, v)
 		var dpi depositInfo
 		require.Nil(t, json.Unmarshal(v, &dpi))
@@ -111,9 +95,9 @@ func TestAddDepositInfo(t *testing.T) {
 		// check skyDepositSeqsIndex
 		v = tx.Bucket(skyDepositSeqsIndexBkt).Get([]byte("skyaddr1"))
 		require.NotNil(t, v)
-		var seqs []uint64
-		require.Nil(t, json.Unmarshal(v, &seqs))
-		require.Equal(t, seqs[0], seq)
+		var btcAddrs []string
+		require.Nil(t, json.Unmarshal(v, &btcAddrs))
+		require.Equal(t, btcAddrs[0], "btcaddr1")
 
 		// check bind address bkt
 		v = tx.Bucket(bindAddressBkt).Get([]byte("btcaddr1"))
@@ -126,10 +110,11 @@ func TestAddDepositInfo(t *testing.T) {
 		SkyAddress: "skyaddr1",
 		BtcAddress: "btcaddr2",
 	})
+
 	require.Nil(t, err)
 	require.Equal(t, uint64(2), seq)
 	db.View(func(tx *bolt.Tx) error {
-		v := tx.Bucket(depositInfoBkt).Get(uint64ToBytes(seq))
+		v := tx.Bucket(depositInfoBkt).Get([]byte("btcaddr2"))
 		require.NotNil(t, v)
 		var dpi depositInfo
 		require.Nil(t, json.Unmarshal(v, &dpi))
@@ -138,9 +123,9 @@ func TestAddDepositInfo(t *testing.T) {
 		// check skyDepositSeqsIndex
 		v = tx.Bucket(skyDepositSeqsIndexBkt).Get([]byte("skyaddr1"))
 		require.NotNil(t, v)
-		var seqs []uint64
-		require.Nil(t, json.Unmarshal(v, &seqs))
-		require.Equal(t, seqs, []uint64{1, 2})
+		var btcAddrs []string
+		require.Nil(t, json.Unmarshal(v, &btcAddrs))
+		require.Equal(t, btcAddrs, []string{"btcaddr1", "btcaddr2"})
 		return nil
 	})
 
@@ -209,6 +194,7 @@ func TestGetBindAddress(t *testing.T) {
 		})
 	}
 }
+
 func TestUpdateDepositStatus(t *testing.T) {
 	db, shutdown := setupDB(t)
 	defer shutdown()
@@ -232,14 +218,14 @@ func TestUpdateDepositStatus(t *testing.T) {
 
 	db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(depositInfoBkt)
-		v1 := bkt.Get(uint64ToBytes(seq))
+		v1 := bkt.Get([]byte("btcaddr1"))
 		require.NotNil(t, v1)
 		var dpi1 depositInfo
 		require.Nil(t, json.Unmarshal(v1, &dpi1))
 
 		require.Equal(t, dpi1.Status, statusWaitBtcDeposit)
 
-		v2 := bkt.Get(uint64ToBytes(seq2))
+		v2 := bkt.Get([]byte("btcaddr2"))
 		require.NotNil(t, v2)
 		var dpi2 depositInfo
 		require.Nil(t, json.Unmarshal(v2, &dpi2))
@@ -248,12 +234,12 @@ func TestUpdateDepositStatus(t *testing.T) {
 		return nil
 	})
 
-	err = s.UpdateDepositStatus(seq, statusWaitSkySend)
+	err = s.UpdateDepositStatus("btcaddr1", statusWaitSkySend)
 	require.Nil(t, err)
 
 	db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(depositInfoBkt)
-		v1 := bkt.Get(uint64ToBytes(seq))
+		v1 := bkt.Get([]byte("btcaddr1"))
 		require.NotNil(t, v1)
 		var dpi1 depositInfo
 		require.Nil(t, json.Unmarshal(v1, &dpi1))
@@ -263,7 +249,7 @@ func TestUpdateDepositStatus(t *testing.T) {
 	})
 
 	// check cache
-	dpi, ok := s.cache.depositInfo[seq]
+	dpi, ok := s.cache.depositInfo["btcaddr1"]
 	require.True(t, ok)
 	require.Equal(t, seq, dpi.Seq)
 	require.Equal(t, statusWaitSkySend, dpi.Status)
