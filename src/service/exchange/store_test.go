@@ -15,7 +15,7 @@ import (
 
 func setupDB(t *testing.T) (*bolt.DB, func()) {
 	rand.Seed(int64(time.Now().Second()))
-	f := fmt.Sprintf("test%d.db", rand.Intn(1024))
+	f := fmt.Sprintf("%s/test%d.db", os.TempDir(), rand.Intn(1024))
 	db, err := bolt.Open(f, 0700, nil)
 	require.Nil(t, err)
 	return db, func() {
@@ -195,7 +195,29 @@ func TestGetBindAddress(t *testing.T) {
 	}
 }
 
-func TestUpdateDepositStatus(t *testing.T) {
+func TestGetDepositInfo(t *testing.T) {
+	db, shutdown := setupDB(t)
+	defer shutdown()
+
+	s, err := newStore(db)
+	require.Nil(t, err)
+
+	_, err = s.AddDepositInfo(depositInfo{
+		BtcAddress: "btcaddr1",
+		SkyAddress: "skyaddr1",
+		Status:     statusDone,
+	})
+	require.Nil(t, err)
+
+	dpi, ok := s.GetDepositInfo("btcaddr1")
+	require.True(t, ok)
+	require.Equal(t, "btcaddr1", dpi.BtcAddress)
+	require.Equal(t, "skyaddr1", dpi.SkyAddress)
+	require.Equal(t, statusDone, dpi.Status)
+	require.NotEmpty(t, dpi.UpdatedAt)
+}
+
+func TestUpdateDeposit(t *testing.T) {
 	db, shutdown := setupDB(t)
 	defer shutdown()
 
@@ -234,9 +256,16 @@ func TestUpdateDepositStatus(t *testing.T) {
 		return nil
 	})
 
-	err = s.UpdateDepositStatus("btcaddr1", statusWaitSkySend)
-	require.Nil(t, err)
+	err = s.UpdateDepositInfo("btcaddr1", func(dpi depositInfo) depositInfo {
+		dpi.Status = statusWaitSkySend
+		dpi.Txid = "121212"
 
+		// try to change immutable value skyaddress
+		dpi.SkyAddress = "no change"
+		return dpi
+	})
+
+	require.Nil(t, err)
 	db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(depositInfoBkt)
 		v1 := bkt.Get([]byte("btcaddr1"))
@@ -244,7 +273,13 @@ func TestUpdateDepositStatus(t *testing.T) {
 		var dpi1 depositInfo
 		require.Nil(t, json.Unmarshal(v1, &dpi1))
 
+		// check updated value
 		require.Equal(t, dpi1.Status, statusWaitSkySend)
+		require.Equal(t, "121212", dpi1.Txid)
+
+		// check immutable value
+		require.Equal(t, "skyaddr1", dpi1.SkyAddress)
+		require.Equal(t, seq, dpi1.Seq)
 		return nil
 	})
 
@@ -253,6 +288,10 @@ func TestUpdateDepositStatus(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, seq, dpi.Seq)
 	require.Equal(t, statusWaitSkySend, dpi.Status)
+	require.Equal(t, "skyaddr1", dpi.SkyAddress)
+	require.Equal(t, "btcaddr1", dpi.BtcAddress)
+
+	// test no exist deposit info
 }
 
 func TestGetDepositInfoOfSkyAddr(t *testing.T) {

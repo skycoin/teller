@@ -170,8 +170,13 @@ func (s *store) AddDepositInfo(dpinfo depositInfo) (uint64, error) {
 	return dpinfo.Seq, nil
 }
 
+// GetDepositInfo returns depsoit info of given btc address
+func (s *store) GetDepositInfo(btcAddr string) (depositInfo, bool) {
+	return s.cache.getDepositInfo(btcAddr)
+}
+
 // UpdateDepositStatus updates deposit info
-func (s *store) UpdateDepositStatus(btcAddr string, st status) error {
+func (s *store) UpdateDepositInfo(btcAddr string, updateFunc func(depositInfo) depositInfo) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(depositInfoBkt)
 		if bkt == nil {
@@ -188,8 +193,10 @@ func (s *store) UpdateDepositStatus(btcAddr string, st status) error {
 			return err
 		}
 
-		dpi.Status = st
-		dpi.UpdatedAt = time.Now().UTC().Unix()
+		dpiNew := updateFunc(dpi)
+		dpiNew.UpdatedAt = time.Now().UTC().Unix()
+
+		dpi.updateMutableVar(dpiNew)
 
 		d, err := json.Marshal(dpi)
 		if err != nil {
