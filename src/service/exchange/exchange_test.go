@@ -1,223 +1,230 @@
 package exchange
 
-// import (
-// 	"testing"
-// 	"time"
+import (
+	"testing"
 
-// 	"github.com/skycoin/teller/src/logger"
-// 	"github.com/skycoin/teller/src/service/monitor"
-// 	"github.com/stretchr/testify/assert"
-// )
+	"time"
 
-// func TestCoinValue(t *testing.T) {
-// 	db, close := prepareDB(t)
-// 	defer close()
+	"fmt"
 
-// 	bkt := newCoinValueBucket(coinValueBktName, db)
-// 	cv := coinValue{
-// 		Address:    "a",
-// 		Balance:    100,
-// 		CoinName:   "btc",
-// 		ICOAddress: "a-ico"}
-// 	err := bkt.put(cv)
-// 	assert.Nil(t, err)
+	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/service/scanner"
+	"github.com/skycoin/teller/src/service/sender"
+	"github.com/stretchr/testify/require"
+)
 
-// 	// get the value
-// 	cv1, ok := bkt.get("a")
-// 	assert.True(t, ok)
-// 	assert.Equal(t, cv1, cv)
+type dummySender struct {
+	txid      string
+	err       error
+	sleepTime time.Duration
+	sent      struct {
+		Address string
+		Value   int64
+	}
+}
 
-// 	_, ok = bkt.get("b")
-// 	assert.False(t, ok)
-// }
+func (send *dummySender) Send(destAddr string, coins int64, opt *sender.SendOption) (string, error) {
+	time.Sleep(send.sleepTime)
 
-// func TestCoinValueBktGetAll(t *testing.T) {
-// 	db, close := prepareDB(t)
-// 	defer close()
-// 	bkt := newCoinValueBucket(coinValueBktName, db)
-// 	testData := []struct {
-// 		Address string
-// 		Balance int64
-// 	}{
-// 		{
-// 			"a",
-// 			1,
-// 		},
-// 	}
+	if send.err != nil && send.err != sender.ErrServiceClosed {
+		return "", send.err
+	}
 
-// 	for _, d := range testData {
-// 		err := bkt.put(coinValue{
-// 			Address: d.Address,
-// 			Balance: d.Balance,
-// 		})
-// 		assert.Nil(t, err)
-// 	}
+	send.sent.Address = destAddr
+	send.sent.Value = coins
+	return send.txid, send.err
+}
 
-// 	balMap, err := bkt.getAllBalances()
-// 	assert.Nil(t, err)
-// 	for _, d := range testData {
-// 		v, ok := balMap[d.Address]
-// 		assert.True(t, ok)
-// 		assert.Equal(t, d.Balance, v)
-// 	}
-// }
+type dummyScanner struct {
+	dvC         chan scanner.DepositValue
+	addrs       []string
+	notifyC     chan struct{}
+	notifyAfter time.Duration
+}
 
-// func TestCoinValueBucketChangeBalance(t *testing.T) {
-// 	db, close := prepareDB(t)
-// 	defer close()
-// 	bkt := newCoinValueBucket(coinValueBktName, db)
-// 	bkt.put(coinValue{
-// 		Address: "a",
-// 		Balance: 1,
-// 	})
+func (scan *dummyScanner) AddDepositAddress(addr string) error {
+	scan.addrs = append(scan.addrs, addr)
+	return nil
+}
 
-// 	err := bkt.changeBalance("a", 2)
-// 	assert.Nil(t, err)
-// 	cv, ok := bkt.get("a")
-// 	assert.True(t, ok)
-// 	assert.Equal(t, int64(3), cv.Balance)
-// }
+func (scan *dummyScanner) GetDepositValue() <-chan scanner.DepositValue {
+	defer func() {
+		go func() {
+			// notify after given duration, so that the test code know
+			// it's time do checking
+			time.Sleep(scan.notifyAfter)
+			scan.notifyC <- struct{}{}
+		}()
+	}()
+	return scan.dvC
+}
 
-// func TestEventHandler(t *testing.T) {
-// 	db, close := prepareDB(t)
-// 	defer close()
-// 	cfg := exchgConfig{
-// 		db:  db,
-// 		log: logger.NewLogger("", true),
-// 		rateTable: rateTable{
-// 			[]struct {
-// 				Date time.Time
-// 				Rate float64
-// 			}{
-// 				{
-// 					time.Time{},
-// 					1,
-// 				},
-// 			},
-// 		},
+func TestRunExchangeService(t *testing.T) {
 
-// 		checkPeriod: 5 * time.Second,
-// 		nodeRPCAddr: "127.0.0.1:7430",
-// 		nodeWltFile: "/Users/heaven/.skycoin/wallets/skycoin.wlt",
-// 	}
+	var testCases = []struct {
+		name        string
+		initDpis    []depositInfo
+		bindBtcAddr string
+		bindSkyAddr string
+		dpAddr      string
+		dpValue     float64
 
-// 	ex := newExchange(&cfg)
-// 	ex.coinValue.put(coinValue{
-// 		Address:    "a",
-// 		Balance:    0,
-// 		ICOAddress: "cBB6zToAjhMkvRrWaz8Tkv6QZxjKCfJWBx",
-// 	})
+		sendSleepTime  time.Duration
+		sendReturnTxid string
+		sendErr        error
 
-// 	err := ex.eventHandler(monitor.Event{
-// 		Type: monitor.EBalanceChange,
-// 		Value: monitor.AddressValue{
-// 			Address: "a",
-// 			Value:   1 * 10e9,
-// 		},
-// 	})
-// 	assert.Nil(t, err)
-// }
+		dvC         chan scanner.DepositValue
+		notifyAfter time.Duration
 
-// func TestRateTable(t *testing.T) {
-// 	now := time.Now()
-// 	testCases := []struct {
-// 		name       string
-// 		tb         rateTable
-// 		expectRate float64
-// 		ok         bool
-// 	}{
-// 		{
-// 			"get 10",
-// 			rateTable{
-// 				rates: []struct {
-// 					Date time.Time
-// 					Rate float64
-// 				}{
-// 					{
-// 						now,
-// 						10,
-// 					},
-// 					{
-// 						now.Add(1000),
-// 						20,
-// 					},
-// 					{
-// 						now.Add(2000),
-// 						30,
-// 					},
-// 				},
-// 			},
-// 			10,
-// 			true,
-// 		},
-// 		{
-// 			"get 20",
-// 			rateTable{
-// 				rates: []struct {
-// 					Date time.Time
-// 					Rate float64
-// 				}{
-// 					{
-// 						now.Add(-1000),
-// 						10,
-// 					},
-// 					{
-// 						now,
-// 						20,
-// 					},
-// 					{
-// 						now.Add(2000),
-// 						30,
-// 					},
-// 				},
-// 			},
-// 			20,
-// 			true,
-// 		},
-// 		{
-// 			"get zero",
-// 			rateTable{
-// 				rates: []struct {
-// 					Date time.Time
-// 					Rate float64
-// 				}{},
-// 			},
-// 			0.0,
-// 			false,
-// 		},
-// 		{
-// 			"get basic 10",
-// 			rateTable{
-// 				rates: []struct {
-// 					Date time.Time
-// 					Rate float64
-// 				}{
-// 					{
-// 						time.Time{},
-// 						10,
-// 					},
-// 					{
-// 						now.Add(1000),
-// 						20,
-// 					},
-// 					{
-// 						now.Add(2000),
-// 						30,
-// 					},
-// 				},
-// 			},
-// 			10,
-// 			true,
-// 		},
-// 	}
+		putDVTime    time.Duration
+		writeToDBOk  bool
+		expectStatus status
+	}{
+		{
+			name:           "ok",
+			initDpis:       []depositInfo{},
+			bindBtcAddr:    "btcaddr",
+			bindSkyAddr:    "skyaddr",
+			dpAddr:         "btcaddr",
+			dpValue:        0.002,
+			sendSleepTime:  time.Second * 1,
+			sendReturnTxid: "1111",
+			sendErr:        nil,
 
-// 	for _, tc := range testCases {
-// 		t.Run(tc.name, func(t *testing.T) {
-// 			rate, ok := tc.tb.get(now)
-// 			assert.Equal(t, tc.ok, ok)
-// 			if ok {
-// 				assert.Equal(t, tc.expectRate, rate)
-// 			}
-// 		})
-// 	}
-// }
+			dvC:          make(chan scanner.DepositValue, 1),
+			notifyAfter:  3 * time.Second,
+			putDVTime:    1 * time.Second,
+			writeToDBOk:  true,
+			expectStatus: statusDone,
+		},
+		{
+			name:           "deposit_addr_not_exist",
+			initDpis:       []depositInfo{},
+			bindBtcAddr:    "btcaddr",
+			bindSkyAddr:    "skyaddr",
+			dpAddr:         "btcaddr1",
+			dpValue:        0.002,
+			sendSleepTime:  time.Second * 1,
+			sendReturnTxid: "1111",
+			sendErr:        nil,
+			dvC:            make(chan scanner.DepositValue, 1),
+			notifyAfter:    3 * time.Second,
+			putDVTime:      1 * time.Second,
+			writeToDBOk:    false,
+			expectStatus:   statusWaitBtcDeposit,
+		},
+		{
+			name: "deposit_status_above_waiting_btc_deposit",
+			initDpis: []depositInfo{
+				{BtcAddress: "btcaddr", SkyAddress: "skyaddr", Status: statusDone},
+			},
+			bindBtcAddr:    "btcaddr",
+			bindSkyAddr:    "skyaddr",
+			dpAddr:         "btcaddr",
+			dpValue:        0.002,
+			sendSleepTime:  time.Second * 1,
+			sendReturnTxid: "1111",
+			sendErr:        nil,
+			dvC:            make(chan scanner.DepositValue, 1),
+			notifyAfter:    3 * time.Second,
+			putDVTime:      1 * time.Second,
+			writeToDBOk:    true,
+			expectStatus:   statusDone,
+		},
+		{
+			name:           "send_service_closed",
+			initDpis:       []depositInfo{},
+			bindBtcAddr:    "btcaddr",
+			bindSkyAddr:    "skyaddr",
+			dpAddr:         "btcaddr",
+			dpValue:        0.002,
+			sendSleepTime:  time.Second * 1,
+			sendReturnTxid: "1111",
+			sendErr:        sender.ErrServiceClosed,
+			dvC:            make(chan scanner.DepositValue, 1),
+			notifyAfter:    3 * time.Second,
+			putDVTime:      1 * time.Second,
+			writeToDBOk:    true,
+			expectStatus:   statusDone,
+		},
+		{
+			name:           "send_failed",
+			initDpis:       []depositInfo{},
+			bindBtcAddr:    "btcaddr",
+			bindSkyAddr:    "skyaddr",
+			dpAddr:         "btcaddr",
+			dpValue:        0.002,
+			sendSleepTime:  time.Second * 3,
+			sendReturnTxid: "",
+			sendErr:        fmt.Errorf("send skycoin failed"),
+			dvC:            make(chan scanner.DepositValue, 1),
+			notifyAfter:    3 * time.Second,
+			putDVTime:      1 * time.Second,
+			writeToDBOk:    true,
+			expectStatus:   statusWaitSkySend,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, shutdown := setupDB(t)
+			defer shutdown()
+
+			send := &dummySender{
+				sleepTime: tc.sendSleepTime,
+				txid:      tc.sendReturnTxid,
+				err:       tc.sendErr,
+			}
+
+			dvC := make(chan scanner.DepositValue)
+			scan := &dummyScanner{
+				dvC:         dvC,
+				notifyC:     make(chan struct{}, 1),
+				notifyAfter: tc.notifyAfter,
+			}
+			var service *Service
+
+			require.NotPanics(t, func() {
+				service = NewService(Config{
+					DB:   db,
+					Log:  logger.NewLogger("", true),
+					Rate: 500,
+				}, scan, send)
+
+				// init the deposit infos
+				for _, dpi := range tc.initDpis {
+					service.store.AddDepositInfo(dpi)
+				}
+			})
+
+			go service.Run()
+
+			excli := NewExchange(service)
+			if len(tc.initDpis) == 0 {
+				require.Nil(t, excli.BindAddress(tc.bindBtcAddr, tc.bindSkyAddr))
+			}
+
+			// fake deposit value
+			time.AfterFunc(tc.putDVTime, func() {
+				dvC <- scanner.DepositValue{Address: tc.dpAddr, Value: tc.dpValue}
+			})
+
+			<-scan.notifyC
+
+			// check the info
+			dpi, ok := service.store.GetDepositInfo(tc.dpAddr)
+			require.Equal(t, tc.writeToDBOk, ok)
+			if ok {
+				require.Equal(t, tc.expectStatus, dpi.Status)
+
+				if len(tc.initDpis) == 0 && tc.sendErr == nil {
+					require.Equal(t, tc.bindSkyAddr, send.sent.Address)
+					require.Equal(t, int64(tc.dpValue*500), send.sent.Value)
+				}
+			}
+
+			service.Shutdown()
+		})
+	}
+
+}
