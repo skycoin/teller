@@ -28,12 +28,6 @@ type SendOption struct {
 	Timeout time.Duration
 }
 
-// Response send response
-type Response struct {
-	Err  string
-	Txid string
-}
-
 // SendAsync send coins to dest address, should return immediately or timeout
 func (s *Sender) SendAsync(destAddr string, coins int64, opt *SendOption) (<-chan interface{}, error) {
 	rspC := make(chan interface{}, 1)
@@ -69,5 +63,17 @@ func (s *Sender) Send(destAddr string, coins int64, opt *SendOption) (string, er
 		return "", errors.New(rsp.Err)
 	}
 
+	// waiting for the transaction confirmed
+	for st := range rsp.StatusC {
+		if st == TxConfirmed {
+			break
+		}
+	}
+
 	return rsp.Txid, nil
+}
+
+// IsClosed checks if the service is closed
+func (s *Sender) IsClosed() bool {
+	return s.s.IsClosed()
 }

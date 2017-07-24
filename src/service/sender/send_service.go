@@ -4,6 +4,7 @@ package sender
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"time"
 
@@ -14,6 +15,16 @@ import (
 
 const sendCoinCheckTime = 3 * time.Second
 
+// SendStatus represents the send status
+type SendStatus int8
+
+const (
+	// Sent represents coins already sent, but waiting confirm
+	Sent SendStatus = iota + 1
+	// TxConfirmed represents the transaction is confirmed
+	TxConfirmed
+)
+
 // Request send coin request struct
 type Request struct {
 	Coins   int64            // coin number
@@ -21,13 +32,30 @@ type Request struct {
 	RspC    chan interface{} // response
 }
 
+// Response send response
+type Response struct {
+	Err     string
+	Txid    string
+	StatusC chan SendStatus
+}
+
+func makeResponse(txid string, err string) Response {
+	return Response{
+		Txid:    txid,
+		Err:     err,
+		StatusC: make(chan SendStatus, 5),
+	}
+}
+
 // SendService is in charge of sending skycoin
 type SendService struct {
 	logger.Logger
-	cfg     Config
-	skycli  skyclient
-	quit    chan struct{}
-	reqChan chan Request
+	cfg      Config
+	skycli   skyclient
+	quit     chan struct{}
+	reqChan  chan Request
+	isClosed bool
+	sync.Mutex
 }
 
 // Config sender configuration info
@@ -69,43 +97,35 @@ func (s *SendService) Run() error {
 
 			sendLoop:
 				for { // loop to resend coin if send failed
-					// sendCoin will not return until the tx is confirmed
-					txid, err := s.sendCoin(req.Address, req.Coins)
-					if err != nil {
-						if err == ErrServiceClosed {
-							// tx should be confirmed before shutdown
-							if txid != "" {
-								req.RspC <- Response{Txid: txid}
-							}
-							return
-						}
 
-						// transaction not create yet
-						if txid == "" {
-							s.Debugln("Send coin failed:", err, "try to send again..")
+					txid, err := s.skycli.Send(req.Address, req.Coins)
+					if err != nil {
+						s.Debugln("Send coin failed:", err, "try to send again..")
+						time.Sleep(sendCoinCheckTime)
+						continue
+					}
+
+					rsp := makeResponse(txid, "")
+					go func() { rsp.StatusC <- Sent }()
+
+					req.RspC <- rsp
+
+					// transaction already exist, check tx status
+					for {
+						ok, err := s.isTxConfirmed(txid)
+						if err != nil {
+							s.Debugln(err)
 							time.Sleep(sendCoinCheckTime)
 							continue
 						}
 
-						// transaction already exist, check tx status
-						for {
-							ok, err := s.isTxConfirmed(txid)
-							if err != nil {
-								s.Debugln(err)
-								time.Sleep(sendCoinCheckTime)
-								continue
-							}
-
-							if ok {
-								req.RspC <- Response{Txid: txid}
-								break sendLoop
-							}
-							time.Sleep(sendCoinCheckTime)
+						if ok {
+							go func() { rsp.StatusC <- TxConfirmed }()
+							s.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
+							break sendLoop
 						}
+						time.Sleep(sendCoinCheckTime)
 					}
-					req.RspC <- Response{Txid: txid}
-					s.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
-					break
 				}
 			}
 		}
@@ -127,44 +147,6 @@ func verifyRequest(req Request) error {
 	return nil
 }
 
-func (s *SendService) sendCoin(addr string, coins int64) (string, error) {
-	// verify the address
-	txid, err := s.skycli.Send(addr, coins)
-	if err != nil {
-		return "", err
-	}
-
-	errC := make(chan error, 1)
-	okC := make(chan struct{}, 1)
-	go func() {
-		for {
-			// check if the tx is confirmed
-			tx, err := s.skycli.GetTransaction(txid)
-			if err != nil {
-				errC <- fmt.Errorf("Check confirmation of tx: %v failed: %v", txid, err)
-				return
-			}
-			if tx.Transaction.Status.Confirmed {
-				okC <- struct{}{}
-				return
-			}
-
-			time.Sleep(sendCoinCheckTime)
-		}
-	}()
-
-	select {
-	case err := <-errC:
-		return txid, err
-	case <-okC:
-		return txid, nil
-	case <-s.quit:
-		// wait until the transaction is confirmed, otherwise the
-		<-okC
-		return txid, ErrServiceClosed
-	}
-}
-
 func (s *SendService) isTxConfirmed(txid string) (bool, error) {
 	tx, err := s.skycli.GetTransaction(txid)
 	if err != nil {
@@ -176,5 +158,15 @@ func (s *SendService) isTxConfirmed(txid string) (bool, error) {
 
 // Shutdown close the sender
 func (s *SendService) Shutdown() {
+	s.Lock()
+	s.isClosed = true
+	s.Unlock()
 	close(s.quit)
+}
+
+// IsClosed checks if the send service is closed
+func (s *SendService) IsClosed() bool {
+	s.Lock()
+	defer s.Unlock()
+	return s.isClosed
 }
