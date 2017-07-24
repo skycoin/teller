@@ -4,15 +4,17 @@ package exchange
 type status int8
 
 const (
-	statusWaitBtcDeposit status = iota
-	statusWaitSkySend
+	statusWaitDeposit status = iota
+	statusWaitSend
+	statusWaitConfirm
 	statusDone
 )
 
 var statusString = []string{
-	statusWaitBtcDeposit: "waiting_btc_deposit",
-	statusWaitSkySend:    "waiting_sky_send",
-	statusDone:           "done",
+	statusWaitDeposit: "waiting_deposit",
+	statusWaitSend:    "waiting_send",
+	statusWaitConfirm: "waiting_confirm",
+	statusDone:        "done",
 }
 
 // depositInfo records the deposit info
