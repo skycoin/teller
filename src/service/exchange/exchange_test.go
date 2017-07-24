@@ -253,7 +253,7 @@ func TestRunExchangeService(t *testing.T) {
 
 			go service.Run()
 
-			excli := NewExchange(service)
+			excli := NewClient(service)
 			if len(tc.initDpis) == 0 {
 				require.Nil(t, excli.BindAddress(tc.bindBtcAddr, tc.bindSkyAddr))
 			}
