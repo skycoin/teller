@@ -133,7 +133,7 @@ func (s *Service) Run() error {
 				st := <-rsp.StatusC
 				switch st {
 				case sender.Sent:
-					s.Printf("Status=%s skycoin address=%s\n", statusString[statusWaitConfirm], skyAddr)
+					s.Printf("Status=%s, skycoin address=%s\n", statusString[statusWaitConfirm], skyAddr)
 					if err := s.store.UpdateDepositInfo(dv.Address, func(dpi depositInfo) depositInfo {
 						dpi.Status = statusWaitConfirm
 						return dpi
@@ -141,7 +141,7 @@ func (s *Service) Run() error {
 						s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
 					}
 				case sender.TxConfirmed:
-					s.Printf("Status=%s skycoin address=%s\n", statusString[statusDone], skyAddr)
+					s.Printf("Status=%s, skycoin address=%s\n", statusString[statusDone], skyAddr)
 					if err := s.store.UpdateDepositInfo(dv.Address, func(dpi depositInfo) depositInfo {
 						dpi.Status = statusDone
 						return dpi
@@ -173,9 +173,13 @@ func (s *Service) Shutdown() {
 }
 
 func (s *Service) addDepositInfo(btcAddr, skyAddr string) error {
-	_, err := s.store.AddDepositInfo(depositInfo{
+	if _, err := s.store.AddDepositInfo(depositInfo{
 		BtcAddress: btcAddr,
 		SkyAddress: skyAddr,
-	})
-	return err
+	}); err != nil {
+		return err
+	}
+
+	// add btc address to scanner
+	return s.scanner.AddDepositAddress(btcAddr)
 }

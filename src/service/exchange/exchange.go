@@ -15,9 +15,5 @@ func NewExchange(s *Service) *Exchange {
 // to the btc address, will send specific skycoin to the binded
 // skycoin address
 func (ec *Exchange) BindAddress(btcAddr, skyAddr string) error {
-	if err := ec.s.addDepositInfo(btcAddr, skyAddr); err != nil {
-		return err
-	}
-
-	return ec.s.scanner.AddDepositAddress(btcAddr)
+	return ec.s.addDepositInfo(btcAddr, skyAddr)
 }
