@@ -20,7 +20,8 @@ var (
 
 // SkySender provids apis for sending skycoin
 type SkySender interface {
-	Send(destAddr string, coins int64, opt *sender.SendOption) (string, error)
+	SendAsync(destAddr string, coins int64, opt *sender.SendOption) (<-chan interface{}, error)
+	IsClosed() bool
 }
 
 // BtcScanner provids apis for interact with scan service
@@ -87,21 +88,27 @@ func (s *Service) Run() error {
 			}
 
 			// only update the status that are under waiting_sky_send
-			if dpi.Status >= statusWaitSkySend {
-				// TODO: this might mean the user deposit btcoin the btc address multiple times
-				s.Printf("Deposit status of btc address %s already >= %s\n", dv.Address, statusString[statusWaitSkySend])
+			if dpi.Status >= statusWaitSend {
+				// TODO: this might mean the user deposit btcoin btc to the same address multiple times
+				s.Printf("Deposit status of btc address %s already >= %s\n", dv.Address, statusString[statusWaitSend])
 				continue
 			}
 
 			// update status to waiting_sky_send
 			err := s.store.UpdateDepositInfo(dv.Address, func(dpi depositInfo) depositInfo {
-				dpi.Status = statusWaitSkySend
+				dpi.Status = statusWaitSend
 				return dpi
 			})
 
 			if err != nil {
 				s.Printf("Update deposit status of btc address %s failed: %v\n", dv.Address, err)
 				continue
+			}
+
+			// checks if the send service is closed
+			if s.sender.IsClosed() {
+				s.Println("Send service closed")
+				return nil
 			}
 
 			// send skycoins
@@ -114,25 +121,47 @@ func (s *Service) Run() error {
 			// try to send skycoin
 			skyAmt := calculateSkyValue(dv.Value, float64(s.cfg.Rate))
 
-			txid, err := s.sender.Send(skyAddr, skyAmt, nil)
+			rspC, err := s.sender.SendAsync(skyAddr, skyAmt, nil)
 			if err != nil && err != sender.ErrServiceClosed {
 				return fmt.Errorf("Send %d skycoin to %s failed: %v", skyAmt, skyAddr, err)
 			}
 
-			s.Printf("Send %d skycoin to %s success, txid=%s, deposit address=%s\n",
-				skyAmt, skyAddr, txid, dv.Address)
+			rsp := (<-rspC).(sender.Response)
 
-			// update the txid
-			if er := s.store.UpdateDepositInfo(dv.Address, func(dpi depositInfo) depositInfo {
-				dpi.Status = statusDone
-				dpi.Txid = txid
-				return dpi
-			}); er != nil {
-				s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, er)
+		loop:
+			for {
+				st := <-rsp.StatusC
+				switch st {
+				case sender.Sent:
+					s.Printf("Status=%s skycoin address=%s\n", statusString[statusWaitConfirm], skyAddr)
+					if err := s.store.UpdateDepositInfo(dv.Address, func(dpi depositInfo) depositInfo {
+						dpi.Status = statusWaitConfirm
+						return dpi
+					}); err != nil {
+						s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
+					}
+				case sender.TxConfirmed:
+					s.Printf("Status=%s skycoin address=%s\n", statusString[statusDone], skyAddr)
+					if err := s.store.UpdateDepositInfo(dv.Address, func(dpi depositInfo) depositInfo {
+						dpi.Status = statusDone
+						return dpi
+					}); err != nil {
+						s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
+					}
+					break loop
+				}
 			}
 
-			if err == sender.ErrServiceClosed {
-				return nil
+			s.Printf("Send %d skycoin to %s success, txid=%s, deposit address=%s\n",
+				skyAmt, skyAddr, rsp.Txid, dv.Address)
+
+			// update the txid
+			if err := s.store.UpdateDepositInfo(dv.Address, func(dpi depositInfo) depositInfo {
+				dpi.Status = statusDone
+				dpi.Txid = rsp.Txid
+				return dpi
+			}); err != nil {
+				s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
 			}
 		}
 	}

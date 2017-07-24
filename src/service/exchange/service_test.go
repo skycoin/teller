@@ -1,11 +1,10 @@
 package exchange
 
 import (
+	"fmt"
 	"testing"
 
 	"time"
-
-	"fmt"
 
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/scanner"
@@ -21,6 +20,7 @@ type dummySender struct {
 		Address string
 		Value   int64
 	}
+	closed bool
 }
 
 func (send *dummySender) Send(destAddr string, coins int64, opt *sender.SendOption) (string, error) {
@@ -35,11 +35,42 @@ func (send *dummySender) Send(destAddr string, coins int64, opt *sender.SendOpti
 	return send.txid, send.err
 }
 
+func (send *dummySender) SendAsync(destAddr string,
+	coins int64,
+	opt *sender.SendOption) (<-chan interface{}, error) {
+	rspC := make(chan interface{}, 1)
+	if send.err != nil {
+		return rspC, send.err
+	}
+
+	stC := make(chan sender.SendStatus, 2)
+	time.AfterFunc(100*time.Millisecond, func() {
+		send.sent.Address = destAddr
+		send.sent.Value = coins
+		rspC <- sender.Response{
+			StatusC: stC,
+			Txid:    send.txid,
+		}
+		stC <- sender.Sent
+	})
+
+	time.AfterFunc(send.sleepTime, func() {
+		stC <- sender.TxConfirmed
+	})
+
+	return rspC, nil
+}
+
+func (send *dummySender) IsClosed() bool {
+	return send.closed
+}
+
 type dummyScanner struct {
 	dvC         chan scanner.DepositValue
 	addrs       []string
 	notifyC     chan struct{}
 	notifyAfter time.Duration
+	closed      bool
 }
 
 func (scan *dummyScanner) AddDepositAddress(addr string) error {
@@ -73,8 +104,11 @@ func TestRunExchangeService(t *testing.T) {
 		sendReturnTxid string
 		sendErr        error
 
-		dvC         chan scanner.DepositValue
-		notifyAfter time.Duration
+		sendServClosed bool
+
+		dvC           chan scanner.DepositValue
+		scanServClose bool
+		notifyAfter   time.Duration
 
 		putDVTime    time.Duration
 		writeToDBOk  bool
@@ -111,7 +145,7 @@ func TestRunExchangeService(t *testing.T) {
 			notifyAfter:    3 * time.Second,
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    false,
-			expectStatus:   statusWaitBtcDeposit,
+			expectStatus:   statusWaitDeposit,
 		},
 		{
 			name: "deposit_status_above_waiting_btc_deposit",
@@ -141,11 +175,12 @@ func TestRunExchangeService(t *testing.T) {
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
 			sendErr:        sender.ErrServiceClosed,
+			sendServClosed: true,
 			dvC:            make(chan scanner.DepositValue, 1),
 			notifyAfter:    3 * time.Second,
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
-			expectStatus:   statusDone,
+			expectStatus:   statusWaitSend,
 		},
 		{
 			name:           "send_failed",
@@ -161,7 +196,24 @@ func TestRunExchangeService(t *testing.T) {
 			notifyAfter:    3 * time.Second,
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
-			expectStatus:   statusWaitSkySend,
+			expectStatus:   statusWaitSend,
+		},
+		{
+			name:           "scan_service_closed",
+			initDpis:       []depositInfo{},
+			bindBtcAddr:    "btcaddr",
+			bindSkyAddr:    "skyaddr",
+			dpAddr:         "btcaddr",
+			dpValue:        0.002,
+			sendSleepTime:  time.Second * 3,
+			sendReturnTxid: "",
+			sendErr:        fmt.Errorf("send skycoin failed"),
+			dvC:            make(chan scanner.DepositValue, 1),
+			notifyAfter:    3 * time.Second,
+			scanServClose:  true,
+			putDVTime:      1 * time.Second,
+			writeToDBOk:    true,
+			expectStatus:   statusWaitSend,
 		},
 	}
 
@@ -174,6 +226,7 @@ func TestRunExchangeService(t *testing.T) {
 				sleepTime: tc.sendSleepTime,
 				txid:      tc.sendReturnTxid,
 				err:       tc.sendErr,
+				closed:    tc.sendServClosed,
 			}
 
 			dvC := make(chan scanner.DepositValue)
@@ -181,6 +234,7 @@ func TestRunExchangeService(t *testing.T) {
 				dvC:         dvC,
 				notifyC:     make(chan struct{}, 1),
 				notifyAfter: tc.notifyAfter,
+				closed:      tc.scanServClose,
 			}
 			var service *Service
 
@@ -206,10 +260,18 @@ func TestRunExchangeService(t *testing.T) {
 
 			// fake deposit value
 			time.AfterFunc(tc.putDVTime, func() {
+				if scan.closed {
+					close(dvC)
+					return
+				}
 				dvC <- scanner.DepositValue{Address: tc.dpAddr, Value: tc.dpValue}
 			})
 
 			<-scan.notifyC
+
+			if scan.closed {
+				return
+			}
 
 			// check the info
 			dpi, ok := service.store.GetDepositInfo(tc.dpAddr)
