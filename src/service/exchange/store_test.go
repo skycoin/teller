@@ -71,7 +71,7 @@ func TestAddDepositInfo(t *testing.T) {
 	require.Equal(t, seq, dpi.Seq)
 	require.Equal(t, "skyaddr1", dpi.SkyAddress)
 	require.Equal(t, "btcaddr1", dpi.BtcAddress)
-	require.Equal(t, statusWaitBtcDeposit, dpi.Status)
+	require.Equal(t, statusWaitDeposit, dpi.Status)
 	require.NotEmpty(t, dpi.UpdatedAt)
 
 	// check binded address cache
@@ -245,19 +245,19 @@ func TestUpdateDeposit(t *testing.T) {
 		var dpi1 depositInfo
 		require.Nil(t, json.Unmarshal(v1, &dpi1))
 
-		require.Equal(t, dpi1.Status, statusWaitBtcDeposit)
+		require.Equal(t, dpi1.Status, statusWaitDeposit)
 
 		v2 := bkt.Get([]byte("btcaddr2"))
 		require.NotNil(t, v2)
 		var dpi2 depositInfo
 		require.Nil(t, json.Unmarshal(v2, &dpi2))
-		require.Equal(t, dpi2.Status, statusWaitBtcDeposit)
+		require.Equal(t, dpi2.Status, statusWaitDeposit)
 
 		return nil
 	})
 
 	err = s.UpdateDepositInfo("btcaddr1", func(dpi depositInfo) depositInfo {
-		dpi.Status = statusWaitSkySend
+		dpi.Status = statusWaitSend
 		dpi.Txid = "121212"
 
 		// try to change immutable value skyaddress
@@ -274,7 +274,7 @@ func TestUpdateDeposit(t *testing.T) {
 		require.Nil(t, json.Unmarshal(v1, &dpi1))
 
 		// check updated value
-		require.Equal(t, dpi1.Status, statusWaitSkySend)
+		require.Equal(t, dpi1.Status, statusWaitSend)
 		require.Equal(t, "121212", dpi1.Txid)
 
 		// check immutable value
@@ -287,7 +287,7 @@ func TestUpdateDeposit(t *testing.T) {
 	dpi, ok := s.cache.depositInfo["btcaddr1"]
 	require.True(t, ok)
 	require.Equal(t, seq, dpi.Seq)
-	require.Equal(t, statusWaitSkySend, dpi.Status)
+	require.Equal(t, statusWaitSend, dpi.Status)
 	require.Equal(t, "skyaddr1", dpi.SkyAddress)
 	require.Equal(t, "btcaddr1", dpi.BtcAddress)
 
