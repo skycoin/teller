@@ -1,20 +1,13 @@
 package service
 
 import (
-	"errors"
-
-	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
 )
 
 // gateway is used to limit the service's direct Export methods.
 type gateway struct {
+	logger.Logger
 	s *Service
-}
-
-// Logger returns the service's logger
-func (gw *gateway) Logger() logger.Logger {
-	return gw.s.log
 }
 
 // ResetPongTimer resets the pong timer
@@ -24,27 +17,17 @@ func (gw *gateway) ResetPongTimer() {
 	})
 }
 
-// AddMonitor add monitor of specific deposit address
-func (gw *gateway) AddMonitor(mm *daemon.MonitorMessage) (err error) {
-	if mm == nil {
-		return errors.New("Nil daemon.MonitorMessage")
+// BindAddress binds skycoin address with a deposit btc address
+// return btc address
+func (gw *gateway) BindAddress(skyAddr string) (string, error) {
+	btcAddr, err := gw.s.btcAddrGen.NewAddress()
+	if err != nil {
+		return "", err
 	}
-	gw.s.strand(func() {
-		cv := coinValue{
-			Address:    mm.DepositCoin.Address,
-			CoinName:   mm.DepositCoin.CoinName,
-			ICOAddress: mm.ICOCoin.Address,
-		}
-		err = gw.s.exchange.AddMonitor(cv)
-	})
-	return
-}
 
-// GetExchangeLogs returns exchange logs whose id are in the given range
-func (gw *gateway) GetExchangeLogs(start, end int) ([]daemon.ExchangeLog, error) {
-	return gw.s.exchange.GetLogs(start, end)
-}
+	if err := gw.s.excli.BindAddress(btcAddr, skyAddr); err != nil {
+		return "", err
+	}
 
-func (gw *gateway) GetExchangeLogsLen() int {
-	return gw.s.exchange.GetLogsLen()
+	return btcAddr, nil
 }

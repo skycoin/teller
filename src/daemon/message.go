@@ -4,17 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
-	"time"
 )
 
 var regMessageMap = map[MsgType]reflect.Type{}
 
 var (
-	PingMsgType            = PingMessage{}.Type()
-	PongMsgType            = PongMessage{}.Type()
-	MonitorMsgType         = MonitorMessage{}.Type()
-	GetExchgLogsMsgType    = GetExchangeLogsMessage{}.Type()
-	GetExchgLogsAckMsgType = GetExchangeLogsAckMessage{}.Type()
+	PingMsgType         = PingMessage{}.Type()
+	PongMsgType         = PongMessage{}.Type()
+	BindRequestMsgType  = BindRequest{}.Type()
+	BindResponseMsgType = BindResponse{}.Type()
 )
 
 func init() {
@@ -23,10 +21,6 @@ func init() {
 	registerMessage(&AuthAckMessage{})
 	registerMessage(&PingMessage{})
 	registerMessage(&PongMessage{})
-	registerMessage(&MonitorMessage{})
-	registerMessage(&MonitorAckMessage{})
-	registerMessage(&GetExchangeLogsMessage{})
-	registerMessage(&GetExchangeLogsAckMessage{})
 }
 
 // Messager interface describes what should be implemented as a message
@@ -125,11 +119,6 @@ func (pm PingMessage) Serialize() ([]byte, error) {
 	return json.Marshal(pm)
 }
 
-// // Version returns the protocol message version
-// func (pm PingMessage) Version() uint16 {
-// 	return msgVersion
-// }
-
 // PongMessage represents the ack message of ping.
 type PongMessage struct {
 	Base
@@ -146,111 +135,35 @@ func (pm PongMessage) Serialize() ([]byte, error) {
 	return json.Marshal(pm)
 }
 
-// // Version returns the protocol message version
-// func (pm PongMessage) Version() uint16 {
-// 	return msgVersion
-// }
-
-// MonitorMessage command message
-type MonitorMessage struct {
+// BindRequest request for binding skycoin address with a deposit address
+type BindRequest struct {
 	Base
-	DepositCoin struct {
-		CoinName string `json:"coin"`
-		Address  string `json:"address"`
-	} `json:"deposit_coin"`
-	ICOCoin struct {
-		CoinName string `json:"coin"`
-		Address  string `json:"address"`
-	} `json:"ico_coin"`
+	SkyAddress string `json:"skycoin_address"`
 }
 
-// Type returns the message type
-func (mm MonitorMessage) Type() MsgType {
-	return stringToMsgType("MNIT")
+// Type returns message type
+func (br BindRequest) Type() MsgType {
+	return stringToMsgType("BREQ")
 }
 
-// Serialize encode the message into json bytes
-func (mm MonitorMessage) Serialize() ([]byte, error) {
-	return json.Marshal(mm)
+// Serialize returns the json marshal value
+func (br BindRequest) Serialize() ([]byte, error) {
+	return json.Marshal(br)
 }
 
-// // Version returns the protocol version
-// func (mm MonitorMessage) Version() uint16 {
-// 	return msgVersion
-// }
-
-// Result represents the request message result, ususally will be embeded
-// in other Ack message.
-type Result struct {
-	Success bool   `json:"success"`
-	Err     string `json:"err"`
-}
-
-// MonitorAckMessage represents the ack message of monitor message
-type MonitorAckMessage struct {
+// BindResponse response message for bind request
+type BindResponse struct {
 	Base
-	Result `json:"result"`
+	BtcAddress string `json:"btc_address, omitempty"`
+	Err        string `json:"error,omitempty"`
 }
 
-// Type returns the message type
-func (mam MonitorAckMessage) Type() MsgType {
-	return stringToMsgType("MNAK")
+// Type returns message type
+func (br BindResponse) Type() MsgType {
+	return stringToMsgType("BRSP")
 }
 
-// Serialize serialize the monitor ack message
-func (mam MonitorAckMessage) Serialize() ([]byte, error) {
-	return json.Marshal(mam)
-}
-
-// GetExchangeLogsMessage rerpesents the message to require exchange logs
-type GetExchangeLogsMessage struct {
-	Base
-	StartID int
-	EndID   int
-}
-
-// Type returns the message type
-func (gelm GetExchangeLogsMessage) Type() MsgType {
-	return stringToMsgType("GLOG")
-}
-
-// Serialize serialize the message
-func (gelm GetExchangeLogsMessage) Serialize() ([]byte, error) {
-	return json.Marshal(gelm)
-}
-
-// ExchangeLog represents the log of exchange
-type ExchangeLog struct {
-	ID      int       `json:"logid"`
-	Time    time.Time `json:"time"`
-	Deposit struct {
-		Address string
-		Coin    uint64
-	} `json:"deposit"`
-	ICO struct {
-		Address string
-		Coin    uint64
-	} `json:"ico"`
-	Tx struct {
-		Hash      string `json:"hash"`
-		Confirmed bool   `json:"coinfirmed"`
-	} `json:"tx"`
-}
-
-// GetExchangeLogsAckMessage represents the ack message of GetExchangeLogsMessage
-type GetExchangeLogsAckMessage struct {
-	Base
-	Result   `json:"result"`
-	MaxLogID int           `json:"max_log_id"`
-	Logs     []ExchangeLog `json:"exchange_logs"`
-}
-
-// Type returns the exchange logs ack message type
-func (gelam GetExchangeLogsAckMessage) Type() MsgType {
-	return stringToMsgType("ALOG")
-}
-
-// Serialize get exchange logs ack message
-func (gelam GetExchangeLogsAckMessage) Serialize() ([]byte, error) {
-	return json.Marshal(gelam)
+// Serialize returns the json marshal value
+func (br BindResponse) Serialize() ([]byte, error) {
+	return json.Marshal(br)
 }
