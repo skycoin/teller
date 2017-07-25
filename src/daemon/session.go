@@ -12,6 +12,10 @@ var (
 	ErrWriteChanFull = errors.New("Write channel is full")
 )
 
+const (
+	handleTimeout = 5 * time.Second
+)
+
 // ResponseWriteCloser will be used to write data back, also provides Close method
 // to close the session if necessary.
 type ResponseWriteCloser interface {
@@ -105,7 +109,6 @@ func (sn *Session) Run() error {
 
 	go func() {
 		// read message loop
-		defer sn.log.Debugln("Exit read message loop")
 		for {
 			msg, err := sn.ts.Read()
 			if err != nil {
@@ -129,18 +132,27 @@ func (sn *Session) Run() error {
 		}
 	}()
 
+	idC := make(chan chan struct{}, 1)
+
 	// start the session subscribe id generator
 	go func() {
 		i := 1
 		for {
 			select {
-			case <-sn.quit:
+			case c := <-idC:
+				c <- struct{}{}
 				return
 			case sn.idGenC <- i:
 				i++
 				i = i % 2048 // limit the max id number
 			}
 		}
+	}()
+
+	defer func() {
+		c := make(chan struct{}, 1)
+		idC <- c
+		<-c
 	}()
 
 	for {
@@ -150,6 +162,8 @@ func (sn *Session) Run() error {
 		case err := <-errC:
 			sn.log.Debugln(err)
 			return err
+		case req := <-sn.reqC:
+			req()
 		case msg := <-msgChan:
 			sn.log.Debugln("Recv msg:", msg.Type())
 			if sn.mux != nil {
@@ -161,8 +175,6 @@ func (sn *Session) Run() error {
 				go push(msg)
 			}
 
-		case req := <-sn.reqC:
-			req()
 		case msg := <-sn.wc:
 			if err := sn.ts.Write(msg); err != nil {
 				sn.log.Debugln(err)
