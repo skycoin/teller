@@ -1,15 +1,15 @@
 package service
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"net"
+	"sync"
 	"testing"
 
-	"time"
-
 	"os"
+
+	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/fortytw2/leaktest"
@@ -19,9 +19,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func makeServer(t *testing.T, auth *daemon.Auth) (net.Listener, func()) {
+func pingHandler(w daemon.ResponseWriteCloser, msg daemon.Messager) {
+	switch msg.Type() {
+	case daemon.PingMessage{}.Type():
+		w.Write(&daemon.PongMessage{Value: "PONG"})
+	default:
+		fmt.Println("unknow message type:", msg.Type())
+	}
+}
+
+func makeProxy(t *testing.T, auth *daemon.Auth, msgHandler map[daemon.MsgType]daemon.Handler) (net.Listener, func()) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	assert.Nil(t, err)
+	var s *daemon.Session
+	var wg sync.WaitGroup
 	go func() {
 		for {
 			conn, err := ln.Accept()
@@ -29,27 +40,28 @@ func makeServer(t *testing.T, auth *daemon.Auth) (net.Listener, func()) {
 				return
 			}
 			mux := daemon.NewMux(logger.NewLogger("", true))
-			mux.HandleFunc(daemon.PingMessage{}.Type(), func(w daemon.ResponseWriteCloser, msg daemon.Messager) {
-				switch msg.Type() {
-				case daemon.PingMessage{}.Type():
-					fmt.Println("recv ping message")
-					w.Write(&daemon.PongMessage{Value: "PONG"})
-				default:
-					fmt.Println("unknow message type:", msg.Type())
-				}
-			})
-			s, err := daemon.NewSession(conn, auth, mux, false)
+			for tp, hd := range msgHandler {
+				mux.HandleFunc(tp, hd)
+			}
+
+			s, err = daemon.NewSession(conn, auth, mux, false)
 			if err != nil {
 				return
 			}
-			cxt, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			go s.Run(cxt)
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				s.Run()
+			}()
 		}
 	}()
+
 	return ln, func() {
+		if s != nil {
+			s.Close()
+		}
 		ln.Close()
-		fmt.Println("close listener")
+		wg.Wait()
 	}
 }
 
@@ -68,8 +80,9 @@ func makeAuthPair() (clientAuth, serverAuth *daemon.Auth) {
 	return
 }
 
-func prepareDB(t *testing.T) (*bolt.DB, func()) {
-	f := fmt.Sprintf("test%d.db", rand.Intn(1024))
+func setupDB(t *testing.T) (*bolt.DB, func()) {
+	rand.Seed(time.Now().Unix())
+	f := fmt.Sprintf("%s/test%d.db", os.TempDir(), rand.Intn(1024))
 	db, err := bolt.Open(f, 0700, nil)
 	assert.Nil(t, err)
 	return db, func() {
@@ -78,26 +91,78 @@ func prepareDB(t *testing.T) (*bolt.DB, func()) {
 	}
 }
 
+type dummyExchanger struct {
+	err error
+}
+
+func (de dummyExchanger) BindAddress(btcAddr, skyAddr string) error {
+	return de.err
+}
+
+type dummyBtcAddrGenerator struct {
+	addr string
+	err  error
+}
+
+func (dba dummyBtcAddrGenerator) NewAddress() (string, error) {
+	return dba.addr, dba.err
+}
+
 func TestRunService(t *testing.T) {
-	defer leaktest.Check(t)()
-	cAuth, sAuth := makeAuthPair()
-	s, stop := makeServer(t, sAuth)
-	defer stop()
 
-	proxyAddr := s.Addr().String()
+	var testCases = []struct {
+		name               string
+		proxyMsgHanlderMap map[daemon.MsgType]daemon.Handler
+		exchanger          Exchanger
+		btcAddrGen         BtcAddrGenerator
+	}{
+		{
+			"test_ping_pong",
+			map[daemon.MsgType]daemon.Handler{
+				daemon.PingMsgType: pingHandler,
+			},
+			&dummyExchanger{},
+			dummyBtcAddrGenerator{addr: "1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy"},
+		},
+		{
+			"pong_timeout",
+			map[daemon.MsgType]daemon.Handler{
+				daemon.PingMsgType: func(w daemon.ResponseWriteCloser, msg daemon.Messager) {
+					time.Sleep(pongTimeout + time.Second)
+				},
+			},
+			&dummyExchanger{},
+			dummyBtcAddrGenerator{addr: "1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy"},
+		},
+	}
 
-	lg := logger.NewLogger("", true)
-	db, close := prepareDB(t)
-	defer close()
-	service, cancel := New(proxyAddr, cAuth, db, Logger(lg))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			defer leaktest.Check(t)()
+			cAuth, sAuth := makeAuthPair()
+			s, stop := makeProxy(t, sAuth, tc.proxyMsgHanlderMap)
+			defer stop()
+			proxyAddr := s.Addr().String()
 
-	service.HandleFunc(daemon.PongMessage{}.Type(), PongMessageHandler(service.gateway))
+			lg := logger.NewLogger("", true)
+			db, close := setupDB(t)
+			defer close()
 
-	// time.AfterFunc(15*time.Second, func() {
-	// 	cancel()
-	// })
-	service.Run()
-	time.Sleep(5 * time.Second)
-	cancel()
-	// time.Sleep(3 * time.Second)
+			service := New(Config{
+				ProxyAddr: proxyAddr,
+				Auth:      cAuth,
+				DB:        db,
+				Log:       lg,
+			}, tc.exchanger, tc.btcAddrGen)
+
+			service.HandleFunc(daemon.PongMessage{}.Type(), PongMessageHandler(service.gateway))
+
+			time.AfterFunc(pongTimeout+time.Second, func() {
+				service.Shutdown()
+			})
+
+			service.Run()
+		})
+	}
+
 }

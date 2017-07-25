@@ -3,13 +3,8 @@ package service
 import (
 	"errors"
 	"net"
-	"path/filepath"
 
 	"time"
-
-	"os/user"
-
-	"sync"
 
 	"github.com/boltdb/bolt"
 	"github.com/skycoin/teller/src/daemon"
@@ -22,151 +17,104 @@ const (
 	pingTimeout   = 5 * time.Second
 	pongTimeout   = 10 * time.Second
 	dialTimeout   = 5 * time.Second
-
-	scanPeriod = 30 * time.Second
-
-	nodeRPCAddr = "127.0.0.1:7430"
-	nodeWltFile = ".skycoin/wallets/skycoin.wlt"
-
-	depositCoin = "bitcoin" // default deposit coin
-	icoCoin     = "skycoin" // default ico coin
 )
 
 var (
 	ErrPongTimout = errors.New("Pong message timeout")
 )
 
-// Service provides the ico service
-type Service struct {
-	log       logger.Logger
-	cfg       config       // service configuration info
-	session   *session     // connection is maintained in session, and when session done, means this connection is done.
-	proxyAddr string       // ico proxy address, format in host:port
-	auth      *daemon.Auth // records the secrects for authentication,
-	mux       *daemon.Mux  // used for dispatching message to corresponding handler
-	// cxt       context.Context // usually it's not recommand to record context as member variable, while in this case,
-	// we have to record it here, so that Run method can check it to exist the service loop.
-	reqc chan func() // reqeust function channel, requests go throught this channel can make the accessing of
-	// member variable thread safe.
-	exchange *exchange // exchange is in charge of monitoring deposit coin's balance, and send ico coins to given address.
-	gateway  *gateway  // gateway will be used in message handlers, provides methods to access service's resource
-	// in safe mode, and can also reduce the export methods number of service.
-	wg   sync.WaitGroup // for making sure that all goroutine are returned before service exit.
-	quit chan struct{}
+// BtcAddrGenerator generate new deposit address
+type BtcAddrGenerator interface {
+	NewAddress() (string, error)
 }
 
-// config records the configurations of the service
-type config struct {
+// Exchanger provids apis to interact with exchange service
+type Exchanger interface {
+	BindAddress(btcAddr, skyAddr string) error
+}
+
+// Service provides the ico service
+type Service struct {
+	logger.Logger
+	cfg     Config      // service configuration info
+	session *session    // connection is maintained in session, and when session done, means this connection is done.
+	mux     *daemon.Mux // used for dispatching message to corresponding handler
+
+	excli      Exchanger        // exchange service client
+	btcAddrGen BtcAddrGenerator // btc address generator
+	gateway    *gateway         // gateway will be used in message handlers, provides methods to access service's resource
+	reqc       chan func()      // reqeust function channel, to queue the variable update request
+	quit       chan struct{}
+}
+
+// Config records the configurations of the service
+type Config struct {
+	ProxyAddr string
+	Auth      *daemon.Auth
+	DB        *bolt.DB
+	Log       logger.Logger
+
 	ReconnectTime time.Duration
 	PingTimeout   time.Duration
 	PongTimeout   time.Duration
 	DialTimeout   time.Duration
-
-	ScanPeriod time.Duration // scan period
-
-	NodeRPCAddr  string // node's rpc address
-	NodeWltFile  string // ico coin's wallet path
-	ExchangeRate rateTable
-
-	DepositCoin string // deposit coin name
-	ICOCoin     string // ico coin name
 }
 
-// Cancel callback function for canceling the service.
-type Cancel func()
-
 // New creates a ico service
-func New(proxyAddr string, auth *daemon.Auth, db *bolt.DB, ops ...Option) *Service {
-	cur, err := user.Current()
-	if err != nil {
-		panic(err)
+func New(cfg Config, excli Exchanger, btcAddrGen BtcAddrGenerator) *Service {
+	if cfg.ReconnectTime == 0 {
+		cfg.ReconnectTime = reconnectTime
 	}
-	// cxt, cancel := context.WithCancel(context.Background())
+
+	if cfg.PingTimeout == 0 {
+		cfg.PingTimeout = pingTimeout
+	}
+
+	if cfg.PongTimeout == 0 {
+		cfg.PongTimeout = pongTimeout
+	}
+
+	if cfg.DialTimeout == 0 {
+		cfg.DialTimeout = dialTimeout
+	}
+
 	s := &Service{
-		proxyAddr: proxyAddr,
-		auth:      auth,
-		reqc:      make(chan func(), 1),
-		log:       logger.NewLogger("", false),
-		cfg: config{
-			ReconnectTime: reconnectTime,
-			PingTimeout:   pingTimeout,
-			PongTimeout:   pongTimeout,
-			DialTimeout:   dialTimeout,
-			ScanPeriod:    scanPeriod,
-			NodeRPCAddr:   nodeRPCAddr,
-			NodeWltFile:   filepath.Join(cur.HomeDir, nodeWltFile),
-			DepositCoin:   depositCoin,
-			ICOCoin:       icoCoin,
-		},
-		quit: make(chan struct{}),
+		cfg:        cfg,
+		Logger:     cfg.Log,
+		excli:      excli,
+		btcAddrGen: btcAddrGen,
+		reqc:       make(chan func(), 1),
+		quit:       make(chan struct{}),
 	}
 
-	for _, op := range ops {
-		op(s)
+	s.mux = daemon.NewMux(s.Logger)
+
+	s.gateway = &gateway{
+		Logger: s.Logger,
+		s:      s,
 	}
 
-	s.mux = daemon.NewMux(s.log)
-	s.gateway = &gateway{s}
-
-	cfg := exchgConfig{
-		db:          db,
-		log:         s.log,
-		rateTable:   s.cfg.ExchangeRate,
-		checkPeriod: s.cfg.ScanPeriod,
-		nodeRPCAddr: s.cfg.NodeRPCAddr,
-		nodeWltFile: s.cfg.NodeWltFile,
-		depositCoin: s.cfg.DepositCoin,
-		icoCoin:     s.cfg.ICOCoin,
-	}
-
-	s.exchange = newExchange(&cfg)
-
+	// bind message handlers
 	bindHandlers(s)
 
 	return s
 }
 
 // Run starts the service
-func (s *Service) Run() error {
-	go func() {
-		defer func() {
-			s.log.Println("Service exit")
-		}()
+func (s *Service) Run() {
+	defer s.Println("Service exit")
 
-		// start the exchange
-		exchgErrC := s.exchange.Run()
-
-		errC := make(chan error, 1)
-
-		// session err channel
-		serrC := make(chan error, 1)
-		go func() {
-			serrC <- s.newSession()
-		}()
-
-		for {
-			select {
-			case err := <-exchgErrC:
-				s.log.Debugln("Exchange error:", err)
-				return
-			case err := <-serrC:
-				s.log.Debugln("Session error:", err)
-				select {
-				case <-s.quit:
-					// service is closed
-					return
-				case <-time.After(s.cfg.ReconnectTime):
-					go func() {
-						errC <- s.newSession()
-					}()
-					continue
-				}
-			case req := <-s.reqc:
-				req()
-			}
+	for {
+		if err := s.newSession(); err != nil {
+			s.Println(err)
 		}
-	}()
-	return nil
+		select {
+		case <-s.quit:
+			return
+		case <-time.After(s.cfg.ReconnectTime):
+			continue
+		}
+	}
 }
 
 // Shutdown close the service
@@ -181,17 +129,17 @@ func (s *Service) HandleFunc(tp daemon.MsgType, h daemon.Handler) {
 }
 
 func (s *Service) newSession() error {
-	s.log.Debugln("New session")
+	s.Debugln("New session")
 
-	defer s.log.Debugln("Session closed")
-	s.log.Println("Connect to", s.proxyAddr)
+	defer s.Debugln("Session closed")
+	s.Println("Connect to", s.cfg.ProxyAddr)
 
-	conn, err := net.DialTimeout("tcp", s.proxyAddr, s.cfg.DialTimeout)
+	conn, err := net.DialTimeout("tcp", s.cfg.ProxyAddr, s.cfg.DialTimeout)
 	if err != nil {
 		return err
 	}
 
-	sn, err := daemon.NewSession(conn, s.auth, s.mux, true, daemon.Logger(s.log))
+	sn, err := daemon.NewSession(conn, s.cfg.Auth, s.mux, true, daemon.Logger(s.Logger))
 	if err != nil {
 		return err
 	}
@@ -215,19 +163,22 @@ func (s *Service) newSession() error {
 		case err := <-errC:
 			return err
 		case <-s.session.pongTimer.C:
-			s.log.Debugln("Pong message time out")
+			s.Debugln("Pong message time out")
 			s.session.close()
+			s.session = nil
 			return ErrPongTimout
 		case <-s.session.pingTicker.C:
 			// send ping message
-			s.log.Debugln("Send ping message")
+			s.Debugln("Send ping message")
 			s.sendPing()
+		case req := <-s.reqc:
+			req()
 		}
 	}
 }
 
 func (s *Service) closeSession() {
-	if s.session != nil {
+	if s.session != nil && !s.session.isClosed() {
 		s.session.close()
 	}
 }
