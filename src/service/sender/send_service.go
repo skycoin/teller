@@ -100,6 +100,11 @@ func (s *SendService) Run() error {
 				txid, err := s.skycli.Send(req.Address, req.Coins)
 				if err != nil {
 					s.Debugln("Send coin failed:", err, "try to send again..")
+					select {
+					case <-s.quit:
+						return nil
+					default:
+					}
 					time.Sleep(sendCoinCheckTime)
 					continue
 				}
@@ -113,6 +118,11 @@ func (s *SendService) Run() error {
 				for {
 					ok, err := s.isTxConfirmed(txid)
 					if err != nil {
+						select {
+						case <-s.quit:
+							return nil
+						default:
+						}
 						s.Debugln(err)
 						time.Sleep(sendCoinCheckTime)
 						continue
