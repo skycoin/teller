@@ -60,9 +60,7 @@ type SendService struct {
 
 // Config sender configuration info
 type Config struct {
-	WalletPath   string // path to the ico coin wallet
-	SkyRpcserver string // skycoin node server
-	ReqBufSize   uint32 // the buffer size of sending request
+	ReqBufSize uint32 // the buffer size of sending request
 }
 
 type skyclient interface {
@@ -73,9 +71,8 @@ type skyclient interface {
 // NewService creates sender instance
 func NewService(cfg Config, log logger.Logger, skycli skyclient) *SendService {
 	return &SendService{
-		Logger: log,
-		cfg:    cfg,
-		// skycli:  cli.New(cfg.walletPath, cfg.skyRpcserver),
+		Logger:  log,
+		cfg:     cfg,
 		skycli:  skycli,
 		quit:    make(chan struct{}),
 		reqChan: make(chan Request, cfg.ReqBufSize),
@@ -84,55 +81,53 @@ func NewService(cfg Config, log logger.Logger, skycli skyclient) *SendService {
 
 // Run start the send service
 func (s *SendService) Run() error {
-	go func() {
-		defer s.Println("Send service exit")
-		for {
-			select {
-			case req := <-s.reqChan:
-				// verify the request
-				if err := verifyRequest(req); err != nil {
-					req.RspC <- Response{Err: fmt.Sprintf("Invalid request: %v", err)}
+	s.Println("Start skycoin send service...")
+	defer s.Println("Skycoin send service closed")
+	for {
+		select {
+		case <-s.quit:
+			return nil
+		case req := <-s.reqChan:
+			// verify the request
+			if err := verifyRequest(req); err != nil {
+				req.RspC <- Response{Err: fmt.Sprintf("Invalid request: %v", err)}
+				continue
+			}
+
+		sendLoop:
+			for { // loop to resend coin if send failed
+
+				txid, err := s.skycli.Send(req.Address, req.Coins)
+				if err != nil {
+					s.Debugln("Send coin failed:", err, "try to send again..")
+					time.Sleep(sendCoinCheckTime)
 					continue
 				}
 
-			sendLoop:
-				for { // loop to resend coin if send failed
+				rsp := makeResponse(txid, "")
+				go func() { rsp.StatusC <- Sent }()
 
-					txid, err := s.skycli.Send(req.Address, req.Coins)
+				req.RspC <- rsp
+
+				// transaction already exist, check tx status
+				for {
+					ok, err := s.isTxConfirmed(txid)
 					if err != nil {
-						s.Debugln("Send coin failed:", err, "try to send again..")
+						s.Debugln(err)
 						time.Sleep(sendCoinCheckTime)
 						continue
 					}
 
-					rsp := makeResponse(txid, "")
-					go func() { rsp.StatusC <- Sent }()
-
-					req.RspC <- rsp
-
-					// transaction already exist, check tx status
-					for {
-						ok, err := s.isTxConfirmed(txid)
-						if err != nil {
-							s.Debugln(err)
-							time.Sleep(sendCoinCheckTime)
-							continue
-						}
-
-						if ok {
-							go func() { rsp.StatusC <- TxConfirmed }()
-							s.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
-							break sendLoop
-						}
-						time.Sleep(sendCoinCheckTime)
+					if ok {
+						go func() { rsp.StatusC <- TxConfirmed }()
+						s.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
+						break sendLoop
 					}
+					time.Sleep(sendCoinCheckTime)
 				}
 			}
 		}
-	}()
-
-	<-s.quit
-	return nil
+	}
 }
 
 func verifyRequest(req Request) error {
