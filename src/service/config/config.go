@@ -21,24 +21,23 @@ type Config struct {
 	PingTimeout   time.Duration `json:"ping_timeout"`
 	PongTimeout   time.Duration `json:"pong_timeout"`
 
-	Node Node `json:"node"`
+	Skynode Skynode `json:"skynode"`
 
-	ExchangeRate []ExchangeRate `json:"exchange_rate"`
+	ExchangeRate int64 `json:"exchange_rate"`
 
-	DepositCoin string `json:"deposit_coin"`
-	ICOCoin     string `json:"ico_coin"`
-
-	Btcscan Btcscan `json:"btc_scan"`
-	Btcrpc  Btcrpc  `json:"btc_rpc"`
+	Btcscan   Btcscan   `json:"btc_scan"`
+	Btcrpc    Btcrpc    `json:"btc_rpc"`
+	SkySender SkySender `json:"sky_sender"`
 }
 
 // Btcscan config for scanner
 type Btcscan struct {
-	CheckPeriod time.Duration `json:"check_period"`
+	CheckPeriod       time.Duration `json:"check_period"`
+	DepositBufferSize uint32        `json:"deposit_buffer_size"`
 }
 
-// Node represents the node related config
-type Node struct {
+// Skynode represents the skycoin node related config
+type Skynode struct {
 	RPCAddress string `json:"rpc_address"`
 	WalletPath string `json:"wallet_path"`
 }
@@ -54,6 +53,11 @@ func New(path string) (*Config, error) {
 	if err := json.NewDecoder(bytes.NewReader(v)).Decode(&cfg); err != nil {
 		return nil, err
 	}
+
+	cfg.PingTimeout = cfg.PingTimeout * time.Second
+	cfg.PongTimeout = cfg.PongTimeout * time.Second
+	cfg.DialTimeout = cfg.DialTimeout * time.Second
+	cfg.ReconnectTime = cfg.ReconnectTime * time.Second
 
 	return &cfg, nil
 }
@@ -71,4 +75,9 @@ type Btcrpc struct {
 	User   string `json:"user"`
 	Pass   string `json:"pass"`
 	Cert   string `json:"cert"`
+}
+
+// SkySender config for skycoin sender
+type SkySender struct {
+	ReqBuffSize uint32 `json:"request_buffer_size"`
 }
