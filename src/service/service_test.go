@@ -145,15 +145,10 @@ func TestRunService(t *testing.T) {
 			proxyAddr := s.Addr().String()
 
 			lg := logger.NewLogger("", true)
-			db, close := setupDB(t)
-			defer close()
 
 			service := New(Config{
 				ProxyAddr: proxyAddr,
-				Auth:      cAuth,
-				DB:        db,
-				Log:       lg,
-			}, tc.exchanger, tc.btcAddrGen)
+			}, cAuth, lg, tc.exchanger, tc.btcAddrGen)
 
 			service.HandleFunc(daemon.PongMessage{}.Type(), PongMessageHandler(service.gateway))
 

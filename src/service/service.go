@@ -6,7 +6,6 @@ import (
 
 	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
 )
@@ -20,6 +19,7 @@ const (
 )
 
 var (
+	// ErrPongTimeout not receive pong message in given time error
 	ErrPongTimout = errors.New("Pong message timeout")
 )
 
@@ -39,6 +39,7 @@ type Service struct {
 	cfg     Config      // service configuration info
 	session *session    // connection is maintained in session, and when session done, means this connection is done.
 	mux     *daemon.Mux // used for dispatching message to corresponding handler
+	auth    *daemon.Auth
 
 	excli      Exchanger        // exchange service client
 	btcAddrGen BtcAddrGenerator // btc address generator
@@ -50,9 +51,6 @@ type Service struct {
 // Config records the configurations of the service
 type Config struct {
 	ProxyAddr string
-	Auth      *daemon.Auth
-	DB        *bolt.DB
-	Log       logger.Logger
 
 	ReconnectTime time.Duration
 	PingTimeout   time.Duration
@@ -61,7 +59,7 @@ type Config struct {
 }
 
 // New creates a ico service
-func New(cfg Config, excli Exchanger, btcAddrGen BtcAddrGenerator) *Service {
+func New(cfg Config, auth *daemon.Auth, log logger.Logger, excli Exchanger, btcAddrGen BtcAddrGenerator) *Service {
 	if cfg.ReconnectTime == 0 {
 		cfg.ReconnectTime = reconnectTime
 	}
@@ -80,7 +78,8 @@ func New(cfg Config, excli Exchanger, btcAddrGen BtcAddrGenerator) *Service {
 
 	s := &Service{
 		cfg:        cfg,
-		Logger:     cfg.Log,
+		Logger:     log,
+		auth:       auth,
 		excli:      excli,
 		btcAddrGen: btcAddrGen,
 		reqc:       make(chan func(), 1),
@@ -102,7 +101,8 @@ func New(cfg Config, excli Exchanger, btcAddrGen BtcAddrGenerator) *Service {
 
 // Run starts the service
 func (s *Service) Run() {
-	defer s.Println("Service exit")
+	s.Println("Start teller service...")
+	defer s.Println("Teller Service closed")
 
 	for {
 		if err := s.newSession(); err != nil {
@@ -139,7 +139,7 @@ func (s *Service) newSession() error {
 		return err
 	}
 
-	sn, err := daemon.NewSession(conn, s.cfg.Auth, s.mux, true, daemon.Logger(s.Logger))
+	sn, err := daemon.NewSession(conn, s.auth, s.mux, true, daemon.Logger(s.Logger))
 	if err != nil {
 		return err
 	}
