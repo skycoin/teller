@@ -15,7 +15,7 @@ import (
 
 func setupDB(t *testing.T) (*bolt.DB, func()) {
 	rand.Seed(int64(time.Now().Second()))
-	f := fmt.Sprintf("test%d.db", rand.Intn(1024))
+	f := fmt.Sprintf("%s/test%d.db", os.TempDir(), rand.Intn(1024))
 	db, err := bolt.Open(f, 0700, nil)
 	require.Nil(t, err)
 	return db, func() {
