@@ -21,6 +21,8 @@ func init() {
 	registerMessage(&AuthAckMessage{})
 	registerMessage(&PingMessage{})
 	registerMessage(&PongMessage{})
+	registerMessage(&BindRequest{})
+	registerMessage(&BindResponse{})
 }
 
 // Messager interface describes what should be implemented as a message
