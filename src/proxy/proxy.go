@@ -64,7 +64,7 @@ func New(srvAddr, httpSrvAddr string, auth *daemon.Auth, ops ...Option) (*Proxy,
 
 	bindHandlers(px)
 
-	px.httpServ = newHTTPServ(httpSrvAddr, px.log, &gateway{p: px})
+	px.httpServ = newHTTPServ(httpSrvAddr, px.log, &gateway{p: px, Logger: px.log})
 
 	return px, func() {
 		cancel()
@@ -85,9 +85,7 @@ func (px *Proxy) Run() {
 	// start connection handler process
 	px.wg.Add(1)
 	go func() {
-		defer func() {
-			px.wg.Done()
-		}()
+		defer px.wg.Done()
 		px.handleConnection()
 	}()
 
@@ -101,6 +99,8 @@ func (px *Proxy) Run() {
 				case <-px.cxt.Done():
 					return
 				default:
+					px.log.Println("Accept error:", err)
+					continue
 				}
 			}
 
@@ -115,8 +115,11 @@ func (px *Proxy) Run() {
 
 	px.wg.Add(1)
 	go func() {
-		defer px.wg.Done()
-		defer px.log.Debugln("Http service stop")
+		defer func() {
+			px.wg.Done()
+			px.log.Debugln("Http service stop")
+		}()
+
 		px.httpServ.Run(px.cxt)
 	}()
 
@@ -177,7 +180,7 @@ func (px *Proxy) newSession(conn net.Conn) {
 		return
 	}
 
-	if err := px.sn.Run(px.cxt); err != nil {
+	if err := px.sn.Run(); err != nil {
 		if err != io.EOF {
 			px.log.Debug(err)
 		}

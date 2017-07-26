@@ -12,34 +12,41 @@ import (
 )
 
 type gatewayer interface {
-	AddMonitor(context.Context, *daemon.MonitorMessage) (*daemon.MonitorAckMessage, error)
-	GetExchangeLogs(context.Context, *daemon.GetExchangeLogsMessage) (*daemon.GetExchangeLogsAckMessage, error)
-	Log() logger.Logger
+	logger.Logger
+	BindAddress(context.Context, *daemon.BindRequest) (*daemon.BindResponse, error)
+	// AddMonitor(context.Context, *daemon.MonitorMessage) (*daemon.MonitorAckMessage, error)
+	// GetExchangeLogs(context.Context, *daemon.GetExchangeLogsMessage) (*daemon.GetExchangeLogsAckMessage, error)
 }
 
 type gateway struct {
+	logger.Logger
 	p *Proxy
 }
 
-func (gw *gateway) AddMonitor(cxt context.Context, msg *daemon.MonitorMessage) (*daemon.MonitorAckMessage, error) {
-	var ack daemon.MonitorAckMessage
-	if err := gw.sendMessage(cxt, msg, &ack); err != nil {
+func (gw *gateway) BindAddress(cxt context.Context, req *daemon.BindRequest) (*daemon.BindResponse, error) {
+	var rsp daemon.BindResponse
+	if err := gw.sendMessage(cxt, req, &rsp); err != nil {
 		return nil, err
 	}
-	return &ack, nil
+
+	return &rsp, nil
 }
 
-func (gw *gateway) Log() logger.Logger {
-	return gw.p.log
-}
+// func (gw *gateway) AddMonitor(cxt context.Context, msg *daemon.MonitorMessage) (*daemon.MonitorAckMessage, error) {
+// 	var ack daemon.MonitorAckMessage
+// 	if err := gw.sendMessage(cxt, msg, &ack); err != nil {
+// 		return nil, err
+// 	}
+// 	return &ack, nil
+// }
 
-func (gw *gateway) GetExchangeLogs(cxt context.Context, msg *daemon.GetExchangeLogsMessage) (*daemon.GetExchangeLogsAckMessage, error) {
-	var ack daemon.GetExchangeLogsAckMessage
-	if err := gw.sendMessage(cxt, msg, &ack); err != nil {
-		return nil, err
-	}
-	return &ack, nil
-}
+// func (gw *gateway) GetExchangeLogs(cxt context.Context, msg *daemon.GetExchangeLogsMessage) (*daemon.GetExchangeLogsAckMessage, error) {
+// 	var ack daemon.GetExchangeLogsAckMessage
+// 	if err := gw.sendMessage(cxt, msg, &ack); err != nil {
+// 		return nil, err
+// 	}
+// 	return &ack, nil
+// }
 
 func (gw *gateway) sendMessage(cxt context.Context, msg daemon.Messager, ackMsg daemon.Messager) (err error) {
 	// the ackMsg must be
@@ -51,7 +58,7 @@ func (gw *gateway) sendMessage(cxt context.Context, msg daemon.Messager, ackMsg 
 		msgC := make(chan daemon.Messager, 1)
 		// open the data stream
 		id, closeStream, er := gw.p.openStream(func(m daemon.Messager) {
-			gw.Log().Debugf("Recv %s message", m.Type())
+			gw.Debugf("Recv %s message", m.Type())
 			msgC <- m
 		})
 		if er != nil {

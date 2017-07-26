@@ -5,14 +5,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"strings"
-
 	"encoding/json"
 
 	"time"
 
-	"strconv"
-
+	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
 )
@@ -25,6 +22,8 @@ const (
 	errInternalServErr  = 500
 
 	maxRequestLogsNum = 100
+
+	proxyRequestTimeout = 3 * time.Second
 )
 
 var httpErrCodeStr = []string{
@@ -49,8 +48,8 @@ func newHTTPServ(addr string, log logger.Logger, gw *gateway) *httpServ {
 func (hs *httpServ) Run(cxt context.Context) {
 	hs.log.Println("Http service start, serve on", hs.srvAddr)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/monitor", MonitorHandler(hs.gateway))
-	mux.HandleFunc("/exchange_logs", ExchangeLogsHandler(hs.gateway))
+	mux.HandleFunc("/bind", BindHandler(hs.gateway))
+	// mux.HandleFunc("/exchange_logs", ExchangeLogsHandler(hs.gateway))
 
 	errC := make(chan error, 1)
 	go func() {
@@ -66,176 +65,226 @@ func (hs *httpServ) Run(cxt context.Context) {
 	hs.log.Debugln("http service exit")
 }
 
-// MonitorHandler monitor handler function
-// Method: POST
-// URI: /monitor
-// Content-Type: application/json
-func MonitorHandler(gw gatewayer) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			w.Header().Set("Allow", "POST")
-			errorResponse(w, http.StatusMethodNotAllowed)
-			gw.Log().Println(httpErrCodeStr[http.StatusMethodNotAllowed])
-			return
-		}
-
-		ct := r.Header.Get("Content-Type")
-		if !strings.Contains(ct, "application/json") {
-			w.Header().Set("Accept", "application/json")
-			errorResponse(w, http.StatusNotAcceptable)
-			gw.Log().Println(httpErrCodeStr[http.StatusNotAcceptable])
-			return
-		}
-
-		var mm daemon.MonitorMessage
-		if err := json.NewDecoder(r.Body).Decode(&mm); err != nil {
-			errorResponse(w, http.StatusBadRequest)
-			gw.Log().Println(httpErrCodeStr[http.StatusBadRequest])
-			return
-		}
-
-		cxt, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-		defer cancel()
-		ack, err := gw.AddMonitor(cxt, &mm)
-		if err != nil {
-			if err == context.DeadlineExceeded {
-				errorResponse(w, http.StatusRequestTimeout)
-				gw.Log().Println(httpErrCodeStr[http.StatusRequestTimeout])
-				return
-			}
-			errorResponse(w, http.StatusInternalServerError)
-			gw.Log().Println(err)
-			return
-		}
-
-		if err := jsonResponse(w, ack); err != nil {
-			gw.Log().Println(err)
-		}
-	}
-}
-
-// ExchangeLogsHandler api for querying exchange logs.
+// BindHandler binds skycoin address with a bitcoin address
 // Method: GET
-// URI: /exchange_logs?start=$start&&end=$end
-func ExchangeLogsHandler(gw gatewayer) http.HandlerFunc {
+// URI: /bind
+// Args:
+//    skyaddr
+func BindHandler(gw gatewayer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.Header().Set("Allow", "GET")
 			errorResponse(w, http.StatusMethodNotAllowed)
-			gw.Log().Println(httpErrCodeStr[http.StatusMethodNotAllowed])
+			gw.Println(httpErrCodeStr[http.StatusMethodNotAllowed])
 			return
 		}
 
-		startStr := r.URL.Query().Get("start")
-		if startStr == "" {
-			errStr := "Missing 'start' param in url"
-			http.Error(w, errStr, http.StatusBadRequest)
-			gw.Log().Println(errStr)
+		skyAddr := r.FormValue("skyaddr")
+		if skyAddr == "" {
+			errorResponse(w, http.StatusBadRequest)
+			gw.Println(httpErrCodeStr[http.StatusBadRequest])
 			return
 		}
 
-		start, err := strconv.Atoi(startStr)
+		// verify the skycoin address
+		if _, err := cipher.DecodeBase58Address(skyAddr); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid skycoin address: %v", err), http.StatusBadRequest)
+			gw.Println("Invalid skycoin address:", err)
+			return
+		}
+
+		bindReq := daemon.BindRequest{SkyAddress: skyAddr}
+
+		cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
+		defer cancel()
+		rsp, err := gw.BindAddress(cxt, &bindReq)
 		if err != nil {
-			errStr := fmt.Sprintf("Invalid 'start' param, err:%v", err)
-			http.Error(w, errStr, http.StatusBadRequest)
-			gw.Log().Println(errStr)
-			return
-		}
-
-		endStr := r.URL.Query().Get("end")
-		if endStr == "" {
-			errStr := "Missing 'end' param in url"
-			http.Error(w, errStr, http.StatusBadRequest)
-			gw.Log().Println(errStr)
-			return
-		}
-
-		end, err := strconv.Atoi(endStr)
-		if err != nil {
-			errStr := fmt.Sprintf("Invalid 'end' param, err:%v", err)
-			http.Error(w, errStr, http.StatusBadRequest)
-			gw.Log().Println(errStr)
-			return
-		}
-
-		if start > end {
-			errStr := fmt.Sprintf("start must >= end")
-			http.Error(w, errStr, http.StatusBadRequest)
-			gw.Log().Println(errStr)
-			return
-		}
-
-		// divide the start end id into small block, so that the response won't be too big
-		idPairs := divideStartEndRange(start, end, maxRequestLogsNum)
-		totalLogs := []daemon.ExchangeLog{}
-		var maxLogsID int
-		for _, pair := range idPairs {
-			if maxLogsID != 0 && maxLogsID < pair[0] {
-				break
-			}
-
-			msg := &daemon.GetExchangeLogsMessage{
-				StartID: pair[0],
-				EndID:   pair[1],
-			}
-
-			cxt, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-			defer cancel()
-			ack, err := gw.GetExchangeLogs(cxt, msg)
-			if err != nil {
-				if err == context.DeadlineExceeded {
-					errorResponse(w, http.StatusRequestTimeout)
-					gw.Log().Println(httpErrCodeStr[http.StatusRequestTimeout])
-					return
-				}
-				errorResponse(w, http.StatusInternalServerError)
-				gw.Log().Println(err)
+			if err == context.DeadlineExceeded {
+				errorResponse(w, http.StatusRequestTimeout)
+				gw.Println(httpErrCodeStr[http.StatusRequestTimeout])
 				return
 			}
-			totalLogs = append(totalLogs, ack.Logs...)
-			maxLogsID = ack.MaxLogID
-		}
-		ack := daemon.GetExchangeLogsAckMessage{
-			Result: daemon.Result{
-				Success: true,
-			},
-			MaxLogID: maxLogsID,
-			Logs:     totalLogs,
+			errorResponse(w, http.StatusInternalServerError)
+			gw.Println(err)
+			return
 		}
 
-		if err := jsonResponse(w, ack); err != nil {
-			gw.Log().Println(err)
+		if err := jsonResponse(w, rsp); err != nil {
+			gw.Println(err)
 		}
 	}
 }
 
-func divideStartEndRange(start, end, blocksize int) [][]int {
-	if start > end {
-		return [][]int{}
-	}
+// // MonitorHandler monitor handler function
+// // Method: POST
+// // URI: /monitor
+// // Content-Type: application/json
+// func MonitorHandler(gw gatewayer) http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		if r.Method != "POST" {
+// 			w.Header().Set("Allow", "POST")
+// 			errorResponse(w, http.StatusMethodNotAllowed)
+// 			gw.Log().Println(httpErrCodeStr[http.StatusMethodNotAllowed])
+// 			return
+// 		}
 
-	if blocksize == 0 {
-		return [][]int{{start, end}}
-	}
+// 		ct := r.Header.Get("Content-Type")
+// 		if !strings.Contains(ct, "application/json") {
+// 			w.Header().Set("Accept", "application/json")
+// 			errorResponse(w, http.StatusNotAcceptable)
+// 			gw.Log().Println(httpErrCodeStr[http.StatusNotAcceptable])
+// 			return
+// 		}
 
-	if end-start+1 <= blocksize {
-		return [][]int{
-			[]int{start, end},
-		}
-	}
+// 		var mm daemon.MonitorMessage
+// 		if err := json.NewDecoder(r.Body).Decode(&mm); err != nil {
+// 			errorResponse(w, http.StatusBadRequest)
+// 			gw.Log().Println(httpErrCodeStr[http.StatusBadRequest])
+// 			return
+// 		}
 
-	n := (end - start + 1) / blocksize
+// 		cxt, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+// 		defer cancel()
+// 		ack, err := gw.AddMonitor(cxt, &mm)
+// 		if err != nil {
+// 			if err == context.DeadlineExceeded {
+// 				errorResponse(w, http.StatusRequestTimeout)
+// 				gw.Log().Println(httpErrCodeStr[http.StatusRequestTimeout])
+// 				return
+// 			}
+// 			errorResponse(w, http.StatusInternalServerError)
+// 			gw.Log().Println(err)
+// 			return
+// 		}
 
-	pairs := make([][]int, 0, n)
-	for i := 0; i < n; i++ {
-		pairs = append(pairs, []int{start + i*blocksize, start - 1 + (i+1)*blocksize})
-	}
+// 		if err := jsonResponse(w, ack); err != nil {
+// 			gw.Log().Println(err)
+// 		}
+// 	}
+// }
 
-	if ((end - start + 1) % blocksize) != 0 {
-		pairs = append(pairs, []int{start + n*blocksize, end})
-	}
-	return pairs
-}
+// // ExchangeLogsHandler api for querying exchange logs.
+// // Method: GET
+// // URI: /exchange_logs?start=$start&&end=$end
+// func ExchangeLogsHandler(gw gatewayer) http.HandlerFunc {
+// 	return func(w http.ResponseWriter, r *http.Request) {
+// 		if r.Method != "GET" {
+// 			w.Header().Set("Allow", "GET")
+// 			errorResponse(w, http.StatusMethodNotAllowed)
+// 			gw.Log().Println(httpErrCodeStr[http.StatusMethodNotAllowed])
+// 			return
+// 		}
+
+// 		startStr := r.URL.Query().Get("start")
+// 		if startStr == "" {
+// 			errStr := "Missing 'start' param in url"
+// 			http.Error(w, errStr, http.StatusBadRequest)
+// 			gw.Log().Println(errStr)
+// 			return
+// 		}
+
+// 		start, err := strconv.Atoi(startStr)
+// 		if err != nil {
+// 			errStr := fmt.Sprintf("Invalid 'start' param, err:%v", err)
+// 			http.Error(w, errStr, http.StatusBadRequest)
+// 			gw.Log().Println(errStr)
+// 			return
+// 		}
+
+// 		endStr := r.URL.Query().Get("end")
+// 		if endStr == "" {
+// 			errStr := "Missing 'end' param in url"
+// 			http.Error(w, errStr, http.StatusBadRequest)
+// 			gw.Log().Println(errStr)
+// 			return
+// 		}
+
+// 		end, err := strconv.Atoi(endStr)
+// 		if err != nil {
+// 			errStr := fmt.Sprintf("Invalid 'end' param, err:%v", err)
+// 			http.Error(w, errStr, http.StatusBadRequest)
+// 			gw.Log().Println(errStr)
+// 			return
+// 		}
+
+// 		if start > end {
+// 			errStr := fmt.Sprintf("start must >= end")
+// 			http.Error(w, errStr, http.StatusBadRequest)
+// 			gw.Log().Println(errStr)
+// 			return
+// 		}
+
+// 		// divide the start end id into small block, so that the response won't be too big
+// 		idPairs := divideStartEndRange(start, end, maxRequestLogsNum)
+// 		totalLogs := []daemon.ExchangeLog{}
+// 		var maxLogsID int
+// 		for _, pair := range idPairs {
+// 			if maxLogsID != 0 && maxLogsID < pair[0] {
+// 				break
+// 			}
+
+// 			msg := &daemon.GetExchangeLogsMessage{
+// 				StartID: pair[0],
+// 				EndID:   pair[1],
+// 			}
+
+// 			cxt, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+// 			defer cancel()
+// 			ack, err := gw.GetExchangeLogs(cxt, msg)
+// 			if err != nil {
+// 				if err == context.DeadlineExceeded {
+// 					errorResponse(w, http.StatusRequestTimeout)
+// 					gw.Log().Println(httpErrCodeStr[http.StatusRequestTimeout])
+// 					return
+// 				}
+// 				errorResponse(w, http.StatusInternalServerError)
+// 				gw.Log().Println(err)
+// 				return
+// 			}
+// 			totalLogs = append(totalLogs, ack.Logs...)
+// 			maxLogsID = ack.MaxLogID
+// 		}
+// 		ack := daemon.GetExchangeLogsAckMessage{
+// 			Result: daemon.Result{
+// 				Success: true,
+// 			},
+// 			MaxLogID: maxLogsID,
+// 			Logs:     totalLogs,
+// 		}
+
+// 		if err := jsonResponse(w, ack); err != nil {
+// 			gw.Log().Println(err)
+// 		}
+// 	}
+// }
+
+// func divideStartEndRange(start, end, blocksize int) [][]int {
+// 	if start > end {
+// 		return [][]int{}
+// 	}
+
+// 	if blocksize == 0 {
+// 		return [][]int{{start, end}}
+// 	}
+
+// 	if end-start+1 <= blocksize {
+// 		return [][]int{
+// 			[]int{start, end},
+// 		}
+// 	}
+
+// 	n := (end - start + 1) / blocksize
+
+// 	pairs := make([][]int, 0, n)
+// 	for i := 0; i < n; i++ {
+// 		pairs = append(pairs, []int{start + i*blocksize, start - 1 + (i+1)*blocksize})
+// 	}
+
+// 	if ((end - start + 1) % blocksize) != 0 {
+// 		pairs = append(pairs, []int{start + n*blocksize, end})
+// 	}
+// 	return pairs
+// }
 
 func errorResponse(w http.ResponseWriter, code int) {
 	http.Error(w, httpErrCodeStr[code], code)
