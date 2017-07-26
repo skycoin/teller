@@ -46,21 +46,19 @@ type Service struct {
 
 // Config exchange config struct
 type Config struct {
-	DB   *bolt.DB
-	Log  logger.Logger
 	Rate int64 // sky_btc rate
 }
 
 // NewService creates exchange service
-func NewService(cfg Config, scanner BtcScanner, sender SkySender) *Service {
-	s, err := newStore(cfg.DB)
+func NewService(cfg Config, db *bolt.DB, log logger.Logger, scanner BtcScanner, sender SkySender) *Service {
+	s, err := newStore(db)
 	if err != nil {
 		panic(err)
 	}
 
 	return &Service{
-		Logger:  cfg.Log,
 		cfg:     cfg,
+		Logger:  log,
 		scanner: scanner,
 		sender:  sender,
 		store:   s,
@@ -70,6 +68,8 @@ func NewService(cfg Config, scanner BtcScanner, sender SkySender) *Service {
 
 // Run starts the exchange process
 func (s *Service) Run() error {
+	s.Println("Start exchange service...")
+	defer s.Println("Exchange service closed")
 	for {
 		select {
 		case <-s.quit:
@@ -80,19 +80,21 @@ func (s *Service) Run() error {
 				return nil
 			}
 
+			s.Printf("Receive %f deposit bitcoin from %s\n", dv.Value, dv.Address)
+
 			// get deposit info of given btc address
-			dpi, ok := s.store.GetDepositInfo(dv.Address)
+			_, ok = s.store.GetDepositInfo(dv.Address)
 			if !ok {
 				s.Printf("Deposit info of btc address %s doesn't exist\n", dv.Address)
 				continue
 			}
 
 			// only update the status that are under waiting_sky_send
-			if dpi.Status >= statusWaitSend {
-				// TODO: this might mean the user deposit btcoin btc to the same address multiple times
-				s.Printf("Deposit status of btc address %s already >= %s\n", dv.Address, statusString[statusWaitSend])
-				continue
-			}
+			// if dpi.Txid != "" {
+			// 	// TODO: this might mean the user deposit btcoin btc to the same address multiple times
+			// 	s.Printf("Deposit value of btc address %s already >= %s\n", dv.Address, statusString[statusWaitSend])
+			// 	continue
+			// }
 
 			// update status to waiting_sky_send
 			err := s.store.UpdateDepositInfo(dv.Address, func(dpi depositInfo) depositInfo {
@@ -120,7 +122,7 @@ func (s *Service) Run() error {
 
 			// try to send skycoin
 			skyAmt := calculateSkyValue(dv.Value, float64(s.cfg.Rate))
-
+			s.Printf("Send %d skycoin to %s\n", skyAmt, skyAddr)
 			rspC, err := s.sender.SendAsync(skyAddr, skyAmt, nil)
 			if err != nil && err != sender.ErrServiceClosed {
 				return fmt.Errorf("Send %d skycoin to %s failed: %v", skyAmt, skyAddr, err)
