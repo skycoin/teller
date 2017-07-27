@@ -4,7 +4,7 @@
     "dial_timeout": 5,
     "ping_timeout": 5,
     "pong_timeout": 10,
-    "exchange_rate": 1,
+    "exchange_rate": 500,
     "skynode": {
         "rpc_address": "127.0.0.1:6430",
         "wallet_path": "absolute path to the wallet file"
