@@ -16,6 +16,7 @@ import (
 	"io/ioutil"
 
 	"github.com/boltdb/bolt"
+	"github.com/skycoin/skycoin/src/cipher"
 )
 
 // lastScanBlock struct in bucket
@@ -33,6 +34,19 @@ var (
 	scanMetaBkt      = []byte("scan_meta")
 	lastScanBlockKey = []byte("last_scan_block")
 )
+
+var usage = fmt.Sprintf(`%s is a helper teller help tool:
+Usage: 
+    %s command [arguments]	
+
+The commands are:
+
+    setlastscanblock    set the last scan block height and hash in teller's data.db
+    getlastscanblock    get the last scan block in teller
+    addbtcaddress       add the bitcoin address to the deposit address pool
+    getbtcaddress       list all bitcoin deposit address in the pool
+    newbtcaddress       generate bitcoin address
+`, filepath.Base(os.Args[0]), filepath.Base(os.Args[0]))
 
 func main() {
 	u, _ := user.Current()
@@ -59,6 +73,30 @@ func main() {
 	if len(args) > 0 {
 		cmd := args[0]
 		switch cmd {
+		case "help":
+			if len(args) == 1 {
+				fmt.Println(usage)
+				return
+			}
+
+			switch args[1] {
+			case "setlastscanblock":
+				fmt.Println("usage: setlastscanblock block_height block_hash")
+				return
+			case "getlastscanblock":
+				fmt.Println("usage: getlastscanblock")
+				return
+			case "addbtcaddress":
+				fmt.Println("usage: addbtcaddress btc_address")
+				return
+			case "getbtcaddress":
+				fmt.Println("usage: getbtcaddress")
+				return
+			case "newbtcaddress":
+				fmt.Println("usage: newbtcaddress seed num")
+				return
+			}
+			return
 		case "setlastscanblock":
 			height, err := strconv.ParseInt(args[1], 10, 64)
 			if err != nil {
@@ -127,6 +165,26 @@ func main() {
 				return
 			}
 			fmt.Println(string(v))
+		case "newbtcaddress":
+			count := args[2]
+			var n int
+			var err error
+			if count != "" {
+				n, err = strconv.Atoi(count)
+				if err != nil {
+					fmt.Println("Invalid argument: ", err)
+					return
+				}
+			} else {
+				n = 1
+			}
+
+			seckeys := cipher.GenerateDeterministicKeyPairs([]byte(args[1]), n)
+			for _, sec := range seckeys {
+				addr := cipher.AddressFromSecKey(sec)
+				fmt.Println(addr.String())
+			}
+			return
 		default:
 			log.Printf("Unknow command: %s\n", cmd)
 		}
