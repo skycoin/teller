@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 
 	"flag"
 
@@ -40,12 +41,22 @@ func main() {
 	}
 
 	log := logger.NewLogger("", true)
-	px, close := proxy.New(*proxyAddr, *httpAddr, auth, proxy.Logger(log))
-	px.Run()
+	px := proxy.New(*proxyAddr, *httpAddr, auth, proxy.Logger(log))
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		px.Run()
+	}()
 
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, os.Interrupt)
 	<-sigchan
 	signal.Stop(sigchan)
-	close()
+	log.Println("Shutting down...")
+
+	px.Shutdown()
+	wg.Wait()
+	log.Println("Shutdown complete")
 }

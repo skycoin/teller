@@ -56,13 +56,17 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// init logger
+	log := logger.NewLogger("", true)
+
 	quit := make(chan struct{})
 	go catchInterrupt(quit)
 
 	// load config
 	cfg, err := config.New("config.json")
 	if err != nil {
-		panic(err)
+		log.Println("Load config failed:", err)
+		return
 	}
 
 	rpubkey := cipher.MustPubKeyFromHex(RemotePubkey)
@@ -70,18 +74,17 @@ func main() {
 
 	appDir, err := createAppDirIfNotExist(appDir)
 	if err != nil {
-		panic(err)
+		log.Println("Create AppDir failed:", err)
+		return
 	}
 
 	// open db
 	dbPath := filepath.Join(appDir, dbName)
 	db, err := bolt.Open(dbPath, 0700, &bolt.Options{Timeout: 1 * time.Second})
 	if err != nil {
-		panic(fmt.Sprintf("Open db failed, err: %v", err))
+		log.Printf("Open db failed, err: %v\n", err)
+		return
 	}
-
-	// init logger
-	log := logger.NewLogger("", true)
 
 	// prepare auth
 	auth := &daemon.Auth{
@@ -93,7 +96,8 @@ func main() {
 	btcrpcConnConf := makeBtcrpcConfg(*cfg)
 	btcrpc, err := btcrpcclient.New(&btcrpcConnConf, nil)
 	if err != nil {
-		panic(err)
+		log.Printf("Connect btcd failed: %v\n", err)
+		return
 	}
 
 	log.Println("Connect to btcd success")
@@ -105,7 +109,8 @@ func main() {
 	scanConfig := makeScanConfig(*cfg)
 	scanServ, err := scanner.NewService(scanConfig, db, log, btcrpc)
 	if err != nil {
-		panic(err)
+		log.Println("Open scan service failed:", err)
+		return
 	}
 
 	wg.Add(1)
@@ -142,12 +147,14 @@ func main() {
 	// create bitcoin address manager
 	f, err := ioutil.ReadFile("btc_addresses.json")
 	if err != nil {
-		panic(err)
+		log.Println("Load deposit bitcoin address list failed:", err)
+		return
 	}
 
 	btcAddrGen, err := btcaddrs.New(db, bytes.NewReader(f), log)
 	if err != nil {
-		panic(err)
+		log.Println("Create bitcoin deposit address manager failed:", err)
+		return
 	}
 
 	srv := service.New(makeServiceConfig(*cfg), auth, log, excli, btcAddrGen)

@@ -19,15 +19,14 @@ type Gatewayer interface {
 	logger.Logger
 	ResetPongTimer() // Reset the session's pong timer
 	BindAddress(skyAddr string) (string, error)
-	// AddMonitor(*daemon.MonitorMessage) error                      // add new coin address to monitor
-	// GetExchangeLogs(start, end int) ([]daemon.ExchangeLog, error) // get logs whose id are in the given range
-	// GetExchangeLogsLen() int                                      // return the exchange logs length
+	GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error)
 }
 
 // bindHandlers
 func bindHandlers(srv *Service) {
 	srv.HandleFunc(daemon.PongMsgType, PongMessageHandler(srv.gateway))
 	srv.HandleFunc(daemon.BindRequestMsgType, BindRequestHandler(srv.gateway))
+	srv.HandleFunc(daemon.StatusRequestMsgType, StatusRequestHandler(srv.gateway))
 }
 
 // PongMessageHandler handler for processing the received pong message
@@ -73,9 +72,43 @@ func BindRequestHandler(gw Gatewayer) daemon.Handler {
 		btcAddr, err := gw.BindAddress(req.SkyAddress)
 		if err != nil {
 			gw.Printf("Bind address failed: %v", err)
-			ack.Err = fmt.Sprintf("Bind address failed: %v", err)
+			ack.Error = fmt.Sprintf("Bind address failed: %v", err)
 		} else {
 			ack.BtcAddress = btcAddr
+		}
+
+		w.Write(&ack)
+	}
+}
+
+// StatusRequestHandler handler for processing status request
+func StatusRequestHandler(gw Gatewayer) daemon.Handler {
+	return func(w daemon.ResponseWriteCloser, msg daemon.Messager) {
+		if msg == nil {
+			gw.Println(ErrRequestMessageIsNil)
+			return
+		}
+
+		if msg.Type() != daemon.StatusRequestMsgType {
+			gw.Printf("Expect status request message, but got:%v\n", msg.Type())
+			return
+		}
+
+		req, ok := msg.(*daemon.StatusRequest)
+		if !ok {
+			gw.Println("Assert *daemon.StatusRequest failed")
+			return
+		}
+
+		ack := daemon.StatusResponse{}
+		ack.Id = req.ID()
+		sts, err := gw.GetDepositStatuses(req.SkyAddress)
+		if err != nil {
+			errStr := fmt.Sprintf("Get status of %s failed: %v\n", req.SkyAddress, err)
+			gw.Println(errStr)
+			ack.Error = errStr
+		} else {
+			ack.Statuses = sts
 		}
 
 		w.Write(&ack)

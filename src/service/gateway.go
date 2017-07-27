@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
 )
 
@@ -30,4 +31,9 @@ func (gw *gateway) BindAddress(skyAddr string) (string, error) {
 	}
 
 	return btcAddr, nil
+}
+
+// GetDepositStatuses returns deposit status of given skycoin address
+func (gw *gateway) GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error) {
+	return gw.s.excli.GetDepositStatuses(skyAddr)
 }

@@ -9,10 +9,12 @@ import (
 var regMessageMap = map[MsgType]reflect.Type{}
 
 var (
-	PingMsgType         = PingMessage{}.Type()
-	PongMsgType         = PongMessage{}.Type()
-	BindRequestMsgType  = BindRequest{}.Type()
-	BindResponseMsgType = BindResponse{}.Type()
+	PingMsgType           = PingMessage{}.Type()
+	PongMsgType           = PongMessage{}.Type()
+	BindRequestMsgType    = BindRequest{}.Type()
+	BindResponseMsgType   = BindResponse{}.Type()
+	StatusRequestMsgType  = StatusRequest{}.Type()
+	StatusResponseMsgType = StatusResponse{}.Type()
 )
 
 func init() {
@@ -23,6 +25,8 @@ func init() {
 	registerMessage(&PongMessage{})
 	registerMessage(&BindRequest{})
 	registerMessage(&BindResponse{})
+	registerMessage(&StatusRequest{})
+	registerMessage(&StatusResponse{})
 }
 
 // Messager interface describes what should be implemented as a message
@@ -156,8 +160,8 @@ func (br BindRequest) Serialize() ([]byte, error) {
 // BindResponse response message for bind request
 type BindResponse struct {
 	Base
-	BtcAddress string `json:"btc_address, omitempty"`
-	Err        string `json:"error,omitempty"`
+	BtcAddress string `json:"btc_address,omitempty"`
+	Error      string `json:"error,omitempty"`
 }
 
 // Type returns message type
@@ -168,4 +172,44 @@ func (br BindResponse) Type() MsgType {
 // Serialize returns the json marshal value
 func (br BindResponse) Serialize() ([]byte, error) {
 	return json.Marshal(br)
+}
+
+// StatusRequest request to get skycoin status
+type StatusRequest struct {
+	Base
+	SkyAddress string `json:"sky_address"`
+}
+
+// Type retusn message type
+func (sr StatusRequest) Type() MsgType {
+	return stringToMsgType("SREQ")
+}
+
+// Serialize returns the json marshal value
+func (sr StatusRequest) Serialize() ([]byte, error) {
+	return json.Marshal(sr)
+}
+
+// DepositStatus json struct for deposit status
+type DepositStatus struct {
+	Seq      uint64 `json:"seq"`
+	UpdateAt int64  `json:"update_at"`
+	Status   string `json:"status"`
+}
+
+// StatusResponse response to status request
+type StatusResponse struct {
+	Base
+	Statuses []DepositStatus `json:"statuses,omitempty"`
+	Error    string          `json:"error,omitempty"`
+}
+
+// Type returns message type
+func (sr StatusResponse) Type() MsgType {
+	return stringToMsgType("SRSP")
+}
+
+// Serialize returns the json marshal value
+func (sr StatusResponse) Serialize() ([]byte, error) {
+	return json.Marshal(sr)
 }

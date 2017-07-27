@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/boltdb/bolt"
+	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/scanner"
 	"github.com/skycoin/teller/src/service/sender"
@@ -184,4 +185,21 @@ func (s *Service) addDepositInfo(btcAddr, skyAddr string) error {
 
 	// add btc address to scanner
 	return s.scanner.AddDepositAddress(btcAddr)
+}
+
+func (s *Service) getDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error) {
+	dpis, err := s.store.GetDepositInfoOfSkyAddress(skyAddr)
+	if err != nil {
+		return []daemon.DepositStatus{}, err
+	}
+
+	dss := make([]daemon.DepositStatus, 0, len(dpis))
+	for _, dpi := range dpis {
+		dss = append(dss, daemon.DepositStatus{
+			Seq:      dpi.Seq,
+			UpdateAt: dpi.UpdatedAt,
+			Status:   dpi.Status.String(),
+		})
+	}
+	return dss, nil
 }

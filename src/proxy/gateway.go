@@ -14,8 +14,7 @@ import (
 type gatewayer interface {
 	logger.Logger
 	BindAddress(context.Context, *daemon.BindRequest) (*daemon.BindResponse, error)
-	// AddMonitor(context.Context, *daemon.MonitorMessage) (*daemon.MonitorAckMessage, error)
-	// GetExchangeLogs(context.Context, *daemon.GetExchangeLogsMessage) (*daemon.GetExchangeLogsAckMessage, error)
+	GetDepositStatuses(context.Context, *daemon.StatusRequest) (*daemon.StatusResponse, error)
 }
 
 type gateway struct {
@@ -32,21 +31,14 @@ func (gw *gateway) BindAddress(cxt context.Context, req *daemon.BindRequest) (*d
 	return &rsp, nil
 }
 
-// func (gw *gateway) AddMonitor(cxt context.Context, msg *daemon.MonitorMessage) (*daemon.MonitorAckMessage, error) {
-// 	var ack daemon.MonitorAckMessage
-// 	if err := gw.sendMessage(cxt, msg, &ack); err != nil {
-// 		return nil, err
-// 	}
-// 	return &ack, nil
-// }
+func (gw *gateway) GetDepositStatuses(cxt context.Context, req *daemon.StatusRequest) (*daemon.StatusResponse, error) {
+	var rsp daemon.StatusResponse
+	if err := gw.sendMessage(cxt, req, &rsp); err != nil {
+		return nil, err
+	}
 
-// func (gw *gateway) GetExchangeLogs(cxt context.Context, msg *daemon.GetExchangeLogsMessage) (*daemon.GetExchangeLogsAckMessage, error) {
-// 	var ack daemon.GetExchangeLogsAckMessage
-// 	if err := gw.sendMessage(cxt, msg, &ack); err != nil {
-// 		return nil, err
-// 	}
-// 	return &ack, nil
-// }
+	return &rsp, nil
+}
 
 func (gw *gateway) sendMessage(cxt context.Context, msg daemon.Messager, ackMsg daemon.Messager) (err error) {
 	// the ackMsg must be

@@ -31,6 +31,7 @@ type BtcAddrGenerator interface {
 // Exchanger provids apis to interact with exchange service
 type Exchanger interface {
 	BindAddress(btcAddr, skyAddr string) error
+	GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error)
 }
 
 // Service provides the ico service

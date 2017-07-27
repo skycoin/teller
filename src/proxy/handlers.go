@@ -6,7 +6,7 @@ import (
 )
 
 func bindHandlers(px *Proxy) {
-	px.mux.HandleFunc(daemon.PingMsgType, PingMessageHandler(px.log))
+	px.mux.HandleFunc(daemon.PingMsgType, PingMessageHandler(px.Logger))
 }
 
 // PingMessageHandler handler for processing the received ping message
