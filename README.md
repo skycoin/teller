@@ -1,36 +1,71 @@
 # teller
 
-There're mainly two processes in this project, ico server and ico proxy.
+## Setup project
 
-## ICO-SERVER
+### Prerequest
 
-The ico-server will run in a private environment for security, which can't be accessed 
-from public network directly, cause the ico coin's wallet is located here, and contains 
-the private keys of all addresses in the wallet.
+* Have btcd started
+* Have skycoin node started
 
-Once the ico-server started, it will try to connect to the ico-proxy, and establish
-an encrypted session, all data transferred in this session are encrypted with ECDH and
-chacha20.
-
-### Run ico-server
-
-#### Prerequest:
-1. have go1.7+ installed
-2. have skycoin-cli(command line interface) installed
-3. have local skycoin node started
-
-To install the CLI:
+### Start teller-proxy
 
 ```bash
-$ cd $GOPATH/src/github.com/skycoin/teller/cmd/server
-$ ./install.sh
+cd cmd/proxy/
+go run proxy.go
 ```
 
-To install the skycoin node, please follow the instructions [here](https://github.com/skycoin/skycoin/blob/master/README.md).
+once the proxy start, will show a `pubkey` in the log.
 
-#### Config
+```bash
+18:28:49 proxy.go:33: Pubkey: 03583bf0a6cbe7048023be5475aca693e192b4b5570bcc883c50f7d96f0a996eda
+```
 
-The config.json file is located in the folder of `$GOPATH/src/github.com/skycoin/teller/cmd/server`
+### Start teller
+
+install the `skycoin-cli`
+
+```bash
+cd cmd/teller
+./install.sh
+```
+
+add pregenearted bitcoin deposit address list in `btc_addresses.json`.
+
+```bash
+{
+    "btc_addresses": [
+        "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
+        "14FG8vQnmK6B7YbLSr6uC5wfGY78JFNCYg",
+        "17mMWfVWq3pSwz7BixNmfce5nxaD73gRjh",
+        "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp"
+    ]
+}
+```
+
+use `tool` to pregenerate bitcoin address list:
+
+```bash
+cd cmd/tool
+go run tool.go newbtcaddress $seed $num
+```
+
+example:
+
+```bash
+go run tool.go newbtcaddress 12323 3
+
+2Q5sR1EgTWesxX9853AnNpbBS1grEY1JXn3
+2Q8y3vVAqY8Q3paxS7Fz4biy1RUTY5XQuzb
+216WfF5EcvpVk6ypSRP3Lg9BxqpUrgBJBco
+```
+
+
+teller's config is managed in `config.json`, need to set the `wallet_path`
+in `skynode` field to an absolute path of skycoin wallet file, and set up the `btcd`
+config in `btc_rpc` field, including server address, username, password and
+absolute path to the cert file.
+
+config.json:
 
 ```json
 {
@@ -39,148 +74,93 @@ The config.json file is located in the folder of `$GOPATH/src/github.com/skycoin
     "dial_timeout": 5,
     "ping_timeout": 5,
     "pong_timeout": 10,
-    "exchange_rate": [
-        {
-            "date": "0001-01-01 00:00:00",
-            "rate":2500
-        },
-    ],
-    "monitor": {
-        "check_period": 20
+    "exchange_rate": 500,
+    "skynode": {
+        "rpc_address": "127.0.0.1:6430",
+        "wallet_path": "absolute path to the wallet file"
     },
-    "node": {
-        "rpc_address": "127.0.0.1:7430",
-        "wallet_path": "/skycoin/wallets/skycoin.wlt"
+    "btc_scan": {
+        "check_period": 20,
+        "deposit_buffer_size": 1024
     },
-    "deposit_coin": "bitcoin",
-    "ico_coin": "skycoin",
-}
-```
-
-The `proxy_address` is the ico-proxy server address. All time related value are using `seconds`
-as unit, example: the `dial_timeout: 5`, means the dial timeout value is 5 seconds.
-
-The `exchange_rate` field represents the exchange rate between deposit coin and ico coin.
-For example, if the rate is 2500 which means deposit 1 `bitcoin` can get 2500 `skycoin`.
-
-`check_period` field in `monitor` represents the time interval for checking the deposit coin balance.
-We use the api from https://blockexplorer.com, so please don't set it too short.
-
-The value of `rpc_address` is the default rpc address of local skycoin node, you can ignore it if
-you didn't change the rpc port.
-
-`wallet_path` must be an absolute path of an real skycoin wallet in your computer.
-
-
-#### Start server
-
-```bash
-$ cd $GOPATH/src/github.com/skycoin/teller/cmd/server
-$ go run server.go
-```
-
-## ICO-PROXY
-
-The ico-proxy is run as a service in public network environment, which will provid 
-http apis for web-server end. When ico-proxy recv http api requet, it will send 
-corresponding request to ico-server and send ack from ico-server back to the http
-client.
-
-As we described in the prevous section, the session between ico-server and ico-proxy
-is encrypted, so it's safe, while the http request from web-server to ico-proxy is
-not safe, so we recommend to run the http api service in localhost, and the web-server
-should run in the same machine as ico-proxy, in this way, we can both avoid invalid
-http request from public network, and provid api service for web-server.
-
-### Run ico-proxy
-
-```bash
-$ cd $GOPATH/src/github.com/skycoin/teller/cmd/proxy
-$ go run proxy.go
-```
-
-The proxy will open an public tcp port on `0.0.0.0:7070`, which is used to communicate
-with the ico-server, and also have an http service on `localhost:7071`.
-
-### web service apis
-
-#### Add monitor
-
-```
-URI: /monitor
-Method: POST
-Content-Type: application/json
-Body:
-{
-    "id": 0,
-    "deposit_coin": {
-        "coin": "BTC",
-        "address": "1EVES5roY8zspu9s632PeJB43MRNJ1oiuJ"
+    "btc_rpc": {
+        "server": "127.0.0.1:8334",
+        "user": "",
+        "pass": "",
+        "cert": "absolute path to rpc cert file"
     },
-    "ico_coin": {
-        "coin": "SKY",
-        "address": "cBB6zToAjhMkvRrWaz8Tkv6QZxjKCfJWBx"
+    "sky_sender": {
+        "request_buffer_size": 1024 
     }
 }
-
 ```
 
-#### Get exchange logs
+run teller service
 
+```bash
+go run teller.go -proxy-pubkey=$the_pubkey_of_proxy
 ```
-URI: /exchange_logs?start=1&end=100
+
+## Service apis
+
+The http apis service is provided by the proxy and serve on port 7071.
+
+### Bind
+
+```bash
 Method: GET
-
+URI: /bind
+Args: skyaddr
 ```
 
-Note: the log id is start from 1, so the `start` should begin with 1 as well.
+example:
 
-Result example:
+```bash
+curl http://localhost:7071/bind?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
+```
 
-```json
+response:
+
+```bash
 {
-  "id": 0,
-  "result": {
-    "success": true,
-    "err": ""
-  },
-  "max_log_id": 3,
-  "exchange_logs": [
-    {
-      "logid": 1,
-      "time": "2017-04-29T23:11:44.71962344+08:00",
-      "deposit": {
-        "Address": "bitcoin",
-        "Coin": 10000
-      },
-      "ico": {
-        "Address": "skycoin",
-        "Coin": 2
-      },
-      "tx": {
-        "hash": "1a0a659782c46be096c0ea1cec4285d04594bc78a93231665f0ae1b2685df639",
-        "coinfirmed": true
-      }
-    },
-    {
-      "logid": 2,
-      "time": "2017-04-29T23:13:15.104516523+08:00",
-      "deposit": {
-        "Address": "bitcoin",
-        "Coin": 10000
-      },
-      "ico": {
-        "Address": "skycoin",
-        "Coin": 2
-      },
-      "tx": {
-        "hash": "541aa8bfcafb7c4b404c0004b714c5efb922393a8c87f647057ad80f6fc0e717",
-        "coinfirmed": true
-      }
-    }
-  ]
+    "btc_address": "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp"
 }
 ```
 
-The `max_log_id` represents current maximum log id. For bitcoin, the Coin unit is `statoshi`, and
-`sky` fro skycoin.
+### Status
+
+```bash
+Method: GET
+URI: /status
+Args: skyaddr
+```
+
+example:
+
+```bash
+curl http://localhost:7071/status?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
+```
+
+response:
+
+```bash
+{
+    "statuses": [
+        {
+            "seq": 1,
+            "update_at": 1501137828,
+            "status": "done"
+        },
+        {
+            "seq": 2,
+            "update_at": 1501128062,
+            "status": "waiting_deposit"
+        },
+        {
+            "seq": 3,
+            "update_at": 1501128063,
+            "status": "waiting_deposit"
+        },
+    ]
+}
+```
