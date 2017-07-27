@@ -4,6 +4,8 @@
 
 ### Prerequest
 
+* Have go1.8+ installed
+* Have `GOPATH` env set
 * Have btcd started
 * Have skycoin node started
 
