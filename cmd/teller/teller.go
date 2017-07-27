@@ -57,7 +57,7 @@ func main() {
 	}
 
 	// init logger
-	log := logger.NewLogger("", true)
+	log := logger.NewLogger("", false)
 
 	quit := make(chan struct{})
 	go catchInterrupt(quit)

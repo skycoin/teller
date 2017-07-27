@@ -53,8 +53,8 @@ func (hs *httpServ) Run() error {
 	defer hs.Debugln("Http service closed")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/bind", BindHandler(hs.gateway))
-	mux.HandleFunc("/status", StatusHandler(hs.gateway))
+	mux.HandleFunc("/bind", logHandler(hs.Logger, BindHandler(hs.gateway)))
+	mux.HandleFunc("/status", logHandler(hs.Logger, StatusHandler(hs.gateway)))
 
 	var err error
 	hs.ln, err = net.Listen("tcp", hs.srvAddr)
@@ -192,4 +192,12 @@ func jsonResponse(w http.ResponseWriter, data interface{}) error {
 		return err
 	}
 	return nil
+}
+
+func logHandler(log logger.Logger, hd http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		t := time.Now()
+		hd(w, r)
+		log.Printf("HTTP [%s] %dms %s \n", r.Method, time.Since(t)/time.Millisecond, r.URL.String())
+	}
 }

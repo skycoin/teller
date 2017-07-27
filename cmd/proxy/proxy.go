@@ -40,7 +40,7 @@ func main() {
 		LSeckey: lseckey,
 	}
 
-	log := logger.NewLogger("", true)
+	log := logger.NewLogger("", false)
 	px := proxy.New(*proxyAddr, *httpAddr, auth, proxy.Logger(log))
 
 	var wg sync.WaitGroup

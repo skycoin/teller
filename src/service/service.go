@@ -6,6 +6,8 @@ import (
 
 	"time"
 
+	"io"
+
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
 )
@@ -107,7 +109,11 @@ func (s *Service) Run() {
 
 	for {
 		if err := s.newSession(); err != nil {
-			s.Println(err)
+			if err == io.EOF {
+				s.Println("Proxy connection break..")
+			} else {
+				s.Println(err)
+			}
 		}
 		select {
 		case <-s.quit:
@@ -139,6 +145,8 @@ func (s *Service) newSession() error {
 	if err != nil {
 		return err
 	}
+
+	s.Println("Connect success")
 
 	sn, err := daemon.NewSession(conn, s.auth, s.mux, true, daemon.Logger(s.Logger))
 	if err != nil {

@@ -125,7 +125,7 @@ func (scan *ScanService) Run() error {
 		hash = block.Hash
 		height = block.Height
 
-		scan.Printf("scan height: %v hash:%s\n", height, hash)
+		scan.Debugf("scan height: %v hash:%s\n", height, hash)
 		if err := scan.scanBlock(block); err != nil {
 			select {
 			case <-scan.quit:
