@@ -113,8 +113,12 @@ func (scan *ScanService) Run() error {
 
 		if nxtBlock == nil {
 			scan.Println("No new block to scan...")
-			time.Sleep(time.Duration(scan.cfg.ScanPeriod) * time.Second)
-			continue
+			select {
+			case <-scan.quit:
+				return nil
+			case <-time.After(time.Duration(scan.cfg.ScanPeriod) * time.Second):
+				continue
+			}
 		}
 
 		block = nxtBlock
