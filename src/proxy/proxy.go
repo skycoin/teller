@@ -177,13 +177,13 @@ func (px *Proxy) newSession(conn net.Conn) {
 	var err error
 	px.sn, err = daemon.NewSession(conn, px.auth, px.mux, false, daemon.Logger(px.Logger))
 	if err != nil {
-		px.Debug(err)
+		px.Println(err)
 		return
 	}
 
 	if err := px.sn.Run(); err != nil {
 		if err != io.EOF {
-			px.Debug(err)
+			px.Println(err)
 		}
 		return
 	}

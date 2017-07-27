@@ -103,21 +103,24 @@ func New(cfg Config, auth *daemon.Auth, log logger.Logger, excli Exchanger, btcA
 }
 
 // Run starts the service
-func (s *Service) Run() {
+func (s *Service) Run() error {
 	s.Println("Start teller service...")
 	defer s.Println("Teller Service closed")
 
 	for {
 		if err := s.newSession(); err != nil {
-			if err == io.EOF {
+			switch err {
+			case io.EOF:
 				s.Println("Proxy connection break..")
-			} else {
+			case daemon.ErrAuth:
+				return err
+			default:
 				s.Println(err)
 			}
 		}
 		select {
 		case <-s.quit:
-			return
+			return nil
 		case <-time.After(s.cfg.ReconnectTime):
 			continue
 		}

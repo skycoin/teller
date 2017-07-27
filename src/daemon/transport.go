@@ -30,6 +30,7 @@ var (
 	ErrHandShakeInvalidAckMsg = errors.New("Invalid handshake ack message")
 	ErrHandShakeInvalidAckSeq = errors.New("Invalid handkshake ack sequence")
 	ErrHandShakeInvalidAuth   = errors.New("Invalid handshake auth message")
+	ErrAuth                   = errors.New("Authenticate failed")
 )
 
 // Auth records the keys for authentication
@@ -222,7 +223,7 @@ func (ts *transport) unsolicitedHandshake() error {
 
 	seq, err := strconv.Atoi(string(seqBytes))
 	if err != nil {
-		return err
+		return ErrAuth
 	}
 
 	// write ack message back
@@ -240,7 +241,14 @@ func (ts *transport) unsolicitedHandshake() error {
 	return ts.writeMsg(&authAck, false)
 }
 
-func (ts *transport) Encrypt(d []byte) ([]byte, error) {
+func (ts *transport) Encrypt(d []byte) (v []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = ErrAuth
+			return
+		}
+	}()
+
 	empPk, empSk := cipher.PubKey{}, cipher.SecKey{}
 	if ts.RPubkey == empPk {
 		return []byte{}, ErrEmptyPubkey
@@ -254,7 +262,13 @@ func (ts *transport) Encrypt(d []byte) ([]byte, error) {
 	return cipher.Chacha20Decrypt(d, key, ts.Nonce)
 }
 
-func (ts *transport) Decrypt(d []byte) ([]byte, error) {
+func (ts *transport) Decrypt(d []byte) (v []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = ErrAuth
+			return
+		}
+	}()
 	empPk, empSk := cipher.PubKey{}, cipher.SecKey{}
 	if ts.RPubkey == empPk {
 		return []byte{}, ErrEmptyPubkey

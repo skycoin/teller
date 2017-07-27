@@ -4,7 +4,6 @@ package main
 
 import (
 	"io/ioutil"
-	"log"
 	"os/signal"
 	"os/user"
 	"sync"
@@ -28,36 +27,47 @@ import (
 
 	"bytes"
 
+	"flag"
+
 	"github.com/btcsuite/btcrpcclient"
 	"github.com/skycoin/teller/src/service/exchange"
 	"github.com/skycoin/teller/src/service/sender"
 )
 
 const (
-	RemotePubkey = "03554c1787c0d49ddbced3b9d4f9f1163c01f5d1bcf52ae7362a63027e1a896cef"
-	LocalSeckey  = "81ea5dbfa6fab837bbcb96480cff49b57e7135a15e7d0a6d021177edecf246d3"
-
 	appDir = ".skycoin-teller"
 	dbName = "data.db"
 )
 
 func main() {
-	// generate auth key pairs
-	// for i := 0; i < 2; i++ {
-	// 	pub, sec := cipher.GenerateKeyPair()
-	// 	fmt.Println(pub.Hex())
-	// 	fmt.Println(sec.Hex())
-	// }
+
+	proxyPubkey := flag.String("proxy-pubkey", "", "proxy pubkey")
+	flag.Parse()
+
+	// init logger
+	log := logger.NewLogger("", false)
+
+	rpubkey, err := cipher.PubKeyFromHex(*proxyPubkey)
+	if err != nil {
+		log.Println("Invalid proxy pubkey:", err)
+		return
+	}
+
+	// generate local private key
+	_, lseckey := cipher.GenerateKeyPair()
+
+	auth := &daemon.Auth{
+		RPubkey: rpubkey,
+		LSeckey: lseckey,
+	}
 
 	// start gops agent, for profilling
 	if err := agent.Listen(&agent.Options{
 		NoShutdownCleanup: true,
 	}); err != nil {
-		log.Fatal(err)
+		log.Println("Start profile agent failed:", err)
+		return
 	}
-
-	// init logger
-	log := logger.NewLogger("", false)
 
 	quit := make(chan struct{})
 	go catchInterrupt(quit)
@@ -68,9 +78,6 @@ func main() {
 		log.Println("Load config failed:", err)
 		return
 	}
-
-	rpubkey := cipher.MustPubKeyFromHex(RemotePubkey)
-	lseckey := cipher.MustSecKeyFromHex(LocalSeckey)
 
 	appDir, err := createAppDirIfNotExist(appDir)
 	if err != nil {
@@ -84,12 +91,6 @@ func main() {
 	if err != nil {
 		log.Printf("Open db failed, err: %v\n", err)
 		return
-	}
-
-	// prepare auth
-	auth := &daemon.Auth{
-		RPubkey: rpubkey,
-		LSeckey: lseckey,
 	}
 
 	// create btc rpc client
@@ -163,7 +164,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		srv.Run()
+		errC <- srv.Run()
 	}()
 
 	select {
