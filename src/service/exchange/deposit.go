@@ -17,6 +17,10 @@ var statusString = []string{
 	statusDone:        "done",
 }
 
+func (s status) String() string {
+	return statusString[s]
+}
+
 // depositInfo records the deposit info
 type depositInfo struct {
 	Seq        uint64
