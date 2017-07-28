@@ -28,8 +28,8 @@
 [[projects]]
   branch = "master"
   name = "github.com/btcsuite/btcutil"
-  packages = [".","base58","bech32"]
-  revision = "501929d3d046174c3d39f0ea54ece471aa17238c"
+  packages = [".","base58"]
+  revision = "5ffa719c3882fd2ec1e8b9f4978066701c31a343"
 
 [[projects]]
   branch = "master"
