@@ -28,7 +28,7 @@ install the `skycoin-cli`
 
 ```bash
 cd cmd/teller
-./install.sh
+./install-skycoin-cli.sh
 ```
 
 add pregenearted bitcoin deposit address list in `btc_addresses.json`.

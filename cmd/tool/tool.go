@@ -35,7 +35,7 @@ var (
 	lastScanBlockKey = []byte("last_scan_block")
 )
 
-var usage = fmt.Sprintf(`%s is a helper teller help tool:
+var usage = fmt.Sprintf(`%s is a teller helper tool:
 Usage: 
     %s command [arguments]	
 
