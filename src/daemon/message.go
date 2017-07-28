@@ -9,6 +9,8 @@ import (
 var regMessageMap = map[MsgType]reflect.Type{}
 
 var (
+	HandshakeMsgType      = HandshakeMessage{}.Type()
+	HandshakeAckMsgType   = HandshakeAckMessage{}.Type()
 	PingMsgType           = PingMessage{}.Type()
 	PongMsgType           = PongMessage{}.Type()
 	BindRequestMsgType    = BindRequest{}.Type()
@@ -19,8 +21,8 @@ var (
 
 func init() {
 	// register message into regMessageMap
-	registerMessage(&AuthMessage{})
-	registerMessage(&AuthAckMessage{})
+	registerMessage(&HandshakeMessage{})
+	registerMessage(&HandshakeAckMessage{})
 	registerMessage(&PingMessage{})
 	registerMessage(&PongMessage{})
 	registerMessage(&BindRequest{})
@@ -67,46 +69,39 @@ func (b *Base) SetID(id int) {
 	b.Id = id
 }
 
-// AuthMessage messgae send from client to server, provides client's pubkey and nonce
-// and an encrypted data. Server will use ECDH to caculate the key and use chacha20
-// to decrypt data, and then reply AuthAckMessage with the data, the whole AuthAckMessage
-// will be encrypted.
-type AuthMessage struct {
+// HandshakeMessage will send from teller to proxy with Pubkey and
+// seq number without encryption, teller will waitting for an
+// encrypted HandshakeAckMessage with seq + 1
+type HandshakeMessage struct {
 	Base
 	Pubkey string `json:"pubkey"`
-	Nonce  string `json:"nonce"`
-	EncSeq []byte `json:"enc_seq"`
+	Seq    int32  `json:"seq"`
 }
 
 // Type returns the message type
-func (am AuthMessage) Type() MsgType {
-	return stringToMsgType("AUTH")
+func (hs HandshakeMessage) Type() MsgType {
+	return stringToMsgType("HSHK")
 }
 
-// Serialize use json marshal into bytes
-func (am AuthMessage) Serialize() ([]byte, error) {
-	return json.Marshal(am)
+// Serialize marshal struct into bytes
+func (hs HandshakeMessage) Serialize() ([]byte, error) {
+	return json.Marshal(hs)
 }
 
-// AuthAckMessage ack message for replying the AuthMessage,
-type AuthAckMessage struct {
+// HandshakeAckMessage the ack message of HandshakeMessage
+type HandshakeAckMessage struct {
 	Base
-	EncSeq []byte `json:"enc_seq"`
+	Seq int32 `json:"seq"`
 }
 
-// Type returns the ack message type
-func (aam AuthAckMessage) Type() MsgType {
-	return stringToMsgType("AACK")
+// Type returns the message type
+func (hsa HandshakeAckMessage) Type() MsgType {
+	return stringToMsgType("HACK")
 }
 
-// Serialize json marshal into bytes
-func (aam AuthAckMessage) Serialize() ([]byte, error) {
-	return json.Marshal(aam)
-}
-
-// Version returns the protocol version
-func (aam AuthAckMessage) Version() uint16 {
-	return msgVersion
+// Serialize returns json marshal value
+func (hsa HandshakeAckMessage) Serialize() ([]byte, error) {
+	return json.Marshal(hsa)
 }
 
 // PingMessage represents a ping message, as heart beat message

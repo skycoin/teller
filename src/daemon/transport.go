@@ -9,10 +9,6 @@ import (
 
 	"time"
 
-	"strconv"
-
-	"encoding/base64"
-
 	"io"
 
 	"github.com/skycoin/skycoin/src/cipher"
@@ -37,8 +33,16 @@ var (
 type Auth struct {
 	RPubkey cipher.PubKey // remote public key
 	LSeckey cipher.SecKey // local secret key
-	Nonce   []byte
+	// Nonce   []byte
 }
+
+// Nonce returns the Nonce value
+// func (a Auth) Nonce() [8]byte {
+// 	nonce := [8]byte{}
+// 	copy(nonce[:], a.nonce[:])
+
+// 	return nonce
+// }
 
 type transport struct {
 	*Auth
@@ -135,7 +139,7 @@ func (ts *transport) readMsg() (Messager, error) {
 		return nil, err
 	}
 
-	return packet.decodeMessage(ts)
+	return packet.decodeMessage(ts, packet.head.Nonce)
 }
 
 // solicitedHandshake will send AuthMessage with Pubkey, Nonce and an encrypted random seq,
@@ -143,16 +147,21 @@ func (ts *transport) readMsg() (Messager, error) {
 func (ts *transport) solicitedHandshake() error {
 	// prepare AuthMessage
 	// nonce size must be 64bits, 8 bytes.
-	ts.Nonce = cipher.RandByte(8)
-	randSeq := rand.Int31n(1024)
-	encSeq, err := ts.Encrypt([]byte(fmt.Sprintf("%d", randSeq)))
-	if err != nil {
-		return err
-	}
-	authMsg := AuthMessage{
+	// ts.Nonce = cipher.RandByte(8)
+
+	// v, err := json.Marshal(handshakeSeq{rand.Int31n(1024)})
+	// if err != nil {
+	// 	return fmt.Errorf("marshal handshake seq failed: %v", err)
+	// }
+
+	// encSeq, err := ts.Encrypt(v, makeNonce(cipher.RandByte(8)))
+	// if err != nil {
+	// 	return err
+	// }
+	seq := rand.Int31n(1024)
+	authMsg := HandshakeMessage{
 		Pubkey: cipher.PubKeyFromSecKey(ts.LSeckey).Hex(),
-		Nonce:  base64.StdEncoding.EncodeToString(ts.Nonce),
-		EncSeq: encSeq,
+		Seq:    seq,
 	}
 
 	// send msg
@@ -166,24 +175,28 @@ func (ts *transport) solicitedHandshake() error {
 		return err
 	}
 
-	ackMsg, ok := msg.(*AuthAckMessage)
+	ackMsg, ok := msg.(*HandshakeAckMessage)
 	if !ok {
 		return ErrHandShakeInvalidAckMsg
 	}
 
-	// decrypt the AuthAckMessage's EncData
-	seqBytes, err := ts.Decrypt(ackMsg.EncSeq)
-	if err != nil {
-		return err
-	}
-	seq, err := strconv.Atoi(string(seqBytes))
-	if err != nil {
-		return err
-	}
-
-	if int32(seq) != (randSeq + 1) {
+	if seq+1 != ackMsg.Seq {
 		return ErrHandShakeInvalidAckSeq
 	}
+
+	// decrypt the AuthAckMessage's EncData
+	// seqBytes, err := ts.Decrypt(ackMsg.EncSeq)
+	// if err != nil {
+	// 	return err
+	// }
+	// seq, err := strconv.Atoi(string(seqBytes))
+	// if err != nil {
+	// 	return err
+	// }
+
+	// if int32(seq) != (randSeq + 1) {
+	// 	return ErrHandShakeInvalidAckSeq
+	// }
 	return nil
 }
 
@@ -198,50 +211,50 @@ func (ts *transport) unsolicitedHandshake() error {
 		return err
 	}
 
-	authMsg, ok := msg.(*AuthMessage)
+	hs, ok := msg.(*HandshakeMessage)
 	if !ok {
 		return ErrHandShakeInvalidAuth
 	}
 
 	// validate the pubkey
-	pubKey, err := cipher.PubKeyFromHex(authMsg.Pubkey)
+	pubKey, err := cipher.PubKeyFromHex(hs.Pubkey)
 	if err != nil {
 		return err
 	}
 
 	ts.RPubkey = pubKey
-	ts.Nonce, err = base64.StdEncoding.DecodeString(authMsg.Nonce)
-	if err != nil {
-		return err
-	}
+	// ts.Nonce, err = base64.StdEncoding.DecodeString(authMsg.Nonce)
+	// if err != nil {
+	// 	return err
+	// }
 
 	// decrypt the enc_data in auth message
-	seqBytes, err := ts.Decrypt(authMsg.EncSeq)
-	if err != nil {
-		return err
-	}
+	// seqBytes, err := ts.Decrypt(authMsg.EncSeq)
+	// if err != nil {
+	// 	return err
+	// }
 
-	seq, err := strconv.Atoi(string(seqBytes))
-	if err != nil {
-		return ErrAuth
-	}
+	// seq, err := strconv.Atoi(string(seqBytes))
+	// if err != nil {
+	// 	return ErrAuth
+	// }
 
 	// write ack message back
-	seq++
-	seqStr := fmt.Sprintf("%d", seq)
-	encSeq, err := ts.Encrypt([]byte(seqStr))
-	if err != nil {
-		return err
-	}
+	// seq++
+	// seqStr := fmt.Sprintf("%d", seq)
+	// encSeq, err := ts.Encrypt([]byte(seqStr))
+	// if err != nil {
+	// 	return err
+	// }
 
-	authAck := AuthAckMessage{
-		EncSeq: encSeq,
-	}
+	hsAck := HandshakeAckMessage{}
+	hsAck.Id = hs.ID()
+	hsAck.Seq = hs.Seq + 1
 
-	return ts.writeMsg(&authAck, false)
+	return ts.writeMsg(&hsAck, true)
 }
 
-func (ts *transport) Encrypt(d []byte) (v []byte, err error) {
+func (ts *transport) Encrypt(d []byte, nonce nonce) (v []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = ErrAuth
@@ -259,10 +272,10 @@ func (ts *transport) Encrypt(d []byte) (v []byte, err error) {
 	}
 
 	key := cipher.ECDH(ts.RPubkey, ts.LSeckey)
-	return cipher.Chacha20Decrypt(d, key, ts.Nonce)
+	return cipher.Chacha20Decrypt(d, key, nonce.Bytes())
 }
 
-func (ts *transport) Decrypt(d []byte) (v []byte, err error) {
+func (ts *transport) Decrypt(d []byte, nonce nonce) (v []byte, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = ErrAuth
@@ -279,7 +292,7 @@ func (ts *transport) Decrypt(d []byte) (v []byte, err error) {
 	}
 
 	key := cipher.ECDH(ts.RPubkey, ts.LSeckey)
-	return cipher.Chacha20Encrypt(d, key, ts.Nonce)
+	return cipher.Chacha20Encrypt(d, key, nonce.Bytes())
 }
 
 func (ts *transport) Close() error {

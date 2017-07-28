@@ -5,11 +5,13 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"reflect"
+
+	"github.com/skycoin/skycoin/src/cipher"
 )
 
 // raw message struct
-// | 2 bytes | 2 bytes  | ......  |
-// | version | body len | payload |
+// | 2 bytes | 2 bytes  |  8 bytes | ......  |
+// | version | body len |  nonce   | payload |
 
 const (
 	maxPayloadLen = 8 * 1024 // bytes
@@ -20,6 +22,7 @@ const (
 type header struct {
 	Version uint16
 	Len     uint16
+	Nonce   nonce
 }
 
 // Packet the first layer of data protocol
@@ -54,16 +57,22 @@ func (p *packet) decodePayload(data []byte) error {
 }
 
 // decodeMessage decodes the packet into registered message
-func (p packet) decodeMessage(dpt Decryptor) (Messager, error) {
+func (p packet) decodeMessage(dpt Decryptor, nonce nonce) (Messager, error) {
 	var data []byte
 	var err error
 	if p.payload.Encrypt {
-		data, err = dpt.Decrypt(p.payload.Data)
+		data, err = dpt.Decrypt(p.payload.Data, nonce)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		data = p.payload.Data
+		// only AuthMessage can be raw data without encryption
+		switch p.payload.Type {
+		case HandshakeMsgType:
+			data = p.payload.Data
+		default:
+			return nil, ErrAuth
+		}
 	}
 
 	msgType, ok := regMessageMap[p.payload.Type]
@@ -88,8 +97,10 @@ func newPacket(msg Messager, encrypt bool, ept Encryptor) (*packet, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	p.head.Nonce = makeNonce(cipher.RandByte(8))
 	if encrypt {
-		encData, err := ept.Encrypt(d)
+		encData, err := ept.Encrypt(d, p.head.Nonce)
 		if err != nil {
 			return nil, err
 		}
@@ -107,6 +118,7 @@ func newPacket(msg Messager, encrypt bool, ept Encryptor) (*packet, error) {
 	// fill the packet header
 	p.head.Version = msg.Version()
 	p.head.Len = uint16(len(pd))
+
 	return &p, nil
 }
 
@@ -118,6 +130,10 @@ func (p *packet) bytes() ([]byte, error) {
 	}
 
 	if err := binary.Write(&buf, binary.LittleEndian, p.head.Len); err != nil {
+		return nil, err
+	}
+
+	if err := binary.Write(&buf, binary.LittleEndian, p.head.Nonce.Bytes()); err != nil {
 		return nil, err
 	}
 
