@@ -1,7 +1,6 @@
 package leaktest
 
 import (
-	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -62,12 +61,13 @@ var leakyFuncs = []func(){
 }
 
 func TestCheck(t *testing.T) {
+
 	// this works because the running goroutine is left running at the
 	// start of the next test case - so the previous leaks don't affect the
 	// check for the next one
 	for i, fn := range leakyFuncs {
 		checker := &testReporter{}
-		snapshot := CheckTimeout(checker, time.Second)
+		snapshot := Check(checker)
 		go fn()
 
 		snapshot()
@@ -78,8 +78,6 @@ func TestCheck(t *testing.T) {
 }
 
 func TestEmptyLeak(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	defer CheckContext(ctx, t)()
+	defer Check(t)()
 	time.Sleep(time.Second)
 }
