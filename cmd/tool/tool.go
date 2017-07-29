@@ -15,7 +15,11 @@ import (
 	"bytes"
 	"io/ioutil"
 
+	"math"
+
 	"github.com/boltdb/bolt"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcrpcclient"
 	"github.com/skycoin/skycoin/src/cipher"
 )
 
@@ -46,6 +50,7 @@ The commands are:
     addbtcaddress       add the bitcoin address to the deposit address pool
     getbtcaddress       list all bitcoin deposit address in the pool
     newbtcaddress       generate bitcoin address
+    scanblock           scan block from specific height to get all vout with interger value
 `, filepath.Base(os.Args[0]), filepath.Base(os.Args[0]))
 
 func main() {
@@ -73,7 +78,7 @@ func main() {
 	if len(args) > 0 {
 		cmd := args[0]
 		switch cmd {
-		case "help":
+		case "help", "h":
 			if len(args) == 1 {
 				fmt.Println(usage)
 				return
@@ -82,19 +87,16 @@ func main() {
 			switch args[1] {
 			case "setlastscanblock":
 				fmt.Println("usage: setlastscanblock block_height block_hash")
-				return
 			case "getlastscanblock":
 				fmt.Println("usage: getlastscanblock")
-				return
 			case "addbtcaddress":
 				fmt.Println("usage: addbtcaddress btc_address")
-				return
 			case "getbtcaddress":
 				fmt.Println("usage: getbtcaddress")
-				return
 			case "newbtcaddress":
 				fmt.Println("usage: newbtcaddress seed num")
-				return
+			case "scanblock":
+				fmt.Println("usage: server user pass cert_path height")
 			}
 			return
 		case "setlastscanblock":
@@ -185,6 +187,74 @@ func main() {
 				fmt.Println(addr.String())
 			}
 			return
+		case "scanblock":
+			if len(args) != 6 {
+				fmt.Println("Invalid arguments")
+				fmt.Println(usage)
+				return
+			}
+			rpcserv := args[1]
+			rpcuser := args[2]
+			rpcpass := args[3]
+			rpccert := args[4]
+			v, err := ioutil.ReadFile(rpccert)
+			if err != nil {
+				fmt.Println("Read cert file failed:", err)
+				return
+			}
+
+			btcrpcli, err := btcrpcclient.New(&btcrpcclient.ConnConfig{
+				Host:         rpcserv,
+				Endpoint:     "ws",
+				User:         rpcuser,
+				Pass:         rpcpass,
+				Certificates: v,
+			}, nil)
+			if err != nil {
+				fmt.Println("Connect btcd failed:", err)
+				return
+			}
+
+			h := args[5]
+			height, err := strconv.ParseInt(h, 10, 64)
+			if err != nil {
+				fmt.Println("Invalid block height")
+				return
+			}
+
+			hash, err := btcrpcli.GetBlockHash(height)
+			if err != nil {
+				fmt.Println("Get block hash failed:", err)
+				return
+			}
+
+			for {
+				bv, err := btcrpcli.GetBlockVerboseTx(hash)
+				if err != nil {
+					fmt.Printf("Get block of %s failed: %v\n", hash, err)
+					return
+				}
+
+				for _, tx := range bv.RawTx {
+					for _, o := range tx.Vout {
+						if math.Trunc(o.Value) == o.Value {
+							fmt.Printf("Height: %v Address: %v Value: %v\n",
+								bv.Height, o.ScriptPubKey.Addresses, o.Value)
+						}
+					}
+				}
+
+				if bv.NextHash == "" {
+					return
+				}
+
+				hash, err = chainhash.NewHashFromStr(bv.NextHash)
+				if err != nil {
+					fmt.Println("Invalid hash:", bv.NextHash, err)
+					return
+				}
+			}
+
 		default:
 			log.Printf("Unknow command: %s\n", cmd)
 		}
