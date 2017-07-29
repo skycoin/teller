@@ -99,6 +99,10 @@ func (de dummyExchanger) BindAddress(btcAddr, skyAddr string) error {
 	return de.err
 }
 
+func (de dummyExchanger) GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error) {
+	return nil, nil
+}
+
 type dummyBtcAddrGenerator struct {
 	addr string
 	err  error
@@ -115,6 +119,7 @@ func TestRunService(t *testing.T) {
 		proxyMsgHanlderMap map[daemon.MsgType]daemon.Handler
 		exchanger          Exchanger
 		btcAddrGen         BtcAddrGenerator
+		shutdownTime       time.Duration
 	}{
 		{
 			"test_ping_pong",
@@ -123,6 +128,7 @@ func TestRunService(t *testing.T) {
 			},
 			&dummyExchanger{},
 			dummyBtcAddrGenerator{addr: "1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy"},
+			time.Second * 5,
 		},
 		{
 			"pong_timeout",
@@ -133,6 +139,7 @@ func TestRunService(t *testing.T) {
 			},
 			&dummyExchanger{},
 			dummyBtcAddrGenerator{addr: "1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy"},
+			pongTimeout + time.Second,
 		},
 	}
 
@@ -152,7 +159,7 @@ func TestRunService(t *testing.T) {
 
 			service.HandleFunc(daemon.PongMessage{}.Type(), PongMessageHandler(service.gateway))
 
-			time.AfterFunc(pongTimeout+time.Second, func() {
+			time.AfterFunc(tc.shutdownTime, func() {
 				service.Shutdown()
 			})
 

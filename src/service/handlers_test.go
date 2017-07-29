@@ -25,6 +25,10 @@ func (dg *dummyGateway) BindAddress(skyAddr string) (string, error) {
 	return dg.btcAddr, dg.bindErr
 }
 
+func (dg *dummyGateway) GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error) {
+	return nil, nil
+}
+
 type ResWC struct {
 	ackMsg daemon.Messager
 	closed bool
