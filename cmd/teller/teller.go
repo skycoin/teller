@@ -42,10 +42,11 @@ const (
 func main() {
 
 	proxyPubkey := flag.String("proxy-pubkey", "", "proxy pubkey")
+	debug := flag.Bool("debug", false, "debug mode will show more detail logs")
 	flag.Parse()
 
 	// init logger
-	log := logger.NewLogger("", false)
+	log := logger.NewLogger("", *debug)
 
 	rpubkey, err := cipher.PubKeyFromHex(*proxyPubkey)
 	if err != nil {
