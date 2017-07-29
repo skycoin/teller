@@ -21,12 +21,12 @@ const (
 )
 
 var (
-	ErrEmptyPubkey            = errors.New("Pubkey is not set")
-	ErrEmptySeckey            = errors.New("Seckey is not set")
-	ErrHandShakeInvalidAckMsg = errors.New("Invalid handshake ack message")
-	ErrHandShakeInvalidAckSeq = errors.New("Invalid handkshake ack sequence")
-	ErrHandShakeInvalidAuth   = errors.New("Invalid handshake auth message")
-	ErrAuth                   = errors.New("Authenticate failed")
+	ErrEmptyPubkey            = errors.New("pubkey is not set")
+	ErrEmptySeckey            = errors.New("peckey is not set")
+	ErrHandShakeInvalidAckMsg = errors.New("invalid handshake ack message")
+	ErrHandShakeInvalidAckSeq = errors.New("invalid handkshake ack sequence")
+	ErrHandShakeInvalidAuth   = errors.New("invalid handshake auth message")
+	ErrAuth                   = errors.New("authenticate failed")
 )
 
 // Auth records the keys for authentication

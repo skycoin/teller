@@ -7,8 +7,8 @@ import (
 
 // ErrSendBufferFull the send service's request channel is full
 var (
-	ErrSendBufferFull = errors.New("Send service's request queue is full")
-	ErrServiceClosed  = errors.New("Send service closed")
+	ErrSendBufferFull = errors.New("send service's request queue is full")
+	ErrServiceClosed  = errors.New("send service closed")
 )
 
 // Sender provids helper function to send coins with send service

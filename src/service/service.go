@@ -22,7 +22,7 @@ const (
 
 var (
 	// ErrPongTimeout not receive pong message in given time error
-	ErrPongTimout = errors.New("Pong message timeout")
+	ErrPongTimout = errors.New("pong message timeout")
 )
 
 // BtcAddrGenerator generate new deposit address

@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	ErrRequestMessageIsNil = errors.New("Request message is nil")
-	ErrInternalServError   = errors.New("Internal server error")
+	ErrRequestMessageIsNil = errors.New("request message is nil")
+	ErrInternalServError   = errors.New("internal server error")
 )
 
 // Gatewayer provides methods to communicate with service.

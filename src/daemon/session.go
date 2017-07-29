@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	ErrWriteChanFull = errors.New("Write channel is full")
+	ErrWriteChanFull = errors.New("write channel is full")
 )
 
 const (

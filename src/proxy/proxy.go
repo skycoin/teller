@@ -200,7 +200,7 @@ func (px *Proxy) strand(f func()) {
 
 func (px *Proxy) write(m daemon.Messager) error {
 	if px.sn == nil {
-		return errors.New("Write failed, session is nil")
+		return errors.New("write failed, session is nil")
 	}
 
 	px.sn.Write(m)
@@ -212,7 +212,7 @@ type closeStream func()
 // openStream
 func (px *Proxy) openStream(f func(daemon.Messager)) (int, closeStream, error) {
 	if px.sn == nil {
-		return 0, func() {}, errors.New("Session is nil")
+		return 0, func() {}, errors.New("session is nil")
 	}
 
 	id := px.sn.Sub(f)

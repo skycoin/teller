@@ -147,7 +147,7 @@ func verifyRequest(req Request) error {
 	}
 
 	if req.Coins < 1 {
-		return errors.New("Send coins must >= 1")
+		return errors.New("send coins must >= 1")
 	}
 	return nil
 }

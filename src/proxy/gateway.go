@@ -43,7 +43,7 @@ func (gw *gateway) GetDepositStatuses(cxt context.Context, req *daemon.StatusReq
 func (gw *gateway) sendMessage(cxt context.Context, msg daemon.Messager, ackMsg daemon.Messager) (err error) {
 	// the ackMsg must be
 	if reflect.TypeOf(ackMsg).Kind() != reflect.Ptr {
-		return errors.New("Ack message type must be setable")
+		return errors.New("ack message type must be setable")
 	}
 
 	gw.p.strand(func() {

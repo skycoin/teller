@@ -45,7 +45,7 @@ type store struct {
 // newStore creates a store instance
 func newStore(db *bolt.DB) (*store, error) {
 	if db == nil {
-		return nil, errors.New("New exchange store failed, db is nil")
+		return nil, errors.New("new exchange store failed, db is nil")
 	}
 
 	if err := db.Update(func(tx *bolt.Tx) error {

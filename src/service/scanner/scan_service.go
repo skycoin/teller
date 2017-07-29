@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	errBlockNotFound = errors.New("Block not found")
+	errBlockNotFound = errors.New("block not found")
 )
 
 // Btcrpcclient rpcclient interface
