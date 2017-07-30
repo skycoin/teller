@@ -4,8 +4,6 @@
 package exchange
 
 import (
-	"fmt"
-
 	"github.com/boltdb/bolt"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
@@ -119,17 +117,19 @@ func (s *Service) Run() error {
 			skyAddr, ok := s.store.GetBindAddress(dv.Address)
 			if !ok {
 				s.Println("Find no bind skycoin address for btc address", dv.Address)
+				continue
 			}
 
 			// try to send skycoin
 			skyAmt := calculateSkyValue(dv.Value, float64(s.cfg.Rate))
 			s.Printf("Send %d skycoin to %s\n", skyAmt, skyAddr)
 			rspC, err := s.sender.SendAsync(skyAddr, skyAmt, nil)
-			if err != nil && err != sender.ErrServiceClosed {
-				return fmt.Errorf("Send %d skycoin to %s failed: %v", skyAmt, skyAddr, err)
-			}
 
 			rsp := (<-rspC).(sender.Response)
+			if rsp.Err != "" {
+				s.Println("Send skycoin failed:", rsp.Err)
+				continue
+			}
 
 		loop:
 			for {
