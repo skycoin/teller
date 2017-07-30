@@ -61,19 +61,6 @@ func main() {
 
 	flag.Parse()
 
-	if _, err := os.Stat(*dbFile); os.IsNotExist(err) {
-		fmt.Println(*dbFile, "does not exist")
-		return
-	}
-
-	db, err := bolt.Open(*dbFile, 0700, nil)
-	if err != nil {
-		log.Printf("Open db failed: %v\n", err)
-		return
-	}
-
-	defer db.Close()
-
 	args := flag.Args()
 
 	if len(args) == 0 {
@@ -82,6 +69,27 @@ func main() {
 	}
 
 	cmd := args[0]
+
+	var db *bolt.DB
+	switch cmd {
+	case "setlastscanblock", "getlastscanblock", "scanblock":
+		_, err := os.Stat(*dbFile)
+		os.IsNotExist(err)
+		if err != nil {
+			fmt.Println(*dbFile, "does not exist")
+			return
+		}
+
+		db, err = bolt.Open(*dbFile, 0700, nil)
+		if err != nil {
+			log.Printf("Open db failed: %v\n", err)
+			return
+		}
+
+		defer db.Close()
+	default:
+	}
+
 	switch cmd {
 	case "help", "h":
 		if len(args) == 1 {
@@ -195,9 +203,9 @@ func main() {
 		}
 
 		if *useJson {
-			s := struct {
-				Addrs []string `json:"btc_addresses"`
-			}{Addrs: addrs}
+			s := addressJSON{
+				BtcAddresses: addrs,
+			}
 
 			b, err := json.MarshalIndent(&s, "", "    ")
 			if err != nil {
