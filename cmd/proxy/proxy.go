@@ -130,7 +130,6 @@ func loadPrivatekey(pkfile string) *privateKey {
 		fmt.Println("Decode pubkey value failed:", err)
 		return nil
 	}
-	fmt.Printf("%+v\n", pk)
 	return &pk
 }
 
