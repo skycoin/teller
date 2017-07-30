@@ -85,14 +85,24 @@ func main() {
 
 	var wg sync.WaitGroup
 	wg.Add(1)
+	errC := make(chan error, 1)
+
 	go func() {
 		defer wg.Done()
-		px.Run()
+		errC <- px.Run()
 	}()
 
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, os.Interrupt)
-	<-sigchan
+
+	select {
+	case <-sigchan:
+	case err := <-errC:
+		if err != nil {
+			log.Println("ERROR:", err)
+		}
+	}
+
 	signal.Stop(sigchan)
 	log.Println("Shutting down...")
 

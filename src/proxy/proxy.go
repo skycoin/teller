@@ -132,6 +132,7 @@ func (px *Proxy) Run() error {
 // Shutdown close the proxy service
 func (px *Proxy) Shutdown() {
 	close(px.quit)
+
 	if px.ln != nil {
 		px.ln.Close()
 		px.ln = nil
@@ -141,7 +142,9 @@ func (px *Proxy) Shutdown() {
 		px.sn.Close()
 	}
 
-	px.httpServ.Shutdown()
+	if px.httpServ != nil {
+		px.httpServ.Shutdown()
+	}
 }
 
 func (px *Proxy) handleConnection() {
