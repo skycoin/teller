@@ -3,7 +3,9 @@
 package main
 
 import (
+	"errors"
 	"io/ioutil"
+	"log"
 	"os/signal"
 	"os/user"
 	"sync"
@@ -39,14 +41,52 @@ const (
 	dbName = "data.db"
 )
 
-func main() {
+type dummyBtcScanner struct{}
 
+func (s *dummyBtcScanner) AddDepositAddress(addr string) error {
+	log.Println("dummyBtcScanner.AddDepositAddress", addr)
+	return nil
+}
+
+func (s *dummyBtcScanner) GetDepositValue() <-chan scanner.DepositValue {
+	log.Println("dummyBtcScanner.GetDepositValue")
+	c := make(chan scanner.DepositValue)
+	close(c)
+	return c
+}
+
+type dummySkySender struct{}
+
+func (s *dummySkySender) Send(destAddr string, coins int64, opt *sender.SendOption) (string, error) {
+	log.Println("dummySkySender.Send", destAddr, coins, opt)
+	return "", errors.New("dummy sky sender")
+}
+
+func (s *dummySkySender) SendAsync(destAddr string, coins int64, opt *sender.SendOption) (<-chan interface{}, error) {
+	log.Println("dummySkySender.Send", destAddr, coins, opt)
+	return nil, errors.New("dummy sky sender")
+}
+
+func (s *dummySkySender) IsClosed() bool {
+	return true
+}
+
+func main() {
+	configFile := flag.String("cfg", "config.json", "config.json file")
+	btcAddrs := flag.String("btc-addrs", "btc_addresses.json", "btc_addresses.json file")
 	proxyPubkey := flag.String("proxy-pubkey", "", "proxy pubkey")
 	debug := flag.Bool("debug", false, "debug mode will show more detail logs")
+	dummyMode := flag.Bool("dummy", false, "run without real btcd or skyd service")
+
 	flag.Parse()
 
 	// init logger
 	log := logger.NewLogger("", *debug)
+
+	if *proxyPubkey == "" {
+		log.Println("-proxy-pubkey missing")
+		return
+	}
 
 	rpubkey, err := cipher.PubKeyFromHex(*proxyPubkey)
 	if err != nil {
@@ -74,7 +114,7 @@ func main() {
 	go catchInterrupt(quit)
 
 	// load config
-	cfg, err := config.New("config.json")
+	cfg, err := config.New(*configFile)
 	if err != nil {
 		log.Println("Load config failed:", err)
 		return
@@ -94,47 +134,58 @@ func main() {
 		return
 	}
 
-	// create btc rpc client
-	btcrpcConnConf := makeBtcrpcConfg(*cfg)
-	btcrpc, err := btcrpcclient.New(&btcrpcConnConf, nil)
-	if err != nil {
-		log.Printf("Connect btcd failed: %v\n", err)
-		return
-	}
-
-	log.Println("Connect to btcd success")
-
 	errC := make(chan error, 10)
 	wg := sync.WaitGroup{}
 
-	// create scan service
-	scanConfig := makeScanConfig(*cfg)
-	scanServ, err := scanner.NewService(scanConfig, db, log, btcrpc)
-	if err != nil {
-		log.Println("Open scan service failed:", err)
-		return
+	var scanServ *scanner.ScanService
+	var scanCli exchange.BtcScanner
+	var sendServ *sender.SendService
+	var sendCli exchange.SkySender
+
+	if *dummyMode {
+		log.Println("btcd and skyd disabled, running in dummy mode")
+		scanCli = &dummyBtcScanner{}
+		sendCli = &dummySkySender{}
+	} else {
+		// create btc rpc client
+		btcrpcConnConf := makeBtcrpcConfg(*cfg)
+		btcrpc, err := btcrpcclient.New(&btcrpcConnConf, nil)
+		if err != nil {
+			log.Printf("Connect btcd failed: %v\n", err)
+			return
+		}
+
+		log.Println("Connect to btcd success")
+
+		// create scan service
+		scanConfig := makeScanConfig(*cfg)
+		scanServ, err = scanner.NewService(scanConfig, db, log, btcrpc)
+		if err != nil {
+			log.Println("Open scan service failed:", err)
+			return
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errC <- scanServ.Run()
+		}()
+
+		scanCli = scanner.NewScanner(scanServ)
+
+		skyCli := cli.New(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
+
+		// create skycoin send service
+		sendServ = sender.NewService(makeSendConfig(*cfg), log, skyCli)
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			errC <- sendServ.Run()
+		}()
+
+		sendCli = sender.NewSender(sendServ)
 	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		errC <- scanServ.Run()
-	}()
-
-	scanCli := scanner.NewScanner(scanServ)
-
-	skycli := cli.New(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
-
-	// create skycoin send service
-	sendServ := sender.NewService(makeSendConfig(*cfg), log, skycli)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		errC <- sendServ.Run()
-	}()
-
-	sendCli := sender.NewSender(sendServ)
 
 	// create exchange service
 	exchangeServ := exchange.NewService(makeExchangeConfig(*cfg), db, log, scanCli, sendCli)
@@ -144,10 +195,10 @@ func main() {
 		errC <- exchangeServ.Run()
 	}()
 
-	excli := exchange.NewClient(exchangeServ)
+	excCli := exchange.NewClient(exchangeServ)
 
 	// create bitcoin address manager
-	f, err := ioutil.ReadFile("btc_addresses.json")
+	f, err := ioutil.ReadFile(*btcAddrs)
 	if err != nil {
 		log.Println("Load deposit bitcoin address list failed:", err)
 		return
@@ -159,7 +210,7 @@ func main() {
 		return
 	}
 
-	srv := service.New(makeServiceConfig(*cfg), auth, log, excli, btcAddrGen)
+	srv := service.New(makeServiceConfig(*cfg), auth, log, excCli, btcAddrGen)
 
 	// Run the service
 	wg.Add(1)
@@ -179,10 +230,14 @@ func main() {
 	log.Println("Shutting down...")
 
 	// close the scan service
-	scanServ.Shutdown()
+	if scanServ != nil {
+		scanServ.Shutdown()
+	}
 
 	// close the skycoin send service
-	sendServ.Shutdown()
+	if sendServ != nil {
+		sendServ.Shutdown()
+	}
 
 	// close exchange service
 	exchangeServ.Shutdown()
