@@ -73,14 +73,12 @@ func main() {
 	var db *bolt.DB
 	switch cmd {
 	case "setlastscanblock", "getlastscanblock", "scanblock":
-		_, err := os.Stat(*dbFile)
-		os.IsNotExist(err)
-		if err != nil {
+		if _, err := os.Stat(*dbFile); os.IsNotExist(err) {
 			fmt.Println(*dbFile, "does not exist")
 			return
 		}
 
-		db, err = bolt.Open(*dbFile, 0700, nil)
+		db, err := bolt.Open(*dbFile, 0700, nil)
 		if err != nil {
 			log.Printf("Open db failed: %v\n", err)
 			return
@@ -198,8 +196,8 @@ func main() {
 
 		var addrs []string
 		for _, sec := range seckeys {
-			addr := cipher.AddressFromSecKey(sec)
-			addrs = append(addrs, addr.String())
+			addr := cipher.BitcoinAddressFromPubkey(cipher.PubKeyFromSecKey(sec))
+			addrs = append(addrs, addr)
 		}
 
 		if *useJson {
