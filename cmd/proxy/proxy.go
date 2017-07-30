@@ -36,9 +36,10 @@ func main() {
 	proxyAddr := flag.String("teller-proxy-addr", "0.0.0.0:7070", "teller proxy listen address")
 	httpAddr := flag.String("http-service-addr", "localhost:7071", "http api service address")
 	newKey := flag.Bool("new-key", false, "generate new key pairs")
+	debug := flag.Bool("debug", false, "debug mode will show more logs")
 	flag.Parse()
 
-	log := logger.NewLogger("", false)
+	log := logger.NewLogger("", *debug)
 
 	appDir, err := createAppDirIfNotExist(appDir)
 	if err != nil {
