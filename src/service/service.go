@@ -142,7 +142,7 @@ func (s *Service) newSession() error {
 	s.Debugln("New session")
 
 	defer s.Debugln("Session closed")
-	s.Println("Connect to", s.cfg.ProxyAddr)
+	s.Println("Connect to proxy address", s.cfg.ProxyAddr)
 
 	conn, err := net.DialTimeout("tcp", s.cfg.ProxyAddr, s.cfg.DialTimeout)
 	if err != nil {

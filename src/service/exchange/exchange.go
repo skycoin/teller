@@ -74,6 +74,7 @@ func (s *Service) Run() error {
 	for {
 		select {
 		case <-s.quit:
+			s.Println("exhange.Service quit")
 			return nil
 		case dv, ok := <-s.scanner.GetDepositValue():
 			if !ok {
@@ -152,6 +153,9 @@ func (s *Service) Run() error {
 						s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
 					}
 					break loop
+				default:
+					s.Panicln("Unknown sender.Response.StatusC value", st)
+					return nil
 				}
 			}
 
