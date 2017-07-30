@@ -75,7 +75,9 @@ func (hs *httpServ) Run() error {
 
 func (hs *httpServ) Shutdown() {
 	close(hs.quit)
-	hs.ln.Close()
+	if hs.ln != nil {
+		hs.ln.Close()
+	}
 }
 
 // BindHandler binds skycoin address with a bitcoin address

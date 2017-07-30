@@ -2,12 +2,34 @@
 
 ## Setup project
 
-### Prerequest
+### Prerequisites
 
 * Have go1.8+ installed
 * Have `GOPATH` env set
 * Have btcd started
 * Have skycoin node started
+
+### Summary of setup for development without btcd or skycoind
+
+```bash
+# generate btc_addresses.json file
+cd cmd/tool
+go run tool.go -json newbtcaddress <seed> <num> > /tmp/btc_addresses.json
+
+# Run proxy, a pubkey will be printed to stdout, copy it
+cd ../proxy
+go run proxy.go
+
+# In a new terminal, run teller in dummy mode, provide pubkey from proxy stdout, point addresses to addr file
+cd ../teller
+go run teller.go -proxy-pubkey=<proxy pubkey> -dummy -btc-addrs=/tmp/btc_addresses.json
+```
+
+Proxy API is available on `localhost:7071`. API has two methods, `/bind` and `/status`, with one query arg `skyaddr`, e.g.:
+
+```bash
+wget http://localhost:7071/bind?skyaddr=<skycoin addr>
+```
 
 ### Start teller-proxy
 
@@ -48,17 +70,23 @@ use `tool` to pregenerate bitcoin address list:
 
 ```bash
 cd cmd/tool
-go run tool.go newbtcaddress $seed $num
+go run tool.go -json newbtcaddress $seed $num
 ```
 
 example:
 
 ```bash
-go run tool.go newbtcaddress 12323 3
+go run tool.go -json newbtcaddress 12323 3
 
 2Q5sR1EgTWesxX9853AnNpbBS1grEY1JXn3
 2Q8y3vVAqY8Q3paxS7Fz4biy1RUTY5XQuzb
 216WfF5EcvpVk6ypSRP3Lg9BxqpUrgBJBco
+```
+
+generate json file example:
+
+```bash
+go run tool.go -json newbtcaddress 12323 3 > new_btc_addresses.json
 ```
 
 
@@ -92,7 +120,7 @@ config.json:
         "cert": "absolute path to rpc cert file"
     },
     "sky_sender": {
-        "request_buffer_size": 1024 
+        "request_buffer_size": 1024
     }
 }
 ```
