@@ -256,6 +256,8 @@ func makeServiceConfig(cfg config.Config) service.Config {
 		PingTimeout:   cfg.PingTimeout,
 		PongTimeout:   cfg.PongTimeout,
 		DialTimeout:   cfg.DialTimeout,
+
+		MaxBind: cfg.MaxBind,
 	}
 }
 

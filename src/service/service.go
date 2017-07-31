@@ -23,6 +23,7 @@ const (
 var (
 	// ErrPongTimeout not receive pong message in given time error
 	ErrPongTimout = errors.New("pong message timeout")
+	ErrMaxBind    = errors.New("max bind reached")
 )
 
 // BtcAddrGenerator generate new deposit address
@@ -34,6 +35,7 @@ type BtcAddrGenerator interface {
 type Exchanger interface {
 	BindAddress(btcAddr, skyAddr string) error
 	GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error)
+	BindNum(skyAddr string) int // returns the number of btc address the skycoin address binded
 }
 
 // Service provides the ico service
@@ -59,6 +61,8 @@ type Config struct {
 	PingTimeout   time.Duration
 	PongTimeout   time.Duration
 	DialTimeout   time.Duration
+
+	MaxBind int
 }
 
 // New creates a ico service

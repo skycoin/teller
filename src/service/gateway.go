@@ -21,6 +21,10 @@ func (gw *gateway) ResetPongTimer() {
 // BindAddress binds skycoin address with a deposit btc address
 // return btc address
 func (gw *gateway) BindAddress(skyAddr string) (string, error) {
+	if gw.s.excli.BindNum(skyAddr) >= gw.s.cfg.MaxBind {
+		return "", ErrMaxBind
+	}
+
 	btcAddr, err := gw.s.btcAddrGen.NewAddress()
 	if err != nil {
 		return "", err

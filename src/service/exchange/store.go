@@ -231,6 +231,11 @@ func (s *store) GetDepositInfoOfSkyAddress(skyAddr string) ([]depositInfo, error
 	return dpis, nil
 }
 
+// GetSkyBindBtcAddresses returns the btc addresses of the given sky address binded
+func (s *store) GetSkyBindBtcAddresses(skyAddr string) []string {
+	return s.cache.getSkyIndex(skyAddr)
+}
+
 type cache struct {
 	sync.RWMutex
 	depositInfo         map[string]depositInfo

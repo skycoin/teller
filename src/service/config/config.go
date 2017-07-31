@@ -20,6 +20,7 @@ type Config struct {
 	DialTimeout   time.Duration `json:"dial_timeout"`
 	PingTimeout   time.Duration `json:"ping_timeout"`
 	PongTimeout   time.Duration `json:"pong_timeout"`
+	MaxBind       int           `json:"max_bind"` // max number of btc addresses a skycoin address can bind
 
 	Skynode Skynode `json:"skynode"`
 

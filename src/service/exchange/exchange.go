@@ -89,13 +89,6 @@ func (s *Service) Run() error {
 				continue
 			}
 
-			// only update the status that are under waiting_sky_send
-			// if dpi.Txid != "" {
-			// 	// TODO: this might mean the user deposit btcoin btc to the same address multiple times
-			// 	s.Printf("Deposit value of btc address %s already >= %s\n", dv.Address, statusString[statusWaitSend])
-			// 	continue
-			// }
-
 			// update status to waiting_sky_send
 			err := s.store.UpdateDepositInfo(dv.Address, func(dpi depositInfo) depositInfo {
 				dpi.Status = statusWaitSend
@@ -206,4 +199,8 @@ func (s *Service) getDepositStatuses(skyAddr string) ([]daemon.DepositStatus, er
 		})
 	}
 	return dss, nil
+}
+
+func (s *Service) getBindNum(skyAddr string) int {
+	return len(s.store.GetSkyBindBtcAddresses(skyAddr))
 }
