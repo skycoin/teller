@@ -12,16 +12,14 @@
 ### Summary of setup for development without btcd or skycoind
 
 ```bash
-# generate btc_addresses.json file
-cd cmd/tool
-go run tool.go -json newbtcaddress <seed> <num> > /tmp/btc_addresses.json
+# Generate btc_addresses.json file. 'foobar' is an arbitrary seed, and 10 is an arbitrary number of addresses to generate
+go run cmd/tool/tool.go -json newbtcaddress foobar 10 > /tmp/btc_addresses.json
 
 # Run proxy, a pubkey will be printed to stdout, copy it
-cd ../proxy
-go run proxy.go
+go run cmd/proxy/proxy.go
 
 # In a new terminal, run teller in dummy mode, provide pubkey from proxy stdout, point addresses to addr file
-cd ../teller
+cd cmd/teller/
 go run teller.go -proxy-pubkey=<proxy pubkey> -dummy -btc-addrs=/tmp/btc_addresses.json
 ```
 
@@ -33,9 +31,10 @@ wget http://localhost:7071/api/bind?skyaddr=<skycoin addr>
 
 ### Start teller-proxy
 
+*Note: the proxy must be run from the repo root, in order to serve static content from `./web/dist`*
+
 ```bash
-cd cmd/proxy/
-go run proxy.go
+go run cmd/proxy/proxy.go
 ```
 
 once the proxy start, will show a `pubkey` in the log.
