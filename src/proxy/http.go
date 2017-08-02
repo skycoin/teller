@@ -18,15 +18,7 @@ import (
 )
 
 const (
-	errBadRequest       = 400
-	errMethodNotAllowed = 405
-	errNotAcceptable    = 406
-	errRequestTimeout   = 408
-	errInternalServErr  = 500
-
-	maxRequestLogsNum = 100
-
-	proxyRequestTimeout = 3 * time.Second
+	proxyRequestTimeout = time.Second * 5
 
 	shutdownTimeout = time.Second * 5
 
@@ -39,11 +31,11 @@ const (
 )
 
 var httpErrCodeStr = []string{
-	errBadRequest:       "Bad Request",
-	errMethodNotAllowed: "Method Not Allowed",
-	errNotAcceptable:    "Not Acceptable",
-	errInternalServErr:  "Internal Server Error",
-	errRequestTimeout:   "Request Timeout",
+	http.StatusBadRequest:          "Bad Request",
+	http.StatusMethodNotAllowed:    "Method Not Allowed",
+	http.StatusNotAcceptable:       "Not Acceptable",
+	http.StatusInternalServerError: "Internal Server Error",
+	http.StatusRequestTimeout:      "Request Timeout",
 }
 
 type httpServ struct {
@@ -154,10 +146,11 @@ func BindHandler(gw gatewayer) http.HandlerFunc {
 			return
 		}
 
-		bindReq := daemon.BindRequest{SkyAddress: skyAddr}
-
 		cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
 		defer cancel()
+
+		bindReq := daemon.BindRequest{SkyAddress: skyAddr}
+
 		rsp, err := gw.BindAddress(cxt, &bindReq)
 		if err != nil {
 			if err == context.DeadlineExceeded {
@@ -165,6 +158,7 @@ func BindHandler(gw gatewayer) http.HandlerFunc {
 				gw.Println(httpErrCodeStr[http.StatusRequestTimeout])
 				return
 			}
+
 			errorResponse(w, http.StatusInternalServerError)
 			gw.Println(err)
 			return
@@ -204,9 +198,11 @@ func StatusHandler(gw gatewayer) http.HandlerFunc {
 			return
 		}
 
-		stReq := daemon.StatusRequest{SkyAddress: skyAddr}
 		cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
 		defer cancel()
+
+		stReq := daemon.StatusRequest{SkyAddress: skyAddr}
+
 		rsp, err := gw.GetDepositStatuses(cxt, &stReq)
 		if err != nil {
 			if err == context.DeadlineExceeded {
@@ -214,6 +210,7 @@ func StatusHandler(gw gatewayer) http.HandlerFunc {
 				gw.Println(httpErrCodeStr[http.StatusRequestTimeout])
 				return
 			}
+
 			errorResponse(w, http.StatusInternalServerError)
 			gw.Println(err)
 			return

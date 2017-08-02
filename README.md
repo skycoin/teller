@@ -73,7 +73,7 @@ cd cmd/tool
 go run tool.go -json newbtcaddress $seed $num
 ```
 
-example:
+Example:
 
 ```bash
 go run tool.go -json newbtcaddress 12323 3
@@ -83,7 +83,7 @@ go run tool.go -json newbtcaddress 12323 3
 216WfF5EcvpVk6ypSRP3Lg9BxqpUrgBJBco
 ```
 
-generate json file example:
+generate json file Example:
 
 ```bash
 go run tool.go -json newbtcaddress 12323 3 > new_btc_addresses.json
@@ -133,7 +133,11 @@ go run teller.go -proxy-pubkey=$the_pubkey_of_proxy
 
 ## Service apis
 
-The http apis service is provided by the proxy and serve on port 7071.
+The HTTP API service is provided by the proxy and serve on port 7071 by default.
+
+The API returns JSON for all 200 OK responses.
+
+If the API returns a non-200 response, the response body is the error message, in plain text (not JSON).
 
 ### Bind
 
@@ -143,7 +147,10 @@ URI: /api/bind
 Args: skyaddr
 ```
 
-example:
+Binds a skycoin address to a BTC address. A skycoin address can be bound to
+multiple BTC addresses.  The default maximum number of bound addresses is 5.
+
+Example:
 
 ```bash
 curl http://localhost:7071/api/bind?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
@@ -165,7 +172,21 @@ URI: /api/status
 Args: skyaddr
 ```
 
-example:
+Returns statuses of a skycoin address.
+
+Since a single skycoin address can be bound to multiple BTC addresses the result is in an array.
+The default maximum number of BTC addresses per skycoin address is 5.
+
+We cannot return the BTC address for security reasons so they are numbered and timestamped instead.
+
+Possible statuses are:
+
+* `waiting_deposit` - Skycoin address is bound, no deposit seen on BTC address yet
+* `waiting_send` - BTC deposit detected, waiting to send skycoin out
+* `waiting_confirm` - Skycoin sent out, waiting to confirm the skycoin transaction
+* `done` - Skycoin transaction confirmed
+
+Example:
 
 ```bash
 curl http://localhost:7071/api/status?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
