@@ -25,10 +25,10 @@ cd ../teller
 go run teller.go -proxy-pubkey=<proxy pubkey> -dummy -btc-addrs=/tmp/btc_addresses.json
 ```
 
-Proxy API is available on `localhost:7071`. API has two methods, `/bind` and `/status`, with one query arg `skyaddr`, e.g.:
+Proxy API is available on `localhost:7071`. API has two methods, `/api/bind` and `/api/status`, with one query arg `skyaddr`, e.g.:
 
 ```bash
-wget http://localhost:7071/bind?skyaddr=<skycoin addr>
+wget http://localhost:7071/api/bind?skyaddr=<skycoin addr>
 ```
 
 ### Start teller-proxy
@@ -139,14 +139,14 @@ The http apis service is provided by the proxy and serve on port 7071.
 
 ```bash
 Method: GET
-URI: /bind
+URI: /api/bind
 Args: skyaddr
 ```
 
 example:
 
 ```bash
-curl http://localhost:7071/bind?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
+curl http://localhost:7071/api/bind?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
 ```
 
 response:
@@ -161,14 +161,14 @@ response:
 
 ```bash
 Method: GET
-URI: /status
+URI: /api/status
 Args: skyaddr
 ```
 
 example:
 
 ```bash
-curl http://localhost:7071/status?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
+curl http://localhost:7071/api/status?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
 ```
 
 response:
