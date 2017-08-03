@@ -1,25 +1,25 @@
 export default {
   distribution: {
-    title: 'Skycoin distribution event',
-    heading: 'Skycoin distribution event',
+    title: 'Распространение Skycoin',
+    heading: 'Распространение Skycoin',
     instructions: `
-<p>To participate in the distribution event:</p>
+<p>Что необходимо для участия в распространении:</p>
 
 <ul>
-  <li>Enter your Skycoin address below</li>
-  <li>You&apos;ll recieve a unique Bitcoin address to purchase SKY</li>
-  <li>Send BTC to the address—you&apos;ll recieve 1 SKY per 0.002 BTC</li>
+  <li>Введите ваш Skycoin адрес</li>
+  <li>Вы получите уникальный Bitcoin адрес для приобретения SKY</li>
+  <li>Пошлите Bitcoin на полученый адрес: 1 SKY стоит 0.002 BTC</li>
 </ul>
 
-<p>You can check the status of your order by entering your address and selecting <strong>Check status</strong>.</p>
+<p>Вы можете проверить статус заказа, введя адрес SKY и нажав на <strong>Проверить статус</strong>.</p>
     `,
-    btcAddressFor: 'BTC address for {skyAddress}',
-    statusFor: 'Status for {skyAddress}',
-    enterAddress: 'Enter Skycoin address',
-    getAddress: 'Get address',
-    checkStatus: 'Check status',
+    btcAddressFor: 'BTC адрес для {skyAddress}',
+    statusFor: 'Статус по {skyAddress}',
+    enterAddress: 'Ввдеите адрес Skycoin',
+    getAddress: 'Получить адрес',
+    checkStatus: 'Проверить статус',
     errors: {
-      noSkyAddress: 'Please enter your SKY address.',
+      noSkyAddress: 'Пожалуйста введите ваш SKY адрес.',
     },
   },
 };
