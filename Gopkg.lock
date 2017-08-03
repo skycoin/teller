@@ -14,7 +14,6 @@
   version = "v1.3.1"
 
 [[projects]]
-  branch = "master"
   name = "github.com/btcsuite/btcd"
   packages = ["btcec","btcjson","chaincfg","chaincfg/chainhash","wire"]
   revision = "47885ab8702485be6b6f87a03d4f3be0bc5c982c"
@@ -26,7 +25,6 @@
   revision = "84c8d2346e9fc8c7b947e243b9c24e6df9fd206a"
 
 [[projects]]
-  branch = "master"
   name = "github.com/btcsuite/btcrpcclient"
   packages = ["."]
   revision = "0d9ec835baeb9a8ce7fbe3eb7d7783284a089ced"
@@ -106,6 +104,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "1b7dc0c35feacfcf32c9ade2194996cf65f6f753dc63b7ec807be6a6868f99d1"
+  inputs-digest = "eda9cbef65d18a059a34aaace599576aabbca71b45992fea210e5bde4b0fe005"
   solver-name = "gps-cdcl"
   solver-version = 1
