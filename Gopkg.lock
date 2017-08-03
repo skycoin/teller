@@ -91,7 +91,7 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["ripemd160"]
+  packages = ["acme","acme/autocert","ripemd160"]
   revision = "558b6879de74bc843225cde5686419267ff707ca"
 
 [[projects]]
@@ -103,6 +103,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5174dd7829b127daad947ec71ba58305244859e9386cf62c8a712616724cba87"
+  inputs-digest = "b46bae1c61fc84372c82f7d2cabd80b328ad9f9baf5358d19a4869a3c4aa913c"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
@@ -28,6 +30,9 @@ const (
 	serverReadTimeout  = time.Second * 10
 	serverWriteTimeout = time.Second * 60
 	serverIdleTimeout  = time.Second * 120
+
+	// Directory where cached SSL certs from Let's Encrypt are stored
+	tlsAutoCertCache = "cert-cache"
 )
 
 var httpErrCodeStr = []string{
@@ -43,26 +48,21 @@ type httpServ struct {
 	Addr          string
 	StaticDir     string
 	HtmlInterface bool
-	ln            *http.Server
-	gateway       *gateway
-	quit          chan struct{}
-}
+	Tls           bool
+	AutoTlsHost   string
+	TlsCert       string
+	TlsKey        string
+	Gateway       *gateway
 
-// creates a http service
-func newHTTPServ(addr string, log logger.Logger, gw *gateway) *httpServ {
-	return &httpServ{
-		Logger:        log,
-		Addr:          addr,
-		StaticDir:     "./web/build/",
-		HtmlInterface: true,
-		gateway:       gw,
-		quit:          make(chan struct{}),
-	}
+	ln   *http.Server
+	quit chan struct{}
 }
 
 func (hs *httpServ) Run() error {
 	hs.Println("Http service start, serve on", hs.Addr)
 	defer hs.Debugln("Http service closed")
+
+	hs.quit = make(chan struct{})
 
 	mux := hs.setupMux()
 
@@ -74,13 +74,45 @@ func (hs *httpServ) Run() error {
 		IdleTimeout:  serverIdleTimeout,
 	}
 
-	if err := hs.ln.ListenAndServe(); err != nil {
-		select {
-		case <-hs.quit:
-			return nil
-		default:
-			return fmt.Errorf("http serve failed: %v", err)
+	handleListenErr := func(f func() error) error {
+		if err := f(); err != nil {
+			select {
+			case <-hs.quit:
+				return nil
+			default:
+				return fmt.Errorf("http serve failed: %v", err)
+			}
 		}
+		return nil
+	}
+
+	if hs.Tls {
+		if hs.AutoTlsHost != "" {
+			// https://godoc.org/golang.org/x/crypto/acme/autocert
+			// https://stackoverflow.com/a/40494806
+			certManager := autocert.Manager{
+				Prompt:     autocert.AcceptTOS,
+				HostPolicy: autocert.HostWhitelist(hs.AutoTlsHost),
+				Cache:      autocert.DirCache(tlsAutoCertCache),
+			}
+
+			hs.ln.TLSConfig = &tls.Config{
+				GetCertificate: certManager.GetCertificate,
+			}
+
+			return handleListenErr(func() error {
+				return hs.ln.ListenAndServeTLS("", "")
+			})
+		} else {
+			return handleListenErr(func() error {
+				return hs.ln.ListenAndServeTLS(hs.TlsCert, hs.TlsKey)
+			})
+		}
+
+	} else {
+		return handleListenErr(func() error {
+			return hs.ln.ListenAndServe()
+		})
 	}
 
 	return nil
@@ -94,8 +126,8 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 	}
 
 	// API Methods
-	handleApi("/api/bind", BindHandler(hs.gateway))
-	handleApi("/api/status", StatusHandler(hs.gateway))
+	handleApi("/api/bind", BindHandler(hs.Gateway))
+	handleApi("/api/status", StatusHandler(hs.Gateway))
 
 	// Static files
 	if hs.HtmlInterface {
@@ -106,7 +138,9 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 }
 
 func (hs *httpServ) Shutdown() {
-	close(hs.quit)
+	if hs.quit != nil {
+		close(hs.quit)
+	}
 
 	if hs.ln != nil {
 		hs.Printf("Shutting down http server, %s timeout\n", shutdownTimeout)
@@ -116,6 +150,8 @@ func (hs *httpServ) Shutdown() {
 			log.Println("HTTP server shutdown error:", err)
 		}
 	}
+
+	hs.quit = nil
 }
 
 // BindHandler binds skycoin address with a bitcoin address
