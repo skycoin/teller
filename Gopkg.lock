@@ -30,10 +30,9 @@
   revision = "0d9ec835baeb9a8ce7fbe3eb7d7783284a089ced"
 
 [[projects]]
-  branch = "master"
   name = "github.com/btcsuite/btcutil"
-  packages = [".","base58","bech32"]
-  revision = "501929d3d046174c3d39f0ea54ece471aa17238c"
+  packages = [".","base58"]
+  revision = "5ffa719c3882fd2ec1e8b9f4978066701c31a343"
 
 [[projects]]
   branch = "master"
@@ -104,6 +103,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "eda9cbef65d18a059a34aaace599576aabbca71b45992fea210e5bde4b0fe005"
+  inputs-digest = "5174dd7829b127daad947ec71ba58305244859e9386cf62c8a712616724cba87"
   solver-name = "gps-cdcl"
   solver-version = 1
