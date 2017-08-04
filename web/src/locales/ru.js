@@ -15,7 +15,7 @@ export default {
     `,
     btcAddressFor: 'BTC адрес для {skyAddress}',
     statusFor: 'Статус по {skyAddress}',
-    enterAddress: 'Ввдеите адрес Skycoin',
+    enterAddress: 'Введите адрес Skycoin',
     getAddress: 'Получить адрес',
     checkStatus: 'Проверить статус',
     errors: {
