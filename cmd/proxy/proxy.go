@@ -20,12 +20,12 @@ import (
 func main() {
 	proxyAddr := flag.String("teller-proxy-addr", "0.0.0.0:7070", "teller proxy listen address")
 	httpAddr := flag.String("http-service-addr", "localhost:7071", "http api service address")
-	tls := flag.Bool("-tls", false, "serve http api over tls")
-	autoTlsHost := flag.String("-auto-tls-host", "", "generate certificate with Let's Encrypt for this hostname and use it")
-	tlsKey := flag.String("-tls-key", "", "tls key file (if not using -auto-tls-host)")
-	tlsCert := flag.String("-tls-cert", "", "tls cert file (if not using -auto-tls-host)")
-	htmlInterface := flag.Bool("-html", true, "serve html interface")
-	htmlStaticDir := flag.String("-html-static-dir", "./web/build", "static directory to serve html interface from")
+	tls := flag.Bool("tls", false, "serve http api over tls")
+	autoTlsHost := flag.String("auto-tls-host", "", "generate certificate with Let's Encrypt for this hostname and use it")
+	tlsKey := flag.String("tls-key", "", "tls key file (if not using -auto-tls-host)")
+	tlsCert := flag.String("tls-cert", "", "tls cert file (if not using -auto-tls-host)")
+	htmlInterface := flag.Bool("html", true, "serve html interface")
+	htmlStaticDir := flag.String("html-static-dir", "./web/build", "static directory to serve html interface from")
 	debug := flag.Bool("debug", false, "debug mode will show more logs")
 	flag.Parse()
 
@@ -47,7 +47,7 @@ func main() {
 		LSeckey: lseckey,
 	}
 
-	pxc := proxy.ProxyConfig{
+	pxCfg := proxy.ProxyConfig{
 		SrvAddr:       *proxyAddr,
 		HttpSrvAddr:   *httpAddr,
 		HtmlStaticDir: *htmlStaticDir,
@@ -58,7 +58,7 @@ func main() {
 		TlsKey:        *tlsKey,
 	}
 
-	px := proxy.New(cfg, auth, proxy.Logger(log))
+	px := proxy.New(pxCfg, auth, proxy.Logger(log))
 
 	var wg sync.WaitGroup
 	wg.Add(1)

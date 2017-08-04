@@ -141,9 +141,13 @@ If the API returns a non-200 response, the response body is the error message, i
 ### Bind
 
 ```bash
-Method: GET
+Method: POST
+Accept: application/json
+Content-Type: application/json
 URI: /api/bind
-Args: skyaddr
+Request Body: {
+    "skyaddr": "..."
+}
 ```
 
 Binds a skycoin address to a BTC address. A skycoin address can be bound to
@@ -152,7 +156,7 @@ multiple BTC addresses.  The default maximum number of bound addresses is 5.
 Example:
 
 ```bash
-curl http://localhost:7071/api/bind?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
+curl -H  -X POST "Content-Type: application/json" -d '{"skyaddr":"..."}' http://localhost:7071/api/bind
 ```
 
 response:
@@ -167,8 +171,9 @@ response:
 
 ```bash
 Method: GET
+Content-Type: application/json
 URI: /api/status
-Args: skyaddr
+Query Args: skyaddr
 ```
 
 Returns statuses of a skycoin address.
