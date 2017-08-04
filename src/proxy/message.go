@@ -2,13 +2,13 @@ package proxy
 
 import "github.com/skycoin/teller/src/daemon"
 
-// BindResponse http response for /bind api
+// BindResponse http response for /api/bind
 type BindResponse struct {
 	BtcAddress string `json:"btc_address,omitempty"`
 	Error      string `json:"error,omitempty"`
 }
 
-// StatusResponse http response for /status api
+// StatusResponse http response for /api/status
 type StatusResponse struct {
 	Statuses []daemon.DepositStatus `json:"statuses,omitempty"`
 	Error    string                 `json:"error,omitempty"`

@@ -3,12 +3,14 @@ package proxy
 import (
 	"context"
 	"fmt"
-	"net"
+	"log"
 	"net/http"
 
 	"encoding/json"
 
 	"time"
+
+	"github.com/NYTimes/gziphandler"
 
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
@@ -16,73 +18,109 @@ import (
 )
 
 const (
-	errBadRequest       = 400
-	errMethodNotAllowed = 405
-	errNotAcceptable    = 406
-	errRequestTimeout   = 408
-	errInternalServErr  = 500
+	proxyRequestTimeout = time.Second * 5
 
-	maxRequestLogsNum = 100
+	shutdownTimeout = time.Second * 5
 
-	proxyRequestTimeout = 3 * time.Second
+	// https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
+	// The timeout configuration is necessary for public servers, or else
+	// connections will be used up
+	serverReadTimeout  = time.Second * 10
+	serverWriteTimeout = time.Second * 60
+	serverIdleTimeout  = time.Second * 120
 )
 
 var httpErrCodeStr = []string{
-	errBadRequest:       "Bad Request",
-	errMethodNotAllowed: "Method Not Allowed",
-	errNotAcceptable:    "Not Acceptable",
-	errInternalServErr:  "Internal Server Error",
-	errRequestTimeout:   "Request Timeout",
+	http.StatusBadRequest:          "Bad Request",
+	http.StatusMethodNotAllowed:    "Method Not Allowed",
+	http.StatusNotAcceptable:       "Not Acceptable",
+	http.StatusInternalServerError: "Internal Server Error",
+	http.StatusRequestTimeout:      "Request Timeout",
 }
 
 type httpServ struct {
 	logger.Logger
-	ln      net.Listener
-	srvAddr string
-	gateway *gateway
-	quit    chan struct{}
+	Addr          string
+	StaticDir     string
+	HtmlInterface bool
+	ln            *http.Server
+	gateway       *gateway
+	quit          chan struct{}
 }
 
 // creates a http service
 func newHTTPServ(addr string, log logger.Logger, gw *gateway) *httpServ {
-	return &httpServ{srvAddr: addr, Logger: log, gateway: gw, quit: make(chan struct{})}
+	return &httpServ{
+		Logger:        log,
+		Addr:          addr,
+		StaticDir:     "./web/build/",
+		HtmlInterface: true,
+		gateway:       gw,
+		quit:          make(chan struct{}),
+	}
 }
 
 func (hs *httpServ) Run() error {
-	hs.Println("Http service start, serve on", hs.srvAddr)
+	hs.Println("Http service start, serve on", hs.Addr)
 	defer hs.Debugln("Http service closed")
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/bind", logHandler(hs.Logger, BindHandler(hs.gateway)))
-	mux.HandleFunc("/status", logHandler(hs.Logger, StatusHandler(hs.gateway)))
+	mux := hs.setupMux()
 
-	var err error
-	hs.ln, err = net.Listen("tcp", hs.srvAddr)
-	if err != nil {
-		return fmt.Errorf("listen %s failed: err:%v", hs.srvAddr, err)
+	hs.ln = &http.Server{
+		Addr:         hs.Addr,
+		Handler:      mux,
+		ReadTimeout:  serverReadTimeout,
+		WriteTimeout: serverWriteTimeout,
+		IdleTimeout:  serverIdleTimeout,
 	}
 
-	if err := http.Serve(hs.ln, mux); err != nil {
+	if err := hs.ln.ListenAndServe(); err != nil {
 		select {
 		case <-hs.quit:
 			return nil
 		default:
-			return fmt.Errorf("http serve failed:%v", err)
+			return fmt.Errorf("http serve failed: %v", err)
 		}
 	}
+
 	return nil
+}
+
+func (hs *httpServ) setupMux() *http.ServeMux {
+	mux := http.NewServeMux()
+
+	handleApi := func(path string, f http.HandlerFunc) {
+		mux.Handle(path, gziphandler.GzipHandler(logHandler(hs.Logger, f)))
+	}
+
+	// API Methods
+	handleApi("/api/bind", BindHandler(hs.gateway))
+	handleApi("/api/status", StatusHandler(hs.gateway))
+
+	// Static files
+	if hs.HtmlInterface {
+		mux.Handle("/", gziphandler.GzipHandler(http.FileServer(http.Dir(hs.StaticDir))))
+	}
+
+	return mux
 }
 
 func (hs *httpServ) Shutdown() {
 	close(hs.quit)
+
 	if hs.ln != nil {
-		hs.ln.Close()
+		hs.Printf("Shutting down http server, %s timeout\n", shutdownTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := hs.ln.Shutdown(ctx); err != nil {
+			log.Println("HTTP server shutdown error:", err)
+		}
 	}
 }
 
 // BindHandler binds skycoin address with a bitcoin address
 // Method: GET
-// URI: /bind
+// URI: /api/bind
 // Args:
 //    skyaddr
 func BindHandler(gw gatewayer) http.HandlerFunc {
@@ -108,10 +146,11 @@ func BindHandler(gw gatewayer) http.HandlerFunc {
 			return
 		}
 
-		bindReq := daemon.BindRequest{SkyAddress: skyAddr}
-
 		cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
 		defer cancel()
+
+		bindReq := daemon.BindRequest{SkyAddress: skyAddr}
+
 		rsp, err := gw.BindAddress(cxt, &bindReq)
 		if err != nil {
 			if err == context.DeadlineExceeded {
@@ -119,6 +158,7 @@ func BindHandler(gw gatewayer) http.HandlerFunc {
 				gw.Println(httpErrCodeStr[http.StatusRequestTimeout])
 				return
 			}
+
 			errorResponse(w, http.StatusInternalServerError)
 			gw.Println(err)
 			return
@@ -132,7 +172,7 @@ func BindHandler(gw gatewayer) http.HandlerFunc {
 
 // StatusHandler returns the deposit status of specific skycoin address
 // Method: GET
-// URI: /status
+// URI: /api/status
 // Args:
 //     skyaddr
 func StatusHandler(gw gatewayer) http.HandlerFunc {
@@ -158,9 +198,11 @@ func StatusHandler(gw gatewayer) http.HandlerFunc {
 			return
 		}
 
-		stReq := daemon.StatusRequest{SkyAddress: skyAddr}
 		cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
 		defer cancel()
+
+		stReq := daemon.StatusRequest{SkyAddress: skyAddr}
+
 		rsp, err := gw.GetDepositStatuses(cxt, &stReq)
 		if err != nil {
 			if err == context.DeadlineExceeded {
@@ -168,6 +210,7 @@ func StatusHandler(gw gatewayer) http.HandlerFunc {
 				gw.Println(httpErrCodeStr[http.StatusRequestTimeout])
 				return
 			}
+
 			errorResponse(w, http.StatusInternalServerError)
 			gw.Println(err)
 			return
