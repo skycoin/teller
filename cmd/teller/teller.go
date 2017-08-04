@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"log"
+	"net"
 	"os/signal"
 	"os/user"
 	"sync"
@@ -77,6 +78,7 @@ func main() {
 	proxyPubkey := flag.String("proxy-pubkey", "", "proxy pubkey")
 	debug := flag.Bool("debug", false, "debug mode will show more detail logs")
 	dummyMode := flag.Bool("dummy", false, "run without real btcd or skyd service")
+	profile := flag.Bool("prof", false, "start gops profiling tool")
 
 	flag.Parse()
 
@@ -102,12 +104,14 @@ func main() {
 		LSeckey: lseckey,
 	}
 
-	// start gops agent, for profilling
-	if err := agent.Listen(&agent.Options{
-		NoShutdownCleanup: true,
-	}); err != nil {
-		log.Println("Start profile agent failed:", err)
-		return
+	if *profile {
+		// start gops agent, for profilling
+		if err := agent.Listen(&agent.Options{
+			NoShutdownCleanup: true,
+		}); err != nil {
+			log.Println("Start profile agent failed:", err)
+			return
+		}
 	}
 
 	quit := make(chan struct{})
@@ -147,6 +151,15 @@ func main() {
 		scanCli = &dummyBtcScanner{}
 		sendCli = &dummySkySender{}
 	} else {
+		// test if skycoin node is available
+		conn, err := net.Dial("tcp", cfg.Skynode.RPCAddress)
+		if err != nil {
+			log.Println("Connect skycoin node failed:", err)
+			return
+		}
+
+		conn.Close()
+
 		// create btc rpc client
 		btcrpcConnConf := makeBtcrpcConfg(*cfg)
 		btcrpc, err := btcrpcclient.New(&btcrpcConnConf, nil)
