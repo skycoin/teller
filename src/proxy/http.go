@@ -2,15 +2,18 @@ package proxy
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"encoding/json"
 
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
@@ -28,14 +31,19 @@ const (
 	serverReadTimeout  = time.Second * 10
 	serverWriteTimeout = time.Second * 60
 	serverIdleTimeout  = time.Second * 120
+
+	// Directory where cached SSL certs from Let's Encrypt are stored
+	tlsAutoCertCache = "cert-cache"
 )
 
-var httpErrCodeStr = []string{
-	http.StatusBadRequest:          "Bad Request",
-	http.StatusMethodNotAllowed:    "Method Not Allowed",
-	http.StatusNotAcceptable:       "Not Acceptable",
-	http.StatusInternalServerError: "Internal Server Error",
-	http.StatusRequestTimeout:      "Request Timeout",
+var httpCodeNames = []string{
+	http.StatusBadRequest:           "Bad Request",
+	http.StatusMethodNotAllowed:     "Method Not Allowed",
+	http.StatusNotAcceptable:        "Not Acceptable",
+	http.StatusInternalServerError:  "Internal Server Error",
+	http.StatusRequestTimeout:       "Request Timeout",
+	http.StatusUnsupportedMediaType: "Unsupported Media Type",
+	http.StatusForbidden:            "Forbidden",
 }
 
 type httpServ struct {
@@ -43,26 +51,22 @@ type httpServ struct {
 	Addr          string
 	StaticDir     string
 	HtmlInterface bool
-	ln            *http.Server
-	gateway       *gateway
-	quit          chan struct{}
-}
+	StartAt       time.Time
+	Tls           bool
+	AutoTlsHost   string
+	TlsCert       string
+	TlsKey        string
+	Gateway       *gateway
 
-// creates a http service
-func newHTTPServ(addr string, log logger.Logger, gw *gateway) *httpServ {
-	return &httpServ{
-		Logger:        log,
-		Addr:          addr,
-		StaticDir:     "./web/build/",
-		HtmlInterface: true,
-		gateway:       gw,
-		quit:          make(chan struct{}),
-	}
+	ln   *http.Server
+	quit chan struct{}
 }
 
 func (hs *httpServ) Run() error {
 	hs.Println("Http service start, serve on", hs.Addr)
 	defer hs.Debugln("Http service closed")
+
+	hs.quit = make(chan struct{})
 
 	mux := hs.setupMux()
 
@@ -74,13 +78,45 @@ func (hs *httpServ) Run() error {
 		IdleTimeout:  serverIdleTimeout,
 	}
 
-	if err := hs.ln.ListenAndServe(); err != nil {
-		select {
-		case <-hs.quit:
-			return nil
-		default:
-			return fmt.Errorf("http serve failed: %v", err)
+	handleListenErr := func(f func() error) error {
+		if err := f(); err != nil {
+			select {
+			case <-hs.quit:
+				return nil
+			default:
+				return fmt.Errorf("http serve failed: %v", err)
+			}
 		}
+		return nil
+	}
+
+	if hs.Tls {
+		if hs.AutoTlsHost != "" {
+			// https://godoc.org/golang.org/x/crypto/acme/autocert
+			// https://stackoverflow.com/a/40494806
+			certManager := autocert.Manager{
+				Prompt:     autocert.AcceptTOS,
+				HostPolicy: autocert.HostWhitelist(hs.AutoTlsHost),
+				Cache:      autocert.DirCache(tlsAutoCertCache),
+			}
+
+			hs.ln.TLSConfig = &tls.Config{
+				GetCertificate: certManager.GetCertificate,
+			}
+
+			return handleListenErr(func() error {
+				return hs.ln.ListenAndServeTLS("", "")
+			})
+		} else {
+			return handleListenErr(func() error {
+				return hs.ln.ListenAndServeTLS(hs.TlsCert, hs.TlsKey)
+			})
+		}
+
+	} else {
+		return handleListenErr(func() error {
+			return hs.ln.ListenAndServe()
+		})
 	}
 
 	return nil
@@ -94,8 +130,8 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 	}
 
 	// API Methods
-	handleApi("/api/bind", BindHandler(hs.gateway))
-	handleApi("/api/status", StatusHandler(hs.gateway))
+	handleApi("/api/bind", BindHandler(hs))
+	handleApi("/api/status", StatusHandler(hs))
 
 	// Static files
 	if hs.HtmlInterface {
@@ -106,7 +142,9 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 }
 
 func (hs *httpServ) Shutdown() {
-	close(hs.quit)
+	if hs.quit != nil {
+		close(hs.quit)
+	}
 
 	if hs.ln != nil {
 		hs.Printf("Shutting down http server, %s timeout\n", shutdownTimeout)
@@ -116,57 +154,72 @@ func (hs *httpServ) Shutdown() {
 			log.Println("HTTP server shutdown error:", err)
 		}
 	}
+
+	hs.quit = nil
 }
 
 // BindHandler binds skycoin address with a bitcoin address
-// Method: GET
+// Method: POST
+// Accept: application/json
 // URI: /api/bind
 // Args:
-//    skyaddr
-func BindHandler(gw gatewayer) http.HandlerFunc {
+//    {"skyaddr": "..."}
+func BindHandler(srv *httpServ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.Header().Set("Allow", "GET")
-			errorResponse(w, http.StatusMethodNotAllowed)
-			gw.Println(httpErrCodeStr[http.StatusMethodNotAllowed])
-			return
-		}
+		bindHandler(w, r, srv)
+	}
+}
 
-		skyAddr := r.FormValue("skyaddr")
-		if skyAddr == "" {
-			errorResponse(w, http.StatusBadRequest)
-			gw.Println(httpErrCodeStr[http.StatusBadRequest])
-			return
-		}
+type bindRequest struct {
+	SkyAddr string `json:"skyaddr"`
+}
 
-		// verify the skycoin address
-		if _, err := cipher.DecodeBase58Address(skyAddr); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid skycoin address: %v", err), http.StatusBadRequest)
-			gw.Println("Invalid skycoin address:", err)
-			return
-		}
+func bindHandler(w http.ResponseWriter, r *http.Request, srv *httpServ) {
+	w.Header().Set("Accept", "application/json")
 
-		cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
-		defer cancel()
+	if !validMethod(w, r, srv.Gateway, []string{http.MethodPost}) {
+		return
+	}
 
-		bindReq := daemon.BindRequest{SkyAddress: skyAddr}
+	if r.Header.Get("Content-Type") != "application/json" {
+		errorResponse(w, srv.Gateway, http.StatusUnsupportedMediaType)
+		return
+	}
 
-		rsp, err := gw.BindAddress(cxt, &bindReq)
-		if err != nil {
-			if err == context.DeadlineExceeded {
-				errorResponse(w, http.StatusRequestTimeout)
-				gw.Println(httpErrCodeStr[http.StatusRequestTimeout])
-				return
-			}
+	userBindReq := &bindRequest{}
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(&userBindReq); err != nil {
+		errorResponse(w, srv.Gateway, http.StatusBadRequest, "Invalid json request body:", err)
+		return
+	}
+	defer r.Body.Close()
 
-			errorResponse(w, http.StatusInternalServerError)
-			gw.Println(err)
-			return
-		}
+	if userBindReq.SkyAddr == "" {
+		errorResponse(w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
+		return
+	}
 
-		if err := jsonResponse(w, makeBindHTTPResponse(*rsp)); err != nil {
-			gw.Println(err)
-		}
+	if !verifySkycoinAddress(w, srv.Gateway, userBindReq.SkyAddr) {
+		return
+	}
+
+	if !readyToStart(w, srv.Gateway, srv.StartAt) {
+		return
+	}
+
+	cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
+	defer cancel()
+
+	daemonBindReq := daemon.BindRequest{SkyAddress: userBindReq.SkyAddr}
+
+	rsp, err := srv.Gateway.BindAddress(cxt, &daemonBindReq)
+	if err != nil {
+		handleGatewayResponseError(w, srv.Gateway, err)
+		return
+	}
+
+	if err := jsonResponse(w, makeBindHTTPResponse(*rsp)); err != nil {
+		srv.Gateway.Println(err)
 	}
 }
 
@@ -175,55 +228,101 @@ func BindHandler(gw gatewayer) http.HandlerFunc {
 // URI: /api/status
 // Args:
 //     skyaddr
-func StatusHandler(gw gatewayer) http.HandlerFunc {
+func StatusHandler(srv *httpServ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.Header().Set("Allow", "GET")
-			errorResponse(w, http.StatusMethodNotAllowed)
-			gw.Println(httpErrCodeStr[http.StatusMethodNotAllowed])
-			return
-		}
-
-		skyAddr := r.FormValue("skyaddr")
-		if skyAddr == "" {
-			errorResponse(w, http.StatusBadRequest)
-			gw.Println(httpErrCodeStr[http.StatusBadRequest])
-			return
-		}
-
-		// verify the skycoin address
-		if _, err := cipher.DecodeBase58Address(skyAddr); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid skycoin address: %v", err), http.StatusBadRequest)
-			gw.Println("Invalid skycoin address:", err)
-			return
-		}
-
-		cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
-		defer cancel()
-
-		stReq := daemon.StatusRequest{SkyAddress: skyAddr}
-
-		rsp, err := gw.GetDepositStatuses(cxt, &stReq)
-		if err != nil {
-			if err == context.DeadlineExceeded {
-				errorResponse(w, http.StatusRequestTimeout)
-				gw.Println(httpErrCodeStr[http.StatusRequestTimeout])
-				return
-			}
-
-			errorResponse(w, http.StatusInternalServerError)
-			gw.Println(err)
-			return
-		}
-
-		if err := jsonResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
-			gw.Println(err)
-		}
+		statusHandler(w, r, srv)
 	}
 }
 
-func errorResponse(w http.ResponseWriter, code int) {
-	http.Error(w, httpErrCodeStr[code], code)
+func statusHandler(w http.ResponseWriter, r *http.Request, srv *httpServ) {
+	if !validMethod(w, r, srv.Gateway, []string{http.MethodGet}) {
+		return
+	}
+
+	skyAddr := r.URL.Query().Get("skyaddr")
+	if skyAddr == "" {
+		errorResponse(w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
+		return
+	}
+
+	if !verifySkycoinAddress(w, srv.Gateway, skyAddr) {
+		return
+	}
+
+	if !readyToStart(w, srv.Gateway, srv.StartAt) {
+		return
+	}
+
+	cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
+	defer cancel()
+
+	stReq := daemon.StatusRequest{SkyAddress: skyAddr}
+
+	rsp, err := srv.Gateway.GetDepositStatuses(cxt, &stReq)
+	if err != nil {
+		handleGatewayResponseError(w, srv.Gateway, err)
+		return
+	}
+
+	if err := jsonResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
+		srv.Gateway.Println(err)
+	}
+}
+
+func readyToStart(w http.ResponseWriter, gw gatewayer, startAt time.Time) bool {
+	if time.Now().UTC().After(startAt.UTC()) {
+		return true
+	}
+
+	msg := fmt.Sprintf("Event starts at %v", startAt)
+	http.Error(w, msg, http.StatusForbidden)
+	gw.Println(http.StatusForbidden, msg)
+
+	return false
+}
+
+func validMethod(w http.ResponseWriter, r *http.Request, gw gatewayer, allowed []string) bool {
+	for _, m := range allowed {
+		if r.Method == m {
+			return true
+		}
+	}
+
+	w.Header().Set("Allow", strings.Join(allowed, ", "))
+
+	status := http.StatusMethodNotAllowed
+	errorResponse(w, gw, status, "Invalid request method:", r.Method)
+
+	return false
+}
+
+func verifySkycoinAddress(w http.ResponseWriter, gw gatewayer, skyAddr string) bool {
+	if _, err := cipher.DecodeBase58Address(skyAddr); err != nil {
+		msg := fmt.Sprintf("Invalid skycoin address: %v", err)
+		http.Error(w, msg, http.StatusBadRequest)
+		gw.Println(http.StatusBadRequest, "Invalid skycoin address:", err, skyAddr)
+		return false
+	}
+	return true
+}
+
+func handleGatewayResponseError(w http.ResponseWriter, gw gatewayer, err error) {
+	if err == nil {
+		return
+	}
+
+	if err == context.DeadlineExceeded {
+		errorResponse(w, gw, http.StatusRequestTimeout)
+		return
+	}
+
+	errorResponse(w, gw, http.StatusInternalServerError, err)
+	return
+}
+
+func errorResponse(w http.ResponseWriter, gw gatewayer, code int, msgs ...interface{}) {
+	http.Error(w, httpCodeNames[code], code)
+	gw.Println(append([]interface{}{code, httpCodeNames[code]}, msgs...)...)
 }
 
 func jsonResponse(w http.ResponseWriter, data interface{}) error {

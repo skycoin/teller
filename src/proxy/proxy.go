@@ -33,16 +33,47 @@ type Proxy struct {
 	httpServ *httpServ
 }
 
+type ProxyConfig struct {
+	SrvAddr       string
+	HttpSrvAddr   string
+	HtmlInterface bool
+	HtmlStaticDir string
+	StartAt       time.Time
+	// If Tls is true, either TlsHost must be set, or both TlsCert and TlsKey must be set
+	// If TlsHost is set then TlsCert and TlsKey must not be set, and vice versa
+	Tls         bool
+	AutoTlsHost string
+	TlsCert     string
+	TlsKey      string
+}
+
 // New creates proxy instance
-func New(srvAddr, httpSrvAddr string, auth *daemon.Auth, ops ...Option) *Proxy {
+func New(cfg ProxyConfig, auth *daemon.Auth, ops ...Option) *Proxy {
 	if auth == nil {
 		panic("Auth is nil")
 	}
 
+	if cfg.Tls && cfg.AutoTlsHost == "" && (cfg.TlsCert == "" || cfg.TlsKey == "") {
+		panic("when using -tls, either -auto-tls-host or both -tls-cert and -tls-key must be set")
+	}
+
+	if (cfg.TlsCert == "" && cfg.TlsKey != "") || (cfg.TlsCert != "" && cfg.TlsKey == "") {
+		panic("-tls-cert and -tls-key must be set or unset together")
+	}
+
+	if cfg.AutoTlsHost != "" && (cfg.TlsKey != "" || cfg.TlsCert != "") {
+		panic("either use -auto-tls-host or both -tls-key and -tls-cert")
+	}
+
+	if !cfg.Tls && (cfg.AutoTlsHost != "" || cfg.TlsKey != "" || cfg.TlsCert != "") {
+		panic("-auto-tls-host or -tls-key or -tls-cert is set but -tls is not enabled")
+	}
+
 	px := &Proxy{
-		srvAddr:     srvAddr,
-		httpSrvAddr: httpSrvAddr,
-		Logger:      logger.NewLogger("", false), // default logger does not turn on debug mode, can use Logger option to set it.
+		// default logger does not turn on debug mode, can use Logger option to set it.
+		Logger:      logger.NewLogger("", false),
+		srvAddr:     cfg.SrvAddr,
+		httpSrvAddr: cfg.HttpSrvAddr,
 		connC:       make(chan net.Conn),
 		auth:        auth,
 		reqC:        make(chan func()),
@@ -57,7 +88,23 @@ func New(srvAddr, httpSrvAddr string, auth *daemon.Auth, ops ...Option) *Proxy {
 
 	bindHandlers(px)
 
-	px.httpServ = newHTTPServ(httpSrvAddr, px.Logger, &gateway{p: px, Logger: px.Logger})
+	gw := &gateway{
+		p:      px,
+		Logger: px.Logger,
+	}
+
+	px.httpServ = &httpServ{
+		Logger:        px.Logger,
+		Addr:          cfg.HttpSrvAddr,
+		StaticDir:     cfg.HtmlStaticDir,
+		HtmlInterface: cfg.HtmlInterface,
+		StartAt:       cfg.StartAt,
+		Tls:           cfg.Tls,
+		AutoTlsHost:   cfg.AutoTlsHost,
+		TlsCert:       cfg.TlsCert,
+		TlsKey:        cfg.TlsKey,
+		Gateway:       gw,
+	}
 
 	return px
 }
