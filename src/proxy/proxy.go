@@ -38,6 +38,7 @@ type ProxyConfig struct {
 	HttpSrvAddr   string
 	HtmlInterface bool
 	HtmlStaticDir string
+	StartAt       time.Time
 	// If Tls is true, either TlsHost must be set, or both TlsCert and TlsKey must be set
 	// If TlsHost is set then TlsCert and TlsKey must not be set, and vice versa
 	Tls         bool
@@ -97,6 +98,7 @@ func New(cfg ProxyConfig, auth *daemon.Auth, ops ...Option) *Proxy {
 		Addr:          cfg.HttpSrvAddr,
 		StaticDir:     cfg.HtmlStaticDir,
 		HtmlInterface: cfg.HtmlInterface,
+		StartAt:       cfg.StartAt,
 		Tls:           cfg.Tls,
 		AutoTlsHost:   cfg.AutoTlsHost,
 		TlsCert:       cfg.TlsCert,

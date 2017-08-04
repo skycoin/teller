@@ -5,6 +5,7 @@ import (
 	"os/signal"
 	"os/user"
 	"sync"
+	"time"
 
 	"flag"
 
@@ -26,6 +27,7 @@ func main() {
 	tlsCert := flag.String("tls-cert", "", "tls cert file (if not using -auto-tls-host)")
 	htmlInterface := flag.Bool("html", true, "serve html interface")
 	htmlStaticDir := flag.String("html-static-dir", "./web/build", "static directory to serve html interface from")
+	startAt := flag.String("start-time", "", "Don't process API requests until after this timestamp (RFC3339 format)")
 	debug := flag.Bool("debug", false, "debug mode will show more logs")
 	flag.Parse()
 
@@ -47,12 +49,23 @@ func main() {
 		LSeckey: lseckey,
 	}
 
+	startAtStamp := time.Time{}
+	if *startAt != "" {
+		var err error
+		startAtStamp, err = time.Parse(time.RFC3339, *startAt)
+		if err != nil {
+			log.Fatalln("Invalid -start-time, must be in RCF3339 format", time.RFC3339)
+		}
+		startAtStamp = startAtStamp.UTC()
+	}
+
 	pxCfg := proxy.ProxyConfig{
 		SrvAddr:       *proxyAddr,
 		HttpSrvAddr:   *httpAddr,
 		HtmlStaticDir: *htmlStaticDir,
 		HtmlInterface: *htmlInterface,
 		Tls:           *tls,
+		StartAt:       startAtStamp,
 		AutoTlsHost:   *autoTlsHost,
 		TlsCert:       *tlsCert,
 		TlsKey:        *tlsKey,

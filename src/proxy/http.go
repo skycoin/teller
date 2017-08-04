@@ -43,6 +43,7 @@ var httpCodeNames = []string{
 	http.StatusInternalServerError:  "Internal Server Error",
 	http.StatusRequestTimeout:       "Request Timeout",
 	http.StatusUnsupportedMediaType: "Unsupported Media Type",
+	http.StatusForbidden:            "Forbidden",
 }
 
 type httpServ struct {
@@ -50,6 +51,7 @@ type httpServ struct {
 	Addr          string
 	StaticDir     string
 	HtmlInterface bool
+	StartAt       time.Time
 	Tls           bool
 	AutoTlsHost   string
 	TlsCert       string
@@ -128,8 +130,8 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 	}
 
 	// API Methods
-	handleApi("/api/bind", BindHandler(hs.Gateway))
-	handleApi("/api/status", StatusHandler(hs.Gateway))
+	handleApi("/api/bind", BindHandler(hs))
+	handleApi("/api/status", StatusHandler(hs))
 
 	// Static files
 	if hs.HtmlInterface {
@@ -162,9 +164,9 @@ func (hs *httpServ) Shutdown() {
 // URI: /api/bind
 // Args:
 //    {"skyaddr": "..."}
-func BindHandler(gw gatewayer) http.HandlerFunc {
+func BindHandler(srv *httpServ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bindHandler(w, r, gw)
+		bindHandler(w, r, srv)
 	}
 }
 
@@ -172,32 +174,36 @@ type bindRequest struct {
 	SkyAddr string `json:"skyaddr"`
 }
 
-func bindHandler(w http.ResponseWriter, r *http.Request, gw gatewayer) {
+func bindHandler(w http.ResponseWriter, r *http.Request, srv *httpServ) {
 	w.Header().Set("Accept", "application/json")
 
-	if !validMethod(w, r, gw, []string{http.MethodPost}) {
+	if !validMethod(w, r, srv.Gateway, []string{http.MethodPost}) {
 		return
 	}
 
 	if r.Header.Get("Content-Type") != "application/json" {
-		errorResponse(w, gw, http.StatusUnsupportedMediaType)
+		errorResponse(w, srv.Gateway, http.StatusUnsupportedMediaType)
 		return
 	}
 
 	userBindReq := &bindRequest{}
 	decoder := json.NewDecoder(r.Body)
 	if err := decoder.Decode(&userBindReq); err != nil {
-		errorResponse(w, gw, http.StatusBadRequest, "Invalid json request body:", err)
+		errorResponse(w, srv.Gateway, http.StatusBadRequest, "Invalid json request body:", err)
 		return
 	}
 	defer r.Body.Close()
 
 	if userBindReq.SkyAddr == "" {
-		errorResponse(w, gw, http.StatusBadRequest, "Missing skyaddr")
+		errorResponse(w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
 		return
 	}
 
-	if !verifySkycoinAddress(w, gw, userBindReq.SkyAddr) {
+	if !verifySkycoinAddress(w, srv.Gateway, userBindReq.SkyAddr) {
+		return
+	}
+
+	if !readyToStart(w, srv.Gateway, srv.StartAt) {
 		return
 	}
 
@@ -206,14 +212,14 @@ func bindHandler(w http.ResponseWriter, r *http.Request, gw gatewayer) {
 
 	daemonBindReq := daemon.BindRequest{SkyAddress: userBindReq.SkyAddr}
 
-	rsp, err := gw.BindAddress(cxt, &daemonBindReq)
+	rsp, err := srv.Gateway.BindAddress(cxt, &daemonBindReq)
 	if err != nil {
-		handleGatewayResponseError(w, gw, err)
+		handleGatewayResponseError(w, srv.Gateway, err)
 		return
 	}
 
 	if err := jsonResponse(w, makeBindHTTPResponse(*rsp)); err != nil {
-		gw.Println(err)
+		srv.Gateway.Println(err)
 	}
 }
 
@@ -222,24 +228,28 @@ func bindHandler(w http.ResponseWriter, r *http.Request, gw gatewayer) {
 // URI: /api/status
 // Args:
 //     skyaddr
-func StatusHandler(gw gatewayer) http.HandlerFunc {
+func StatusHandler(srv *httpServ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		statusHandler(w, r, gw)
+		statusHandler(w, r, srv)
 	}
 }
 
-func statusHandler(w http.ResponseWriter, r *http.Request, gw gatewayer) {
-	if !validMethod(w, r, gw, []string{http.MethodGet}) {
+func statusHandler(w http.ResponseWriter, r *http.Request, srv *httpServ) {
+	if !validMethod(w, r, srv.Gateway, []string{http.MethodGet}) {
 		return
 	}
 
 	skyAddr := r.URL.Query().Get("skyaddr")
 	if skyAddr == "" {
-		errorResponse(w, gw, http.StatusBadRequest, "Missing skyaddr")
+		errorResponse(w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
 		return
 	}
 
-	if !verifySkycoinAddress(w, gw, skyAddr) {
+	if !verifySkycoinAddress(w, srv.Gateway, skyAddr) {
+		return
+	}
+
+	if !readyToStart(w, srv.Gateway, srv.StartAt) {
 		return
 	}
 
@@ -248,15 +258,27 @@ func statusHandler(w http.ResponseWriter, r *http.Request, gw gatewayer) {
 
 	stReq := daemon.StatusRequest{SkyAddress: skyAddr}
 
-	rsp, err := gw.GetDepositStatuses(cxt, &stReq)
+	rsp, err := srv.Gateway.GetDepositStatuses(cxt, &stReq)
 	if err != nil {
-		handleGatewayResponseError(w, gw, err)
+		handleGatewayResponseError(w, srv.Gateway, err)
 		return
 	}
 
 	if err := jsonResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
-		gw.Println(err)
+		srv.Gateway.Println(err)
 	}
+}
+
+func readyToStart(w http.ResponseWriter, gw gatewayer, startAt time.Time) bool {
+	if time.Now().UTC().After(startAt.UTC()) {
+		return true
+	}
+
+	msg := fmt.Sprintf("Event starts at %v", startAt)
+	http.Error(w, msg, http.StatusForbidden)
+	gw.Println(http.StatusForbidden, msg)
+
+	return false
 }
 
 func validMethod(w http.ResponseWriter, r *http.Request, gw gatewayer, allowed []string) bool {
@@ -278,7 +300,7 @@ func verifySkycoinAddress(w http.ResponseWriter, gw gatewayer, skyAddr string) b
 	if _, err := cipher.DecodeBase58Address(skyAddr); err != nil {
 		msg := fmt.Sprintf("Invalid skycoin address: %v", err)
 		http.Error(w, msg, http.StatusBadRequest)
-		gw.Println("Invalid skycoin address:", err, skyAddr)
+		gw.Println(http.StatusBadRequest, "Invalid skycoin address:", err, skyAddr)
 		return false
 	}
 	return true
