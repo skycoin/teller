@@ -39,12 +39,12 @@ type ProxyConfig struct {
 	HtmlInterface bool
 	HtmlStaticDir string
 	StartAt       time.Time
-	// If Tls is true, either TlsHost must be set, or both TlsCert and TlsKey must be set
+	// If HttpsSrvAddr is non-empty, either TlsHost must be set, or both TlsCert and TlsKey must be set
 	// If TlsHost is set then TlsCert and TlsKey must not be set, and vice versa
-	Tls         bool
-	AutoTlsHost string
-	TlsCert     string
-	TlsKey      string
+	HttpsSrvAddr string
+	AutoTlsHost  string
+	TlsCert      string
+	TlsKey       string
 }
 
 // New creates proxy instance
@@ -53,7 +53,11 @@ func New(cfg ProxyConfig, auth *daemon.Auth, ops ...Option) *Proxy {
 		panic("Auth is nil")
 	}
 
-	if cfg.Tls && cfg.AutoTlsHost == "" && (cfg.TlsCert == "" || cfg.TlsKey == "") {
+	if cfg.HttpSrvAddr == "" && cfg.HttpsSrvAddr == "" {
+		panic("at least one of -http-service-addr, -https-service-addr must be set")
+	}
+
+	if cfg.HttpsSrvAddr != "" && cfg.AutoTlsHost == "" && (cfg.TlsCert == "" || cfg.TlsKey == "") {
 		panic("when using -tls, either -auto-tls-host or both -tls-cert and -tls-key must be set")
 	}
 
@@ -65,7 +69,7 @@ func New(cfg ProxyConfig, auth *daemon.Auth, ops ...Option) *Proxy {
 		panic("either use -auto-tls-host or both -tls-key and -tls-cert")
 	}
 
-	if !cfg.Tls && (cfg.AutoTlsHost != "" || cfg.TlsKey != "" || cfg.TlsCert != "") {
+	if cfg.HttpsSrvAddr == "" && (cfg.AutoTlsHost != "" || cfg.TlsKey != "" || cfg.TlsCert != "") {
 		panic("-auto-tls-host or -tls-key or -tls-cert is set but -tls is not enabled")
 	}
 
@@ -99,7 +103,7 @@ func New(cfg ProxyConfig, auth *daemon.Auth, ops ...Option) *Proxy {
 		StaticDir:     cfg.HtmlStaticDir,
 		HtmlInterface: cfg.HtmlInterface,
 		StartAt:       cfg.StartAt,
-		Tls:           cfg.Tls,
+		HttpsAddr:     cfg.HttpsSrvAddr,
 		AutoTlsHost:   cfg.AutoTlsHost,
 		TlsCert:       cfg.TlsCert,
 		TlsKey:        cfg.TlsKey,
