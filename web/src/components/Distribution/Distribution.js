@@ -3,6 +3,7 @@
 import React from 'react';
 import PropTypes from 'prop-types';
 import styled from 'styled-components';
+import moment from 'moment';
 import Helmet from 'react-helmet';
 import { Flex, Box } from 'grid-styled';
 import { FormattedMessage, FormattedHTMLMessage, injectIntl } from 'react-intl';
@@ -38,7 +39,7 @@ class Distribution extends React.Component {
   constructor() {
     super();
     this.state = {
-      status: '',
+      status: [],
       skyAddress: null,
       btcAddress: '',
       addressIsOpen: false,
@@ -152,9 +153,19 @@ class Distribution extends React.Component {
               />
             </Heading>
 
-            <Heading as="p" color="black" fontSize={[2, 3]} my={[3, 5]}>
-              {this.state.status}
-            </Heading>
+            <Text as="div" color="black" fontSize={[2, 3]} my={[3, 5]}>
+              {this.state.status.map(status => (
+                <p key={status.seq}>
+                  <FormattedMessage
+                    id={`distribution.statuses.${status.status}`}
+                    values={{
+                      id: status.seq,
+                      updated: moment.unix(status.update_at).locale(intl.locale).format('LL'),
+                    }}
+                  />
+                </p>
+              ))}
+            </Text>
           </Modal>
 
           <Container>
