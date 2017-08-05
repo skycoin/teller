@@ -20,8 +20,8 @@ import (
 
 func main() {
 	proxyAddr := flag.String("teller-proxy-addr", "0.0.0.0:7070", "teller proxy listen address")
-	httpAddr := flag.String("http-service-addr", "localhost:7071", "http api service address")
-	tls := flag.Bool("tls", false, "serve http api over tls")
+	httpAddr := flag.String("http-service-addr", "127.0.0.1:7071", "http api service address")
+	httpsAddr := flag.String("https-service-addr", "", "https api service address")
 	autoTlsHost := flag.String("auto-tls-host", "", "generate certificate with Let's Encrypt for this hostname and use it")
 	tlsKey := flag.String("tls-key", "", "tls key file (if not using -auto-tls-host)")
 	tlsCert := flag.String("tls-cert", "", "tls cert file (if not using -auto-tls-host)")
@@ -64,7 +64,7 @@ func main() {
 		HttpSrvAddr:   *httpAddr,
 		HtmlStaticDir: *htmlStaticDir,
 		HtmlInterface: *htmlInterface,
-		Tls:           *tls,
+		HttpsSrvAddr:  *httpsAddr,
 		StartAt:       startAtStamp,
 		AutoTlsHost:   *autoTlsHost,
 		TlsCert:       *tlsCert,
@@ -79,7 +79,9 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		errC <- px.Run()
+		err := px.Run()
+		log.Println("px.Run err:", err)
+		errC <- err
 	}()
 
 	sigchan := make(chan os.Signal, 1)
