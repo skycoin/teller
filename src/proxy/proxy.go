@@ -170,14 +170,20 @@ func (px *Proxy) Run() error {
 	}()
 
 	wg.Add(1)
+	var httpSrvErr error
 	go func() {
 		defer wg.Done()
 
-		px.httpServ.Run()
+		httpSrvErr = px.httpServ.Run()
+		if httpSrvErr != nil {
+			px.Println("httpServ.Run error:", httpSrvErr)
+			px.Shutdown()
+		}
 	}()
 
 	wg.Wait()
-	return nil
+
+	return httpSrvErr
 }
 
 // Shutdown close the proxy service

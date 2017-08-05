@@ -88,6 +88,7 @@ func (hs *httpServ) Run() error {
 			case <-hs.quit:
 				return nil
 			default:
+				hs.Println("ListenAndServe or ListenAndServeTLS error:", err)
 				return fmt.Errorf("http serve failed: %v", err)
 			}
 		}
@@ -143,6 +144,7 @@ func (hs *httpServ) Run() error {
 				go func() {
 					defer wg.Done()
 					if err := hs.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
+						hs.Println("ListenAndServeTLS error:", err)
 						errC <- err
 					}
 				}()
@@ -150,6 +152,7 @@ func (hs *httpServ) Run() error {
 				go func() {
 					defer wg.Done()
 					if err := hs.httpListener.ListenAndServe(); err != nil {
+						hs.Println("ListenAndServe error:", err)
 						errC <- err
 					}
 				}()
