@@ -12,12 +12,14 @@ export default {
 </ul>
 
 <p>You can check the status of your order by entering your address and selecting <strong>Check status</strong>.</p>
+<p>Each time you select <strong>Get Address</strong>, a new BTC address is generated. A single SKY address can have up to 5 BTC addresses assigned to it.</p>
     `,
-    btcAddressFor: 'BTC address for {skyAddress}',
     statusFor: 'Status for {skyAddress}',
     enterAddress: 'Enter Skycoin address',
     getAddress: 'Get address',
     checkStatus: 'Check status',
+    loading: 'Loading...',
+    btcAddress: 'BTC address',
     errors: {
       noSkyAddress: 'Please enter your SKY address.',
     },
