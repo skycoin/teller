@@ -238,11 +238,11 @@ func main() {
 	}()
 
 	// start monitor service
-	ms := monitor.New(monitor.Config{Addr: cfg.MonitorAddr},
-		log,
-		btcAddrMgr,
-		excCli,
-		scanCli)
+	monitorCfg := monitor.Config{
+		Addr: cfg.MonitorAddr,
+	}
+	ms := monitor.New(monitorCfg, log, btcAddrMgr, excCli, scanCli)
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
