@@ -21,5 +21,11 @@ export default {
     errors: {
       noSkyAddress: 'Please enter your SKY address.',
     },
+    statuses: {
+      done: 'Transaction {id}: Skycoin deposit confirmed (updated at {updated}).',
+      waiting_deposit: 'Transaction {id}: waiting for BTC deposit (updated at {updated}).',
+      waiting_send: 'Transaction {id}: BTC deposit received; Skycoin deposit is queued (updated at {updated}).',
+      waiting_confirm: 'Transaction {id}: Skycoin deposit sent; waiting to confirm transaction (updated at {updated}).',
+    },
   },
 };

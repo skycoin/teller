@@ -90,8 +90,14 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/unrolled/secure"
+  packages = ["."]
+  revision = "a80c09da9c7bd84aaf622507fd339a9281b8acd1"
+
+[[projects]]
+  branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["ripemd160"]
+  packages = ["acme","acme/autocert","ripemd160"]
   revision = "558b6879de74bc843225cde5686419267ff707ca"
 
 [[projects]]
@@ -103,6 +109,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "5174dd7829b127daad947ec71ba58305244859e9386cf62c8a712616724cba87"
+  inputs-digest = "b0bf1ef7e5f51b32da054aac1c88a19952629b00b88075df6b917906aed67d2c"
   solver-name = "gps-cdcl"
   solver-version = 1
