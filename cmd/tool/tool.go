@@ -108,8 +108,25 @@ func main() {
 			fmt.Println("usage: [-json] newbtcaddress seed num. -json will print as json.")
 		case "scanblock":
 			fmt.Println("usage: server user pass cert_path height")
+		case "newkeys":
+			fmt.Println("usage: newkeys")
 		}
 		return
+	case "newkeys":
+		pub, sec := cipher.GenerateKeyPair()
+		var keypair = struct {
+			Pubkey string
+			Seckey string
+		}{
+			pub.Hex(),
+			sec.Hex(),
+		}
+		v, err := json.MarshalIndent(keypair, "", "    ")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(string(v))
 	case "setlastscanblock":
 		height, err := strconv.ParseInt(args[1], 10, 64)
 		if err != nil {
