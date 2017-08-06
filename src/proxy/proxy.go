@@ -33,43 +33,44 @@ type Proxy struct {
 	httpServ *httpServ
 }
 
-type ProxyConfig struct {
+// Config proxy config
+type Config struct {
 	SrvAddr       string
-	HttpSrvAddr   string
-	HtmlInterface bool
-	HtmlStaticDir string
+	HTTPSrvAddr   string
+	HTMLInterface bool
+	HTMLStaticDir string
 	StartAt       time.Time
-	// If HttpsSrvAddr is non-empty, either TlsHost must be set, or both TlsCert and TlsKey must be set
-	// If TlsHost is set then TlsCert and TlsKey must not be set, and vice versa
-	HttpsSrvAddr string
-	AutoTlsHost  string
-	TlsCert      string
-	TlsKey       string
+	// If HTTPSSrvAddr is non-empty, either TlsHost must be set, or both TLSCert and TLSKey must be set
+	// If TlsHost is set then TLSCert and TLSKey must not be set, and vice versa
+	HTTPSSrvAddr string
+	AutoTLSHost  string
+	TLSCert      string
+	TLSKey       string
 }
 
 // New creates proxy instance
-func New(cfg ProxyConfig, auth *daemon.Auth, ops ...Option) *Proxy {
+func New(cfg Config, auth *daemon.Auth, ops ...Option) *Proxy {
 	if auth == nil {
 		panic("Auth is nil")
 	}
 
-	if cfg.HttpSrvAddr == "" && cfg.HttpsSrvAddr == "" {
+	if cfg.HTTPSrvAddr == "" && cfg.HTTPSSrvAddr == "" {
 		panic("at least one of -http-service-addr, -https-service-addr must be set")
 	}
 
-	if cfg.HttpsSrvAddr != "" && cfg.AutoTlsHost == "" && (cfg.TlsCert == "" || cfg.TlsKey == "") {
+	if cfg.HTTPSSrvAddr != "" && cfg.AutoTLSHost == "" && (cfg.TLSCert == "" || cfg.TLSKey == "") {
 		panic("when using -tls, either -auto-tls-host or both -tls-cert and -tls-key must be set")
 	}
 
-	if (cfg.TlsCert == "" && cfg.TlsKey != "") || (cfg.TlsCert != "" && cfg.TlsKey == "") {
+	if (cfg.TLSCert == "" && cfg.TLSKey != "") || (cfg.TLSCert != "" && cfg.TLSKey == "") {
 		panic("-tls-cert and -tls-key must be set or unset together")
 	}
 
-	if cfg.AutoTlsHost != "" && (cfg.TlsKey != "" || cfg.TlsCert != "") {
+	if cfg.AutoTLSHost != "" && (cfg.TLSKey != "" || cfg.TLSCert != "") {
 		panic("either use -auto-tls-host or both -tls-key and -tls-cert")
 	}
 
-	if cfg.HttpsSrvAddr == "" && (cfg.AutoTlsHost != "" || cfg.TlsKey != "" || cfg.TlsCert != "") {
+	if cfg.HTTPSSrvAddr == "" && (cfg.AutoTLSHost != "" || cfg.TLSKey != "" || cfg.TLSCert != "") {
 		panic("-auto-tls-host or -tls-key or -tls-cert is set but -tls is not enabled")
 	}
 
@@ -77,7 +78,7 @@ func New(cfg ProxyConfig, auth *daemon.Auth, ops ...Option) *Proxy {
 		// default logger does not turn on debug mode, can use Logger option to set it.
 		Logger:      logger.NewLogger("", false),
 		srvAddr:     cfg.SrvAddr,
-		httpSrvAddr: cfg.HttpSrvAddr,
+		httpSrvAddr: cfg.HTTPSrvAddr,
 		connC:       make(chan net.Conn),
 		auth:        auth,
 		reqC:        make(chan func()),
@@ -99,14 +100,14 @@ func New(cfg ProxyConfig, auth *daemon.Auth, ops ...Option) *Proxy {
 
 	px.httpServ = &httpServ{
 		Logger:        px.Logger,
-		Addr:          cfg.HttpSrvAddr,
-		StaticDir:     cfg.HtmlStaticDir,
-		HtmlInterface: cfg.HtmlInterface,
+		Addr:          cfg.HTTPSrvAddr,
+		StaticDir:     cfg.HTMLStaticDir,
+		HTMLInterface: cfg.HTMLInterface,
 		StartAt:       cfg.StartAt,
-		HttpsAddr:     cfg.HttpsSrvAddr,
-		AutoTlsHost:   cfg.AutoTlsHost,
-		TlsCert:       cfg.TlsCert,
-		TlsKey:        cfg.TlsKey,
+		HTTPSAddr:     cfg.HTTPSSrvAddr,
+		AutoTLSHost:   cfg.AutoTLSHost,
+		TLSCert:       cfg.TLSCert,
+		TLSKey:        cfg.TLSKey,
 		Gateway:       gw,
 	}
 

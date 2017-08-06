@@ -273,7 +273,6 @@ func BindHandler(srv *httpServ) http.HandlerFunc {
 		if !validMethod(w, r, srv.Gateway, []string{http.MethodPost}) {
 			return
 		}
-
 		if r.Header.Get("Content-Type") != "application/json" {
 			errorResponse(w, srv.Gateway, http.StatusUnsupportedMediaType)
 			return
@@ -328,42 +327,38 @@ type bindRequest struct {
 //     skyaddr
 func StatusHandler(srv *httpServ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		statusHandler(w, r, srv)
-	}
-}
+		if !validMethod(w, r, srv.Gateway, []string{http.MethodGet}) {
+			return
+		}
 
-func statusHandler(w http.ResponseWriter, r *http.Request, srv *httpServ) {
-	if !validMethod(w, r, srv.Gateway, []string{http.MethodGet}) {
-		return
-	}
+		skyAddr := r.URL.Query().Get("skyaddr")
+		if skyAddr == "" {
+			errorResponse(w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
+			return
+		}
 
-	skyAddr := r.URL.Query().Get("skyaddr")
-	if skyAddr == "" {
-		errorResponse(w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
-		return
-	}
+		if !verifySkycoinAddress(w, srv.Gateway, skyAddr) {
+			return
+		}
 
-	if !verifySkycoinAddress(w, srv.Gateway, skyAddr) {
-		return
-	}
+		if !readyToStart(w, srv.Gateway, srv.StartAt) {
+			return
+		}
 
-	if !readyToStart(w, srv.Gateway, srv.StartAt) {
-		return
-	}
+		cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
+		defer cancel()
 
-	cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
-	defer cancel()
+		stReq := daemon.StatusRequest{SkyAddress: skyAddr}
 
-	stReq := daemon.StatusRequest{SkyAddress: skyAddr}
+		rsp, err := srv.Gateway.GetDepositStatuses(cxt, &stReq)
+		if err != nil {
+			handleGatewayResponseError(w, srv.Gateway, err)
+			return
+		}
 
-	rsp, err := srv.Gateway.GetDepositStatuses(cxt, &stReq)
-	if err != nil {
-		handleGatewayResponseError(w, srv.Gateway, err)
-		return
-	}
-
-	if err := httputil.JSONResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
-		srv.Gateway.Println(err)
+		if err := httputil.JSONResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
+			srv.Gateway.Println(err)
+		}
 	}
 }
 

@@ -22,7 +22,7 @@ func main() {
 	proxyAddr := flag.String("teller-proxy-addr", "0.0.0.0:7070", "teller proxy listen address")
 	httpAddr := flag.String("http-service-addr", "127.0.0.1:7071", "http api service address")
 	httpsAddr := flag.String("https-service-addr", "", "https api service address")
-	autoTlsHost := flag.String("auto-tls-host", "", "generate certificate with Let's Encrypt for this hostname and use it")
+	autoTLSHost := flag.String("auto-tls-host", "", "generate certificate with Let's Encrypt for this hostname and use it")
 	tlsKey := flag.String("tls-key", "", "tls key file (if not using -auto-tls-host)")
 	tlsCert := flag.String("tls-cert", "", "tls cert file (if not using -auto-tls-host)")
 	htmlInterface := flag.Bool("html", true, "serve html interface")
@@ -59,16 +59,16 @@ func main() {
 		startAtStamp = startAtStamp.UTC()
 	}
 
-	pxCfg := proxy.ProxyConfig{
+	pxCfg := proxy.Config{
 		SrvAddr:       *proxyAddr,
-		HttpSrvAddr:   *httpAddr,
-		HtmlStaticDir: *htmlStaticDir,
-		HtmlInterface: *htmlInterface,
-		HttpsSrvAddr:  *httpsAddr,
+		HTTPSrvAddr:   *httpAddr,
+		HTMLStaticDir: *htmlStaticDir,
+		HTMLInterface: *htmlInterface,
+		HTTPSSrvAddr:  *httpsAddr,
 		StartAt:       startAtStamp,
-		AutoTlsHost:   *autoTlsHost,
-		TlsCert:       *tlsCert,
-		TlsKey:        *tlsKey,
+		AutoTLSHost:   *autoTLSHost,
+		TLSCert:       *tlsCert,
+		TLSKey:        *tlsKey,
 	}
 
 	px := proxy.New(pxCfg, auth, proxy.Logger(log))
