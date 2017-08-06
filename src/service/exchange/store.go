@@ -91,7 +91,7 @@ func (s *store) GetBindAddress(btcAddr string) (string, bool) {
 }
 
 // AddDepositInfo adds deposit info into storage, return seq or error
-func (s *store) AddDepositInfo(dpinfo depositInfo) (uint64, error) {
+func (s *store) AddDepositInfo(dpinfo DepositInfo) (uint64, error) {
 	// verify the deposit info
 	// verify if the skycoin address is empty, we will use it
 	// to create seq index
@@ -171,12 +171,17 @@ func (s *store) AddDepositInfo(dpinfo depositInfo) (uint64, error) {
 }
 
 // GetDepositInfo returns depsoit info of given btc address
-func (s *store) GetDepositInfo(btcAddr string) (depositInfo, bool) {
+func (s *store) GetDepositInfo(btcAddr string) (DepositInfo, bool) {
 	return s.cache.getDepositInfo(btcAddr)
 }
 
+// GetAllDepositInfo returns all deposit info
+func (s *store) GetDepositInfoArray(flt DepositFilter) []DepositInfo {
+	return s.cache.getDepositInfoArray(flt)
+}
+
 // UpdateDepositStatus updates deposit info
-func (s *store) UpdateDepositInfo(btcAddr string, updateFunc func(depositInfo) depositInfo) error {
+func (s *store) UpdateDepositInfo(btcAddr string, updateFunc func(DepositInfo) DepositInfo) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(depositInfoBkt)
 		if bkt == nil {
@@ -188,7 +193,7 @@ func (s *store) UpdateDepositInfo(btcAddr string, updateFunc func(depositInfo) d
 			return fmt.Errorf("DepositInfo of btc address %s doesn't exist in db", btcAddr)
 		}
 
-		var dpi depositInfo
+		var dpi DepositInfo
 		if err := json.Unmarshal(v, &dpi); err != nil {
 			return err
 		}
@@ -216,13 +221,13 @@ func (s *store) UpdateDepositInfo(btcAddr string, updateFunc func(depositInfo) d
 
 // GetDepositInfoOfSkyAddress returns all deposit info that are binded
 // to the given skycoin address
-func (s *store) GetDepositInfoOfSkyAddress(skyAddr string) ([]depositInfo, error) {
+func (s *store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error) {
 	btcAddrs := s.cache.getSkyIndex(skyAddr)
-	dpis := make([]depositInfo, 0, len(btcAddrs))
+	dpis := make([]DepositInfo, 0, len(btcAddrs))
 	for _, btcAddr := range btcAddrs {
 		dpi, ok := s.cache.getDepositInfo(btcAddr)
 		if !ok {
-			return []depositInfo{}, fmt.Errorf("Get deposit info of btc addr %s from cache failed", btcAddr)
+			return []DepositInfo{}, fmt.Errorf("Get deposit info of btc addr %s from cache failed", btcAddr)
 		}
 
 		dpis = append(dpis, dpi)
@@ -238,14 +243,14 @@ func (s *store) GetSkyBindBtcAddresses(skyAddr string) []string {
 
 type cache struct {
 	sync.RWMutex
-	depositInfo         map[string]depositInfo
+	depositInfo         map[string]DepositInfo
 	skyDepositSeqsIndex map[string][]string
 	bindAddress         map[string]string
 }
 
 func loadCache(db *bolt.DB) (*cache, error) {
 	c := cache{
-		depositInfo:         make(map[string]depositInfo),
+		depositInfo:         make(map[string]DepositInfo),
 		skyDepositSeqsIndex: make(map[string][]string),
 		bindAddress:         make(map[string]string),
 	}
@@ -259,7 +264,7 @@ func loadCache(db *bolt.DB) (*cache, error) {
 
 		if err := dpiBkt.ForEach(func(k, v []byte) error {
 			btcAddr := string(k)
-			var dpi depositInfo
+			var dpi DepositInfo
 			if err := json.Unmarshal(v, &dpi); err != nil {
 				return err
 			}
@@ -320,17 +325,29 @@ func (c *cache) getBindAddr(btcAddr string) (string, bool) {
 	return skyAddr, ok
 }
 
-func (c *cache) setDepositInfo(dpi depositInfo) {
+func (c *cache) setDepositInfo(dpi DepositInfo) {
 	c.Lock()
 	c.depositInfo[dpi.BtcAddress] = dpi
 	c.Unlock()
 }
 
-func (c *cache) getDepositInfo(btcAddr string) (depositInfo, bool) {
+func (c *cache) getDepositInfo(btcAddr string) (DepositInfo, bool) {
 	c.RLock()
 	defer c.RUnlock()
 	dpi, ok := c.depositInfo[btcAddr]
 	return dpi, ok
+}
+
+func (c *cache) getDepositInfoArray(flt DepositFilter) []DepositInfo {
+	c.RLock()
+	defer c.RUnlock()
+	dpis := make([]DepositInfo, 0, len(c.depositInfo))
+	for _, dpi := range c.depositInfo {
+		if flt(dpi) {
+			dpis = append(dpis, dpi)
+		}
+	}
+	return dpis
 }
 
 func (c *cache) addSkyIndex(skyAddr string, btcAddr string) {

@@ -138,10 +138,7 @@ func (scan *ScanService) Run() error {
 }
 
 func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
-	addrs, err := scan.getDepositAddresses()
-	if err != nil {
-		return err
-	}
+	addrs := scan.getDepositAddresses()
 
 	dvs := scanBlock(block, addrs)
 	for _, dv := range dvs {
@@ -250,7 +247,7 @@ func (scan *ScanService) getLastScanBlock() (string, int64, error) {
 }
 
 // getDepositAddresses returns the deposit addresses that need to scan
-func (scan *ScanService) getDepositAddresses() ([]string, error) {
+func (scan *ScanService) getDepositAddresses() []string {
 	return scan.store.getDepositAddresses()
 }
 

@@ -29,3 +29,8 @@ func (ec *Client) GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, er
 func (ec *Client) BindNum(skyAddr string) int {
 	return ec.s.getBindNum(skyAddr)
 }
+
+// GetDepositStatusDetail returns deposit status details
+func (ec *Client) GetDepositStatusDetail(flt DepositFilter) ([]daemon.DepositStatusDetail, error) {
+	return ec.s.getDepositStatusDetail(flt)
+}

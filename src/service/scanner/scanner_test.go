@@ -1,7 +1,6 @@
 package scanner
 
 import (
-	"fmt"
 	"testing"
 
 	"encoding/json"
@@ -110,15 +109,18 @@ func TestScannerRun(t *testing.T) {
 	scr.AddDepositAddress("1EYQ7Fnct6qu1f3WpTSib1UhDhxkrww1WH")
 	scr.AddDepositAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
 
-	go func() { require.Nil(t, s.Run()) }()
-
-	var i int
-	go func() {
-		for dv := range scr.GetDepositValue() {
+	time.AfterFunc(time.Second, func() {
+		var i int
+		for range scr.GetDepositValue() {
 			i++
-			fmt.Println("get deposit:", dv)
 		}
-	}()
-	time.Sleep(5 * time.Second)
-	require.Equal(t, 127, i)
+		require.Equal(t, 127, i)
+
+	})
+
+	time.AfterFunc(5*time.Second, func() {
+		s.Shutdown()
+	})
+
+	s.Run()
 }

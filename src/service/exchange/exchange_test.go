@@ -94,7 +94,7 @@ func TestRunExchangeService(t *testing.T) {
 
 	var testCases = []struct {
 		name        string
-		initDpis    []depositInfo
+		initDpis    []DepositInfo
 		bindBtcAddr string
 		bindSkyAddr string
 		dpAddr      string
@@ -112,11 +112,11 @@ func TestRunExchangeService(t *testing.T) {
 
 		putDVTime    time.Duration
 		writeToDBOk  bool
-		expectStatus status
+		expectStatus Status
 	}{
 		{
 			name:           "ok",
-			initDpis:       []depositInfo{},
+			initDpis:       []DepositInfo{},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
@@ -129,11 +129,11 @@ func TestRunExchangeService(t *testing.T) {
 			notifyAfter:  3 * time.Second,
 			putDVTime:    1 * time.Second,
 			writeToDBOk:  true,
-			expectStatus: statusDone,
+			expectStatus: StatusDone,
 		},
 		{
 			name:           "deposit_addr_not_exist",
-			initDpis:       []depositInfo{},
+			initDpis:       []DepositInfo{},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr1",
@@ -145,12 +145,12 @@ func TestRunExchangeService(t *testing.T) {
 			notifyAfter:    3 * time.Second,
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    false,
-			expectStatus:   statusWaitDeposit,
+			expectStatus:   StatusWaitDeposit,
 		},
 		{
 			name: "deposit_status_above_waiting_btc_deposit",
-			initDpis: []depositInfo{
-				{BtcAddress: "btcaddr", SkyAddress: "skyaddr", Status: statusDone},
+			initDpis: []DepositInfo{
+				{BtcAddress: "btcaddr", SkyAddress: "skyaddr", Status: StatusDone},
 			},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
@@ -163,11 +163,11 @@ func TestRunExchangeService(t *testing.T) {
 			notifyAfter:    3 * time.Second,
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
-			expectStatus:   statusDone,
+			expectStatus:   StatusDone,
 		},
 		{
 			name:           "send_service_closed",
-			initDpis:       []depositInfo{},
+			initDpis:       []DepositInfo{},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
@@ -180,11 +180,11 @@ func TestRunExchangeService(t *testing.T) {
 			notifyAfter:    3 * time.Second,
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
-			expectStatus:   statusWaitSend,
+			expectStatus:   StatusWaitSend,
 		},
 		{
 			name:           "send_failed",
-			initDpis:       []depositInfo{},
+			initDpis:       []DepositInfo{},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
@@ -196,11 +196,11 @@ func TestRunExchangeService(t *testing.T) {
 			notifyAfter:    3 * time.Second,
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
-			expectStatus:   statusWaitSend,
+			expectStatus:   StatusWaitSend,
 		},
 		{
 			name:           "scan_service_closed",
-			initDpis:       []depositInfo{},
+			initDpis:       []DepositInfo{},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
@@ -213,7 +213,7 @@ func TestRunExchangeService(t *testing.T) {
 			scanServClose:  true,
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
-			expectStatus:   statusWaitSend,
+			expectStatus:   StatusWaitSend,
 		},
 	}
 

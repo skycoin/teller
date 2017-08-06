@@ -23,6 +23,7 @@ import (
 	"github.com/skycoin/teller/src/service/btcaddrs"
 	"github.com/skycoin/teller/src/service/cli"
 	"github.com/skycoin/teller/src/service/config"
+	"github.com/skycoin/teller/src/service/monitor"
 	"github.com/skycoin/teller/src/service/scanner"
 
 	"fmt"
@@ -54,6 +55,10 @@ func (s *dummyBtcScanner) GetDepositValue() <-chan scanner.DepositValue {
 	c := make(chan scanner.DepositValue)
 	close(c)
 	return c
+}
+
+func (s *dummyBtcScanner) GetDepositAddresses() []string {
+	return []string{}
 }
 
 type dummySkySender struct{}
@@ -217,19 +222,31 @@ func main() {
 		return
 	}
 
-	btcAddrGen, err := btcaddrs.New(db, bytes.NewReader(f), log)
+	btcAddrMgr, err := btcaddrs.New(db, bytes.NewReader(f), log)
 	if err != nil {
 		log.Println("Create bitcoin deposit address manager failed:", err)
 		return
 	}
 
-	srv := service.New(makeServiceConfig(*cfg), auth, log, excCli, btcAddrGen)
+	srv := service.New(makeServiceConfig(*cfg), auth, log, excCli, btcAddrMgr)
 
 	// Run the service
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		errC <- srv.Run()
+	}()
+
+	// start monitor service
+	ms := monitor.New(monitor.Config{Addr: cfg.MonitorAddr},
+		log,
+		btcAddrMgr,
+		excCli,
+		scanCli)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		errC <- ms.Run()
 	}()
 
 	select {
@@ -241,6 +258,10 @@ func main() {
 	}
 
 	log.Println("Shutting down...")
+
+	if ms != nil {
+		ms.Shutdown()
+	}
 
 	// close the scan service
 	if scanServ != nil {

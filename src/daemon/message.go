@@ -192,6 +192,16 @@ type DepositStatus struct {
 	Status   string `json:"status"`
 }
 
+// DepositStatusDetail deposit status detail info
+type DepositStatusDetail struct {
+	Seq        uint64 `json:"seq"`
+	UpdateAt   int64  `json:"update_at"`
+	Status     string `json:"status"`
+	SkyAddress string `json:"skycoin_address"`
+	BtcAddress string `json:"bitcoin_address"`
+	Txid       string `json:"txid"`
+}
+
 // StatusResponse response to status request
 type StatusResponse struct {
 	Base

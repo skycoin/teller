@@ -28,10 +28,6 @@ func (gw *gateway) BindAddress(cxt context.Context, req *daemon.BindRequest) (*d
 		return nil, err
 	}
 
-	if rsp.Error != "" {
-		return nil, errors.New(rsp.Error)
-	}
-
 	return &rsp, nil
 }
 
@@ -39,10 +35,6 @@ func (gw *gateway) GetDepositStatuses(cxt context.Context, req *daemon.StatusReq
 	var rsp daemon.StatusResponse
 	if err := gw.sendMessage(cxt, req, &rsp); err != nil {
 		return nil, err
-	}
-
-	if rsp.Error != "" {
-		return nil, errors.New(rsp.Error)
 	}
 
 	return &rsp, nil

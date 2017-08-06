@@ -1,38 +1,55 @@
 package exchange
 
-// status deposit status
-type status int8
+// Status deposit Status
+type Status int8
 
 const (
-	statusWaitDeposit status = iota
-	statusWaitSend
-	statusWaitConfirm
-	statusDone
+	StatusWaitDeposit Status = iota
+	StatusWaitSend
+	StatusWaitConfirm
+	StatusDone
+	StatusUnknow
 )
 
 var statusString = []string{
-	statusWaitDeposit: "waiting_deposit",
-	statusWaitSend:    "waiting_send",
-	statusWaitConfirm: "waiting_confirm",
-	statusDone:        "done",
+	StatusWaitDeposit: "waiting_deposit",
+	StatusWaitSend:    "waiting_send",
+	StatusWaitConfirm: "waiting_confirm",
+	StatusDone:        "done",
 }
 
-func (s status) String() string {
+func (s Status) String() string {
 	return statusString[s]
 }
 
-// depositInfo records the deposit info
-type depositInfo struct {
+// NewStatusFromStr create status from string
+func NewStatusFromStr(st string) Status {
+	switch st {
+	case statusString[StatusWaitDeposit]:
+		return StatusWaitDeposit
+	case statusString[StatusWaitSend]:
+		return StatusWaitSend
+	case statusString[StatusWaitConfirm]:
+		return StatusWaitConfirm
+	case statusString[StatusDone]:
+		return StatusDone
+	default:
+		return StatusUnknow
+	}
+}
+
+// DepositInfo records the deposit info
+type DepositInfo struct {
 	Seq        uint64
 	UpdatedAt  int64
-	Status     status
+	Status     Status
 	SkyAddress string
 	BtcAddress string
 	Txid       string
 }
 
 // only part of the variable are mofiy allowed
-func (dpi *depositInfo) updateMutableVar(newDpi depositInfo) {
+func (dpi *DepositInfo) updateMutableVar(newDpi DepositInfo) {
 	dpi.Status = newDpi.Status
 	dpi.Txid = newDpi.Txid
 	dpi.UpdatedAt = newDpi.UpdatedAt

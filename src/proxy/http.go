@@ -3,10 +3,7 @@ package proxy
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
-
-	"encoding/json"
 
 	"time"
 
@@ -14,6 +11,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
+	"github.com/skycoin/teller/src/httputil"
 	"github.com/skycoin/teller/src/logger"
 )
 
@@ -30,13 +28,13 @@ const (
 	serverIdleTimeout  = time.Second * 120
 )
 
-var httpErrCodeStr = []string{
-	http.StatusBadRequest:          "Bad Request",
-	http.StatusMethodNotAllowed:    "Method Not Allowed",
-	http.StatusNotAcceptable:       "Not Acceptable",
-	http.StatusInternalServerError: "Internal Server Error",
-	http.StatusRequestTimeout:      "Request Timeout",
-}
+// var httpErrCodeStr = []string{
+// 	http.StatusBadRequest:          "Bad Request",
+// 	http.StatusMethodNotAllowed:    "Method Not Allowed",
+// 	http.StatusNotAcceptable:       "Not Acceptable",
+// 	http.StatusInternalServerError: "Internal Server Error",
+// 	http.StatusRequestTimeout:      "Request Timeout",
+// }
 
 type httpServ struct {
 	logger.Logger
@@ -90,7 +88,7 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	handleApi := func(path string, f http.HandlerFunc) {
-		mux.Handle(path, gziphandler.GzipHandler(logHandler(hs.Logger, f)))
+		mux.Handle(path, gziphandler.GzipHandler(httputil.LogHandler(hs.Logger, f)))
 	}
 
 	// API Methods
@@ -113,7 +111,7 @@ func (hs *httpServ) Shutdown() {
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := hs.ln.Shutdown(ctx); err != nil {
-			log.Println("HTTP server shutdown error:", err)
+			hs.Println("HTTP server shutdown error:", err)
 		}
 	}
 }
@@ -127,15 +125,15 @@ func BindHandler(gw gatewayer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.Header().Set("Allow", "GET")
-			errorResponse(w, http.StatusMethodNotAllowed)
-			gw.Println(httpErrCodeStr[http.StatusMethodNotAllowed])
+			httputil.ErrResponse(w, http.StatusMethodNotAllowed)
+			gw.Println(http.StatusText(http.StatusMethodNotAllowed))
 			return
 		}
 
 		skyAddr := r.FormValue("skyaddr")
 		if skyAddr == "" {
-			errorResponse(w, http.StatusBadRequest)
-			gw.Println(httpErrCodeStr[http.StatusBadRequest])
+			httputil.ErrResponse(w, http.StatusBadRequest)
+			gw.Println(http.StatusText(http.StatusBadRequest))
 			return
 		}
 
@@ -154,17 +152,17 @@ func BindHandler(gw gatewayer) http.HandlerFunc {
 		rsp, err := gw.BindAddress(cxt, &bindReq)
 		if err != nil {
 			if err == context.DeadlineExceeded {
-				errorResponse(w, http.StatusRequestTimeout)
-				gw.Println(httpErrCodeStr[http.StatusRequestTimeout])
+				httputil.ErrResponse(w, http.StatusRequestTimeout)
+				gw.Println(http.StatusText(http.StatusRequestTimeout))
 				return
 			}
 
-			errorResponse(w, http.StatusInternalServerError)
+			httputil.ErrResponse(w, http.StatusInternalServerError)
 			gw.Println(err)
 			return
 		}
 
-		if err := jsonResponse(w, makeBindHTTPResponse(*rsp)); err != nil {
+		if err := httputil.JSONResponse(w, makeBindHTTPResponse(*rsp)); err != nil {
 			gw.Println(err)
 		}
 	}
@@ -179,15 +177,15 @@ func StatusHandler(gw gatewayer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "GET" {
 			w.Header().Set("Allow", "GET")
-			errorResponse(w, http.StatusMethodNotAllowed)
-			gw.Println(httpErrCodeStr[http.StatusMethodNotAllowed])
+			httputil.ErrResponse(w, http.StatusMethodNotAllowed)
+			gw.Println(http.StatusText(http.StatusMethodNotAllowed))
 			return
 		}
 
 		skyAddr := r.FormValue("skyaddr")
 		if skyAddr == "" {
-			errorResponse(w, http.StatusBadRequest)
-			gw.Println(httpErrCodeStr[http.StatusBadRequest])
+			httputil.ErrResponse(w, http.StatusBadRequest)
+			gw.Println(http.StatusText(http.StatusBadRequest))
 			return
 		}
 
@@ -206,43 +204,18 @@ func StatusHandler(gw gatewayer) http.HandlerFunc {
 		rsp, err := gw.GetDepositStatuses(cxt, &stReq)
 		if err != nil {
 			if err == context.DeadlineExceeded {
-				errorResponse(w, http.StatusRequestTimeout)
-				gw.Println(httpErrCodeStr[http.StatusRequestTimeout])
+				httputil.ErrResponse(w, http.StatusRequestTimeout)
+				gw.Println(http.StatusText(http.StatusRequestTimeout))
 				return
 			}
 
-			errorResponse(w, http.StatusInternalServerError)
+			httputil.ErrResponse(w, http.StatusInternalServerError)
 			gw.Println(err)
 			return
 		}
 
-		if err := jsonResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
+		if err := httputil.JSONResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
 			gw.Println(err)
 		}
-	}
-}
-
-func errorResponse(w http.ResponseWriter, code int) {
-	http.Error(w, httpErrCodeStr[code], code)
-}
-
-func jsonResponse(w http.ResponseWriter, data interface{}) error {
-	w.Header().Set("Content-Type", "application/json")
-	d, err := json.MarshalIndent(data, "", "    ")
-	if err != nil {
-		return err
-	}
-
-	if _, err := w.Write(d); err != nil {
-		return err
-	}
-	return nil
-}
-
-func logHandler(log logger.Logger, hd http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		t := time.Now()
-		hd(w, r)
-		log.Printf("HTTP [%s] %dms %s \n", r.Method, time.Since(t)/time.Millisecond, r.URL.String())
 	}
 }

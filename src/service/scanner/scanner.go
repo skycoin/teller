@@ -19,3 +19,8 @@ func (s *Scanner) AddDepositAddress(addr string) error {
 func (s *Scanner) GetDepositValue() <-chan DepositValue {
 	return s.s.depositC
 }
+
+// GetDepositAddresses returns all deposit addresses
+func (s *Scanner) GetDepositAddresses() []string {
+	return s.s.getDepositAddresses()
+}

@@ -99,3 +99,11 @@ func (ba *BtcAddrs) NewAddress() (string, error) {
 	}
 	return addr, nil
 }
+
+// RestNum returns the rest btc address number
+func (ba *BtcAddrs) RestNum() uint64 {
+	ba.Lock()
+	defer ba.Unlock()
+
+	return uint64(len(ba.addresses))
+}

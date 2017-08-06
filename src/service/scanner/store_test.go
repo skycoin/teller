@@ -36,6 +36,8 @@ func TestNewStore(t *testing.T) {
 		require.NotNil(t, bkt)
 		return nil
 	})
+
+	require.NotNil(t, s.cache)
 }
 
 func TestGetLastScanBlock(t *testing.T) {
@@ -55,17 +57,7 @@ func TestGetLastScanBlock(t *testing.T) {
 		Height: 222597,
 	}
 
-	err = s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(scanMetaBkt)
-		lsb := scanBlock
-
-		v, err := json.Marshal(lsb)
-		if err != nil {
-			return err
-		}
-
-		return bkt.Put(lastScanBlockKey, v)
-	})
+	s.setLastScanBlock(scanBlock)
 
 	require.Nil(t, err)
 
@@ -119,19 +111,49 @@ func TestGetDepositAddresses(t *testing.T) {
 		"s3",
 	}
 
-	err = s.db.Update(func(tx *bolt.Tx) error {
+	for _, a := range addrs {
+		require.Nil(t, s.addDepositAddress(a))
+	}
+
+	as := s.getDepositAddresses()
+	for _, a := range addrs {
+		var ok bool
+		for _, a1 := range as {
+			if a == a1 {
+				ok = true
+			}
+		}
+		if !ok {
+			t.Fatalf("%s doesn't exist", a)
+		}
+	}
+
+	// check db
+	s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(scanMetaBkt)
-		v, err := json.Marshal(addrs)
+		require.NotNil(t, bkt)
+		v := bkt.Get(depositAddressesKey)
+		require.NotNil(t, v)
+
+		var ads1 []string
+		err := json.Unmarshal(v, &ads1)
 		require.Nil(t, err)
-		require.Nil(t, bkt.Put(depositAddressesKey, v))
+		require.Equal(t, len(addrs), len(ads1))
+
+		for _, a := range addrs {
+			var ok bool
+			for _, a1 := range ads1 {
+				if a == a1 {
+					ok = true
+				}
+			}
+			if !ok {
+				t.Fatalf("%s doesn't exist", a)
+			}
+		}
+
 		return nil
 	})
-	require.Nil(t, err)
-
-	as, err := s.getDepositAddresses()
-	require.Nil(t, err)
-	require.Equal(t, addrs, as)
-
 }
 
 func TestAddDepositeAddress(t *testing.T) {
@@ -188,4 +210,63 @@ func TestAddDepositeAddress(t *testing.T) {
 			require.Equal(t, tc.err, err)
 		})
 	}
+}
+
+func TestNewCache(t *testing.T) {
+	c := newCache()
+	require.NotNil(t, c.scanAddresses)
+}
+
+func TestCacheAddScanAddress(t *testing.T) {
+	c := newCache()
+
+	_, ok := c.scanAddresses["a1"]
+	require.False(t, ok)
+
+	c.addDepositAddress("a1")
+
+	_, ok = c.scanAddresses["a1"]
+	require.True(t, ok)
+}
+
+func TestCacheGetScanAddresses(t *testing.T) {
+	c := newCache()
+	ads := []string{
+		"a1",
+		"a2",
+		"a3",
+	}
+
+	for _, a := range ads {
+		c.addDepositAddress(a)
+	}
+
+	addrs := c.getDepositAddreses()
+	require.Equal(t, 3, len(addrs))
+
+	for _, a := range ads {
+		var ok bool
+		for _, a1 := range addrs {
+			if a == a1 {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			t.Fatalf("%s does not returned", a)
+		}
+	}
+}
+
+func TestCacheLastScanBlock(t *testing.T) {
+	c := newCache()
+	lsb := lastScanBlock{
+		Hash:   "h1",
+		Height: 1,
+	}
+	c.setLastScanBlock(lsb)
+
+	require.Equal(t, lsb, c.lastScanBlock)
+
+	require.Equal(t, lsb, c.getLastScanBlock())
 }
