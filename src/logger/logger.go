@@ -42,7 +42,7 @@ type logger struct {
 // NewLogger create new Logger with given prefix and debug-enabling value.
 // By default flags of the Logger is log.Lshortfile|log.Ltime
 func NewLogger(prefix string, debug bool, multiW ...io.Writer) Logger {
-	mw := io.MultiWriter(append(multiW, os.Stderr)...)
+	mw := io.MultiWriter(append(multiW, os.Stdout)...)
 	return &logger{
 		Logger: log.New(mw, prefix, log.Lshortfile|log.Ltime),
 		debug:  debug,
