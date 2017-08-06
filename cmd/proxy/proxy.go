@@ -94,9 +94,7 @@ func main() {
 
 	go func() {
 		defer wg.Done()
-		err := px.Run()
-		log.Println("px.Run err:", err)
-		errC <- err
+		errC <- px.Run()
 	}()
 
 	sigchan := make(chan os.Signal, 1)

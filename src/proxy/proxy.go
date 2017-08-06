@@ -171,20 +171,33 @@ func (px *Proxy) Run() error {
 	}()
 
 	wg.Add(1)
-	var httpSrvErr error
+	errC := make(chan error, 1)
 	go func() {
 		defer wg.Done()
-
-		httpSrvErr = px.httpServ.Run()
-		if httpSrvErr != nil {
-			px.Println("httpServ.Run error:", httpSrvErr)
-			px.Shutdown()
+		if err := px.httpServ.Run(); err != nil {
+			select {
+			case <-px.quit:
+				return
+			default:
+				errC <- err
+			}
 		}
 	}()
 
-	wg.Wait()
+	done := make(chan struct{})
 
-	return httpSrvErr
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case err := <-errC:
+		return err
+	}
+
 }
 
 // Shutdown close the proxy service
