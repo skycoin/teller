@@ -105,18 +105,8 @@ func (s *store) AddDepositInfo(dpinfo DepositInfo) (uint64, error) {
 			return bucketNotExistErr(depositInfoBkt)
 		}
 
-		// get seq
-		dpinfo.Seq, _ = bkt.NextSequence()
+		// dpinfo.Seq, _ = bkt.NextSequence()
 		dpinfo.UpdatedAt = time.Now().UTC().Unix()
-
-		v, err := json.Marshal(dpinfo)
-		if err != nil {
-			return err
-		}
-
-		if err := bkt.Put([]byte(dpinfo.BtcAddress), v); err != nil {
-			return err
-		}
 
 		// update index of skycoin address and the deposit seq
 		skyIndexBkt := tx.Bucket(skyDepositSeqsIndexBkt)
@@ -132,6 +122,19 @@ func (s *store) AddDepositInfo(dpinfo DepositInfo) (uint64, error) {
 			}
 		}
 
+		dpinfo.Seq = uint64(len(addrs))
+
+		// write deposit info back to db
+		v, err := json.Marshal(dpinfo)
+		if err != nil {
+			return err
+		}
+
+		if err := bkt.Put([]byte(dpinfo.BtcAddress), v); err != nil {
+			return err
+		}
+
+		// add btc address to bind list
 		addrs = append(addrs, dpinfo.BtcAddress)
 		v, err = json.Marshal(addrs)
 		if err != nil {
