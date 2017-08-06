@@ -3,14 +3,19 @@ package httputil
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/skycoin/teller/src/logger"
 )
 
 // ErrResponse write error message and code
-func ErrResponse(w http.ResponseWriter, code int) {
-	http.Error(w, http.StatusText(code), code)
+func ErrResponse(w http.ResponseWriter, code int, errMsg ...string) {
+	if len(errMsg) > 0 {
+		http.Error(w, strings.Join(errMsg, " "), code)
+	} else {
+		http.Error(w, http.StatusText(code), code)
+	}
 }
 
 // JSONResponse marshal data into json and write response

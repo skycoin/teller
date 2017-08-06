@@ -95,18 +95,18 @@ func (s *Service) Run() error {
 				continue
 			}
 
-			// checks if the send service is closed
-			if s.sender.IsClosed() {
-				s.Println("Send service closed")
-				return nil
-			}
-
 			// send skycoins
 			// get binded skycoin address
 			skyAddr, ok := s.store.GetBindAddress(dv.Address)
 			if !ok {
 				s.Println("Find no bind skycoin address for btc address", dv.Address)
 				continue
+			}
+
+			// checks if the send service is closed
+			if s.sender.IsClosed() {
+				s.Println("Send service closed")
+				return nil
 			}
 
 			// try to send skycoin

@@ -310,8 +310,14 @@ func BindHandler(srv *httpServ) http.HandlerFunc {
 			return
 		}
 
+		if rsp.Error != "" {
+			httputil.ErrResponse(w, http.StatusBadRequest, rsp.Error)
+			srv.Println(rsp.Error)
+			return
+		}
+
 		if err := httputil.JSONResponse(w, makeBindHTTPResponse(*rsp)); err != nil {
-			srv.Gateway.Println(err)
+			srv.Println(err)
 		}
 	}
 }
@@ -356,8 +362,14 @@ func StatusHandler(srv *httpServ) http.HandlerFunc {
 			return
 		}
 
+		if rsp.Error != "" {
+			httputil.ErrResponse(w, http.StatusBadRequest, rsp.Error)
+			srv.Println(rsp.Error)
+			return
+		}
+
 		if err := httputil.JSONResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
-			srv.Gateway.Println(err)
+			srv.Println(err)
 		}
 	}
 }
@@ -368,7 +380,7 @@ func readyToStart(w http.ResponseWriter, gw gatewayer, startAt time.Time) bool {
 	}
 
 	msg := fmt.Sprintf("Event starts at %v", startAt)
-	http.Error(w, msg, http.StatusForbidden)
+	httputil.ErrResponse(w, http.StatusForbidden, msg)
 	gw.Println(http.StatusForbidden, msg)
 
 	return false
@@ -392,7 +404,7 @@ func validMethod(w http.ResponseWriter, r *http.Request, gw gatewayer, allowed [
 func verifySkycoinAddress(w http.ResponseWriter, gw gatewayer, skyAddr string) bool {
 	if _, err := cipher.DecodeBase58Address(skyAddr); err != nil {
 		msg := fmt.Sprintf("Invalid skycoin address: %v", err)
-		http.Error(w, msg, http.StatusBadRequest)
+		httputil.ErrResponse(w, http.StatusBadRequest, msg)
 		gw.Println(http.StatusBadRequest, "Invalid skycoin address:", err, skyAddr)
 		return false
 	}

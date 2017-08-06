@@ -182,7 +182,7 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 		st := exchange.NewStatusFromStr(status)
 		switch st {
 		case exchange.StatusUnknow:
-			http.Error(w, fmt.Sprintf("unknow status %v", status), http.StatusBadRequest)
+			httputil.ErrResponse(w, http.StatusBadRequest, fmt.Sprintf("unknow status %v", status))
 			m.Println("Unknow status", status)
 			return
 		default:
