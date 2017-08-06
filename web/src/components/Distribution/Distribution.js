@@ -58,10 +58,6 @@ class Distribution extends React.Component {
   }
 
   getAddress() {
-    this.setState({
-      addressLoading: true,
-    });
-
     if (!this.state.skyAddress) {
       return alert(
         this.props.intl.formatMessage({
@@ -69,6 +65,10 @@ class Distribution extends React.Component {
         }),
       );
     }
+
+    this.setState({
+      addressLoading: true,
+    });
 
     return getAddress(this.state.skyAddress)
       .then((res) => {
