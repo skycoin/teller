@@ -9,7 +9,7 @@ import { Flex, Box } from 'grid-styled';
 import { FormattedMessage, FormattedHTMLMessage, injectIntl } from 'react-intl';
 import { rem } from 'polished';
 
-import { COLORS, SPACE } from '@skycoin/config';
+import { COLORS, SPACE, BOX_SHADOWS, BORDER_RADIUS } from '@skycoin/config';
 import { media } from '@skycoin/utils';
 import Button from '@skycoin/button';
 import Container from '@skycoin/container';
@@ -31,8 +31,12 @@ const Wrapper = styled.div`
   `}
 `;
 
-const Address = styled.div`
+const Address = Heading.extend`
   word-break: break-all;
+  background-color: ${COLORS.gray[0]};
+  border-radius: ${BORDER_RADIUS.base};
+  box-shadow: ${BOX_SHADOWS.base};
+  padding: 1rem;
 `;
 
 class Distribution extends React.Component {
@@ -42,8 +46,9 @@ class Distribution extends React.Component {
       status: [],
       skyAddress: null,
       btcAddress: '',
-      addressIsOpen: false,
       statusIsOpen: false,
+      addressLoading: false,
+      statusLoading: false,
     };
 
     this.handleChange = this.handleChange.bind(this);
@@ -61,15 +66,23 @@ class Distribution extends React.Component {
       );
     }
 
+    this.setState({
+      addressLoading: true,
+    });
+
     return getAddress(this.state.skyAddress)
       .then((res) => {
         this.setState({
-          addressIsOpen: true,
           btcAddress: res,
         });
       })
       .catch((err) => {
         alert(err.message);
+      })
+      .then(() => {
+        this.setState({
+          addressLoading: false,
+        });
       });
   }
 
@@ -82,7 +95,6 @@ class Distribution extends React.Component {
   closeModals() {
     this.setState({
       statusIsOpen: false,
-      addressIsOpen: false,
     });
   }
 
@@ -95,6 +107,10 @@ class Distribution extends React.Component {
       );
     }
 
+    this.setState({
+      statusLoading: true,
+    });
+
     return checkStatus(this.state.skyAddress)
       .then((res) => {
         this.setState({
@@ -104,6 +120,11 @@ class Distribution extends React.Component {
       })
       .catch((err) => {
         alert(err.message);
+      })
+      .then(() => {
+        this.setState({
+          statusLoading: false,
+        });
       });
   }
 
@@ -118,26 +139,6 @@ class Distribution extends React.Component {
         <Header external />
 
         <Wrapper>
-          <Modal
-            contentLabel="BTC address"
-            style={styles}
-            isOpen={this.state.addressIsOpen}
-            onRequestClose={this.closeModals}
-          >
-            <Heading heavy color="black" fontSize={[2, 3]} my={[3, 5]}>
-              <FormattedMessage
-                id="distribution.btcAddressFor"
-                values={{
-                  skyAddress: this.state.skyAddress,
-                }}
-              />
-            </Heading>
-
-            <Heading as="p" color="black" fontSize={[2, 3]} my={[3, 5]}>
-              <Address>{this.state.btcAddress}</Address>
-            </Heading>
-          </Modal>
-
           <Modal
             contentLabel="Status"
             style={styles}
@@ -160,7 +161,7 @@ class Distribution extends React.Component {
                     id={`distribution.statuses.${status.status}`}
                     values={{
                       id: status.seq,
-                      updated: moment.unix(status.update_at).locale(intl.locale).format('LL'),
+                      updated: moment.unix(status.update_at).locale(intl.locale).format('LL LTS'),
                     }}
                   />
                 </p>
@@ -185,6 +186,11 @@ class Distribution extends React.Component {
                   onChange={this.handleChange}
                 />
 
+                {this.state.btcAddress && <Address heavy color="black" fontSize={[2, 3]} as="p">
+                  <strong><FormattedHTMLMessage id="distribution.btcAddress" />: </strong>
+                  {this.state.btcAddress}
+                </Address>}
+
                 <Button
                   big
                   onClick={this.getAddress}
@@ -193,7 +199,9 @@ class Distribution extends React.Component {
                   mr={[2, 5]}
                   fontSize={[1, 3]}
                 >
-                  <FormattedMessage id="distribution.getAddress" />
+                  {this.state.addressLoading
+                    ? <FormattedMessage id="distribution.loading" />
+                    : <FormattedMessage id="distribution.getAddress" />}
                 </Button>
 
                 <Button
@@ -203,7 +211,9 @@ class Distribution extends React.Component {
                   outlined
                   fontSize={[1, 3]}
                 >
-                  <FormattedMessage id="distribution.checkStatus" />
+                  {this.state.statusLoading
+                    ? <FormattedMessage id="distribution.loading" />
+                    : <FormattedMessage id="distribution.checkStatus" />}
                 </Button>
               </Box>
             </Flex>
