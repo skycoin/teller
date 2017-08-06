@@ -13,7 +13,7 @@ import axios from 'axios';
 
 export const checkStatus = skyAddress =>
   axios.get(`/api/status?skyaddr=${skyAddress}`)
-    .then(response => response.data.statuses)
+    .then(response => response.data.statuses || [])
     .catch((error) => { throw new Error(error.response.data); });
 
 export const getAddress = skyAddress =>
