@@ -29,19 +29,34 @@ func main() {
 	htmlStaticDir := flag.String("html-static-dir", "./web/build", "static directory to serve html interface from")
 	startAt := flag.String("start-time", "", "Don't process API requests until after this timestamp (RFC3339 format)")
 	debug := flag.Bool("debug", false, "debug mode will show more logs")
+	seckey := flag.String("seckey", "", "set proxy private key")
+	prof := flag.Bool("prof", false, "start profiling tool")
 	flag.Parse()
 
 	log := logger.NewLogger("", *debug)
 
 	// start gops agent, for profilling
-	if err := agent.Listen(&agent.Options{
-		NoShutdownCleanup: true,
-	}); err != nil {
-		log.Println("Start profile agent failed:", err)
-		return
+	if *prof {
+		if err := agent.Listen(&agent.Options{
+			NoShutdownCleanup: true,
+		}); err != nil {
+			log.Println("Start profile agent failed:", err)
+			return
+		}
 	}
 
-	_, lseckey := cipher.GenerateKeyPair()
+	var lseckey cipher.SecKey
+	var err error
+	if *seckey != "" {
+		lseckey, err = cipher.SecKeyFromHex(*seckey)
+		if err != nil {
+			log.Println("Invalid seckey:", *seckey, err)
+			return
+		}
+	} else {
+		_, lseckey = cipher.GenerateKeyPair()
+	}
+
 	pubkey := cipher.PubKeyFromSecKey(lseckey).Hex()
 	log.Println("Pubkey:", pubkey)
 
