@@ -25,10 +25,10 @@ export default {
       noSkyAddress: 'Пожалуйста введите ваш SKY адрес.',
     },
     statuses: {
-      done: 'Транзакция {id}: Skycoin депозит подтверждён (последнее обновление: {updated}).',
-      waiting_deposit: 'Транзакция {id}: ожидается BTC депозит (последнее обновление: {updated}).',
-      waiting_send: 'Транзакция {id}: BTC депозит получен; Skycoin депозит в очереди (последнее обновление: {updated}).',
-      waiting_confirm: 'Транзакция {id}: Skycoin депозит отправлен; ожидаем подтверждение транзакции (последнее обновление: {updated}).',
+      waiting_deposit: '[tx-{id} {updated}] Ожидаем BTC депозит.',
+      waiting_send: '[tx-{id} {updated}] BTC депозит подтверждён. Skycoin транзакция поставлена в очередь.',
+      waiting_confirm: '[tx-{id} {updated}] Skycoin транзакция отправлена. Ожидаем подтверждение.',
+      done: '[tx-{id} {updated}] Завершена. Проверьте ваш Skycoin кошелёк.',
     }, 
   },
 };
