@@ -52,14 +52,11 @@ func (m *Mux) HandleFunc(tp MsgType, handler Handler) error {
 // Handle process the given message
 func (m *Mux) Handle(w ResponseWriteCloser, msg Messager) {
 	if hd, ok := m.handlers[msg.Type()]; ok {
-		m.log.Println("Handling msg type", msg.Type())
+		m.log.Debugln("Handling msg type", msg.Type())
 		hd(w, msg)
 		return
-	} else {
-		m.log.Println("No handler found for msg type", msg.Type())
 	}
-	// m.log.Println(MsgNotRegisterError{Value: msg.Type().String()})
-	// w.Close()
+	m.log.Debugln("No handler found for msg type", msg.Type())
 }
 
 // Session represents a connection Session, when this Session is done, the connection will be close.
@@ -199,6 +196,8 @@ func (sn *Session) Close() {
 // Write push the message into write channel.
 func (sn *Session) Write(msg Messager) {
 	select {
+	case <-sn.quit:
+		return
 	case sn.wc <- msg:
 	case <-time.After(5 * time.Second):
 		sn.log.Println(ErrWriteChanFull)
