@@ -35,6 +35,7 @@ func New(db *bolt.DB, addrsReader io.Reader, log logger.Logger) (*BtcAddrs, erro
 		return nil, errors.New("db is nil")
 	}
 
+	log.Println("Loading deposit address...")
 	var addrs addressJSON
 	if err := json.NewDecoder(addrsReader).Decode(&addrs); err != nil {
 		return nil, fmt.Errorf("Decode loaded address json failed: %v", err)
@@ -52,6 +53,12 @@ func New(db *bolt.DB, addrsReader io.Reader, log logger.Logger) (*BtcAddrs, erro
 
 	// check if the loaded addresses were used.
 	for _, addr := range addrs.BtcAddresses {
+		// dup check
+		if _, ok := btcAddr.addresses[addr]; ok {
+			log.Println("Dup deposit btc address:", addr)
+			continue
+		}
+
 		// verify the address
 		_, err := cipher.BitcoinDecodeBase58Address(addr)
 		if err != nil {

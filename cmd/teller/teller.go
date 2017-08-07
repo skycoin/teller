@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"os/exec"
 	"os/signal"
 	"os/user"
 	"sync"
@@ -50,9 +51,9 @@ func (s *dummyBtcScanner) AddDepositAddress(addr string) error {
 	return nil
 }
 
-func (s *dummyBtcScanner) GetDepositValue() <-chan scanner.DepositValue {
+func (s *dummyBtcScanner) GetDepositValue() <-chan scanner.DepositNote {
 	log.Println("dummyBtcScanner.GetDepositValue")
-	c := make(chan scanner.DepositValue)
+	c := make(chan scanner.DepositNote)
 	close(c)
 	return c
 }
@@ -74,6 +75,10 @@ func (s *dummySkySender) SendAsync(destAddr string, coins int64, opt *sender.Sen
 }
 
 func (s *dummySkySender) IsClosed() bool {
+	return true
+}
+
+func (s *dummySkySender) IsTxConfirmed(txid string) bool {
 	return true
 }
 
@@ -143,6 +148,12 @@ func main() {
 		return
 	}
 
+	// check skycoin setup
+	if err := checkSkycoinSetup(*cfg); err != nil {
+		log.Println(err)
+		return
+	}
+
 	errC := make(chan error, 10)
 	wg := sync.WaitGroup{}
 
@@ -156,15 +167,6 @@ func main() {
 		scanCli = &dummyBtcScanner{}
 		sendCli = &dummySkySender{}
 	} else {
-		// test if skycoin node is available
-		conn, err := net.Dial("tcp", cfg.Skynode.RPCAddress)
-		if err != nil {
-			log.Println("Connect skycoin node failed:", err)
-			return
-		}
-
-		conn.Close()
-
 		// create btc rpc client
 		btcrpcConnConf := makeBtcrpcConfg(*cfg)
 		btcrpc, err := btcrpcclient.New(&btcrpcConnConf, nil)
@@ -263,11 +265,6 @@ func main() {
 		ms.Shutdown()
 	}
 
-	// close the scan service
-	if scanServ != nil {
-		scanServ.Shutdown()
-	}
-
 	// close the skycoin send service
 	if sendServ != nil {
 		sendServ.Shutdown()
@@ -278,6 +275,12 @@ func main() {
 
 	// close the teller service
 	srv.Shutdown()
+
+	// close the scan service
+	if scanServ != nil {
+		scanServ.Shutdown()
+	}
+
 	wg.Wait()
 	log.Println("Shutdown complete")
 }
@@ -350,4 +353,27 @@ func catchInterrupt(quit chan<- struct{}) {
 	<-sigchan
 	signal.Stop(sigchan)
 	close(quit)
+}
+
+// checks skycoin setups
+func checkSkycoinSetup(cfg config.Config) error {
+	cmd := exec.Command("skycoin-cli")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%v, run install-skycoin-cli.sh to install the tool", err)
+	}
+
+	// check whether the skycoin wallet file does exist
+	if _, err := os.Stat(cfg.Skynode.WalletPath); os.IsNotExist(err) {
+		return fmt.Errorf("skycoin wallet file: %s does not exist", cfg.Skynode.WalletPath)
+	}
+
+	// test if skycoin node rpc service is reachable
+	conn, err := net.Dial("tcp", cfg.Skynode.RPCAddress)
+	if err != nil {
+		return fmt.Errorf("connect to skycoin node %s failed: %v", cfg.Skynode.RPCAddress, err)
+	}
+
+	conn.Close()
+
+	return nil
 }

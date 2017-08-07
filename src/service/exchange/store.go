@@ -105,7 +105,7 @@ func (s *store) AddDepositInfo(dpinfo DepositInfo) (uint64, error) {
 			return bucketNotExistErr(depositInfoBkt)
 		}
 
-		// dpinfo.Seq, _ = bkt.NextSequence()
+		dpinfo.Seq, _ = bkt.NextSequence()
 		dpinfo.UpdatedAt = time.Now().UTC().Unix()
 
 		// update index of skycoin address and the deposit seq
@@ -121,8 +121,6 @@ func (s *store) AddDepositInfo(dpinfo DepositInfo) (uint64, error) {
 				return err
 			}
 		}
-
-		dpinfo.Seq = uint64(len(addrs))
 
 		// write deposit info back to db
 		v, err := json.Marshal(dpinfo)

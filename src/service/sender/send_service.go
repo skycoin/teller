@@ -130,7 +130,7 @@ func (s *SendService) Run() error {
 
 					if ok {
 						go func() { rsp.StatusC <- TxConfirmed }()
-						s.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
+						// s.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
 						break sendLoop
 					}
 					time.Sleep(sendCoinCheckTime)

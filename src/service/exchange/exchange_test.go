@@ -20,7 +20,8 @@ type dummySender struct {
 		Address string
 		Value   int64
 	}
-	closed bool
+	closed         bool
+	txidConfirmMap map[string]bool
 }
 
 func (send *dummySender) Send(destAddr string, coins int64, opt *sender.SendOption) (string, error) {
@@ -65,8 +66,12 @@ func (send *dummySender) IsClosed() bool {
 	return send.closed
 }
 
+func (send *dummySender) IsTxConfirmed(txid string) bool {
+	return send.txidConfirmMap[txid]
+}
+
 type dummyScanner struct {
-	dvC         chan scanner.DepositValue
+	dvC         chan scanner.DepositNote
 	addrs       []string
 	notifyC     chan struct{}
 	notifyAfter time.Duration
@@ -78,7 +83,7 @@ func (scan *dummyScanner) AddDepositAddress(addr string) error {
 	return nil
 }
 
-func (scan *dummyScanner) GetDepositValue() <-chan scanner.DepositValue {
+func (scan *dummyScanner) GetDepositValue() <-chan scanner.DepositNote {
 	defer func() {
 		go func() {
 			// notify after given duration, so that the test code know
@@ -88,6 +93,10 @@ func (scan *dummyScanner) GetDepositValue() <-chan scanner.DepositValue {
 		}()
 	}()
 	return scan.dvC
+}
+
+func (scan *dummyScanner) GetDepositAddresses() []string {
+	return []string{}
 }
 
 func TestRunExchangeService(t *testing.T) {
@@ -109,6 +118,7 @@ func TestRunExchangeService(t *testing.T) {
 		dvC           chan scanner.DepositValue
 		scanServClose bool
 		notifyAfter   time.Duration
+		txmap         map[string]bool
 
 		putDVTime    time.Duration
 		writeToDBOk  bool
@@ -125,8 +135,10 @@ func TestRunExchangeService(t *testing.T) {
 			sendReturnTxid: "1111",
 			sendErr:        nil,
 
-			dvC:          make(chan scanner.DepositValue, 1),
-			notifyAfter:  3 * time.Second,
+			dvC:         make(chan scanner.DepositValue, 1),
+			notifyAfter: 3 * time.Second,
+			txmap:       make(map[string]bool),
+
 			putDVTime:    1 * time.Second,
 			writeToDBOk:  true,
 			expectStatus: StatusDone,
@@ -143,6 +155,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendErr:        nil,
 			dvC:            make(chan scanner.DepositValue, 1),
 			notifyAfter:    3 * time.Second,
+			txmap:          make(map[string]bool),
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    false,
 			expectStatus:   StatusWaitDeposit,
@@ -161,6 +174,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendErr:        nil,
 			dvC:            make(chan scanner.DepositValue, 1),
 			notifyAfter:    3 * time.Second,
+			txmap:          make(map[string]bool),
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
 			expectStatus:   StatusDone,
@@ -178,6 +192,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendServClosed: true,
 			dvC:            make(chan scanner.DepositValue, 1),
 			notifyAfter:    3 * time.Second,
+			txmap:          make(map[string]bool),
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
 			expectStatus:   StatusWaitSend,
@@ -194,6 +209,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendErr:        fmt.Errorf("send skycoin failed"),
 			dvC:            make(chan scanner.DepositValue, 1),
 			notifyAfter:    3 * time.Second,
+			txmap:          make(map[string]bool),
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
 			expectStatus:   StatusWaitSend,
@@ -210,6 +226,27 @@ func TestRunExchangeService(t *testing.T) {
 			sendErr:        fmt.Errorf("send skycoin failed"),
 			dvC:            make(chan scanner.DepositValue, 1),
 			notifyAfter:    3 * time.Second,
+			txmap:          make(map[string]bool),
+			scanServClose:  true,
+			putDVTime:      1 * time.Second,
+			writeToDBOk:    true,
+			expectStatus:   StatusWaitSend,
+		},
+		{
+			name: "has_unconfrimed_tx",
+			initDpis: []DepositInfo{
+				{BtcAddress: "btcaddr", SkyAddress: "skyaddr", Txid: "t1", Status: StatusWaitConfirm},
+			},
+			bindBtcAddr:    "btcaddr",
+			bindSkyAddr:    "skyaddr",
+			dpAddr:         "btcaddr",
+			dpValue:        0.002,
+			sendSleepTime:  time.Second * 3,
+			sendReturnTxid: "",
+			sendErr:        fmt.Errorf("send skycoin failed"),
+			dvC:            make(chan scanner.DepositValue, 1),
+			notifyAfter:    3 * time.Second,
+			txmap:          map[string]bool{"t1": true},
 			scanServClose:  true,
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
@@ -223,13 +260,14 @@ func TestRunExchangeService(t *testing.T) {
 			defer shutdown()
 
 			send := &dummySender{
-				sleepTime: tc.sendSleepTime,
-				txid:      tc.sendReturnTxid,
-				err:       tc.sendErr,
-				closed:    tc.sendServClosed,
+				sleepTime:      tc.sendSleepTime,
+				txid:           tc.sendReturnTxid,
+				err:            tc.sendErr,
+				closed:         tc.sendServClosed,
+				txidConfirmMap: tc.txmap,
 			}
 
-			dvC := make(chan scanner.DepositValue)
+			dvC := make(chan scanner.DepositNote)
 			scan := &dummyScanner{
 				dvC:         dvC,
 				notifyC:     make(chan struct{}, 1),
@@ -262,7 +300,13 @@ func TestRunExchangeService(t *testing.T) {
 					close(dvC)
 					return
 				}
-				dvC <- scanner.DepositValue{Address: tc.dpAddr, Value: tc.dpValue}
+				dvC <- scanner.DepositNote{
+					DepositValue: scanner.DepositValue{
+						Address: tc.dpAddr,
+						Value:   tc.dpValue,
+					},
+					AckC: make(chan struct{}, 1),
+				}
 			})
 
 			<-scan.notifyC
