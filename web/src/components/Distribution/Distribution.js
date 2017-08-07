@@ -160,7 +160,7 @@ class Distribution extends React.Component {
                   <FormattedMessage
                     id={`distribution.statuses.${status.status}`}
                     values={{
-                      id: status.seq,
+                      id: String(status.seq),
                       updated: moment.unix(status.update_at).locale(intl.locale).format('LL LTS'),
                     }}
                   />
