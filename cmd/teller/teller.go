@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"os/exec"
 	"os/signal"
 	"os/user"
 	"sync"
@@ -93,6 +94,12 @@ func main() {
 
 	// init logger
 	log := logger.NewLogger("", *debug)
+
+	// check if skycoin-cli tool is installed
+	if err := checkSkycoinCli(); err != nil {
+		log.Printf("Err: %v, run install-skycoin-cli.sh to install the tool", err)
+		return
+	}
 
 	if *proxyPubkey == "" {
 		log.Println("-proxy-pubkey missing")
@@ -355,4 +362,10 @@ func catchInterrupt(quit chan<- struct{}) {
 	<-sigchan
 	signal.Stop(sigchan)
 	close(quit)
+}
+
+// checks if skycoin-cli tool is installed
+func checkSkycoinCli() error {
+	cmd := exec.Command("skycoin-cli")
+	return cmd.Run()
 }
