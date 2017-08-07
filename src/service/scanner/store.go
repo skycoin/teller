@@ -91,7 +91,7 @@ func (s *store) loadCache() error {
 				return err
 			}
 			for _, a := range addrs {
-				s.cache.addDepositAddress(a)
+				s.cache.addScanAddress(a)
 			}
 		}
 
@@ -150,11 +150,11 @@ func (s *store) setLastScanBlock(b lastScanBlock) error {
 	})
 }
 
-func (s *store) getDepositAddresses() []string {
-	return s.cache.getDepositAddreses()
+func (s *store) getScanAddresses() []string {
+	return s.cache.getScanAddreses()
 }
 
-func (s *store) addDepositAddress(addr string) error {
+func (s *store) addScanAddress(addr string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(scanMetaBkt)
 		if bkt == nil {
@@ -182,7 +182,34 @@ func (s *store) addDepositAddress(addr string) error {
 			return err
 		}
 
-		s.cache.addDepositAddress(addr)
+		s.cache.addScanAddress(addr)
+		return nil
+	})
+}
+
+func (s *store) removeScanAddr(addr string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		// remove scan address from db
+		var addrs []string
+		if err := getBktValue(tx, scanMetaBkt, depositAddressesKey, &addrs); err != nil {
+			return err
+		}
+
+		addrMap := make(map[string]int)
+		for i, a := range addrs {
+			addrMap[a] = i
+		}
+
+		if idx, ok := addrMap[addr]; ok {
+			addrs = append(addrs[:idx], addrs[idx+1:]...)
+			// write back to db
+			if err := putBktValue(tx, scanMetaBkt, depositAddressesKey, addrs); err != nil {
+				return err
+			}
+		}
+
+		s.cache.removeScanAddr(addr)
+
 		return nil
 	})
 }
@@ -360,13 +387,13 @@ func newCache() *cache {
 	}
 }
 
-func (c *cache) addDepositAddress(addr string) {
+func (c *cache) addScanAddress(addr string) {
 	c.Lock()
 	c.scanAddresses[addr] = struct{}{}
 	c.Unlock()
 }
 
-func (c *cache) getDepositAddreses() []string {
+func (c *cache) getScanAddreses() []string {
 	c.RLock()
 	defer c.RUnlock()
 	var addrs []string
@@ -414,4 +441,10 @@ func (c *cache) getHeadDepositValue() (DepositValue, bool) {
 	}
 
 	return c.depositValues[0], true
+}
+
+func (c *cache) removeScanAddr(addr string) {
+	c.Lock()
+	delete(c.scanAddresses, addr)
+	c.Unlock()
 }

@@ -115,10 +115,10 @@ func TestGetDepositAddresses(t *testing.T) {
 	}
 
 	for _, a := range addrs {
-		require.Nil(t, s.addDepositAddress(a))
+		require.Nil(t, s.addScanAddress(a))
 	}
 
-	as := s.getDepositAddresses()
+	as := s.getScanAddresses()
 	for _, a := range addrs {
 		var ok bool
 		for _, a1 := range as {
@@ -205,7 +205,7 @@ func TestAddDepositeAddress(t *testing.T) {
 			require.Nil(t, err)
 
 			for _, a := range tc.addAddrs {
-				if er := s.addDepositAddress(a); er != nil {
+				if er := s.addScanAddress(a); er != nil {
 					err = er
 				}
 			}
@@ -226,7 +226,7 @@ func TestCacheAddScanAddress(t *testing.T) {
 	_, ok := c.scanAddresses["a1"]
 	require.False(t, ok)
 
-	c.addDepositAddress("a1")
+	c.addScanAddress("a1")
 
 	_, ok = c.scanAddresses["a1"]
 	require.True(t, ok)
@@ -241,10 +241,10 @@ func TestCacheGetScanAddresses(t *testing.T) {
 	}
 
 	for _, a := range ads {
-		c.addDepositAddress(a)
+		c.addScanAddress(a)
 	}
 
-	addrs := c.getDepositAddreses()
+	addrs := c.getScanAddreses()
 	require.Equal(t, 3, len(addrs))
 
 	for _, a := range ads {

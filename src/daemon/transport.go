@@ -17,7 +17,7 @@ import (
 const (
 	handshakeTimeout = 5 * time.Second
 	readTimeout      = 30 * time.Second
-	writeTimeout     = 20 * time.Second
+	writeTimeout     = 5 * time.Second
 )
 
 var (

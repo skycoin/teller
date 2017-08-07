@@ -22,8 +22,8 @@ type SkySender interface {
 
 // BtcScanner provids apis for interact with scan service
 type BtcScanner interface {
-	AddDepositAddress(addr string) error
-	GetDepositAddresses() []string
+	AddScanAddress(addr string) error
+	GetScanAddresses() []string
 	GetDepositValue() <-chan scanner.DepositNote
 }
 
@@ -229,7 +229,7 @@ func (s *Service) addDepositInfo(btcAddr, skyAddr string) error {
 	}
 
 	// add btc address to scanner
-	return s.scanner.AddDepositAddress(btcAddr)
+	return s.scanner.AddScanAddress(btcAddr)
 }
 
 func (s *Service) getDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error) {

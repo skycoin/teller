@@ -52,27 +52,25 @@ func (m *Mux) HandleFunc(tp MsgType, handler Handler) error {
 // Handle process the given message
 func (m *Mux) Handle(w ResponseWriteCloser, msg Messager) {
 	if hd, ok := m.handlers[msg.Type()]; ok {
-		m.log.Println("Handling msg type", msg.Type())
+		m.log.Debugln("Handling msg type", msg.Type())
 		hd(w, msg)
 		return
-	} else {
-		m.log.Println("No handler found for msg type", msg.Type())
 	}
-	// m.log.Println(MsgNotRegisterError{Value: msg.Type().String()})
-	// w.Close()
+	m.log.Debugln("No handler found for msg type", msg.Type())
 }
 
 // Session represents a connection Session, when this Session is done, the connection will be close.
 // Session will read message from transport and dispatch the message to the mux.
 type Session struct {
-	mux    *Mux
-	ts     *transport
-	wc     chan Messager // write channel
-	quit   chan struct{}
-	log    logger.Logger
-	subs   map[int]func(Messager) // subscribers
-	idGenC chan int               // subscribe id generator channel
-	reqC   chan func()
+	mux       *Mux
+	ts        *transport
+	wc        chan Messager // write channel
+	quit      chan struct{}
+	log       logger.Logger
+	subs      map[int]func(Messager) // subscribers
+	idGenC    chan int               // subscribe id generator channel
+	reqC      chan func()
+	wcBufSize int
 }
 
 // NewSession creates a new session
@@ -88,19 +86,21 @@ func NewSession(conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Opti
 	}
 
 	s := &Session{
-		mux:    mux,
-		ts:     ts,
-		wc:     make(chan Messager, 1),
-		quit:   make(chan struct{}),
-		log:    logger.NewLogger("", false),
-		subs:   make(map[int]func(Messager)),
-		idGenC: make(chan int),
-		reqC:   make(chan func()),
+		mux:       mux,
+		ts:        ts,
+		wcBufSize: 100, // default value, can be changed by Option
+		quit:      make(chan struct{}),
+		log:       logger.NewLogger("", false),
+		subs:      make(map[int]func(Messager)),
+		idGenC:    make(chan int),
+		reqC:      make(chan func()),
 	}
 
 	for _, op := range ops {
 		op(s)
 	}
+
+	s.wc = make(chan Messager, s.wcBufSize)
 
 	return s, nil
 }
@@ -199,6 +199,8 @@ func (sn *Session) Close() {
 // Write push the message into write channel.
 func (sn *Session) Write(msg Messager) {
 	select {
+	case <-sn.quit:
+		return
 	case sn.wc <- msg:
 	case <-time.After(5 * time.Second):
 		sn.log.Println(ErrWriteChanFull)

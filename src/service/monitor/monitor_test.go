@@ -42,6 +42,14 @@ func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositF
 	return ds, nil
 }
 
+type dummyScanAddrs struct {
+	addrs []string
+}
+
+func (ds dummyScanAddrs) GetDepositAddresses() []string {
+	return []string{}
+}
+
 func TestRunMonitor(t *testing.T) {
 	dpis := []exchange.DepositInfo{
 		{
@@ -75,7 +83,7 @@ func TestRunMonitor(t *testing.T) {
 
 	m := New(Config{
 		"localhost:7908",
-	}, logger.NewLogger("", true), &dummyBtcAddrMgr{10}, &dummyDps)
+	}, logger.NewLogger("", true), &dummyBtcAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
 
 	time.AfterFunc(1*time.Second, func() {
 		rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/address"))
@@ -84,7 +92,7 @@ func TestRunMonitor(t *testing.T) {
 		var addrUsage addressUsage
 		err = json.NewDecoder(rsp.Body).Decode(&addrUsage)
 		require.Nil(t, err)
-		require.Equal(t, uint64(10), addrUsage.RestNum)
+		require.Equal(t, uint64(10), addrUsage.RestAddrNum)
 		rsp.Body.Close()
 
 		var tt = []struct {

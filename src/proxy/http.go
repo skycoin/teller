@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	proxyRequestTimeout = time.Second * 5
+	proxyRequestTimeout = time.Second * 30
 
 	shutdownTimeout = time.Second * 5
 
