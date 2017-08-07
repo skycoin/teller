@@ -145,7 +145,7 @@ func (s *Service) Run() error {
 				st := <-rsp.StatusC
 				switch st {
 				case sender.Sent:
-					s.Printf("Status=%s, skycoin address=%s\n", statusString[StatusWaitConfirm], skyAddr)
+					s.Printf("Status=%s, skycoin address=%s\n", StatusWaitConfirm, skyAddr)
 					if err := s.store.UpdateDepositInfo(dv.Address, func(dpi DepositInfo) DepositInfo {
 						dpi.Status = StatusWaitConfirm
 						return dpi
@@ -153,7 +153,6 @@ func (s *Service) Run() error {
 						s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
 					}
 				case sender.TxConfirmed:
-					s.Printf("Status=%s, skycoin address=%s\n", statusString[StatusDone], skyAddr)
 					if err := s.store.UpdateDepositInfo(dv.Address, func(dpi DepositInfo) DepositInfo {
 						dpi.Status = StatusDone
 						return dpi
@@ -163,8 +162,7 @@ func (s *Service) Run() error {
 
 					dv.AckC <- struct{}{}
 
-					s.Printf("Send %d skycoin to %s success, txid=%s, deposit address=%s\n",
-						skyAmt, skyAddr, rsp.Txid, dv.Address)
+					s.Printf("Status=%s, txid=%s, skycoin address=%s\n", StatusDone, rsp.Txid, skyAddr)
 
 					break loop
 				default:
