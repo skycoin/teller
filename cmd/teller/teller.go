@@ -46,7 +46,7 @@ const (
 
 type dummyBtcScanner struct{}
 
-func (s *dummyBtcScanner) AddDepositAddress(addr string) error {
+func (s *dummyBtcScanner) AddScanAddress(addr string) error {
 	log.Println("dummyBtcScanner.AddDepositAddress", addr)
 	return nil
 }
@@ -58,7 +58,7 @@ func (s *dummyBtcScanner) GetDepositValue() <-chan scanner.DepositNote {
 	return c
 }
 
-func (s *dummyBtcScanner) GetDepositAddresses() []string {
+func (s *dummyBtcScanner) GetScanAddresses() []string {
 	return []string{}
 }
 

@@ -121,6 +121,9 @@ func (scan *ScanService) Run() error {
 						scan.Println("pop deposit value failed:", err)
 					}
 
+					// remove the scan address from service
+					scan.store.removeScanAddr(headDv.Address)
+
 					scan.Debugf("deposit value: %+v is processed\n", ddv)
 				case <-scan.quit:
 					return
@@ -211,7 +214,7 @@ func (scan *ScanService) Run() error {
 }
 
 func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
-	addrs := scan.getDepositAddresses()
+	addrs := scan.getScanAddresses()
 
 	dvs := scanBlock(block, addrs)
 	for _, dv := range dvs {
@@ -260,9 +263,9 @@ func scanBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) []De
 	return dv
 }
 
-// AddDepositAddress adds new deposit address
-func (scan *ScanService) AddDepositAddress(addr string) error {
-	return scan.store.addDepositAddress(addr)
+// AddScanAddress adds new scan address
+func (scan *ScanService) AddScanAddress(addr string) error {
+	return scan.store.addScanAddress(addr)
 }
 
 // GetBestBlock returns the hash and height of the block in the longest (best)
@@ -318,9 +321,9 @@ func (scan *ScanService) getLastScanBlock() (string, int64, error) {
 	return scan.store.getLastScanBlock()
 }
 
-// getDepositAddresses returns the deposit addresses that need to scan
-func (scan *ScanService) getDepositAddresses() []string {
-	return scan.store.getDepositAddresses()
+// getScanAddresses returns the deposit addresses that need to scan
+func (scan *ScanService) getScanAddresses() []string {
+	return scan.store.getScanAddresses()
 }
 
 // Shutdown shutdown the scanner
