@@ -294,7 +294,8 @@ func makeServiceConfig(cfg config.Config) service.Config {
 		PongTimeout:   cfg.PongTimeout,
 		DialTimeout:   cfg.DialTimeout,
 
-		MaxBind: cfg.MaxBind,
+		MaxBind:             cfg.MaxBind,
+		SessionWriteBufSize: cfg.SessionWriteBufSize,
 	}
 }
 

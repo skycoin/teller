@@ -62,14 +62,15 @@ func (m *Mux) Handle(w ResponseWriteCloser, msg Messager) {
 // Session represents a connection Session, when this Session is done, the connection will be close.
 // Session will read message from transport and dispatch the message to the mux.
 type Session struct {
-	mux    *Mux
-	ts     *transport
-	wc     chan Messager // write channel
-	quit   chan struct{}
-	log    logger.Logger
-	subs   map[int]func(Messager) // subscribers
-	idGenC chan int               // subscribe id generator channel
-	reqC   chan func()
+	mux       *Mux
+	ts        *transport
+	wc        chan Messager // write channel
+	quit      chan struct{}
+	log       logger.Logger
+	subs      map[int]func(Messager) // subscribers
+	idGenC    chan int               // subscribe id generator channel
+	reqC      chan func()
+	wcBufSize int
 }
 
 // NewSession creates a new session
@@ -85,19 +86,21 @@ func NewSession(conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Opti
 	}
 
 	s := &Session{
-		mux:    mux,
-		ts:     ts,
-		wc:     make(chan Messager, 1024),
-		quit:   make(chan struct{}),
-		log:    logger.NewLogger("", false),
-		subs:   make(map[int]func(Messager)),
-		idGenC: make(chan int),
-		reqC:   make(chan func()),
+		mux:       mux,
+		ts:        ts,
+		wcBufSize: 100, // default value, can be changed by Option
+		quit:      make(chan struct{}),
+		log:       logger.NewLogger("", false),
+		subs:      make(map[int]func(Messager)),
+		idGenC:    make(chan int),
+		reqC:      make(chan func()),
 	}
 
 	for _, op := range ops {
 		op(s)
 	}
+
+	s.wc = make(chan Messager, s.wcBufSize)
 
 	return s, nil
 }

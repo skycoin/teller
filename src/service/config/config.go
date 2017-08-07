@@ -17,13 +17,14 @@ const (
 
 // Config represents the configuration root
 type Config struct {
-	ProxyAddress  string        `json:"proxy_address"`
-	ReconnectTime time.Duration `json:"reconnect_time"`
-	DialTimeout   time.Duration `json:"dial_timeout"`
-	PingTimeout   time.Duration `json:"ping_timeout"`
-	PongTimeout   time.Duration `json:"pong_timeout"`
-	MaxBind       int           `json:"max_bind"`        // max number of btc addresses a skycoin address can bind
-	MonitorAddr   string        `json:"monitor_address"` // monitor service address
+	ProxyAddress        string        `json:"proxy_address"`
+	ReconnectTime       time.Duration `json:"reconnect_time"`
+	DialTimeout         time.Duration `json:"dial_timeout"`
+	PingTimeout         time.Duration `json:"ping_timeout"`
+	PongTimeout         time.Duration `json:"pong_timeout"`
+	MaxBind             int           `json:"max_bind"`        // max number of btc addresses a skycoin address can bind
+	MonitorAddr         string        `json:"monitor_address"` // monitor service address
+	SessionWriteBufSize int           `json:"session_write_bufer_size"`
 
 	Skynode Skynode `json:"skynode"`
 

@@ -11,3 +11,9 @@ func Logger(log logger.Logger) Option {
 		s.log = log
 	}
 }
+
+func WriteBufferSize(bufsize int) Option {
+	return func(s *Session) {
+		s.wcBufSize = bufsize
+	}
+}

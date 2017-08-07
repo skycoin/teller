@@ -62,7 +62,8 @@ type Config struct {
 	PongTimeout   time.Duration
 	DialTimeout   time.Duration
 
-	MaxBind int
+	MaxBind             int
+	SessionWriteBufSize int
 }
 
 // New creates a ico service
@@ -81,6 +82,10 @@ func New(cfg Config, auth *daemon.Auth, log logger.Logger, excli Exchanger, btcA
 
 	if cfg.DialTimeout == 0 {
 		cfg.DialTimeout = dialTimeout
+	}
+
+	if cfg.SessionWriteBufSize == 0 {
+		cfg.SessionWriteBufSize = 100
 	}
 
 	s := &Service{
@@ -155,7 +160,12 @@ func (s *Service) newSession() error {
 
 	s.Println("Connect success")
 
-	sn, err := daemon.NewSession(conn, s.auth, s.mux, true, daemon.Logger(s.Logger))
+	sn, err := daemon.NewSession(conn,
+		s.auth,
+		s.mux,
+		true,
+		daemon.Logger(s.Logger),
+		daemon.WriteBufferSize(s.cfg.SessionWriteBufSize))
 	if err != nil {
 		return err
 	}
