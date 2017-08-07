@@ -87,7 +87,7 @@ func NewSession(conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Opti
 	s := &Session{
 		mux:    mux,
 		ts:     ts,
-		wc:     make(chan Messager, 1),
+		wc:     make(chan Messager, 1024),
 		quit:   make(chan struct{}),
 		log:    logger.NewLogger("", false),
 		subs:   make(map[int]func(Messager)),
