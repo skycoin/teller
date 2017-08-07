@@ -71,6 +71,7 @@ func main() {
 	cmd := args[0]
 
 	var db *bolt.DB
+	var err error
 	switch cmd {
 	case "setlastscanblock", "getlastscanblock", "scanblock":
 		if _, err := os.Stat(*dbFile); os.IsNotExist(err) {
@@ -78,12 +79,11 @@ func main() {
 			return
 		}
 
-		db, err := bolt.Open(*dbFile, 0700, nil)
+		db, err = bolt.Open(*dbFile, 0700, nil)
 		if err != nil {
 			log.Printf("Open db failed: %v\n", err)
 			return
 		}
-
 		defer db.Close()
 	default:
 	}
@@ -142,6 +142,10 @@ func main() {
 
 		db.Update(func(tx *bolt.Tx) error {
 			bkt := tx.Bucket(scanMetaBkt)
+			if bkt == nil {
+				fmt.Println("scan meta bucket is empty")
+				return nil
+			}
 			v, err := json.Marshal(lb)
 			if err != nil {
 				fmt.Println("Marshal lastscanblock failed:", err)

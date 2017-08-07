@@ -63,7 +63,7 @@ func TestAddDepositInfo(t *testing.T) {
 		BtcAddress: "btcaddr1",
 	})
 	require.Nil(t, err)
-	require.Equal(t, uint64(1), seq)
+	require.Equal(t, uint64(0), seq)
 
 	// check the deposit info cache
 	dpi, ok := s.cache.depositInfo["btcaddr1"]
@@ -112,7 +112,7 @@ func TestAddDepositInfo(t *testing.T) {
 	})
 
 	require.Nil(t, err)
-	require.Equal(t, uint64(2), seq)
+	require.Equal(t, uint64(1), seq)
 	db.View(func(tx *bolt.Tx) error {
 		v := tx.Bucket(depositInfoBkt).Get([]byte("btcaddr2"))
 		require.NotNil(t, v)
@@ -229,14 +229,14 @@ func TestUpdateDeposit(t *testing.T) {
 		BtcAddress: "btcaddr1",
 	})
 	require.Nil(t, err)
-	require.Equal(t, uint64(1), seq)
+	require.Equal(t, uint64(0), seq)
 
 	seq2, err := s.AddDepositInfo(DepositInfo{
 		SkyAddress: "skyaddr1",
 		BtcAddress: "btcaddr2",
 	})
 	require.Nil(t, err)
-	require.Equal(t, uint64(2), seq2)
+	require.Equal(t, uint64(1), seq2)
 
 	db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(depositInfoBkt)

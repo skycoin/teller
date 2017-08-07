@@ -16,7 +16,7 @@ func (s *Scanner) AddDepositAddress(addr string) error {
 }
 
 // GetDepositValue returns deposit value channel
-func (s *Scanner) GetDepositValue() <-chan DepositValue {
+func (s *Scanner) GetDepositValue() <-chan DepositNote {
 	return s.s.depositC
 }
 

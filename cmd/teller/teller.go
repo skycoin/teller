@@ -50,9 +50,9 @@ func (s *dummyBtcScanner) AddDepositAddress(addr string) error {
 	return nil
 }
 
-func (s *dummyBtcScanner) GetDepositValue() <-chan scanner.DepositValue {
+func (s *dummyBtcScanner) GetDepositValue() <-chan scanner.DepositNote {
 	log.Println("dummyBtcScanner.GetDepositValue")
-	c := make(chan scanner.DepositValue)
+	c := make(chan scanner.DepositNote)
 	close(c)
 	return c
 }
@@ -74,6 +74,10 @@ func (s *dummySkySender) SendAsync(destAddr string, coins int64, opt *sender.Sen
 }
 
 func (s *dummySkySender) IsClosed() bool {
+	return true
+}
+
+func (s *dummySkySender) IsTxConfirmed(txid string) bool {
 	return true
 }
 
@@ -263,11 +267,6 @@ func main() {
 		ms.Shutdown()
 	}
 
-	// close the scan service
-	if scanServ != nil {
-		scanServ.Shutdown()
-	}
-
 	// close the skycoin send service
 	if sendServ != nil {
 		sendServ.Shutdown()
@@ -278,6 +277,12 @@ func main() {
 
 	// close the teller service
 	srv.Shutdown()
+
+	// close the scan service
+	if scanServ != nil {
+		scanServ.Shutdown()
+	}
+
 	wg.Wait()
 	log.Println("Shutdown complete")
 }

@@ -77,3 +77,13 @@ func (s *Sender) Send(destAddr string, coins int64, opt *SendOption) (string, er
 func (s *Sender) IsClosed() bool {
 	return s.s.IsClosed()
 }
+
+// IsTxConfirmed checks if tx is confirmed
+func (s *Sender) IsTxConfirmed(txid string) bool {
+	tx, err := s.s.skycli.GetTransaction(txid)
+	if err != nil {
+		return false
+	}
+
+	return tx.Transaction.Status.Confirmed
+}

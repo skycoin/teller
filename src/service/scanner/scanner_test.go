@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"fmt"
 	"testing"
 
 	"encoding/json"
@@ -110,15 +111,39 @@ func TestScannerRun(t *testing.T) {
 	scr.AddDepositAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
 
 	time.AfterFunc(time.Second, func() {
-		var i int
-		for range scr.GetDepositValue() {
-			i++
+		var dvs []DepositNote
+		for dv := range scr.GetDepositValue() {
+			dvs = append(dvs, dv)
+			time.Sleep(100 * time.Millisecond)
+			dv.AckC <- struct{}{}
 		}
-		require.Equal(t, 127, i)
+		require.Equal(t, 127, len(dvs))
 
+		// check all deposit value's
+		db.View(func(tx *bolt.Tx) error {
+			for _, dv := range dvs {
+				key := fmt.Sprintf("%v:%v", dv.Tx, dv.N)
+				var d DepositValue
+				require.Nil(t, getBktValue(tx, depositValueBkt, []byte(key), &d))
+				require.True(t, d.IsUsed)
+
+				var idxs []string
+				require.Nil(t, getBktValue(tx, scanMetaBkt, dvIndexListKey, &idxs))
+				require.Equal(t, 0, len(idxs))
+			}
+
+			return nil
+		})
+
+		_, ok, err := scr.s.store.popDepositValue()
+		require.Nil(t, err)
+		require.False(t, ok)
+
+		_, ok = scr.s.store.cache.popDepositValue()
+		require.False(t, ok)
 	})
 
-	time.AfterFunc(5*time.Second, func() {
+	time.AfterFunc(15*time.Second, func() {
 		s.Shutdown()
 	})
 
