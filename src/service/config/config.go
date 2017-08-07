@@ -11,6 +11,8 @@ import (
 const (
 	// RateTimeLayout represents the rate time layout
 	RateTimeLayout = "2006-01-02 15:04:05"
+
+	defaultMonitorAddr = "127.0.0.1:7711"
 )
 
 // Config represents the configuration root
@@ -60,6 +62,10 @@ func New(path string) (*Config, error) {
 	cfg.PongTimeout = cfg.PongTimeout * time.Second
 	cfg.DialTimeout = cfg.DialTimeout * time.Second
 	cfg.ReconnectTime = cfg.ReconnectTime * time.Second
+
+	if cfg.MonitorAddr == "" {
+		cfg.MonitorAddr = defaultMonitorAddr
+	}
 
 	return &cfg, nil
 }

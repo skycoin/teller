@@ -24,10 +24,10 @@ export default {
       noSkyAddress: 'Please enter your SKY address.',
     },
     statuses: {
-      done: 'Transaction {id}: Skycoin deposit confirmed (updated at {updated}).',
-      waiting_deposit: 'Transaction {id}: waiting for BTC deposit (updated at {updated}).',
-      waiting_send: 'Transaction {id}: BTC deposit received; Skycoin deposit is queued (updated at {updated}).',
-      waiting_confirm: 'Transaction {id}: Skycoin deposit sent; waiting to confirm transaction (updated at {updated}).',
+      waiting_deposit: '[tx-{id} {updated}] Waiting for BTC deposit.',
+      waiting_send: '[tx-{id} {updated}] BTC deposit confirmed. Skycoin transaction is queued.',
+      waiting_confirm: '[tx-{id} {updated}] Skycoin transaction sent.  Waiting to confirm.',
+      done: '[tx-{id} {updated}] Completed. Check your Skycoin wallet.',
     },
   },
 };
