@@ -95,12 +95,6 @@ func main() {
 	// init logger
 	log := logger.NewLogger("", *debug)
 
-	// check if skycoin-cli tool is installed
-	if err := checkSkycoinCli(); err != nil {
-		log.Printf("Err: %v, run install-skycoin-cli.sh to install the tool", err)
-		return
-	}
-
 	if *proxyPubkey == "" {
 		log.Println("-proxy-pubkey missing")
 		return
@@ -154,6 +148,12 @@ func main() {
 		return
 	}
 
+	// check skycoin setup
+	if err := checkSkycoinSetup(*cfg); err != nil {
+		log.Println(err)
+		return
+	}
+
 	errC := make(chan error, 10)
 	wg := sync.WaitGroup{}
 
@@ -167,15 +167,6 @@ func main() {
 		scanCli = &dummyBtcScanner{}
 		sendCli = &dummySkySender{}
 	} else {
-		// test if skycoin node is available
-		conn, err := net.Dial("tcp", cfg.Skynode.RPCAddress)
-		if err != nil {
-			log.Println("Connect skycoin node failed:", err)
-			return
-		}
-
-		conn.Close()
-
 		// create btc rpc client
 		btcrpcConnConf := makeBtcrpcConfg(*cfg)
 		btcrpc, err := btcrpcclient.New(&btcrpcConnConf, nil)
@@ -364,8 +355,25 @@ func catchInterrupt(quit chan<- struct{}) {
 	close(quit)
 }
 
-// checks if skycoin-cli tool is installed
-func checkSkycoinCli() error {
+// checks skycoin setups
+func checkSkycoinSetup(cfg config.Config) error {
 	cmd := exec.Command("skycoin-cli")
-	return cmd.Run()
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%v, run install-skycoin-cli.sh to install the tool", err)
+	}
+
+	// check whether the skycoin wallet file does exist
+	if _, err := os.Stat(cfg.Skynode.WalletPath); os.IsNotExist(err) {
+		return fmt.Errorf("skycoin wallet file: %s does not exist", cfg.Skynode.WalletPath)
+	}
+
+	// test if skycoin node rpc service is reachable
+	conn, err := net.Dial("tcp", cfg.Skynode.RPCAddress)
+	if err != nil {
+		return fmt.Errorf("connect to skycoin node %s failed: %v", cfg.Skynode.RPCAddress, err)
+	}
+
+	conn.Close()
+
+	return nil
 }
