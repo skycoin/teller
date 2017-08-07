@@ -52,8 +52,11 @@ func (m *Mux) HandleFunc(tp MsgType, handler Handler) error {
 // Handle process the given message
 func (m *Mux) Handle(w ResponseWriteCloser, msg Messager) {
 	if hd, ok := m.handlers[msg.Type()]; ok {
+		m.log.Println("Handling msg type", msg.Type())
 		hd(w, msg)
 		return
+	} else {
+		m.log.Println("No handler found for msg type", msg.Type())
 	}
 	// m.log.Println(MsgNotRegisterError{Value: msg.Type().String()})
 	// w.Close()
