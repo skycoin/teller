@@ -79,7 +79,7 @@ func BindRequestHandler(gw Gatewayer) daemon.Handler {
 			ack.BtcAddress = btcAddr
 		}
 
-		gw.Printf("BindRequestHandler reqID=%v ack=%+v\n", req.ID(), ack)
+		gw.Printf("BindRequestHandler req=%+v ack=%+v\n", *req, ack)
 
 		w.Write(&ack)
 	}
@@ -126,7 +126,7 @@ func StatusRequestHandler(gw Gatewayer) daemon.Handler {
 			ack.Statuses = sts
 		}
 
-		gw.Printf("StatusRequestHandler reqID=%v ack=%+v\n", req.ID(), ack)
+		gw.Printf("StatusRequestHandler req=%+v ack=%+v\n", *req, ack)
 
 		w.Write(&ack)
 	}
