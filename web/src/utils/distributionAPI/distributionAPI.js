@@ -24,5 +24,5 @@ export const getAddress = skyAddress =>
   })
     .then(response => response.data.btc_address)
     .catch((error) => {
-      throw new Error(error.response.dat || 'An unknown error occurred.');
+      throw new Error(error.response.data || 'An unknown error occurred.');
     });
