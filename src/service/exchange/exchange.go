@@ -4,6 +4,7 @@
 package exchange
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -82,9 +83,9 @@ func (s *Service) Run() error {
 			}
 
 			s.Printf("Receive %f deposit bitcoin from %s\n", dv.Value, dv.Address)
-
+			btcTxIndex := fmt.Sprintf("%v:%v", dv.Tx, dv.N)
 			// get deposit info of given btc address
-			di, ok := s.store.GetDepositInfo(dv.Tx)
+			di, ok := s.store.GetDepositInfo(btcTxIndex)
 			if !ok {
 				// s.Printf("Deposit info from btc address %s with tx %s doesn't exist\n", dv.Address, dv.Tx)
 				// continue
@@ -97,7 +98,7 @@ func (s *Service) Run() error {
 				di = DepositInfo{
 					SkyAddress: skyaddr,
 					BtcAddress: dv.Address,
-					BtcTx:      dv.Tx,
+					BtcTx:      btcTxIndex,
 					Status:     StatusWaitSend,
 				}
 
@@ -115,7 +116,7 @@ func (s *Service) Run() error {
 
 			if di.Status == StatusWaitDeposit {
 				// update status to waiting_sky_send
-				err := s.store.UpdateDepositInfo(dv.Tx, func(dpi DepositInfo) DepositInfo {
+				err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
 					dpi.Status = StatusWaitSend
 					return dpi
 				})
@@ -152,7 +153,7 @@ func (s *Service) Run() error {
 			}
 
 			// update the txid
-			if err := s.store.UpdateDepositInfo(dv.Tx, func(dpi DepositInfo) DepositInfo {
+			if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
 				dpi.Txid = rsp.Txid
 				return dpi
 			}); err != nil {
@@ -165,14 +166,14 @@ func (s *Service) Run() error {
 				switch st {
 				case sender.Sent:
 					s.Printf("Status=%s, skycoin address=%s\n", StatusWaitConfirm, skyAddr)
-					if err := s.store.UpdateDepositInfo(dv.Tx, func(dpi DepositInfo) DepositInfo {
+					if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
 						dpi.Status = StatusWaitConfirm
 						return dpi
 					}); err != nil {
 						s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
 					}
 				case sender.TxConfirmed:
-					if err := s.store.UpdateDepositInfo(dv.Tx, func(dpi DepositInfo) DepositInfo {
+					if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
 						dpi.Status = StatusDone
 						return dpi
 					}); err != nil {
