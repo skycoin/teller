@@ -46,6 +46,7 @@ type Config struct {
 	AutoTLSHost  string
 	TLSCert      string
 	TLSKey       string
+	Throttle     Throttle
 }
 
 // New creates proxy instance
@@ -109,6 +110,7 @@ func New(cfg Config, auth *daemon.Auth, ops ...Option) *Proxy {
 		TLSCert:       cfg.TLSCert,
 		TLSKey:        cfg.TLSKey,
 		Gateway:       gw,
+		Throttle:      cfg.Throttle,
 	}
 
 	return px

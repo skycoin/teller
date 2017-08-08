@@ -31,6 +31,8 @@ func main() {
 	debug := flag.Bool("debug", false, "debug mode will show more logs")
 	seckey := flag.String("seckey", "", "set proxy private key")
 	prof := flag.Bool("prof", false, "start profiling tool")
+	thrMax := flag.Int64("throttle-max", 5, "max allowd per ip in specific duration")
+	thrDur := flag.Int64("throttle-duration", int64(time.Minute), "throttle duration")
 	flag.Parse()
 
 	log := logger.NewLogger("", *debug)
@@ -84,6 +86,10 @@ func main() {
 		AutoTLSHost:   *autoTLSHost,
 		TLSCert:       *tlsCert,
 		TLSKey:        *tlsKey,
+		Throttle: proxy.Throttle{
+			Max:      *thrMax,
+			Duration: time.Duration(*thrDur),
+		},
 	}
 
 	px := proxy.New(pxCfg, auth, proxy.Logger(log))

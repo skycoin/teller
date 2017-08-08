@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
+	"github.com/didip/tollbooth"
 	"github.com/unrolled/secure"
 	"golang.org/x/crypto/acme/autocert"
 
@@ -37,6 +38,11 @@ const (
 	tlsAutoCertCache = "cert-cache"
 )
 
+type Throttle struct {
+	Max      int64
+	Duration time.Duration
+}
+
 type httpServ struct {
 	logger.Logger
 	Addr          string
@@ -48,6 +54,8 @@ type httpServ struct {
 	TLSCert       string
 	TLSKey        string
 	Gateway       *gateway
+
+	Throttle Throttle
 
 	httpListener  *http.Server
 	httpsListener *http.Server
@@ -221,7 +229,7 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	handleAPI := func(path string, f http.HandlerFunc) {
-		mux.Handle(path, gziphandler.GzipHandler(httputil.LogHandler(hs.Logger, f)))
+		mux.Handle(path, gziphandler.GzipHandler(rateLimiter(hs.Throttle, httputil.LogHandler(hs.Logger, f))))
 	}
 
 	// API Methods
@@ -234,6 +242,10 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 	}
 
 	return mux
+}
+
+func rateLimiter(thr Throttle, hd http.HandlerFunc) http.Handler {
+	return tollbooth.LimitFuncHandler(tollbooth.NewLimiter(thr.Max, thr.Duration), hd)
 }
 
 func (hs *httpServ) Shutdown() {
