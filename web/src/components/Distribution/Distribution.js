@@ -191,30 +191,32 @@ class Distribution extends React.Component {
                   {this.state.btcAddress}
                 </Address>}
 
-                <Button
-                  big
-                  onClick={this.getAddress}
-                  color="white"
-                  bg="base"
-                  mr={[2, 5]}
-                  fontSize={[1, 3]}
-                >
-                  {this.state.addressLoading
-                    ? <FormattedMessage id="distribution.loading" />
-                    : <FormattedMessage id="distribution.getAddress" />}
-                </Button>
+                <div>
+                  <Button
+                    big
+                    onClick={this.getAddress}
+                    color="white"
+                    bg="base"
+                    mr={[2, 5]}
+                    fontSize={[1, 3]}
+                  >
+                    {this.state.addressLoading
+                      ? <FormattedMessage id="distribution.loading" />
+                      : <FormattedMessage id="distribution.getAddress" />}
+                  </Button>
 
-                <Button
-                  onClick={this.checkStatus}
-                  color="base"
-                  big
-                  outlined
-                  fontSize={[1, 3]}
-                >
-                  {this.state.statusLoading
-                    ? <FormattedMessage id="distribution.loading" />
-                    : <FormattedMessage id="distribution.checkStatus" />}
-                </Button>
+                  <Button
+                    onClick={this.checkStatus}
+                    color="base"
+                    big
+                    outlined
+                    fontSize={[1, 3]}
+                  >
+                    {this.state.statusLoading
+                      ? <FormattedMessage id="distribution.loading" />
+                      : <FormattedMessage id="distribution.checkStatus" />}
+                  </Button>
+                </div>
               </Box>
             </Flex>
           </Container>
