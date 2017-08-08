@@ -84,27 +84,46 @@ func (s *Service) Run() error {
 			s.Printf("Receive %f deposit bitcoin from %s\n", dv.Value, dv.Address)
 
 			// get deposit info of given btc address
-			di, ok := s.store.GetDepositInfo(dv.Address)
+			di, ok := s.store.GetDepositInfo(dv.Tx)
 			if !ok {
-				s.Printf("Deposit info of btc address %s doesn't exist\n", dv.Address)
-				continue
+				// s.Printf("Deposit info from btc address %s with tx %s doesn't exist\n", dv.Address, dv.Tx)
+				// continue
+				skyaddr, ok := s.store.GetBindAddress(dv.Address)
+				if !ok {
+					s.Printf("Deposit from %s has no bind skycoin address\n", dv.Address)
+					dv.AckC <- struct{}{}
+					continue
+				}
+				di = DepositInfo{
+					SkyAddress: skyaddr,
+					BtcAddress: dv.Address,
+					BtcTx:      dv.Tx,
+					Status:     StatusWaitSend,
+				}
+
+				if err := s.store.AddDepositInfo(di); err != nil {
+					s.Printf("Add deposit info %v failed: %v\n", di, err)
+					continue
+				}
 			}
 
 			if di.Status >= StatusWaitConfirm {
 				dv.AckC <- struct{}{}
-				s.Printf("Deposit info of btc address %s already processed\n", dv.Address)
+				s.Printf("Deposit info from btc address %s with tx %s already processed\n", dv.Address, dv.Tx)
 				continue
 			}
 
-			// update status to waiting_sky_send
-			err := s.store.UpdateDepositInfo(dv.Address, func(dpi DepositInfo) DepositInfo {
-				dpi.Status = StatusWaitSend
-				return dpi
-			})
+			if di.Status == StatusWaitDeposit {
+				// update status to waiting_sky_send
+				err := s.store.UpdateDepositInfo(dv.Tx, func(dpi DepositInfo) DepositInfo {
+					dpi.Status = StatusWaitSend
+					return dpi
+				})
 
-			if err != nil {
-				s.Printf("Update deposit status of btc address %s failed: %v\n", dv.Address, err)
-				continue
+				if err != nil {
+					s.Printf("Update deposit status of btc tx %s failed: %v\n", dv.Tx, err)
+					continue
+				}
 			}
 
 			// send skycoins
@@ -124,8 +143,7 @@ func (s *Service) Run() error {
 			// try to send skycoin
 			skyAmt := calculateSkyValue(dv.Value, float64(s.cfg.Rate))
 			s.Printf("Send %d skycoin to %s\n", skyAmt, skyAddr)
-			rspC, err := s.sender.SendAsync(skyAddr, skyAmt, nil)
-
+			rspC, _ := s.sender.SendAsync(skyAddr, skyAmt, nil)
 			rsp := (<-rspC).(sender.Response)
 			if rsp.Err != "" {
 				s.Println("Send skycoin failed:", rsp.Err)
@@ -134,7 +152,7 @@ func (s *Service) Run() error {
 			}
 
 			// update the txid
-			if err := s.store.UpdateDepositInfo(dv.Address, func(dpi DepositInfo) DepositInfo {
+			if err := s.store.UpdateDepositInfo(dv.Tx, func(dpi DepositInfo) DepositInfo {
 				dpi.Txid = rsp.Txid
 				return dpi
 			}); err != nil {
@@ -147,14 +165,14 @@ func (s *Service) Run() error {
 				switch st {
 				case sender.Sent:
 					s.Printf("Status=%s, skycoin address=%s\n", StatusWaitConfirm, skyAddr)
-					if err := s.store.UpdateDepositInfo(dv.Address, func(dpi DepositInfo) DepositInfo {
+					if err := s.store.UpdateDepositInfo(dv.Tx, func(dpi DepositInfo) DepositInfo {
 						dpi.Status = StatusWaitConfirm
 						return dpi
 					}); err != nil {
 						s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
 					}
 				case sender.TxConfirmed:
-					if err := s.store.UpdateDepositInfo(dv.Address, func(dpi DepositInfo) DepositInfo {
+					if err := s.store.UpdateDepositInfo(dv.Tx, func(dpi DepositInfo) DepositInfo {
 						dpi.Status = StatusDone
 						return dpi
 					}); err != nil {
@@ -201,7 +219,7 @@ func (s *Service) processUnconfirmedTx() {
 		for {
 			if ok := s.sender.IsTxConfirmed(dpi.Txid); ok {
 				// update the dpi status
-				if err := s.store.UpdateDepositInfo(dpi.BtcAddress, func(dpi DepositInfo) DepositInfo {
+				if err := s.store.UpdateDepositInfo(dpi.BtcTx, func(dpi DepositInfo) DepositInfo {
 					dpi.Status = StatusDone
 					return dpi
 				}); err != nil {
@@ -221,11 +239,8 @@ func (s *Service) processUnconfirmedTx() {
 	}
 }
 
-func (s *Service) addDepositInfo(btcAddr, skyAddr string) error {
-	if _, err := s.store.AddDepositInfo(DepositInfo{
-		BtcAddress: btcAddr,
-		SkyAddress: skyAddr,
-	}); err != nil {
+func (s *Service) bindAddress(btcAddr, skyAddr string) error {
+	if err := s.store.BindAddress(skyAddr, btcAddr); err != nil {
 		return err
 	}
 

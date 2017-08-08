@@ -45,6 +45,7 @@ type DepositInfo struct {
 	Status     Status
 	SkyAddress string
 	BtcAddress string
+	BtcTx      string
 	Txid       string
 }
 
