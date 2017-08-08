@@ -129,6 +129,7 @@ func (s *Service) Run() error {
 			rsp := (<-rspC).(sender.Response)
 			if rsp.Err != "" {
 				s.Println("Send skycoin failed:", rsp.Err)
+				dv.AckC <- struct{}{}
 				continue
 			}
 
