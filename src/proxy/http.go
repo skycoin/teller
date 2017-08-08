@@ -316,11 +316,15 @@ func BindHandler(srv *httpServ) http.HandlerFunc {
 
 		daemonBindReq := daemon.BindRequest{SkyAddress: userBindReq.SkyAddr}
 
+		srv.Println("Sending BindRequest to teller, skyaddr", userBindReq.SkyAddr)
+
 		rsp, err := srv.Gateway.BindAddress(cxt, &daemonBindReq)
 		if err != nil {
 			handleGatewayResponseError(w, srv.Gateway, err)
 			return
 		}
+
+		srv.Printf("Received response to BindRequest: %+v\n", *rsp)
 
 		if rsp.Error != "" {
 			httputil.ErrResponse(w, http.StatusBadRequest, rsp.Error)
@@ -368,11 +372,15 @@ func StatusHandler(srv *httpServ) http.HandlerFunc {
 
 		stReq := daemon.StatusRequest{SkyAddress: skyAddr}
 
+		srv.Println("Sending StatusRequest to teller, skyaddr", skyAddr)
+
 		rsp, err := srv.Gateway.GetDepositStatuses(cxt, &stReq)
 		if err != nil {
 			handleGatewayResponseError(w, srv.Gateway, err)
 			return
 		}
+
+		srv.Printf("Received response to StatusRequest: %+v\n", *rsp)
 
 		if rsp.Error != "" {
 			httputil.ErrResponse(w, http.StatusBadRequest, rsp.Error)
@@ -438,6 +446,6 @@ func handleGatewayResponseError(w http.ResponseWriter, gw gatewayer, err error) 
 }
 
 func errorResponse(w http.ResponseWriter, gw gatewayer, code int, msgs ...interface{}) {
-	httputil.ErrResponse(w, code)
 	gw.Println(append([]interface{}{code, http.StatusText(code)}, msgs...)...)
+	httputil.ErrResponse(w, code)
 }
