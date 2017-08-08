@@ -78,7 +78,7 @@ type dummyScanner struct {
 	closed      bool
 }
 
-func (scan *dummyScanner) AddDepositAddress(addr string) error {
+func (scan *dummyScanner) AddScanAddress(addr string) error {
 	scan.addrs = append(scan.addrs, addr)
 	return nil
 }
@@ -95,7 +95,7 @@ func (scan *dummyScanner) GetDepositValue() <-chan scanner.DepositNote {
 	return scan.dvC
 }
 
-func (scan *dummyScanner) GetDepositAddresses() []string {
+func (scan *dummyScanner) GetScanAddresses() []string {
 	return []string{}
 }
 

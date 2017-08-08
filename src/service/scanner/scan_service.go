@@ -122,7 +122,7 @@ func (scan *ScanService) Run() error {
 					}
 
 					// remove the scan address from service
-					scan.store.removeScanAddr(headDv.Address)
+					// scan.store.removeScanAddr(headDv.Address)
 
 					scan.Debugf("deposit value: %+v is processed\n", ddv)
 				case <-scan.quit:
