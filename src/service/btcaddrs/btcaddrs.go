@@ -20,8 +20,8 @@ var ErrDepositAddressEmpty = errors.New("deposit address pool is empty")
 // BtcAddrs manages deposit bitcoin address
 type BtcAddrs struct {
 	sync.Mutex
-	used      *store              // all used addresses
-	addresses map[string]struct{} // address pool for deposit
+	used      *store   // all used addresses
+	addresses []string // address pool for deposit
 }
 
 // btc address json struct
@@ -47,14 +47,14 @@ func New(db *bolt.DB, addrsReader io.Reader, log logger.Logger) (*BtcAddrs, erro
 	}
 
 	btcAddr := &BtcAddrs{
-		used:      usedAddrs,
-		addresses: make(map[string]struct{}),
+		used: usedAddrs,
 	}
 
+	addrMap := make(map[string]struct{}, len(addrs.BtcAddresses))
 	// check if the loaded addresses were used.
 	for _, addr := range addrs.BtcAddresses {
 		// dup check
-		if _, ok := btcAddr.addresses[addr]; ok {
+		if _, ok := addrMap[addr]; ok {
 			log.Println("Dup deposit btc address:", addr)
 			continue
 		}
@@ -67,7 +67,8 @@ func New(db *bolt.DB, addrsReader io.Reader, log logger.Logger) (*BtcAddrs, erro
 		}
 
 		if !usedAddrs.IsExsit(addr) {
-			btcAddr.addresses[addr] = struct{}{}
+			btcAddr.addresses = append(btcAddr.addresses, addr)
+			addrMap[addr] = struct{}{}
 		}
 	}
 
@@ -83,16 +84,15 @@ func (ba *BtcAddrs) NewAddress() (string, error) {
 	}
 
 	var addr string
-	var remove []string
-	for a := range ba.addresses {
+	var pt int
+	for i, a := range ba.addresses {
 		// check if used
 		if ba.used.IsExsit(a) {
-			remove = append(remove, a)
 			continue
 		}
 
+		pt = i
 		addr = a
-		remove = append(remove, a)
 		break
 	}
 
@@ -101,9 +101,7 @@ func (ba *BtcAddrs) NewAddress() (string, error) {
 	}
 
 	// remove used addr
-	for _, a := range remove {
-		delete(ba.addresses, a)
-	}
+	ba.addresses = ba.addresses[pt+1:]
 	return addr, nil
 }
 
