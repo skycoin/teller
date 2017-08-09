@@ -148,12 +148,6 @@ func main() {
 		return
 	}
 
-	// check skycoin setup
-	if err := checkSkycoinSetup(*cfg); err != nil {
-		log.Println(err)
-		return
-	}
-
 	errC := make(chan error, 10)
 	wg := sync.WaitGroup{}
 
@@ -167,6 +161,12 @@ func main() {
 		scanCli = &dummyBtcScanner{}
 		sendCli = &dummySkySender{}
 	} else {
+		// check skycoin setup
+		if err := checkSkycoinSetup(*cfg); err != nil {
+			log.Println(err)
+			return
+		}
+
 		// create btc rpc client
 		btcrpcConnConf := makeBtcrpcConfg(*cfg)
 		btcrpc, err := btcrpcclient.New(&btcrpcConnConf, nil)
