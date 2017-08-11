@@ -1,4 +1,6 @@
-# distribution.skycoin.net
+# event.skycoin.net
+
+https://event.skycoin.net
 
 ## Setup
 
