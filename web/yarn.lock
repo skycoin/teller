@@ -14,27 +14,27 @@
   version "0.1.2"
   resolved "https://registry.yarnpkg.com/@skycoin/buy-buttons/-/buy-buttons-0.1.2.tgz#aefd0bcd25f5f57562b28c957ddd3d30eb7e6003"
 
-"@skycoin/buy@^0.1.0":
-  version "0.1.2"
-  resolved "https://registry.yarnpkg.com/@skycoin/buy/-/buy-0.1.2.tgz#d643685ad028b420f4d5a91bc713a742dac1544b"
+"@skycoin/buy@^0.2.1":
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/@skycoin/buy/-/buy-0.2.1.tgz#05d5cca48c631ef32f0c4c88248217b3ea4b981c"
 
-"@skycoin/config@^0.1.0":
-  version "0.1.1"
-  resolved "https://registry.yarnpkg.com/@skycoin/config/-/config-0.1.1.tgz#014e71cf3029848c154d2affd70cab8fd6290ff8"
+"@skycoin/config@^0.2.0":
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/@skycoin/config/-/config-0.2.0.tgz#262f9eb1f6d784d60c2a9b3211ad434d59dd90ff"
 
 "@skycoin/container@^0.1.0":
   version "0.1.1"
   resolved "https://registry.yarnpkg.com/@skycoin/container/-/container-0.1.1.tgz#b9a300878fc2ec41ae1157f2cf6deb596465a3c7"
 
-"@skycoin/footer@^0.1.0":
-  version "0.1.2"
-  resolved "https://registry.yarnpkg.com/@skycoin/footer/-/footer-0.1.2.tgz#58269bf9820b7a5af77328ad47195e9241b60ba0"
+"@skycoin/footer@^0.2.0":
+  version "0.2.0"
+  resolved "https://registry.yarnpkg.com/@skycoin/footer/-/footer-0.2.0.tgz#9c45ba34d9140effc9af7dbbc47d1b3f4ac10695"
 
-"@skycoin/header@^0.1.1":
-  version "0.1.2"
-  resolved "https://registry.yarnpkg.com/@skycoin/header/-/header-0.1.2.tgz#6faf7a9cfa5356bdf2afac874cd21271d91de599"
+"@skycoin/header@^0.2.1":
+  version "0.2.1"
+  resolved "https://registry.yarnpkg.com/@skycoin/header/-/header-0.2.1.tgz#4196127bc02dbda4b4cea26c05e89171e4b1dc93"
 
-"@skycoin/heading@^0.1.1":
+"@skycoin/heading@^0.1.0":
   version "0.1.1"
   resolved "https://registry.yarnpkg.com/@skycoin/heading/-/heading-0.1.1.tgz#17284bce0f197c3885f80c9532c958b219b136ff"
 
@@ -58,9 +58,9 @@
   version "0.1.1"
   resolved "https://registry.yarnpkg.com/@skycoin/text/-/text-0.1.1.tgz#d412eb7499f31c3e31beecd805ceea51c6a83b0e"
 
-"@skycoin/utils@^0.1.0":
-  version "0.1.2"
-  resolved "https://registry.yarnpkg.com/@skycoin/utils/-/utils-0.1.2.tgz#52379b2f7080c7715dbc4a10bf4cc5fdbd410769"
+"@skycoin/utils@^0.2.2":
+  version "0.2.2"
+  resolved "https://registry.yarnpkg.com/@skycoin/utils/-/utils-0.2.2.tgz#a03c6737eedc3508b3d86888df8caeca95d2955f"
 
 abab@^1.0.3:
   version "1.0.3"
