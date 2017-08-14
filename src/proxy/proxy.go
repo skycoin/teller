@@ -252,7 +252,6 @@ func (px *Proxy) handleConnection() {
 func (px *Proxy) newSession(conn net.Conn) {
 	px.Debugln("New session")
 	defer px.Debugln("Session closed")
-	var err error
 	sn, err := daemon.NewSession(conn, px.auth, px.mux, false, daemon.Logger(px.Logger))
 	if err != nil {
 		px.Println(err)
@@ -272,7 +271,7 @@ func (px *Proxy) newSession(conn net.Conn) {
 	}()
 
 	select {
-	case <-errC:
+	case err := <-errC:
 		if err != io.EOF && err != nil {
 			px.Println(err)
 		}
