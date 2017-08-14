@@ -44,7 +44,7 @@ type logger struct {
 func NewLogger(prefix string, debug bool, multiW ...io.Writer) Logger {
 	mw := io.MultiWriter(append(multiW, os.Stdout)...)
 	return &logger{
-		Logger: log.New(mw, prefix, log.Lshortfile|log.Ltime),
+		Logger: log.New(mw, prefix, log.Lshortfile|log.Ltime|log.Ldate),
 		debug:  debug,
 	}
 }

@@ -74,10 +74,37 @@ func (hs *httpServ) Run() error {
 
 	hs.quit = make(chan struct{})
 
-	mux := hs.setupMux()
+	var mux http.Handler = hs.setupMux()
+
+	allowedHosts := []string{} // empty array means all hosts allowed
+	sslHost := ""
+	if hs.AutoTLSHost == "" {
+		// Note: if AutoTLSHost is not set, but HTTPSAddr is set, then
+		// http will redirect to the HTTPSAddr listening IP, which would be
+		// either 127.0.0.1 or 0.0.0.0
+		// When running behind a DNS name, make sure to set AutoTLSHost
+		sslHost = hs.HTTPSAddr
+	} else {
+		sslHost = hs.AutoTLSHost
+		// When using -auto-tls-host,
+		// which implies automatic Let's Encrypt SSL cert generation in production,
+		// restrict allowed hosts to that host.
+		allowedHosts = []string{hs.AutoTLSHost}
+	}
+
+	if len(allowedHosts) == 0 {
+		hs.Println("Allowed hosts: all")
+	} else {
+		hs.Println("Allowed hosts:", allowedHosts)
+	}
+
+	hs.Println("SSL Host:", sslHost)
+
+	secureMiddleware := configureSecureMiddleware(sslHost, allowedHosts)
+	mux = secureMiddleware.Handler(mux)
 
 	if hs.Addr != "" {
-		hs.httpListener = setupHTTPListener(hs.Addr, hs.HTTPSAddr, []string{}, mux)
+		hs.httpListener = setupHTTPListener(hs.Addr, mux)
 	}
 
 	handleListenErr := func(f func() error) error {
@@ -96,15 +123,7 @@ func (hs *httpServ) Run() error {
 	if hs.HTTPSAddr != "" {
 		hs.Println("Using TLS")
 
-		allowedHosts := []string{}
-		if hs.AutoTLSHost != "" {
-			// When using -auto-tls-host,
-			// which implies automatic Let's Encrypt SSL cert generation in production,
-			// restrict allowed hosts to this host.
-			allowedHosts = []string{hs.AutoTLSHost}
-		}
-
-		hs.httpsListener = setupHTTPListener(hs.HTTPSAddr, hs.HTTPSAddr, allowedHosts, mux)
+		hs.httpsListener = setupHTTPListener(hs.HTTPSAddr, mux)
 
 		tlsCert := hs.TLSCert
 		tlsKey := hs.TLSKey
@@ -179,16 +198,16 @@ func (hs *httpServ) Run() error {
 
 }
 
-func setupHTTPListener(addr, httpsAddr string, allowedHosts []string, mux *http.ServeMux) *http.Server {
+func configureSecureMiddleware(sslHost string, allowedHosts []string) *secure.Secure {
 	sslRedirect := true
-	if httpsAddr == "" {
+	if sslHost == "" {
 		sslRedirect = false
 	}
 
-	secureMiddleware := secure.New(secure.Options{
+	return secure.New(secure.Options{
 		AllowedHosts: allowedHosts,
 		SSLRedirect:  sslRedirect,
-		SSLHost:      httpsAddr,
+		SSLHost:      sslHost,
 
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP
 		// FIXME: Web frontend code has inline styles, CSP doesn't work yet
@@ -196,7 +215,7 @@ func setupHTTPListener(addr, httpsAddr string, allowedHosts []string, mux *http.
 
 		// Set HSTS to one year, for this domain only, do not add to chrome preload list
 		// https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Strict-Transport-Security
-		STSSeconds:           31536000, // 1 years
+		STSSeconds:           31536000, // 1 year
 		STSIncludeSubdomains: false,
 		STSPreload:           false,
 
@@ -215,10 +234,12 @@ func setupHTTPListener(addr, httpsAddr string, allowedHosts []string, mux *http.
 		// "same-origin" is invalid in chrome
 		ReferrerPolicy: "no-referrer",
 	})
+}
 
+func setupHTTPListener(addr string, handler http.Handler) *http.Server {
 	return &http.Server{
 		Addr:         addr,
-		Handler:      secureMiddleware.Handler(mux),
+		Handler:      handler,
 		ReadTimeout:  serverReadTimeout,
 		WriteTimeout: serverWriteTimeout,
 		IdleTimeout:  serverIdleTimeout,
