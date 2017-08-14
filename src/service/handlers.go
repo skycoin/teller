@@ -55,6 +55,8 @@ func BindRequestHandler(gw Gatewayer) daemon.Handler {
 			return
 		}
 
+		gw.ResetPongTimer()
+
 		if msg.Type() != daemon.BindRequestMsgType {
 			gw.Printf("Expect bind request message, but got: %v\n", msg.Type())
 			return
@@ -91,6 +93,8 @@ func StatusRequestHandler(gw Gatewayer) daemon.Handler {
 			return
 		}
 
+		gw.ResetPongTimer()
+
 		if msg.Type() != daemon.StatusRequestMsgType {
 			gw.Printf("Expect status request message, but got:%v\n", msg.Type())
 			return
@@ -111,16 +115,6 @@ func StatusRequestHandler(gw Gatewayer) daemon.Handler {
 			gw.Println(errStr)
 			ack.Error = errStr
 		} else {
-			// if len(sts) > 0 {
-			// 	sort.Slice(sts, func(i, j int) bool {
-			// 		return sts[i].Seq < sts[j].Seq
-			// 	})
-			// 	first := sts[0]
-			// 	for i := range sts {
-			// 		sts[i].Seq = sts[i].Seq - first.Seq
-			// 	}
-			// }
-
 			ack.Statuses = sts
 		}
 

@@ -4,6 +4,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"net"
 	"sync"
@@ -11,9 +12,12 @@ import (
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
 
-	"time"
-
 	"io"
+	"time"
+)
+
+const (
+	pingTimeout = 10 * time.Second
 )
 
 // Proxy represents the ico proxy server
@@ -28,6 +32,7 @@ type Proxy struct {
 	auth        *daemon.Auth
 	mux         *daemon.Mux
 	reqC        chan func()
+	pingTimer   *time.Timer
 
 	httpServ *httpServ
 	sync.Mutex
@@ -159,6 +164,7 @@ func (px *Proxy) Run() error {
 		}
 	}()
 
+	errC := make(chan error, 1)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -173,7 +179,6 @@ func (px *Proxy) Run() error {
 	}()
 
 	wg.Add(1)
-	errC := make(chan error, 1)
 	go func() {
 		defer wg.Done()
 		if err := px.httpServ.Run(); err != nil {
@@ -233,7 +238,6 @@ func (px *Proxy) handleConnection() {
 				return
 			case exec := <-execFuncC:
 				exec(conn)
-				conn.Close()
 				select {
 				case <-px.quit:
 					return
@@ -257,11 +261,25 @@ func (px *Proxy) newSession(conn net.Conn) {
 
 	px.setSession(sn)
 
-	if err := sn.Run(); err != nil {
-		if err != io.EOF {
+	px.pingTimer = time.NewTimer(pingTimeout)
+	errC := make(chan error, 1)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		errC <- sn.Run()
+	}()
+
+	select {
+	case <-errC:
+		if err != io.EOF && err != nil {
 			px.Println(err)
 		}
+	case <-px.pingTimer.C:
+		conn.Close()
 	}
+	wg.Wait()
 
 	px.setSession(nil)
 }
@@ -285,6 +303,16 @@ func (px *Proxy) write(m daemon.Messager) (err error) {
 	px.sn.Write(m)
 
 	return
+}
+
+func (px *Proxy) writeWithContext(cxt context.Context, m daemon.Messager) error {
+	px.Lock()
+	defer px.Unlock()
+	if px.sn == nil {
+		return errors.New("write failed, session is nil")
+	}
+
+	return px.sn.WriteWithContext(cxt, m)
 }
 
 type closeStream func()
@@ -323,4 +351,9 @@ func (px *Proxy) closeSession() {
 		px.sn.Close()
 	}
 	px.Unlock()
+}
+
+// ResetPingTimer is not thread safe
+func (px *Proxy) ResetPingTimer() {
+	px.pingTimer.Reset(pingTimeout)
 }
