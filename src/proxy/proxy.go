@@ -25,12 +25,12 @@ type Proxy struct {
 	quit        chan struct{}
 	sn          *daemon.Session
 	connC       chan net.Conn
-	// wg    *sync.WaitGroup
-	auth *daemon.Auth
-	mux  *daemon.Mux
-	reqC chan func()
+	auth        *daemon.Auth
+	mux         *daemon.Mux
+	reqC        chan func()
 
 	httpServ *httpServ
+	sync.Mutex
 }
 
 // Config proxy config
@@ -211,9 +211,7 @@ func (px *Proxy) Shutdown() {
 		px.ln = nil
 	}
 
-	if px.sn != nil {
-		px.sn.Close()
-	}
+	px.closeSession()
 
 	if px.httpServ != nil {
 		px.httpServ.Shutdown()
@@ -251,18 +249,21 @@ func (px *Proxy) newSession(conn net.Conn) {
 	px.Debugln("New session")
 	defer px.Debugln("Session closed")
 	var err error
-	px.sn, err = daemon.NewSession(conn, px.auth, px.mux, false, daemon.Logger(px.Logger))
+	sn, err := daemon.NewSession(conn, px.auth, px.mux, false, daemon.Logger(px.Logger))
 	if err != nil {
 		px.Println(err)
 		return
 	}
 
-	if err := px.sn.Run(); err != nil {
+	px.setSession(sn)
+
+	if err := sn.Run(); err != nil {
 		if err != io.EOF {
 			px.Println(err)
 		}
-		return
 	}
+
+	px.setSession(nil)
 }
 
 func (px *Proxy) strand(f func()) {
@@ -274,27 +275,52 @@ func (px *Proxy) strand(f func()) {
 	<-q
 }
 
-func (px *Proxy) write(m daemon.Messager) error {
+func (px *Proxy) write(m daemon.Messager) (err error) {
+	px.Lock()
+	defer px.Unlock()
 	if px.sn == nil {
-		return errors.New("write failed, session is nil")
+		err = errors.New("write failed, session is nil")
 	}
 
 	px.sn.Write(m)
-	return nil
+
+	return
 }
 
 type closeStream func()
 
 // openStream
 func (px *Proxy) openStream(f func(daemon.Messager)) (int, closeStream, error) {
+	px.Lock()
+	defer px.Unlock()
 	if px.sn == nil {
 		return 0, func() {}, errors.New("session is nil")
 	}
 
 	id := px.sn.Sub(f)
 	px.Debugln("Open stream:", id)
-	return id, func() {
-		px.sn.Unsub(id)
-		px.Debugln("Close stream:", id)
-	}, nil
+	cf := func() {
+		defer px.Debugln("Close stream:", id)
+		px.Lock()
+		if px.sn != nil {
+			px.sn.Unsub(id)
+		}
+		px.Unlock()
+	}
+
+	return id, cf, nil
+}
+
+func (px *Proxy) setSession(sn *daemon.Session) {
+	px.Lock()
+	px.sn = sn
+	px.Unlock()
+}
+
+func (px *Proxy) closeSession() {
+	px.Lock()
+	if px.sn != nil {
+		px.sn.Close()
+	}
+	px.Unlock()
 }
