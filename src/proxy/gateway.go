@@ -62,17 +62,15 @@ func (gw *gateway) sendMessage(cxt context.Context, msg daemon.Messager, ackMsg 
 		// send  message
 		msg.SetID(id)
 
-		go func() {
-			if err = gw.p.write(msg); err != nil {
-				return
-			}
-		}()
-
+		if err = gw.p.writeWithContext(cxt, msg); err != nil {
+			return
+		}
 		select {
 		case <-cxt.Done():
 			err = cxt.Err()
 			return
 		case ack := <-msgC:
+			gw.p.ResetPingTimer()
 			ackValue := reflect.ValueOf(ack)
 			ackMsgValue := reflect.ValueOf(ackMsg)
 			if ackValue.Type() != ackMsgValue.Type() {

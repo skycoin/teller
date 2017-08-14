@@ -4,6 +4,7 @@
 package proxy
 
 import (
+	"context"
 	"errors"
 	"net"
 	"sync"
@@ -11,9 +12,12 @@ import (
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
 
-	"time"
-
 	"io"
+	"time"
+)
+
+const (
+	pingTimeout = 10 * time.Second
 )
 
 // Proxy represents the ico proxy server
@@ -25,12 +29,13 @@ type Proxy struct {
 	quit        chan struct{}
 	sn          *daemon.Session
 	connC       chan net.Conn
-	// wg    *sync.WaitGroup
-	auth *daemon.Auth
-	mux  *daemon.Mux
-	reqC chan func()
+	auth        *daemon.Auth
+	mux         *daemon.Mux
+	reqC        chan func()
+	pingTimer   *time.Timer
 
 	httpServ *httpServ
+	sync.Mutex
 }
 
 // Config proxy config
@@ -159,6 +164,7 @@ func (px *Proxy) Run() error {
 		}
 	}()
 
+	errC := make(chan error, 1)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -173,7 +179,6 @@ func (px *Proxy) Run() error {
 	}()
 
 	wg.Add(1)
-	errC := make(chan error, 1)
 	go func() {
 		defer wg.Done()
 		if err := px.httpServ.Run(); err != nil {
@@ -211,9 +216,7 @@ func (px *Proxy) Shutdown() {
 		px.ln = nil
 	}
 
-	if px.sn != nil {
-		px.sn.Close()
-	}
+	px.closeSession()
 
 	if px.httpServ != nil {
 		px.httpServ.Shutdown()
@@ -235,7 +238,6 @@ func (px *Proxy) handleConnection() {
 				return
 			case exec := <-execFuncC:
 				exec(conn)
-				conn.Close()
 				select {
 				case <-px.quit:
 					return
@@ -250,19 +252,35 @@ func (px *Proxy) handleConnection() {
 func (px *Proxy) newSession(conn net.Conn) {
 	px.Debugln("New session")
 	defer px.Debugln("Session closed")
-	var err error
-	px.sn, err = daemon.NewSession(conn, px.auth, px.mux, false, daemon.Logger(px.Logger))
+	sn, err := daemon.NewSession(conn, px.auth, px.mux, false, daemon.Logger(px.Logger))
 	if err != nil {
 		px.Println(err)
 		return
 	}
 
-	if err := px.sn.Run(); err != nil {
-		if err != io.EOF {
+	px.setSession(sn)
+
+	px.pingTimer = time.NewTimer(pingTimeout)
+	errC := make(chan error, 1)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		errC <- sn.Run()
+	}()
+
+	select {
+	case err := <-errC:
+		if err != io.EOF && err != nil {
 			px.Println(err)
 		}
-		return
+	case <-px.pingTimer.C:
+		conn.Close()
 	}
+	wg.Wait()
+
+	px.setSession(nil)
 }
 
 func (px *Proxy) strand(f func()) {
@@ -274,27 +292,67 @@ func (px *Proxy) strand(f func()) {
 	<-q
 }
 
-func (px *Proxy) write(m daemon.Messager) error {
+func (px *Proxy) write(m daemon.Messager) (err error) {
+	px.Lock()
+	defer px.Unlock()
+	if px.sn == nil {
+		err = errors.New("write failed, session is nil")
+	}
+
+	px.sn.Write(m)
+
+	return
+}
+
+func (px *Proxy) writeWithContext(cxt context.Context, m daemon.Messager) error {
+	px.Lock()
+	defer px.Unlock()
 	if px.sn == nil {
 		return errors.New("write failed, session is nil")
 	}
 
-	px.sn.Write(m)
-	return nil
+	return px.sn.WriteWithContext(cxt, m)
 }
 
 type closeStream func()
 
 // openStream
 func (px *Proxy) openStream(f func(daemon.Messager)) (int, closeStream, error) {
+	px.Lock()
+	defer px.Unlock()
 	if px.sn == nil {
 		return 0, func() {}, errors.New("session is nil")
 	}
 
 	id := px.sn.Sub(f)
 	px.Debugln("Open stream:", id)
-	return id, func() {
-		px.sn.Unsub(id)
-		px.Debugln("Close stream:", id)
-	}, nil
+	cf := func() {
+		defer px.Debugln("Close stream:", id)
+		px.Lock()
+		if px.sn != nil {
+			px.sn.Unsub(id)
+		}
+		px.Unlock()
+	}
+
+	return id, cf, nil
+}
+
+func (px *Proxy) setSession(sn *daemon.Session) {
+	px.Lock()
+	px.sn = sn
+	px.Unlock()
+}
+
+func (px *Proxy) closeSession() {
+	px.Lock()
+	if px.sn != nil {
+		px.sn.Close()
+	}
+	px.Unlock()
+}
+
+// ResetPingTimer is not thread safe
+func (px *Proxy) ResetPingTimer() {
+	px.pingTimer.Reset(pingTimeout)
 }

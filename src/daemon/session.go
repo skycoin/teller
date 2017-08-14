@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"context"
 	"errors"
 	"net"
 	"time"
@@ -10,10 +11,12 @@ import (
 
 var (
 	ErrWriteChanFull = errors.New("write channel is full")
+	ErrSessionClosed = errors.New("session is closed")
 )
 
 const (
-	handleTimeout = 5 * time.Second
+	handleTimeout  = 5 * time.Second
+	readBufferSize = 1024
 )
 
 // ResponseWriteCloser will be used to write data back, also provides Close method
@@ -107,7 +110,7 @@ func NewSession(conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Opti
 
 // Run starts the session process loop
 func (sn *Session) Run() error {
-	msgChan := make(chan Messager)
+	msgChan := make(chan Messager, readBufferSize)
 	errC := make(chan error, 1)
 
 	go func() {
@@ -202,9 +205,21 @@ func (sn *Session) Write(msg Messager) {
 	case <-sn.quit:
 		return
 	case sn.wc <- msg:
-	case <-time.After(5 * time.Second):
+	case <-time.After(writeTimeout):
 		sn.log.Println(ErrWriteChanFull)
 		sn.Close()
+	}
+}
+
+// WriteWithContext write message
+func (sn *Session) WriteWithContext(cxt context.Context, msg Messager) error {
+	select {
+	case <-sn.quit:
+		return ErrSessionClosed
+	case sn.wc <- msg:
+		return nil
+	case <-cxt.Done():
+		return cxt.Err()
 	}
 }
 
