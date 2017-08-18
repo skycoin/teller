@@ -8,9 +8,10 @@ import (
 
 	"time"
 
+	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/cipher"
+
 	"github.com/skycoin/teller/src/logger"
-	"github.com/skycoin/teller/src/service/cli"
 )
 
 const sendCoinCheckTime = 3 * time.Second
@@ -65,7 +66,7 @@ type Config struct {
 
 type skyclient interface {
 	Send(recvAddr string, coins int64) (string, error)
-	GetTransaction(txid string) (*cli.TxJSON, error)
+	GetTransaction(txid string) (*webrpc.TxnResult, error)
 }
 
 // NewService creates sender instance

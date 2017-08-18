@@ -11,7 +11,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"os/user"
 	"path/filepath"
@@ -28,10 +27,10 @@ import (
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service"
 	"github.com/skycoin/teller/src/service/btcaddrs"
-	"github.com/skycoin/teller/src/service/cli"
 	"github.com/skycoin/teller/src/service/config"
 	"github.com/skycoin/teller/src/service/exchange"
 	"github.com/skycoin/teller/src/service/monitor"
+	"github.com/skycoin/teller/src/service/rpc"
 	"github.com/skycoin/teller/src/service/scanner"
 	"github.com/skycoin/teller/src/service/sender"
 )
@@ -149,14 +148,14 @@ func main() {
 	wg := sync.WaitGroup{}
 
 	var scanServ *scanner.ScanService
-	var scanCli exchange.BtcScanner
+	var scanRpc exchange.BtcScanner
 	var sendServ *sender.SendService
-	var sendCli exchange.SkySender
+	var sendRpc exchange.SkySender
 
 	if *dummyMode {
 		log.Println("btcd and skyd disabled, running in dummy mode")
-		scanCli = &dummyBtcScanner{}
-		sendCli = &dummySkySender{}
+		scanRpc = &dummyBtcScanner{}
+		sendRpc = &dummySkySender{}
 	} else {
 		// check skycoin setup
 		if err := checkSkycoinSetup(*cfg); err != nil {
@@ -188,12 +187,12 @@ func main() {
 			errC <- scanServ.Run()
 		}()
 
-		scanCli = scanner.NewScanner(scanServ)
+		scanRpc = scanner.NewScanner(scanServ)
 
-		skyCli := cli.New(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
+		skyRpc := rpc.New(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
 
 		// create skycoin send service
-		sendServ = sender.NewService(makeSendConfig(*cfg), log, skyCli)
+		sendServ = sender.NewService(makeSendConfig(*cfg), log, skyRpc)
 
 		wg.Add(1)
 		go func() {
@@ -201,11 +200,11 @@ func main() {
 			errC <- sendServ.Run()
 		}()
 
-		sendCli = sender.NewSender(sendServ)
+		sendRpc = sender.NewSender(sendServ)
 	}
 
 	// create exchange service
-	exchangeServ := exchange.NewService(makeExchangeConfig(*cfg), db, log, scanCli, sendCli)
+	exchangeServ := exchange.NewService(makeExchangeConfig(*cfg), db, log, scanRpc, sendRpc)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -240,7 +239,7 @@ func main() {
 	monitorCfg := monitor.Config{
 		Addr: cfg.MonitorAddr,
 	}
-	ms := monitor.New(monitorCfg, log, btcAddrMgr, excCli, scanCli)
+	ms := monitor.New(monitorCfg, log, btcAddrMgr, excCli, scanRpc)
 
 	wg.Add(1)
 	go func() {
@@ -355,11 +354,6 @@ func catchInterrupt(quit chan<- struct{}) {
 
 // checks skycoin setups
 func checkSkycoinSetup(cfg config.Config) error {
-	cmd := exec.Command("skycoin-cli")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%v, run install-skycoin-cli.sh to install the tool", err)
-	}
-
 	// check whether the skycoin wallet file does exist
 	if _, err := os.Stat(cfg.Skynode.WalletPath); os.IsNotExist(err) {
 		return fmt.Errorf("skycoin wallet file: %s does not exist", cfg.Skynode.WalletPath)
