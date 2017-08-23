@@ -145,7 +145,14 @@ func (s *Service) Run() error {
 			skyAmt := calculateSkyValue(dv.Value, float64(s.cfg.Rate))
 			s.Printf("Send %d skycoin to %s\n", skyAmt, skyAddr)
 			rspC, _ := s.sender.SendAsync(skyAddr, skyAmt, nil)
-			rsp := (<-rspC).(sender.Response)
+			var rsp sender.Response
+			select {
+			case r := <-rspC:
+				rsp = r.(sender.Response)
+			case <-s.quit:
+				s.Println("exhange.Service quit")
+				return nil
+			}
 			if rsp.Err != "" {
 				s.Println("Send skycoin failed:", rsp.Err)
 				dv.AckC <- struct{}{}
@@ -162,33 +169,39 @@ func (s *Service) Run() error {
 
 		loop:
 			for {
-				st := <-rsp.StatusC
-				switch st {
-				case sender.Sent:
-					s.Printf("Status=%s, skycoin address=%s\n", StatusWaitConfirm, skyAddr)
-					if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
-						dpi.Status = StatusWaitConfirm
-						return dpi
-					}); err != nil {
-						s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
-					}
-				case sender.TxConfirmed:
-					if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
-						dpi.Status = StatusDone
-						return dpi
-					}); err != nil {
-						s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
-					}
-
-					dv.AckC <- struct{}{}
-
-					s.Printf("Status=%s, txid=%s, skycoin address=%s\n", StatusDone, rsp.Txid, skyAddr)
-
-					break loop
-				default:
-					s.Panicln("Unknown sender.Response.StatusC value", st)
+				select {
+				case <-s.quit:
+					s.Println("exhange.Service quit")
 					return nil
+				case st := <-rsp.StatusC:
+					switch st {
+					case sender.Sent:
+						s.Printf("Status=%s, skycoin address=%s\n", StatusWaitConfirm, skyAddr)
+						if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
+							dpi.Status = StatusWaitConfirm
+							return dpi
+						}); err != nil {
+							s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
+						}
+					case sender.TxConfirmed:
+						if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
+							dpi.Status = StatusDone
+							return dpi
+						}); err != nil {
+							s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
+						}
+
+						dv.AckC <- struct{}{}
+
+						s.Printf("Status=%s, txid=%s, skycoin address=%s\n", StatusDone, rsp.Txid, skyAddr)
+
+						break loop
+					default:
+						s.Panicln("Unknown sender.Response.StatusC value", st)
+						return nil
+					}
 				}
+
 			}
 
 		}
