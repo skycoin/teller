@@ -2,6 +2,11 @@ export default {
   distribution: {
     title: '天空币分发活动',
     heading: '天空币分发活动',
+    headingEnded: 'The previous distribution event finished on',
+    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>, 
+      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the 
+      <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a> 
+      to learn when the next event begins.`,
     instructions: `
 <p>参加天空币分发活动:</p>
 
