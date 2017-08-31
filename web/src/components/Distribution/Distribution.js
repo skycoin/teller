@@ -22,7 +22,7 @@ import Text from '@skycoin/text';
 
 import { checkStatus, getAddress } from '../../utils/distributionAPI';
 
-const eventInProgress = !moment().isBefore(DISTRIBUTION_START) && !moment().isAfter(moment('2017-08-28T12:00:00.000Z'));
+const eventInProgress = !moment().isBefore(DISTRIBUTION_START) && !moment().isAfter(moment(DISTRIBUTION_END));
 const endDate = moment(DISTRIBUTION_END).format('Do MMMM, YYYY h:mm');
 
 const Wrapper = styled.div`
