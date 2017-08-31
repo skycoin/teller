@@ -9,7 +9,7 @@ import { Flex, Box } from 'grid-styled';
 import { FormattedMessage, FormattedHTMLMessage, injectIntl } from 'react-intl';
 import { rem } from 'polished';
 
-import { COLORS, SPACE, BOX_SHADOWS, BORDER_RADIUS } from '@skycoin/config';
+import { COLORS, SPACE, BOX_SHADOWS, BORDER_RADIUS, DISTRIBUTION_END, DISTRIBUTION_START } from '@skycoin/config';
 import { media } from '@skycoin/utils';
 import Button from '@skycoin/button';
 import Container from '@skycoin/container';
@@ -21,6 +21,9 @@ import Modal, { styles } from '@skycoin/modal';
 import Text from '@skycoin/text';
 
 import { checkStatus, getAddress } from '../../utils/distributionAPI';
+
+const eventInProgress = !moment().isBefore(DISTRIBUTION_START) && !moment().isAfter(moment(DISTRIBUTION_END));
+const endDate = moment(DISTRIBUTION_END).format('Do MMMM, YYYY h:mm');
 
 const Wrapper = styled.div`
   background-color: ${COLORS.gray[1]};
@@ -170,7 +173,16 @@ class Distribution extends React.Component {
           </Modal>
 
           <Container>
-            <Flex justify="center">
+            {!eventInProgress ? <Flex column>
+              <Heading heavy as="h2" fontSize={[5, 6]} color="black" mb={[4, 6]}>
+                <FormattedMessage id="distribution.headingEnded" />
+                {' '}
+                {endDate}
+              </Heading>
+              <Text heavy color="black" fontSize={[2, 3]} as="div">
+                <FormattedHTMLMessage id="distribution.ended" />
+              </Text>
+            </Flex> : <Flex justify="center">
               <Box width={[1 / 1, 1 / 1, 2 / 3]} py={[5, 7]}>
                 <Heading heavy as="h2" fontSize={[5, 6]} color="black" mb={[4, 6]}>
                   <FormattedMessage id="distribution.heading" />
@@ -218,7 +230,7 @@ class Distribution extends React.Component {
                   </Button>
                 </div>
               </Box>
-            </Flex>
+            </Flex>}
           </Container>
         </Wrapper>
 
