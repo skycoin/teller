@@ -23,16 +23,17 @@ const (
 // Proxy represents the ico proxy server
 type Proxy struct {
 	logger.Logger
-	srvAddr     string // listen address, eg: 0.0.0.0:12345
-	httpSrvAddr string
-	ln          net.Listener
-	quit        chan struct{}
-	sn          *daemon.Session
-	connC       chan net.Conn
-	auth        *daemon.Auth
-	mux         *daemon.Mux
-	reqC        chan func()
-	pingTimer   *time.Timer
+	srvAddr       string // listen address, eg: 0.0.0.0:12345
+	httpSrvAddr   string
+	withoutTeller bool
+	ln            net.Listener
+	quit          chan struct{}
+	sn            *daemon.Session
+	connC         chan net.Conn
+	auth          *daemon.Auth
+	mux           *daemon.Mux
+	reqC          chan func()
+	pingTimer     *time.Timer
 
 	httpServ *httpServ
 	sync.Mutex
@@ -52,6 +53,8 @@ type Config struct {
 	TLSCert      string
 	TLSKey       string
 	Throttle     Throttle
+
+	WithoutTeller bool
 }
 
 // New creates proxy instance
@@ -82,13 +85,14 @@ func New(cfg Config, auth *daemon.Auth, ops ...Option) *Proxy {
 
 	px := &Proxy{
 		// default logger does not turn on debug mode, can use Logger option to set it.
-		Logger:      logger.NewLogger("", false),
-		srvAddr:     cfg.SrvAddr,
-		httpSrvAddr: cfg.HTTPSrvAddr,
-		connC:       make(chan net.Conn),
-		auth:        auth,
-		reqC:        make(chan func()),
-		quit:        make(chan struct{}),
+		Logger:        logger.NewLogger("", false),
+		srvAddr:       cfg.SrvAddr,
+		httpSrvAddr:   cfg.HTTPSrvAddr,
+		withoutTeller: cfg.WithoutTeller,
+		connC:         make(chan net.Conn),
+		auth:          auth,
+		reqC:          make(chan func()),
+		quit:          make(chan struct{}),
 	}
 
 	for _, op := range ops {
@@ -116,6 +120,7 @@ func New(cfg Config, auth *daemon.Auth, ops ...Option) *Proxy {
 		TLSKey:        cfg.TLSKey,
 		Gateway:       gw,
 		Throttle:      cfg.Throttle,
+		WithoutTeller: cfg.WithoutTeller,
 	}
 
 	return px
@@ -123,60 +128,62 @@ func New(cfg Config, auth *daemon.Auth, ops ...Option) *Proxy {
 
 // Run start the proxy
 func (px *Proxy) Run() error {
-	var err error
-	px.ln, err = net.Listen("tcp", px.srvAddr)
-	if err != nil {
-		return err
-	}
-
-	px.Println("Proxy start, serve on", px.srvAddr)
-	defer px.Println("Proxy service closed")
-
-	// start connection handler process
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		px.handleConnection()
-	}()
+	errC := make(chan error, 1)
+	if !px.withoutTeller {
+		var err error
+		px.ln, err = net.Listen("tcp", px.srvAddr)
+		if err != nil {
+			return err
+		}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			conn, err := px.ln.Accept()
-			if err != nil {
+		px.Println("Proxy start, serve on", px.srvAddr)
+		defer px.Println("Proxy service closed")
+
+		// start connection handler process
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			px.handleConnection()
+		}()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				conn, err := px.ln.Accept()
+				if err != nil {
+					select {
+					case <-px.quit:
+						return
+					default:
+						px.Println("Accept error:", err)
+						continue
+					}
+				}
+
 				select {
-				case <-px.quit:
-					return
-				default:
-					px.Println("Accept error:", err)
-					continue
+				case <-time.After(1 * time.Second):
+					px.Printf("Close connection:%s, only one connection is allowed\n", conn.RemoteAddr())
+					conn.Close()
+				case px.connC <- conn:
 				}
 			}
+		}()
 
-			select {
-			case <-time.After(1 * time.Second):
-				px.Printf("Close connection:%s, only one connection is allowed\n", conn.RemoteAddr())
-				conn.Close()
-			case px.connC <- conn:
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case req := <-px.reqC:
+					req()
+				case <-px.quit:
+					return
+				}
 			}
-		}
-	}()
-
-	errC := make(chan error, 1)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case req := <-px.reqC:
-				req()
-			case <-px.quit:
-				return
-			}
-		}
-	}()
+		}()
+	}
 
 	wg.Add(1)
 	go func() {
