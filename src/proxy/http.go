@@ -54,6 +54,7 @@ type httpServ struct {
 	TLSCert       string
 	TLSKey        string
 	Gateway       *gateway
+	WithoutTeller bool
 
 	Throttle Throttle
 
@@ -253,9 +254,11 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 		mux.Handle(path, gziphandler.GzipHandler(rateLimiter(hs.Throttle, httputil.LogHandler(hs.Logger, f))))
 	}
 
-	// API Methods
-	handleAPI("/api/bind", BindHandler(hs))
-	handleAPI("/api/status", StatusHandler(hs))
+	if !hs.WithoutTeller {
+		// API Methods
+		handleAPI("/api/bind", BindHandler(hs))
+		handleAPI("/api/status", StatusHandler(hs))
+	}
 
 	// Static files
 	if hs.HTMLInterface {

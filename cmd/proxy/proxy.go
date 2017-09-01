@@ -33,6 +33,7 @@ func main() {
 	prof := flag.Bool("prof", false, "start profiling tool")
 	thrMax := flag.Int64("throttle-max", 5, "max allowd per ip in specific duration")
 	thrDur := flag.Int64("throttle-duration", int64(time.Minute), "throttle duration")
+	withoutTeller := flag.Bool("without-teller", false, "disable the listener for teller")
 	flag.Parse()
 
 	log := logger.NewLogger("", *debug)
@@ -90,6 +91,7 @@ func main() {
 			Max:      *thrMax,
 			Duration: time.Duration(*thrDur),
 		},
+		WithoutTeller: *withoutTeller,
 	}
 
 	px := proxy.New(pxCfg, auth, proxy.Logger(log))
