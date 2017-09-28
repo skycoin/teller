@@ -46,6 +46,7 @@ func (wc *ResWC) Close() {
 
 func TestBindMessage(t *testing.T) {
 	dg := dummyGateway{
+		Logger:  logger.NewLogger("", true),
 		btcAddr: "14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
 	}
 
