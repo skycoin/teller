@@ -34,10 +34,11 @@ wget http://localhost:7071/api/bind?skyaddr=<skycoin addr>
 *Note: the proxy must be run from the repo root, in order to serve static content from `./web/dist`*
 
 ```bash
-go run cmd/proxy/proxy.go
+make proxy
 ```
 
-once the proxy start, will show a `pubkey` in the log.
+Once the proxy starts, it will show a `pubkey` value in the log.
+Use this for the `-proxy-pubkey` argument in `teller`.
 
 ```bash
 18:28:49 proxy.go:33: Pubkey: 03583bf0a6cbe7048023be5475aca693e192b4b5570bcc883c50f7d96f0a996eda
@@ -45,14 +46,13 @@ once the proxy start, will show a `pubkey` in the log.
 
 ### Start teller
 
-install the `skycoin-cli`
+Install `skycoin-cli`
 
 ```bash
-cd cmd/teller
-./install-skycoin-cli.sh
+make install-skycoin-cli
 ```
 
-add pregenearted bitcoin deposit address list in `btc_addresses.json`.
+add pregenerated bitcoin deposit address list in `btc_addresses.json`.
 
 ```bash
 {
@@ -218,6 +218,19 @@ response:
         },
     ]
 }
+```
+
+### Code linting
+
+```bash
+make install-linters
+make lint
+```
+
+### Run tests
+
+```bash
+make test
 ```
 
 ### Database structure
