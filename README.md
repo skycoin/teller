@@ -1,4 +1,6 @@
-# teller
+# Teller
+
+[![Build Status](https://travis-ci.org/skycoin/teller.svg?branch=master)](https://travis-ci.org/skycoin/teller)
 
 ## Setup project
 
