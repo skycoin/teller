@@ -106,9 +106,9 @@ func TestScannerRun(t *testing.T) {
 
 	scr := NewScanner(s)
 
-	scr.AddDepositAddress("1ATjE4kwZ5R1ww9SEi4eseYTCenVgaxPWu")
-	scr.AddDepositAddress("1EYQ7Fnct6qu1f3WpTSib1UhDhxkrww1WH")
-	scr.AddDepositAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
+	scr.AddScanAddress("1ATjE4kwZ5R1ww9SEi4eseYTCenVgaxPWu")
+	scr.AddScanAddress("1EYQ7Fnct6qu1f3WpTSib1UhDhxkrww1WH")
+	scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
 
 	time.AfterFunc(time.Second, func() {
 		var dvs []DepositNote

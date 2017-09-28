@@ -21,9 +21,10 @@ const (
 )
 
 var (
-	// ErrPongTimeout not receive pong message in given time error
-	ErrPongTimout = errors.New("pong message timeout")
-	ErrMaxBind    = errors.New("max bind reached")
+	// ErrPongTimeout is returned when no reply to ping message has been received within pongTimeout [10 seconds] time
+	ErrPongTimeout = errors.New("pong message timeout")
+	// ErrMaxBind is returned when the maximum number of address to bind to a SKY address has been reached
+	ErrMaxBind = errors.New("max bind reached")
 )
 
 // BtcAddrGenerator generate new deposit address
@@ -35,7 +36,8 @@ type BtcAddrGenerator interface {
 type Exchanger interface {
 	BindAddress(btcAddr, skyAddr string) error
 	GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error)
-	BindNum(skyAddr string) int // returns the number of btc address the skycoin address binded
+	// Returns the number of btc address the skycoin address binded
+	BindNum(skyAddr string) int
 }
 
 // Service provides the ico service
@@ -192,7 +194,7 @@ func (s *Service) newSession() error {
 			s.Debugln("Pong message time out")
 			s.session.close()
 			s.session = nil
-			return ErrPongTimout
+			return ErrPongTimeout
 		case <-s.session.pingTicker.C:
 			// send ping message
 			s.Debugln("Send ping message")
