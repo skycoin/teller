@@ -219,3 +219,74 @@ response:
     ]
 }
 ```
+
+### Database structure
+
+```
+Bucket: used_btc_address
+File: btcaddrs/store.go
+
+Maps: `btcaddr -> ""`
+Note: Marks a btc address as used
+```
+
+```
+Bucket: exchange_meta
+File: exchange/store.go
+
+Note: unused
+```
+
+```
+Bucket: deposit_info
+File: exchange/store.go
+
+Maps: btcTx[%tx:%n] -> exchange.DepositInfo
+Note: Maps a btc txid:seq to exchange.DepositInfo struct
+```
+
+```
+Bucket: bind_address
+File: exchange/store.go
+
+Maps: btcaddr -> skyaddr
+Note: Maps a btc addr to a sky addr
+```
+
+```
+Bucket: sky_deposit_seqs_index
+File: exchange/store.go
+
+Maps: skyaddr -> [btcaddrs]
+Note: Maps a sky addr to multiple btc addrs
+```
+
+```
+Bucket: btc_txs
+File: exchange/store.go
+
+Maps: btcaddr -> [txs]
+Note: Maps a btcaddr to multiple btc txns
+```
+
+```
+Bucket: scan_meta
+File: scanner/store.go
+
+Maps: "last_scan_block" -> scanner.lastScanBlock[json]
+Note: Saves scanner.lastScanBlock struct (as JSON) to "last_scan_block" key
+
+Maps: "deposit_addresses" -> [btcaddrs]
+Note: Saves list of btc addresss being scanned
+
+Maps: "dv_index_list" -> [btcTx[%tx:%n]][json]
+Note: Saves list of btc txid:seq (as JSON)
+```
+
+```
+Bucket: deposit_value
+File: scanner/store.go
+
+Maps: btcTx[%tx:%n] -> scanner.DepositValue
+Note: Maps a btc txid:seq to scanner.DepositValue struct
+```
