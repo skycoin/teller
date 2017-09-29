@@ -1,29 +1,16 @@
 package btcaddrs
 
 import (
-	"fmt"
-	"math/rand"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
-func setupDB(t *testing.T) (*bolt.DB, func()) {
-	rand.Seed(int64(time.Now().Second()))
-	f := fmt.Sprintf("test%d.db", rand.Intn(1024))
-	db, err := bolt.Open(f, 0700, nil)
-	require.Nil(t, err)
-	return db, func() {
-		db.Close()
-		os.Remove(f)
-	}
-}
-
 func TestNewStore(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -38,7 +25,7 @@ func TestNewStore(t *testing.T) {
 }
 
 func TestLoadCache(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	db.Update(func(tx *bolt.Tx) error {
@@ -64,7 +51,7 @@ func TestLoadCache(t *testing.T) {
 }
 
 func TestStorePut(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -88,7 +75,7 @@ func TestStorePut(t *testing.T) {
 }
 
 func TestStoreGet(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)

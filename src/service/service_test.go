@@ -2,16 +2,12 @@ package service
 
 import (
 	"fmt"
-	"math/rand"
 	"net"
 	"sync"
 	"testing"
 
-	"os"
-
 	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/fortytw2/leaktest"
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
@@ -78,17 +74,6 @@ func makeAuthPair() (clientAuth, serverAuth *daemon.Auth) {
 		RPubkey: cpubkey,
 	}
 	return
-}
-
-func setupDB(t *testing.T) (*bolt.DB, func()) {
-	rand.Seed(time.Now().Unix())
-	f := fmt.Sprintf("%s/test%d.db", os.TempDir(), rand.Intn(1024))
-	db, err := bolt.Open(f, 0700, nil)
-	assert.Nil(t, err)
-	return db, func() {
-		db.Close()
-		os.Remove(f)
-	}
 }
 
 type dummyExchanger struct {

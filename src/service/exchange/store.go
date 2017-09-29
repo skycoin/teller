@@ -2,7 +2,9 @@ package exchange
 
 import (
 	"errors"
+	"log"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -123,17 +125,35 @@ func (s *store) BindAddress(skyaddr, btcaddr string) error {
 	})
 }
 
+func isValidBtcTx(btcTx string) bool {
+	if btcTx == "" {
+		return false
+	}
+
+	pts := strings.Split(btcTx, ":")
+	if len(pts) != 2 {
+		return false
+	}
+
+	if pts[0] == "" {
+		return false
+	}
+
+	return true
+}
+
 // AddDepositInfo adds deposit info into storage, return seq or error
 func (s *store) AddDepositInfo(dpinfo DepositInfo) error {
-	if dpinfo.BtcTx == "" {
-		return errors.New("btc txid is empty")
+	if !isValidBtcTx(dpinfo.BtcTx) {
+		log.Println("Invalid dpinfo.BtcTx:", dpinfo.BtcTx)
+		return fmt.Errorf("btc txid \"%s\" is empty/invalid", dpinfo.BtcTx)
 	}
 
 	if dpinfo.BtcAddress == "" {
 		return errors.New("btc address is empty")
 	}
 
-	if err := s.db.Update(func(tx *bolt.Tx) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
 		// check if the dpi with btctx already exist
 		bkt := tx.Bucket(depositInfoBkt)
 		if bkt == nil {
@@ -233,11 +253,7 @@ func (s *store) AddDepositInfo(dpinfo DepositInfo) error {
 		// s.cache.setBindAddr(dpinfo.BtcAddress, dpinfo.SkyAddress)
 
 		return nil
-	}); err != nil {
-		return err
-	}
-
-	return nil
+	})
 }
 
 // GetDepositInfo returns depsoit info of given btc address
@@ -441,11 +457,13 @@ func (c *cache) setDepositInfo(dpi DepositInfo) {
 	c.Lock()
 	c.depositInfo[dpi.BtcTx] = dpi
 	c.Unlock()
+	log.Printf("setDepositInfo: %+v\n", dpi)
 }
 
 func (c *cache) getDepositInfo(btctx string) (DepositInfo, bool) {
 	c.RLock()
 	defer c.RUnlock()
+	log.Println("depositInfo:", c.depositInfo)
 	dpi, ok := c.depositInfo[btctx]
 	return dpi, ok
 }

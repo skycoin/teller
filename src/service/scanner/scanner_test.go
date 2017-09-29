@@ -11,8 +11,10 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/skycoin/teller/src/logger"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
 var dummyBlocksBktName = []byte("blocks")
@@ -81,7 +83,7 @@ func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.
 }
 
 func TestScannerRun(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	log := logger.NewLogger("", true)

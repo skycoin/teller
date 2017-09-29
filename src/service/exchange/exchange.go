@@ -5,6 +5,7 @@ package exchange
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -81,6 +82,8 @@ func (s *Service) Run() error {
 				s.Println("Scan service closed")
 				return nil
 			}
+
+			log.Printf("%+v\n", dv)
 
 			s.Printf("Receive %f deposit bitcoin from %s\n", dv.Value, dv.Address)
 			btcTxIndex := fmt.Sprintf("%v:%v", dv.Tx, dv.N)

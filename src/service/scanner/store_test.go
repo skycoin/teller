@@ -2,30 +2,18 @@ package scanner
 
 import (
 	"fmt"
-	"math/rand"
-	"os"
 	"testing"
-	"time"
 
 	"encoding/json"
 
 	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
-func setupDB(t *testing.T) (*bolt.DB, func()) {
-	rand.Seed(int64(time.Now().Second()))
-	f := fmt.Sprintf("%s/test%d.db", os.TempDir(), rand.Intn(1024))
-	db, err := bolt.Open(f, 0700, nil)
-	require.Nil(t, err)
-	return db, func() {
-		db.Close()
-		os.Remove(f)
-	}
-}
-
 func TestNewStore(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -44,7 +32,7 @@ func TestNewStore(t *testing.T) {
 }
 
 func TestGetLastScanBlock(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -71,7 +59,7 @@ func TestGetLastScanBlock(t *testing.T) {
 }
 
 func TestSetLastScanBlock(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -102,7 +90,7 @@ func TestSetLastScanBlock(t *testing.T) {
 }
 
 func TestGetDepositAddresses(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -192,7 +180,7 @@ func TestAddDepositeAddress(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := setupDB(t)
+			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
 			s, err := newStore(db)
 			require.Nil(t, err)
@@ -337,7 +325,7 @@ func TestCachePopDepositValue(t *testing.T) {
 }
 
 func TestPushDepositValue(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	dvs := []DepositValue{
@@ -433,7 +421,7 @@ func TestPopDepositValue(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := setupDB(t)
+			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
 
 			s, err := newStore(db)
@@ -568,7 +556,7 @@ func TestPutBktValue(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := setupDB(t)
+			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
 
 			db.Update(func(tx *bolt.Tx) error {
@@ -670,7 +658,7 @@ func TestGetBktValue(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := setupDB(t)
+			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
 
 			db.Update(func(tx *bolt.Tx) error {

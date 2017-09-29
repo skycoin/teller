@@ -3,39 +3,36 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"os/exec"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"sync"
 	"time"
 
-	"path/filepath"
-
 	"github.com/boltdb/bolt"
+	"github.com/btcsuite/btcrpcclient"
 	"github.com/google/gops/agent"
+
 	"github.com/skycoin/skycoin/src/cipher"
+
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service"
 	"github.com/skycoin/teller/src/service/btcaddrs"
 	"github.com/skycoin/teller/src/service/cli"
 	"github.com/skycoin/teller/src/service/config"
+	"github.com/skycoin/teller/src/service/exchange"
 	"github.com/skycoin/teller/src/service/monitor"
 	"github.com/skycoin/teller/src/service/scanner"
-
-	"fmt"
-	"os"
-
-	"bytes"
-
-	"flag"
-
-	"github.com/btcsuite/btcrpcclient"
-	"github.com/skycoin/teller/src/service/exchange"
 	"github.com/skycoin/teller/src/service/sender"
 )
 

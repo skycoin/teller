@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	// all things below are default values for service, use Option to change them.
+	// These are default values for Service, use Option to change them.
 	reconnectTime = 5 * time.Second
 	pingTimeout   = 5 * time.Second
 	pongTimeout   = 10 * time.Second

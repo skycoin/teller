@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/skycoin/teller/src/logger"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
 func TestNewBtcAddrs(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	invalidAddr := "invalid address"
@@ -45,7 +47,7 @@ func TestNewBtcAddrs(t *testing.T) {
 }
 
 func TestNewAddress(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	addrJSON := addressJSON{

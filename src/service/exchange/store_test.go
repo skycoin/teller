@@ -2,29 +2,16 @@ package exchange
 
 import (
 	"encoding/json"
-	"fmt"
-	"math/rand"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
-func setupDB(t *testing.T) (*bolt.DB, func()) {
-	rand.Seed(int64(time.Now().Second()))
-	f := fmt.Sprintf("%s/test%d.db", os.TempDir(), rand.Intn(1024))
-	db, err := bolt.Open(f, 0700, nil)
-	require.Nil(t, err)
-	return db, func() {
-		db.Close()
-		os.Remove(f)
-	}
-}
-
 func TestNewStore(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	_, err := newStore(db)
@@ -52,7 +39,7 @@ func TestBytesUintConvert(t *testing.T) {
 }
 
 func TestAddDepositInfo(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -119,7 +106,7 @@ func TestAddDepositInfo(t *testing.T) {
 }
 
 func TestBindAddress(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 	s, err := newStore(db)
 	require.Nil(t, err)
@@ -151,7 +138,7 @@ func TestBindAddress(t *testing.T) {
 }
 
 func TestGetBindAddress(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -212,7 +199,7 @@ func TestGetBindAddress(t *testing.T) {
 }
 
 func TestGetDepositInfo(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -235,7 +222,7 @@ func TestGetDepositInfo(t *testing.T) {
 }
 
 func TestUpdateDeposit(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -310,7 +297,7 @@ func TestUpdateDeposit(t *testing.T) {
 }
 
 func TestGetDepositInfoOfSkyAddr(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
@@ -333,7 +320,7 @@ func TestGetDepositInfoOfSkyAddr(t *testing.T) {
 }
 
 func TestLoadCache(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	dis := []DepositInfo{
@@ -377,7 +364,7 @@ func TestLoadCache(t *testing.T) {
 }
 
 func TestGetDepositInfoArray(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
