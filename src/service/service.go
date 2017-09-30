@@ -129,6 +129,7 @@ func (s *Service) Run() error {
 				s.Println(err)
 			}
 		}
+
 		select {
 		case <-s.quit:
 			return nil
@@ -201,6 +202,8 @@ func (s *Service) newSession() error {
 			s.sendPing()
 		case req := <-s.reqc:
 			req()
+		case <-s.quit:
+			return nil
 		}
 	}
 }

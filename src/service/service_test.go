@@ -1,18 +1,20 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
 	"testing"
-
 	"time"
 
 	"github.com/fortytw2/leaktest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func pingHandler(w daemon.ResponseWriteCloser, msg daemon.Messager) {
@@ -26,38 +28,51 @@ func pingHandler(w daemon.ResponseWriteCloser, msg daemon.Messager) {
 
 func makeProxy(t *testing.T, auth *daemon.Auth, msgHandler map[daemon.MsgType]daemon.Handler) (net.Listener, func()) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.Nil(t, err)
+	require.NoError(t, err)
+
 	var s *daemon.Session
 	var wg sync.WaitGroup
+
 	go func() {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
+				t.Log(err)
 				return
 			}
+
 			mux := daemon.NewMux(logger.NewLogger("", true))
 			for tp, hd := range msgHandler {
 				mux.HandleFunc(tp, hd)
 			}
 
 			s, err = daemon.NewSession(conn, auth, mux, false)
+			assert.NoError(t, err)
 			if err != nil {
 				return
 			}
+
 			wg.Add(1)
+
 			go func() {
 				defer wg.Done()
-				s.Run()
+				err := s.Run()
+				if err != nil {
+					t.Log(err)
+				}
 			}()
 		}
 	}()
 
 	return ln, func() {
 		if s != nil {
+			t.Logf("Closing daemon.Session")
 			s.Close()
+			wg.Wait()
 		}
-		ln.Close()
-		wg.Wait()
+
+		err := ln.Close()
+		assert.NoError(t, err)
 	}
 }
 
@@ -123,7 +138,6 @@ func (dba dummyBtcAddrGenerator) NewAddress() (string, error) {
 }
 
 func TestRunService(t *testing.T) {
-
 	var testCases = []struct {
 		name               string
 		proxyMsgHanlderMap map[daemon.MsgType]daemon.Handler
@@ -155,7 +169,9 @@ func TestRunService(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			defer leaktest.Check(t)()
+			ctx, _ := context.WithTimeout(context.Background(), tc.shutdownTime+time.Second)
+			defer leaktest.CheckContext(ctx, t)()
+
 			cAuth, sAuth := makeAuthPair()
 			s, stop := makeProxy(t, sAuth, tc.proxyMsgHanlderMap)
 			defer stop()
@@ -173,8 +189,8 @@ func TestRunService(t *testing.T) {
 				service.Shutdown()
 			})
 
-			service.Run()
+			err := service.Run()
+			require.NoError(t, err)
 		})
 	}
-
 }

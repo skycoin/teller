@@ -8,7 +8,7 @@ import (
 )
 
 type session struct {
-	sync.Mutex
+	sync.RWMutex
 	closed bool
 	*daemon.Session
 	pingTicker *time.Ticker // ping ticker for sending ping message periodically
@@ -36,8 +36,8 @@ func (s *session) close() {
 }
 
 func (s *session) isClosed() bool {
-	s.Lock()
-	defer s.Unlock()
+	s.RLock()
+	defer s.RUnlock()
 	return s.closed
 }
 
