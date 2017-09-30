@@ -46,8 +46,8 @@ type dummyScanAddrs struct {
 	addrs []string
 }
 
-func (ds dummyScanAddrs) GetScanAddresses() []string {
-	return []string{}
+func (ds dummyScanAddrs) GetScanAddresses() ([]string, error) {
+	return []string{}, nil
 }
 
 func TestRunMonitor(t *testing.T) {

@@ -22,7 +22,12 @@ func (gw *gateway) ResetPongTimer() {
 // return btc address
 func (gw *gateway) BindAddress(skyAddr string) (string, error) {
 	if gw.s.cfg.MaxBind != 0 {
-		if gw.s.excli.BindNum(skyAddr) >= gw.s.cfg.MaxBind {
+		num, err := gw.s.excli.BindNum(skyAddr)
+		if err != nil {
+			return "", err
+		}
+
+		if num >= gw.s.cfg.MaxBind {
 			return "", ErrMaxBind
 		}
 	}

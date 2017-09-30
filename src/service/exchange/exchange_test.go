@@ -98,8 +98,8 @@ func (scan *dummyScanner) GetDepositValue() <-chan scanner.DepositNote {
 	return scan.dvC
 }
 
-func (scan *dummyScanner) GetScanAddresses() []string {
-	return []string{}
+func (scan *dummyScanner) GetScanAddresses() ([]string, error) {
+	return []string{}, nil
 }
 
 func TestRunExchangeService(t *testing.T) {

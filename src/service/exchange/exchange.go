@@ -24,7 +24,7 @@ type SkySender interface {
 // BtcScanner provids apis for interact with scan service
 type BtcScanner interface {
 	AddScanAddress(addr string) error
-	GetScanAddresses() []string
+	GetScanAddresses() ([]string, error)
 	GetDepositValue() <-chan scanner.DepositNote
 }
 

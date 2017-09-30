@@ -38,7 +38,7 @@ type DepositStatusGetter interface {
 
 // ScanAddressGetter get scanning address interface
 type ScanAddressGetter interface {
-	GetScanAddresses() []string
+	GetScanAddresses() ([]string, error)
 }
 
 // Config configuration info for monitor service
@@ -137,9 +137,16 @@ func (m *Monitor) addressHandler() http.HandlerFunc {
 			return
 		}
 
+		addrs, err := m.GetScanAddresses()
+		if err != nil {
+			m.Println("GetScanAddresses failed:", err)
+			httputil.ErrResponse(w, http.StatusInternalServerError)
+			return
+		}
+
 		addrUsage := addressUsage{
 			RestAddrNum:   m.RestNum(),
-			ScanningAddrs: m.GetScanAddresses(),
+			ScanningAddrs: addrs,
 		}
 
 		if err := httputil.JSONResponse(w, addrUsage); err != nil {

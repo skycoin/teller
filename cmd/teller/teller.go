@@ -55,8 +55,8 @@ func (s *dummyBtcScanner) GetDepositValue() <-chan scanner.DepositNote {
 	return c
 }
 
-func (s *dummyBtcScanner) GetScanAddresses() []string {
-	return []string{}
+func (s *dummyBtcScanner) GetScanAddresses() ([]string, error) {
+	return []string{}, nil
 }
 
 type dummySkySender struct{}

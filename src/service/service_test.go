@@ -120,12 +120,12 @@ func (de dummyExchanger) GetDepositStatuses(skyAddr string) ([]daemon.DepositSta
 	return nil, nil
 }
 
-func (de dummyExchanger) BindNum(skyAddr string) int {
+func (de dummyExchanger) BindNum(skyAddr string) (int, error) {
 	if de.skyAddrs == nil {
-		return 0
+		return 0, nil
 	}
 
-	return len(de.skyAddrs[skyAddr])
+	return len(de.skyAddrs[skyAddr]), nil
 }
 
 type dummyBtcAddrGenerator struct {

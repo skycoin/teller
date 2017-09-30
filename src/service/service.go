@@ -37,7 +37,7 @@ type Exchanger interface {
 	BindAddress(btcAddr, skyAddr string) error
 	GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error)
 	// Returns the number of btc address the skycoin address binded
-	BindNum(skyAddr string) int
+	BindNum(skyAddr string) (int, error)
 }
 
 // Service provides the ico service
