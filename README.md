@@ -2,6 +2,16 @@
 
 [![Build Status](https://travis-ci.org/skycoin/teller.svg?branch=master)](https://travis-ci.org/skycoin/teller)
 
+## Releases & Branches
+
+Last stable release is in `master` branch, which will match the latest tagged release.
+
+Pull requests should target the `develop` branch, which is the default branch.
+
+If you clone, make sure you `git checkout master` to get the latest stable release.
+
+When a new release is published, `develop` will be merged to `master` then tagged.
+
 ## Setup project
 
 ### Prerequisites
