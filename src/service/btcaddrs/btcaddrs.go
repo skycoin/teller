@@ -2,12 +2,11 @@
 package btcaddrs
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
-
-	"encoding/json"
-	"fmt"
 
 	"github.com/boltdb/bolt"
 	"github.com/skycoin/skycoin/src/cipher"
@@ -63,7 +62,7 @@ func New(db *bolt.DB, addrsReader io.Reader, log logger.Logger) (*BtcAddrs, erro
 		// verify the address
 		_, err := cipher.BitcoinDecodeBase58Address(addr)
 		if err != nil {
-			log.Printf("Invalid bitcoin address: %s, err:%v", addr, err)
+			log.Printf("Invalid bitcoin address: %s, err:%v\n", addr, err)
 			return nil, err
 		}
 
