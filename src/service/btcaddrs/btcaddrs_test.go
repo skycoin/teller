@@ -3,6 +3,7 @@ package btcaddrs
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -15,21 +16,19 @@ func TestNewBtcAddrs(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	invalidAddr := "invalid address"
 	addrJSON := addressJSON{
 		BtcAddresses: []string{
 			"14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
 			"1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy",
 			"1JrzSx8a9FVHHCkUFLB2CHULpbz4dTz5Ap",
-			invalidAddr,
 		},
 	}
 
 	v, err := json.Marshal(addrJSON)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	btca, err := New(db, bytes.NewReader(v), logger.NewLogger("", true))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	addrMap := make(map[string]struct{}, len(btca.addresses))
 	for _, a := range btca.addresses {
@@ -38,12 +37,30 @@ func TestNewBtcAddrs(t *testing.T) {
 
 	for _, addr := range addrJSON.BtcAddresses {
 		_, ok := addrMap[addr]
-		if addr == invalidAddr {
-			require.False(t, ok)
-			continue
-		}
 		require.True(t, ok)
 	}
+}
+
+func TestNewBtcAddrsContainsInvalid(t *testing.T) {
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
+
+	invalidAddr := "invalid address"
+	invalidAddrJSON := addressJSON{
+		BtcAddresses: []string{
+			"14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
+			"1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy",
+			"1JrzSx8a9FVHHCkUFLB2CHULpbz4dTz5Ap",
+			invalidAddr,
+		},
+	}
+
+	v, err := json.Marshal(invalidAddrJSON)
+	require.NoError(t, err)
+
+	_, err = New(db, bytes.NewReader(v), logger.NewLogger("", true))
+	require.Error(t, err)
+	require.Equal(t, err, errors.New("Invalid address length"))
 }
 
 func TestNewAddress(t *testing.T) {
@@ -60,13 +77,13 @@ func TestNewAddress(t *testing.T) {
 	}
 
 	v, err := json.Marshal(addrJSON)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	btca, err := New(db, bytes.NewReader(v), logger.NewLogger("", true))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	addr, err := btca.NewAddress()
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	addrMap := make(map[string]struct{})
 	for _, a := range btca.addresses {
@@ -83,7 +100,7 @@ func TestNewAddress(t *testing.T) {
 	require.True(t, exists)
 
 	btca1, err := New(db, bytes.NewReader(v), logger.NewLogger("", true))
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	addrMap1 := make(map[string]struct{})
 	for _, a := range btca1.addresses {

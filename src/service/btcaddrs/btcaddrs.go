@@ -51,6 +51,7 @@ func New(db *bolt.DB, addrsReader io.Reader, log logger.Logger) (*BtcAddrs, erro
 	}
 
 	addrMap := make(map[string]struct{}, len(addrs.BtcAddresses))
+
 	// check if the loaded addresses were used.
 	for _, addr := range addrs.BtcAddresses {
 		// dup check
@@ -63,10 +64,12 @@ func New(db *bolt.DB, addrsReader io.Reader, log logger.Logger) (*BtcAddrs, erro
 		_, err := cipher.BitcoinDecodeBase58Address(addr)
 		if err != nil {
 			log.Printf("Invalid bitcoin address: %s, err:%v", addr, err)
-			continue
+			return nil, err
 		}
 
-		if !usedAddrs.IsExist(addr) {
+		if exists, err := usedAddrs.IsExist(addr); err != nil {
+			return nil, err
+		} else if !exists {
 			btcAddr.addresses = append(btcAddr.addresses, addr)
 			addrMap[addr] = struct{}{}
 		}
@@ -87,7 +90,9 @@ func (ba *BtcAddrs) NewAddress() (string, error) {
 	var pt int
 	for i, a := range ba.addresses {
 		// check if used
-		if ba.used.IsExist(a) {
+		if exists, err := ba.used.IsExist(a); err != nil {
+			return "", err
+		} else if exists {
 			continue
 		}
 

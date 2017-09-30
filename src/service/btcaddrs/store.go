@@ -2,6 +2,7 @@ package btcaddrs
 
 import (
 	"github.com/boltdb/bolt"
+	"github.com/skycoin/teller/src/dbutil"
 )
 
 var usedAddrBkt = []byte("used_btc_address")
@@ -32,13 +33,14 @@ func (s *store) Put(addr string) error {
 
 // checks if address is mark as used
 func (s *store) IsExist(addr string) (bool, error) {
-	var v []byte
+	exists := false
 	if err := s.db.View(func(tx *bolt.Tx) error {
-		v = tx.Bucket(usedAddrBkt).Get(addr)
-		return nil
+		var err error
+		exists, err = dbutil.BucketHasKey(tx, usedAddrBkt, addr)
+		return err
 	}); err != nil {
 		return false, err
 	}
 
-	return v != nil, nil
+	return exists, nil
 }
