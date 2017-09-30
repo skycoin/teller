@@ -1,35 +1,24 @@
 package scanner
 
 import (
+	"errors"
 	"fmt"
-	"math/rand"
-	"os"
+	"sort"
 	"testing"
-	"time"
-
-	"encoding/json"
 
 	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/dbutil"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
-func setupDB(t *testing.T) (*bolt.DB, func()) {
-	rand.Seed(int64(time.Now().Second()))
-	f := fmt.Sprintf("%s/test%d.db", os.TempDir(), rand.Intn(1024))
-	db, err := bolt.Open(f, 0700, nil)
-	require.Nil(t, err)
-	return db, func() {
-		db.Close()
-		os.Remove(f)
-	}
-}
-
 func TestNewStore(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(scanMetaBkt)
@@ -39,74 +28,68 @@ func TestNewStore(t *testing.T) {
 
 		return nil
 	})
-
-	require.NotNil(t, s.cache)
 }
 
 func TestGetLastScanBlock(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	hash, height, err := s.getLastScanBlock()
-	require.Nil(t, err)
-	require.Equal(t, "", hash)
-	require.Equal(t, int64(0), height)
+	lsb, err := s.getLastScanBlock()
+	require.NoError(t, err)
+	require.Equal(t, "", lsb.Hash)
+	require.Equal(t, int64(0), lsb.Height)
 
-	scanBlock := lastScanBlock{
+	scanBlock := LastScanBlock{
 		Hash:   "00000000000004509071260531df744090422d372d706cee907b2b5f2be8b8ff",
 		Height: 222597,
 	}
 
-	s.setLastScanBlock(scanBlock)
+	err = s.setLastScanBlock(scanBlock)
+	require.NoError(t, err)
 
-	require.Nil(t, err)
-
-	h1, height, err := s.getLastScanBlock()
-	require.Nil(t, err)
-	require.Equal(t, scanBlock.Hash, h1)
-	require.Equal(t, scanBlock.Height, height)
+	lsb, err = s.getLastScanBlock()
+	require.NoError(t, err)
+	require.Equal(t, scanBlock, lsb)
 }
 
 func TestSetLastScanBlock(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	scanBlocks := []lastScanBlock{
-		lastScanBlock{
+	scanBlocks := []LastScanBlock{
+		LastScanBlock{
 			Hash:   "00000000000004509071260531df744090422d372d706cee907b2b5f2be8b8ff",
 			Height: 222597,
 		},
-		lastScanBlock{
+		LastScanBlock{
 			Hash:   "000000000000003f499b9736635dd65101c4c70aef4912b5c5b4b86cd36b4d27",
 			Height: 222618,
 		},
 	}
 
 	require.Nil(t, s.setLastScanBlock(scanBlocks[0]))
-	hash, height, err := s.getLastScanBlock()
-	require.Nil(t, err)
-	require.Equal(t, scanBlocks[0].Hash, hash)
-	require.Equal(t, scanBlocks[0].Height, height)
+	lsb, err := s.getLastScanBlock()
+	require.NoError(t, err)
+	require.Equal(t, scanBlocks[0], lsb)
 
 	require.Nil(t, s.setLastScanBlock(scanBlocks[1]))
-	hash, height, err = s.getLastScanBlock()
-	require.Nil(t, err)
-	require.Equal(t, scanBlocks[1].Hash, hash)
-	require.Equal(t, scanBlocks[1].Height, height)
+	lsb, err = s.getLastScanBlock()
+	require.NoError(t, err)
+	require.Equal(t, scanBlocks[1], lsb)
 }
 
 func TestGetDepositAddresses(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	var addrs = []string{
 		"s1",
@@ -115,44 +98,28 @@ func TestGetDepositAddresses(t *testing.T) {
 	}
 
 	for _, a := range addrs {
-		require.Nil(t, s.addScanAddress(a))
+		err := s.addScanAddress(a)
+		require.NoError(t, err)
 	}
 
-	as := s.getScanAddresses()
-	for _, a := range addrs {
-		var ok bool
-		for _, a1 := range as {
-			if a == a1 {
-				ok = true
-			}
-		}
-		if !ok {
-			t.Fatalf("%s doesn't exist", a)
-		}
-	}
+	as, err := s.getScanAddresses()
+	require.NoError(t, err)
+
+	sort.Strings(as)
+	sort.Strings(addrs)
+
+	require.Equal(t, addrs, as)
 
 	// check db
 	s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(scanMetaBkt)
-		require.NotNil(t, bkt)
-		v := bkt.Get(depositAddressesKey)
-		require.NotNil(t, v)
+		var as []string
+		err := dbutil.GetBucketObject(tx, scanMetaBkt, depositAddressesKey, &as)
+		require.NoError(t, err)
 
-		var ads1 []string
-		err := json.Unmarshal(v, &ads1)
-		require.Nil(t, err)
-		require.Equal(t, len(addrs), len(ads1))
+		require.Equal(t, len(addrs), len(as))
 
 		for _, a := range addrs {
-			var ok bool
-			for _, a1 := range ads1 {
-				if a == a1 {
-					ok = true
-				}
-			}
-			if !ok {
-				t.Fatalf("%s doesn't exist", a)
-			}
+			require.Contains(t, as, a)
 		}
 
 		return nil
@@ -186,23 +153,21 @@ func TestAddDepositeAddress(t *testing.T) {
 			addrs[:2],
 			addrs[1:2],
 			[]string{},
-			dupDepositAddrErr(addrs[1]),
+			NewDuplicateDepositAddressErr(addrs[1]),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := setupDB(t)
+			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
 			s, err := newStore(db)
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			err = db.Update(func(tx *bolt.Tx) error {
-				v, err := json.Marshal(tc.initAddrs)
-				require.Nil(t, err)
-				return tx.Bucket(scanMetaBkt).Put(depositAddressesKey, v)
+				return dbutil.PutBucketValue(tx, scanMetaBkt, depositAddressesKey, tc.initAddrs)
 			})
-			require.Nil(t, err)
+			require.NoError(t, err)
 
 			for _, a := range tc.addAddrs {
 				if er := s.addScanAddress(a); er != nil {
@@ -215,129 +180,8 @@ func TestAddDepositeAddress(t *testing.T) {
 	}
 }
 
-func TestNewCache(t *testing.T) {
-	c := newCache()
-	require.NotNil(t, c.scanAddresses)
-}
-
-func TestCacheAddScanAddress(t *testing.T) {
-	c := newCache()
-
-	_, ok := c.scanAddresses["a1"]
-	require.False(t, ok)
-
-	c.addScanAddress("a1")
-
-	_, ok = c.scanAddresses["a1"]
-	require.True(t, ok)
-}
-
-func TestCacheGetScanAddresses(t *testing.T) {
-	c := newCache()
-	ads := []string{
-		"a1",
-		"a2",
-		"a3",
-	}
-
-	for _, a := range ads {
-		c.addScanAddress(a)
-	}
-
-	addrs := c.getScanAddreses()
-	require.Equal(t, 3, len(addrs))
-
-	for _, a := range ads {
-		var ok bool
-		for _, a1 := range addrs {
-			if a == a1 {
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			t.Fatalf("%s does not returned", a)
-		}
-	}
-}
-
-func TestCacheLastScanBlock(t *testing.T) {
-	c := newCache()
-	lsb := lastScanBlock{
-		Hash:   "h1",
-		Height: 1,
-	}
-	c.setLastScanBlock(lsb)
-
-	require.Equal(t, lsb, c.lastScanBlock)
-
-	require.Equal(t, lsb, c.getLastScanBlock())
-}
-
-func TestCachePushDepositValue(t *testing.T) {
-	c := newCache()
-	dvs := []DepositValue{
-		{
-			Address: "b1",
-			Value:   1,
-			Height:  1,
-		},
-		{
-			Address: "b2",
-			Value:   2,
-			Height:  2,
-		},
-		{
-			Address: "b3",
-			Value:   3,
-			Height:  3,
-		},
-	}
-
-	for _, dv := range dvs {
-		c.pushDepositValue(dv)
-	}
-
-	require.Equal(t, dvs, c.depositValues)
-}
-
-func TestCachePopDepositValue(t *testing.T) {
-	c := newCache()
-	dvs := []DepositValue{
-		{
-			Address: "b1",
-			Value:   1,
-			Height:  1,
-		},
-		{
-			Address: "b2",
-			Value:   2,
-			Height:  2,
-		},
-	}
-
-	for _, dv := range dvs {
-		c.pushDepositValue(dv)
-	}
-
-	require.Equal(t, dvs, c.depositValues)
-
-	dv, ok := c.popDepositValue()
-	require.True(t, ok)
-	require.Equal(t, dvs[0], dv)
-	require.Equal(t, dvs[1:], c.depositValues)
-
-	dv, ok = c.popDepositValue()
-	require.True(t, ok)
-	require.Equal(t, dvs[1], dv)
-	require.Equal(t, 0, len(c.depositValues))
-
-	_, ok = c.popDepositValue()
-	require.False(t, ok)
-}
-
 func TestPushDepositValue(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	dvs := []DepositValue{
@@ -363,34 +207,25 @@ func TestPushDepositValue(t *testing.T) {
 	}
 
 	s, err := newStore(db)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	for _, dv := range dvs {
-		require.Nil(t, s.pushDepositValue(dv))
-	}
-
-	// check db
-	db.View(func(tx *bolt.Tx) error {
-		metaBkt := tx.Bucket(scanMetaBkt)
-		require.NotNil(t, metaBkt)
-
-		v := metaBkt.Get(dvIndexListKey)
-		require.NotNil(t, v)
-
-		var idxs []string
-		require.Nil(t, json.Unmarshal(v, &idxs))
-
-		for _, idx := range idxs {
-			_, ok := keyMap[idx]
-			require.True(t, ok)
+	err = db.Update(func(tx *bolt.Tx) error {
+		for _, dv := range dvs {
+			err := s.pushDepositValueTx(tx, dv)
+			require.NoError(t, err)
 		}
-
 		return nil
 	})
 
-	// check cache
-	require.Equal(t, dvs, s.cache.depositValues)
+	require.NoError(t, err)
 
+	// check db
+	idxs, err := s.getDepositValueIndex()
+	require.NoError(t, err)
+	require.Len(t, idxs, len(keyMap))
+	for _, idx := range idxs {
+		require.Contains(t, keyMap, idx)
+	}
 }
 
 func TestPopDepositValue(t *testing.T) {
@@ -433,80 +268,63 @@ func TestPopDepositValue(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := setupDB(t)
+			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
 
 			s, err := newStore(db)
-			require.Nil(t, err)
+			require.NoError(t, err)
 
-			for _, dv := range tc.init {
-				require.Nil(t, s.pushDepositValue(dv))
-			}
-
-			dv, ok, err := s.popDepositValue()
-			require.Nil(t, err)
-			require.Equal(t, tc.popOk, ok)
-			if ok {
-				require.Equal(t, tc.popV, dv)
-
-				// check db
-				db.View(func(tx *bolt.Tx) error {
-					metaBkt := tx.Bucket(scanMetaBkt)
-					require.NotNil(t, metaBkt)
-
-					v := metaBkt.Get(dvIndexListKey)
-					require.NotNil(t, v)
-					var idxs []string
-					require.Nil(t, json.Unmarshal(v, &idxs))
-					require.Equal(t, len(tc.init)-1, len(idxs))
-
-					// key should already been removed from index, have a check
-					key := fmt.Sprintf("%v:%v", dv.Tx, dv.N)
-					var exist bool
-					for _, idx := range idxs {
-						if idx == key {
-							exist = true
-							break
-						}
-					}
-
-					require.False(t, exist)
-
-					// require.Equal(t, idxs[0], fmt.Sprintf("%v:%v", dvs[1].Tx, dvs[1].N))
-					var dv DepositValue
-					require.Nil(t, getBktValue(tx, depositValueBkt, []byte(key), &dv))
-					require.Equal(t, true, dv.IsUsed)
-
-					return nil
-				})
-
-				// check cache
-				for _, cdv := range s.cache.depositValues {
-					if cdv == dv {
-						t.Fatalf("%v should be removed from cache", dv)
-						return
+			err = db.Update(func(tx *bolt.Tx) error {
+				for _, dv := range tc.init {
+					err := s.pushDepositValueTx(tx, dv)
+					require.NoError(t, err)
+					if err != nil {
+						return err
 					}
 				}
+				return nil
+			})
+
+			require.NoError(t, err)
+
+			dv, err := s.popDepositValue()
+
+			if !tc.popOk {
+				require.Error(t, err)
+				require.IsType(t, DepositValuesEmptyErr{}, err)
 				return
 			}
 
-			// ok is false, means no more value to pop
-			require.Equal(t, 0, len(s.cache.depositValues))
+			require.NoError(t, err)
+
+			tc.popV.IsUsed = true
+			require.Equal(t, tc.popV, dv)
 
 			// check db
-			db.View(func(tx *bolt.Tx) error {
-				// check index bucket
-				metaBkt := tx.Bucket(scanMetaBkt)
-				require.NotNil(t, metaBkt)
-				v := metaBkt.Get(dvIndexListKey)
-				if v != nil {
-					var idxs []string
-					require.Nil(t, json.Unmarshal(v, &idxs))
-					require.Equal(t, 0, len(idxs))
+			err = db.View(func(tx *bolt.Tx) error {
+				idxs, err := s.getDepositValueIndexTx(tx)
+				require.NoError(t, err)
+				if err != nil {
+					return err
 				}
+
+				require.Len(t, idxs, len(tc.init)-1)
+
+				// key should already been removed from index, have a check
+				key := dv.TxN()
+				for _, idx := range idxs {
+					require.NotEqual(t, idx, key)
+				}
+
+				var dv DepositValue
+				err = dbutil.GetBucketObject(tx, depositValueBkt, key, &dv)
+				require.Nil(t, err)
+				require.True(t, dv.IsUsed)
 
 				return nil
 			})
+
+			require.NoError(t, err)
 		})
 	}
 }
@@ -514,7 +332,7 @@ func TestPopDepositValue(t *testing.T) {
 func TestPutBktValue(t *testing.T) {
 
 	type kv struct {
-		key   []byte
+		key   string
 		value DepositValue
 	}
 
@@ -535,15 +353,15 @@ func TestPutBktValue(t *testing.T) {
 
 	init := []kv{
 		{
-			[]byte("k1"),
+			"k1",
 			dvs[0],
 		},
 		{
-			[]byte("k2"),
+			"k2",
 			dvs[1],
 		},
 		{
-			[]byte("k3"),
+			"k3",
 			dvs[2],
 		},
 	}
@@ -553,14 +371,14 @@ func TestPutBktValue(t *testing.T) {
 	tt := []struct {
 		name    string
 		putV    []kv
-		key     []byte
+		key     string
 		expectV DepositValue
 		err     error
 	}{
 		{
 			"normal",
 			init,
-			[]byte("k1"),
+			"k1",
 			dvs[0],
 			nil,
 		},
@@ -568,29 +386,31 @@ func TestPutBktValue(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := setupDB(t)
+			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
 
-			db.Update(func(tx *bolt.Tx) error {
-				tx.CreateBucketIfNotExists(bktName)
-				return nil
-			})
+			err := db.Update(func(tx *bolt.Tx) error {
+				_, err := tx.CreateBucketIfNotExists(bktName)
+				require.NoError(t, err)
 
-			db.Update(func(tx *bolt.Tx) error {
 				for _, kv := range tc.putV {
-					err := putBktValue(tx, bktName, kv.key, kv.value)
+					err := dbutil.PutBucketValue(tx, bktName, kv.key, kv.value)
 					require.Equal(t, tc.err, err)
 				}
 
 				return nil
 			})
 
-			db.View(func(tx *bolt.Tx) error {
+			require.NoError(t, err)
+
+			err = db.View(func(tx *bolt.Tx) error {
 				var dv DepositValue
-				require.Nil(t, getBktValue(tx, bktName, tc.key, &dv))
+				require.Nil(t, dbutil.GetBucketObject(tx, bktName, tc.key, &dv))
 				require.Equal(t, tc.expectV, dv)
 				return nil
 			})
+
+			require.NoError(t, err)
 		})
 	}
 }
@@ -598,7 +418,7 @@ func TestPutBktValue(t *testing.T) {
 func TestGetBktValue(t *testing.T) {
 
 	type kv struct {
-		key   []byte
+		key   string
 		value DepositValue
 	}
 
@@ -619,15 +439,15 @@ func TestGetBktValue(t *testing.T) {
 
 	init := []kv{
 		{
-			[]byte("k1"),
+			"k1",
 			dvs[0],
 		},
 		{
-			[]byte("k2"),
+			"k2",
 			dvs[1],
 		},
 		{
-			[]byte("k3"),
+			"k3",
 			dvs[2],
 		},
 	}
@@ -637,7 +457,7 @@ func TestGetBktValue(t *testing.T) {
 	tt := []struct {
 		name    string
 		init    []kv
-		key     []byte
+		key     string
 		v       interface{}
 		expectV DepositValue
 		err     error
@@ -645,7 +465,7 @@ func TestGetBktValue(t *testing.T) {
 		{
 			"normal",
 			init,
-			[]byte("k1"),
+			"k1",
 			&DepositValue{},
 			dvs[0],
 			nil,
@@ -653,105 +473,52 @@ func TestGetBktValue(t *testing.T) {
 		{
 			"not exist",
 			init,
-			[]byte("k5"),
+			"k5",
 			&DepositValue{},
 			dvs[0],
-			fmt.Errorf("value of key %v does not exist in bucket %v", "k5", string(bktName)),
+			dbutil.NewObjectNotExistErr(bktName, []byte("k5")),
 		},
 		{
 			"invalid accept value",
 			init,
-			[]byte("k5"),
+			"k3",
 			DepositValue{},
 			dvs[0],
-			fmt.Errorf("value is not setable"),
+			errors.New("decode value failed: json: Unmarshal(non-pointer scanner.DepositValue)"),
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := setupDB(t)
+			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
 
-			db.Update(func(tx *bolt.Tx) error {
-				bkt, err := tx.CreateBucketIfNotExists(bktName)
-				require.Nil(t, err)
+			err := db.Update(func(tx *bolt.Tx) error {
+				_, err := tx.CreateBucketIfNotExists(bktName)
+				require.NoError(t, err)
 
 				for _, kv := range tc.init {
-					v, err := json.Marshal(kv.value)
-					require.Nil(t, err)
-					require.Nil(t, bkt.Put(kv.key, v))
+					dbutil.PutBucketValue(tx, bktName, kv.key, kv.value)
 				}
 
 				return nil
 			})
 
-			db.View(func(tx *bolt.Tx) error {
-				err := getBktValue(tx, bktName, tc.key, tc.v)
+			require.NoError(t, err)
+
+			err = db.View(func(tx *bolt.Tx) error {
+				err := dbutil.GetBucketObject(tx, bktName, tc.key, tc.v)
 				require.Equal(t, tc.err, err)
-				if err != nil {
-					return err
+
+				if err == nil {
+					v := tc.v.(*DepositValue)
+					require.Equal(t, tc.expectV, *v)
 				}
 
-				v := tc.v.(*DepositValue)
-
-				require.Equal(t, tc.expectV, *v)
 				return nil
 			})
 
+			require.NoError(t, err)
 		})
 	}
-}
-
-func TestGetCacheHeadDepositValue(t *testing.T) {
-	dvs := []DepositValue{
-		DepositValue{
-			Tx: "t1",
-			N:  1,
-		},
-		DepositValue{
-			Tx: "t2",
-			N:  2,
-		},
-		DepositValue{
-			Tx: "t3",
-			N:  3,
-		},
-	}
-
-	tt := []struct {
-		name string
-		init []DepositValue
-		head DepositValue
-		ok   bool
-	}{
-		{
-			"normal",
-			dvs[:],
-			dvs[0],
-			true,
-		},
-		{
-			"empty",
-			dvs[:0],
-			DepositValue{},
-			false,
-		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			c := newCache()
-			for _, dv := range tc.init {
-				c.pushDepositValue(dv)
-			}
-
-			dv, ok := c.getHeadDepositValue()
-			require.Equal(t, tc.ok, ok)
-			if ok {
-				require.Equal(t, tc.head, dv)
-			}
-		})
-	}
-
 }

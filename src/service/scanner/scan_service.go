@@ -29,8 +29,8 @@ const (
 	checkHeadDepositValuePeriod = time.Second * 5
 )
 
-// Btcrpcclient rpcclient interface
-type Btcrpcclient interface {
+// BtcRPCClient rpcclient interface
+type BtcRPCClient interface {
 	GetBestBlock() (*chainhash.Hash, int32, error)
 	GetBlockVerboseTx(blockHash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
 	Shutdown()
@@ -52,7 +52,7 @@ func makeDepositNote(dv DepositValue) DepositNote {
 type ScanService struct {
 	logger.Logger
 	cfg       Config
-	btcrpcclt Btcrpcclient
+	btcClient BtcRPCClient
 	store     *store
 	depositC  chan DepositNote // deposit value channel
 	quit      chan struct{}
@@ -74,14 +74,19 @@ type DepositValue struct {
 	IsUsed  bool    // whether this dv is used
 }
 
+// TxN returns $tx:$n formatted ID string
+func (d DepositValue) TxN() string {
+	return fmt.Sprintf("%s:%d", d.Tx, d.N)
+}
+
 // NewService creates scanner instance
-func NewService(cfg Config, db *bolt.DB, log logger.Logger, btcrpcclient Btcrpcclient) (*ScanService, error) {
+func NewService(cfg Config, db *bolt.DB, log logger.Logger, btc BtcRPCClient) (*ScanService, error) {
 	s, err := newStore(db)
 	if err != nil {
 		return nil, err
 	}
 	return &ScanService{
-		btcrpcclt: btcrpcclient,
+		btcClient: btc,
 		Logger:    log,
 		cfg:       cfg,
 		store:     s,
@@ -99,15 +104,22 @@ func (scan *ScanService) Run() error {
 	go func() {
 		defer wg.Done()
 		for {
-			headDv, ok := scan.store.getHeadDepositValue()
-			if !ok {
-				select {
-				case <-time.After(checkHeadDepositValuePeriod):
-					continue
-				case <-scan.quit:
+			headDv, err := scan.store.getHeadDepositValue()
+			if err != nil {
+				switch err.(type) {
+				case DepositValuesEmptyErr:
+					select {
+					case <-time.After(checkHeadDepositValuePeriod):
+						continue
+					case <-scan.quit:
+						return
+					}
+				default:
+					scan.Println("getHeadDepositValue failed:", err)
 					return
 				}
 			}
+
 			dn := makeDepositNote(headDv)
 			select {
 			case <-scan.quit:
@@ -116,15 +128,11 @@ func (scan *ScanService) Run() error {
 				select {
 				case <-dn.AckC:
 					// pop the head deposit value in store
-					ddv, _, err := scan.store.popDepositValue()
-					if err != nil {
+					if ddv, err := scan.store.popDepositValue(); err != nil {
 						scan.Println("pop deposit value failed:", err)
+					} else {
+						scan.Debugf("deposit value: %+v is processed\n", ddv)
 					}
-
-					// remove the scan address from service
-					// scan.store.removeScanAddr(headDv.Address)
-
-					scan.Debugf("deposit value: %+v is processed\n", ddv)
 				case <-scan.quit:
 					return
 				}
@@ -133,10 +141,13 @@ func (scan *ScanService) Run() error {
 	}()
 
 	// get last scan block
-	hash, height, err := scan.getLastScanBlock()
+	lsb, err := scan.getLastScanBlock()
 	if err != nil {
 		return fmt.Errorf("get last scan block failed: %v", err)
 	}
+
+	height := lsb.Height
+	hash := lsb.Hash
 
 	var block *btcjson.GetBlockVerboseResult
 
@@ -148,11 +159,11 @@ func (scan *ScanService) Run() error {
 			return err
 		}
 
-		hash = block.Hash
-
 		if err := scan.scanBlock(block); err != nil {
 			return fmt.Errorf("Scan block %s failed: %v", block.Hash, err)
 		}
+
+		hash = block.Hash
 	}
 
 	wg.Add(1)
@@ -214,24 +225,34 @@ func (scan *ScanService) Run() error {
 }
 
 func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
-	addrs := scan.getScanAddresses()
-
-	dvs := scanBlock(block, addrs)
-	for _, dv := range dvs {
-		if err := scan.store.pushDepositValue(dv); err != nil {
-			if err == ErrDepositValueExist {
-				continue
-			}
-			scan.Printf("Persist deposit value %v failed: %v\n", dv, err)
+	return scan.store.db.View(func(tx *bolt.Tx) error {
+		addrs, err := scan.store.getScanAddressesTx(tx)
+		if err != nil {
+			return err
 		}
-	}
 
-	hash, err := chainhash.NewHashFromStr(block.Hash)
-	if err != nil {
-		return err
-	}
+		dvs := scanBlock(block, addrs)
+		for _, dv := range dvs {
+			if err := scan.store.pushDepositValueTx(tx, dv); err != nil {
+				switch err.(type) {
+				case DepositValueExistsErr:
+					continue
+				default:
+					scan.Printf("Persist deposit value %+v failed: %v\n", dv, err)
+				}
+			}
+		}
 
-	return scan.setLastScanBlock(hash, block.Height)
+		hash, err := chainhash.NewHashFromStr(block.Hash)
+		if err != nil {
+			return err
+		}
+
+		return scan.store.setLastScanBlockTx(tx, LastScanBlock{
+			Hash:   hash.String(),
+			Height: block.Height,
+		})
+	})
 }
 
 // scanBlock scan the given block and returns the next block hash or error
@@ -243,10 +264,8 @@ func scanBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) []De
 
 	var dv []DepositValue
 	for _, tx := range block.RawTx {
-		// fmt.Println("tx:", tx.Txid)
 		for _, v := range tx.Vout {
 			for _, a := range v.ScriptPubKey.Addresses {
-				// fmt.Println("\taddr:", a)
 				if _, ok := addrMap[a]; ok {
 					dv = append(dv, DepositValue{
 						Address: a,
@@ -271,7 +290,7 @@ func (scan *ScanService) AddScanAddress(addr string) error {
 // GetBestBlock returns the hash and height of the block in the longest (best)
 // chain.
 func (scan *ScanService) getBestBlock() (*btcjson.GetBlockVerboseResult, error) {
-	hash, _, err := scan.btcrpcclt.GetBestBlock()
+	hash, _, err := scan.btcClient.GetBestBlock()
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +300,7 @@ func (scan *ScanService) getBestBlock() (*btcjson.GetBlockVerboseResult, error) 
 
 // getBlock returns block of given hash
 func (scan *ScanService) getBlock(hash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error) {
-	return scan.btcrpcclt.GetBlockVerboseTx(hash)
+	return scan.btcClient.GetBlockVerboseTx(hash)
 }
 
 // getNextBlock returns the next block of given hash, return nil if next block does not exist
@@ -310,19 +329,19 @@ func (scan *ScanService) getNextBlock(hash string) (*btcjson.GetBlockVerboseResu
 
 // setLastScanBlock sets the last scan block hash and height
 func (scan *ScanService) setLastScanBlock(hash *chainhash.Hash, height int64) error {
-	return scan.store.setLastScanBlock(lastScanBlock{
+	return scan.store.setLastScanBlock(LastScanBlock{
 		Hash:   hash.String(),
 		Height: height,
 	})
 }
 
 // getLastScanBlock returns the last scanned block hash and height
-func (scan *ScanService) getLastScanBlock() (string, int64, error) {
+func (scan *ScanService) getLastScanBlock() (LastScanBlock, error) {
 	return scan.store.getLastScanBlock()
 }
 
 // getScanAddresses returns the deposit addresses that need to scan
-func (scan *ScanService) getScanAddresses() []string {
+func (scan *ScanService) getScanAddresses() ([]string, error) {
 	return scan.store.getScanAddresses()
 }
 
@@ -330,7 +349,7 @@ func (scan *ScanService) getScanAddresses() []string {
 func (scan *ScanService) Shutdown() {
 	close(scan.quit)
 	fmt.Println("Close scan service")
-	scan.btcrpcclt.Shutdown()
+	scan.btcClient.Shutdown()
 }
 
 // ConnectBTCD connects to the btcd rpcserver

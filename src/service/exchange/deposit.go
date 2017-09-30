@@ -48,10 +48,3 @@ type DepositInfo struct {
 	BtcTx      string
 	Txid       string
 }
-
-// only part of the variable are mofiy allowed
-func (dpi *DepositInfo) updateMutableVar(newDpi DepositInfo) {
-	dpi.Status = newDpi.Status
-	dpi.Txid = newDpi.Txid
-	dpi.UpdatedAt = newDpi.UpdatedAt
-}

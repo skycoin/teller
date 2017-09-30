@@ -46,8 +46,8 @@ type dummyScanAddrs struct {
 	addrs []string
 }
 
-func (ds dummyScanAddrs) GetDepositAddresses() []string {
-	return []string{}
+func (ds dummyScanAddrs) GetScanAddresses() ([]string, error) {
+	return []string{}, nil
 }
 
 func TestRunMonitor(t *testing.T) {
@@ -81,9 +81,11 @@ func TestRunMonitor(t *testing.T) {
 
 	dummyDps := dummyDepositStatusGetter{dpis: dpis}
 
-	m := New(Config{
+	cfg := Config{
 		"localhost:7908",
-	}, logger.NewLogger("", true), &dummyBtcAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
+	}
+
+	m := New(cfg, logger.NewLogger("", true), &dummyBtcAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
 
 	time.AfterFunc(1*time.Second, func() {
 		rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/address"))

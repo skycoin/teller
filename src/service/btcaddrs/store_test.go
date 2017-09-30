@@ -1,112 +1,86 @@
 package btcaddrs
 
 import (
-	"fmt"
-	"math/rand"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/dbutil"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
-func setupDB(t *testing.T) (*bolt.DB, func()) {
-	rand.Seed(int64(time.Now().Second()))
-	f := fmt.Sprintf("test%d.db", rand.Intn(1024))
-	db, err := bolt.Open(f, 0700, nil)
-	require.Nil(t, err)
-	return db, func() {
-		db.Close()
-		os.Remove(f)
-	}
-}
-
 func TestNewStore(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db)
-	require.Nil(t, err)
-	require.NotNil(t, s.cache)
+	_, err := newStore(db)
+	require.NoError(t, err)
 
-	db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(usedAddrBkt)
 		require.NotNil(t, bkt)
 		return nil
 	})
-}
-
-func TestLoadCache(t *testing.T) {
-	db, shutdown := setupDB(t)
-	defer shutdown()
-
-	db.Update(func(tx *bolt.Tx) error {
-		bkt, err := tx.CreateBucketIfNotExists(usedAddrBkt)
-		require.Nil(t, err)
-		require.NotNil(t, bkt)
-
-		bkt.Put([]byte("a1"), []byte(""))
-		bkt.Put([]byte("a2"), []byte(""))
-		bkt.Put([]byte("a3"), []byte(""))
-
-		return nil
-	})
-
-	s, err := newStore(db)
-	require.Nil(t, err)
-
-	_, ok := s.cache["a1"]
-	require.True(t, ok)
-
-	_, ok = s.cache["a1"]
-	require.True(t, ok)
+	require.NoError(t, err)
 }
 
 func TestStorePut(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	require.Nil(t, s.Put("a1"))
 	require.Nil(t, s.Put("a2"))
 
-	db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(usedAddrBkt)
-		require.NotNil(t, bkt)
-		require.NotNil(t, bkt.Get([]byte("a1")))
-		require.NotNil(t, bkt.Get([]byte("a2")))
-		return nil
-	})
+	err = db.View(func(tx *bolt.Tx) error {
+		exists, err := dbutil.BucketHasKey(tx, usedAddrBkt, "a1")
+		require.NoError(t, err)
+		if err != nil {
+			return err
+		}
+		require.True(t, exists)
 
-	_, ok := s.cache["a1"]
-	require.True(t, ok)
-	_, ok = s.cache["a2"]
-	require.True(t, ok)
+		exists, err = dbutil.BucketHasKey(tx, usedAddrBkt, "a2")
+		require.NoError(t, err)
+		require.True(t, exists)
+
+		return err
+	})
+	require.NoError(t, err)
 }
 
 func TestStoreGet(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	s, err := newStore(db)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
-	db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(usedAddrBkt)
-		require.NotNil(t, bkt)
+	err = db.Update(func(tx *bolt.Tx) error {
+		err := dbutil.PutBucketValue(tx, usedAddrBkt, "a1", "")
+		require.NoError(t, err)
+		if err != nil {
+			return err
+		}
 
-		bkt.Put([]byte("a1"), []byte(""))
-		bkt.Put([]byte("a2"), []byte(""))
-
-		s.cache["a1"] = struct{}{}
-		s.cache["a2"] = struct{}{}
-		return nil
+		err = dbutil.PutBucketValue(tx, usedAddrBkt, "a2", "")
+		require.NoError(t, err)
+		return err
 	})
+	require.NoError(t, err)
 
-	require.True(t, s.IsExsit("a1"))
-	require.True(t, s.IsExsit("a2"))
-	require.False(t, s.IsExsit("a3"))
+	exists, err := s.IsExist("a1")
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	exists, err = s.IsExist("a2")
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	exists, err = s.IsExist("a3")
+	require.NoError(t, err)
+	require.False(t, exists)
 }

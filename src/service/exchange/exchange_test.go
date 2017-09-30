@@ -6,10 +6,13 @@ import (
 
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/dbutil"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/scanner"
 	"github.com/skycoin/teller/src/service/sender"
-	"github.com/stretchr/testify/require"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
 type dummySender struct {
@@ -95,8 +98,8 @@ func (scan *dummyScanner) GetDepositValue() <-chan scanner.DepositNote {
 	return scan.dvC
 }
 
-func (scan *dummyScanner) GetScanAddresses() []string {
-	return []string{}
+func (scan *dummyScanner) GetScanAddresses() ([]string, error) {
+	return []string{}, nil
 }
 
 func TestRunExchangeService(t *testing.T) {
@@ -108,6 +111,8 @@ func TestRunExchangeService(t *testing.T) {
 		bindSkyAddr string
 		dpAddr      string
 		dpValue     float64
+		dpTx        string
+		dpN         uint32
 
 		sendSleepTime  time.Duration
 		sendReturnTxid string
@@ -131,18 +136,19 @@ func TestRunExchangeService(t *testing.T) {
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
 			dpValue:        0.002,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
 			sendErr:        nil,
-
-			dvC:         make(chan scanner.DepositValue, 1),
-			notifyAfter: 3 * time.Second,
-			txmap:       make(map[string]bool),
-
-			putDVTime:    1 * time.Second,
-			writeToDBOk:  true,
-			expectStatus: StatusDone,
+			dvC:            make(chan scanner.DepositValue, 1),
+			notifyAfter:    3 * time.Second,
+			txmap:          make(map[string]bool),
+			putDVTime:      1 * time.Second,
+			writeToDBOk:    true,
+			expectStatus:   StatusDone,
 		},
+
 		{
 			name:           "deposit_addr_not_exist",
 			initDpis:       []DepositInfo{},
@@ -150,6 +156,8 @@ func TestRunExchangeService(t *testing.T) {
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr1",
 			dpValue:        0.002,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
 			sendErr:        nil,
@@ -160,15 +168,21 @@ func TestRunExchangeService(t *testing.T) {
 			writeToDBOk:    false,
 			expectStatus:   StatusWaitDeposit,
 		},
+
 		{
 			name: "deposit_status_above_waiting_btc_deposit",
-			initDpis: []DepositInfo{
-				{BtcAddress: "btcaddr", SkyAddress: "skyaddr", Status: StatusDone},
-			},
+			initDpis: []DepositInfo{{
+				BtcAddress: "btcaddr",
+				SkyAddress: "skyaddr",
+				Status:     StatusDone,
+				BtcTx:      "dptx:1",
+			}},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
 			dpValue:        0.002,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
 			sendErr:        nil,
@@ -186,6 +200,8 @@ func TestRunExchangeService(t *testing.T) {
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
 			dpValue:        0.002,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
 			sendErr:        sender.ErrServiceClosed,
@@ -204,6 +220,8 @@ func TestRunExchangeService(t *testing.T) {
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
 			dpValue:        0.002,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 3,
 			sendReturnTxid: "",
 			sendErr:        fmt.Errorf("send skycoin failed"),
@@ -221,6 +239,8 @@ func TestRunExchangeService(t *testing.T) {
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
 			dpValue:        0.002,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 3,
 			sendReturnTxid: "",
 			sendErr:        fmt.Errorf("send skycoin failed"),
@@ -232,15 +252,22 @@ func TestRunExchangeService(t *testing.T) {
 			writeToDBOk:    true,
 			expectStatus:   StatusWaitSend,
 		},
+
 		{
-			name: "has_unconfrimed_tx",
-			initDpis: []DepositInfo{
-				{BtcAddress: "btcaddr", SkyAddress: "skyaddr", Txid: "t1", Status: StatusWaitConfirm},
-			},
+			name: "has_unconfirmed_tx",
+			initDpis: []DepositInfo{{
+				BtcAddress: "btcaddr",
+				SkyAddress: "skyaddr",
+				Txid:       "t1",
+				Status:     StatusWaitConfirm,
+				BtcTx:      "dptx:1",
+			}},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
 			dpValue:        0.002,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 3,
 			sendReturnTxid: "",
 			sendErr:        fmt.Errorf("send skycoin failed"),
@@ -256,7 +283,7 @@ func TestRunExchangeService(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := setupDB(t)
+			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
 
 			send := &dummySender{
@@ -283,7 +310,8 @@ func TestRunExchangeService(t *testing.T) {
 
 				// init the deposit infos
 				for _, dpi := range tc.initDpis {
-					service.store.AddDepositInfo(dpi)
+					err := service.store.AddDepositInfo(dpi)
+					require.NoError(t, err)
 				}
 			})
 
@@ -291,7 +319,8 @@ func TestRunExchangeService(t *testing.T) {
 
 			excli := NewClient(service)
 			if len(tc.initDpis) == 0 {
-				require.Nil(t, excli.BindAddress(tc.bindBtcAddr, tc.bindSkyAddr))
+				err := excli.BindAddress(tc.bindBtcAddr, tc.bindSkyAddr)
+				require.NoError(t, err)
 			}
 
 			// fake deposit value
@@ -304,6 +333,8 @@ func TestRunExchangeService(t *testing.T) {
 					DepositValue: scanner.DepositValue{
 						Address: tc.dpAddr,
 						Value:   tc.dpValue,
+						Tx:      tc.dpTx,
+						N:       tc.dpN,
 					},
 					AckC: make(chan struct{}, 1),
 				}
@@ -316,9 +347,17 @@ func TestRunExchangeService(t *testing.T) {
 			}
 
 			// check the info
-			dpi, ok := service.store.GetDepositInfo(tc.dpAddr)
-			require.Equal(t, tc.writeToDBOk, ok)
-			if ok {
+			dpTxN := fmt.Sprintf("%s:%d", tc.dpTx, tc.dpN)
+			dpi, err := service.store.GetDepositInfo(dpTxN)
+
+			if tc.writeToDBOk {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				require.IsType(t, dbutil.ObjectNotExistErr{}, err)
+			}
+
+			if tc.writeToDBOk {
 				require.Equal(t, tc.expectStatus, dpi.Status)
 
 				if len(tc.initDpis) == 0 && tc.sendErr == nil {

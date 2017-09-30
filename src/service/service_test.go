@@ -1,22 +1,20 @@
 package service
 
 import (
+	"context"
 	"fmt"
-	"math/rand"
 	"net"
 	"sync"
 	"testing"
-
-	"os"
-
 	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/fortytw2/leaktest"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
-	"github.com/stretchr/testify/assert"
 )
 
 func pingHandler(w daemon.ResponseWriteCloser, msg daemon.Messager) {
@@ -30,38 +28,51 @@ func pingHandler(w daemon.ResponseWriteCloser, msg daemon.Messager) {
 
 func makeProxy(t *testing.T, auth *daemon.Auth, msgHandler map[daemon.MsgType]daemon.Handler) (net.Listener, func()) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	assert.Nil(t, err)
+	require.NoError(t, err)
+
 	var s *daemon.Session
 	var wg sync.WaitGroup
+
 	go func() {
 		for {
 			conn, err := ln.Accept()
 			if err != nil {
+				t.Log(err)
 				return
 			}
+
 			mux := daemon.NewMux(logger.NewLogger("", true))
 			for tp, hd := range msgHandler {
 				mux.HandleFunc(tp, hd)
 			}
 
 			s, err = daemon.NewSession(conn, auth, mux, false)
+			assert.NoError(t, err)
 			if err != nil {
 				return
 			}
+
 			wg.Add(1)
+
 			go func() {
 				defer wg.Done()
-				s.Run()
+				err := s.Run()
+				if err != nil {
+					t.Log(err)
+				}
 			}()
 		}
 	}()
 
 	return ln, func() {
 		if s != nil {
+			t.Logf("Closing daemon.Session")
 			s.Close()
+			wg.Wait()
 		}
-		ln.Close()
-		wg.Wait()
+
+		err := ln.Close()
+		assert.NoError(t, err)
 	}
 }
 
@@ -80,27 +91,41 @@ func makeAuthPair() (clientAuth, serverAuth *daemon.Auth) {
 	return
 }
 
-func setupDB(t *testing.T) (*bolt.DB, func()) {
-	rand.Seed(time.Now().Unix())
-	f := fmt.Sprintf("%s/test%d.db", os.TempDir(), rand.Intn(1024))
-	db, err := bolt.Open(f, 0700, nil)
-	assert.Nil(t, err)
-	return db, func() {
-		db.Close()
-		os.Remove(f)
-	}
-}
-
 type dummyExchanger struct {
-	err error
+	err      error
+	skyAddrs map[string][]string
 }
 
 func (de dummyExchanger) BindAddress(btcAddr, skyAddr string) error {
+	if de.err != nil {
+		return de.err
+	}
+
+	if de.skyAddrs == nil {
+		de.skyAddrs = make(map[string][]string)
+	}
+
+	btcAddrs := de.skyAddrs[skyAddr]
+	if btcAddrs == nil {
+		btcAddrs = []string{}
+	}
+
+	btcAddrs = append(btcAddrs, btcAddr)
+	de.skyAddrs[skyAddr] = btcAddrs
+
 	return de.err
 }
 
 func (de dummyExchanger) GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error) {
 	return nil, nil
+}
+
+func (de dummyExchanger) BindNum(skyAddr string) (int, error) {
+	if de.skyAddrs == nil {
+		return 0, nil
+	}
+
+	return len(de.skyAddrs[skyAddr]), nil
 }
 
 type dummyBtcAddrGenerator struct {
@@ -113,7 +138,6 @@ func (dba dummyBtcAddrGenerator) NewAddress() (string, error) {
 }
 
 func TestRunService(t *testing.T) {
-
 	var testCases = []struct {
 		name               string
 		proxyMsgHanlderMap map[daemon.MsgType]daemon.Handler
@@ -145,7 +169,9 @@ func TestRunService(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			defer leaktest.Check(t)()
+			ctx, _ := context.WithTimeout(context.Background(), tc.shutdownTime+time.Second)
+			defer leaktest.CheckContext(ctx, t)()
+
 			cAuth, sAuth := makeAuthPair()
 			s, stop := makeProxy(t, sAuth, tc.proxyMsgHanlderMap)
 			defer stop()
@@ -163,8 +189,8 @@ func TestRunService(t *testing.T) {
 				service.Shutdown()
 			})
 
-			service.Run()
+			err := service.Run()
+			require.NoError(t, err)
 		})
 	}
-
 }
