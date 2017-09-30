@@ -21,6 +21,6 @@ func (s *Scanner) GetDepositValue() <-chan DepositNote {
 }
 
 // GetScanAddresses returns all scanning addresses
-func (s *Scanner) GetScanAddresses() []string {
+func (s *Scanner) GetScanAddresses() ([]string, error) {
 	return s.s.getScanAddresses()
 }

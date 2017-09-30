@@ -26,7 +26,7 @@ func (ec *Client) GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, er
 }
 
 // BindNum returns the number of btc address the given sky address binded
-func (ec *Client) BindNum(skyAddr string) int {
+func (ec *Client) BindNum(skyAddr string) (int, error) {
 	return ec.s.getBindNum(skyAddr)
 }
 

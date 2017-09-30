@@ -13,6 +13,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/teller/src/dbutil"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/testutil"
 )
@@ -126,23 +127,20 @@ func TestScannerRun(t *testing.T) {
 			for _, dv := range dvs {
 				key := fmt.Sprintf("%v:%v", dv.Tx, dv.N)
 				var d DepositValue
-				require.Nil(t, getBktValue(tx, depositValueBkt, []byte(key), &d))
+				require.Nil(t, dbutil.GetBucketObject(tx, depositValueBkt, key, &d))
 				require.True(t, d.IsUsed)
 
-				var idxs []string
-				require.Nil(t, getBktValue(tx, scanMetaBkt, dvIndexListKey, &idxs))
-				require.Equal(t, 0, len(idxs))
+				idxs, err := scr.s.store.getDepositValueIndexTx(tx)
+				require.NoError(t, err)
+				require.Len(t, idxs, 0)
 			}
 
 			return nil
 		})
 
-		_, ok, err := scr.s.store.popDepositValue()
-		require.Nil(t, err)
-		require.False(t, ok)
-
-		_, ok = scr.s.store.cache.popDepositValue()
-		require.False(t, ok)
+		_, err := scr.s.store.popDepositValue()
+		require.Error(t, err)
+		require.IsType(t, DepositValuesEmptyErr{}, err)
 	})
 
 	time.AfterFunc(15*time.Second, func() {

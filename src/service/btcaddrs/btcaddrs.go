@@ -66,7 +66,7 @@ func New(db *bolt.DB, addrsReader io.Reader, log logger.Logger) (*BtcAddrs, erro
 			continue
 		}
 
-		if !usedAddrs.IsExsit(addr) {
+		if !usedAddrs.IsExist(addr) {
 			btcAddr.addresses = append(btcAddr.addresses, addr)
 			addrMap[addr] = struct{}{}
 		}
@@ -87,7 +87,7 @@ func (ba *BtcAddrs) NewAddress() (string, error) {
 	var pt int
 	for i, a := range ba.addresses {
 		// check if used
-		if ba.used.IsExsit(a) {
+		if ba.used.IsExist(a) {
 			continue
 		}
 

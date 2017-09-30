@@ -1,32 +1,57 @@
 package scanner
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
-	"sync"
 
 	"github.com/boltdb/bolt"
+	"github.com/skycoin/teller/src/dbutil"
 )
 
 var (
 	scanMetaBkt     = []byte("scan_meta")
 	depositValueBkt = []byte("deposit_value")
 
-	lastScanBlockKey    = []byte("last_scan_block")
-	depositAddressesKey = []byte("deposit_addresses")
-	dvIndexListKey      = []byte("dv_index_list") // deposit value index list
+	lastScanBlockKey    = "last_scan_block"
+	depositAddressesKey = "deposit_addresses"
+	dvIndexListKey      = "dv_index_list" // deposit value index list
+
 )
 
-var (
-	ErrDepositValueExist = errors.New("deposit value already exist")
-)
+// DepositValuesEmptyErr is returned if there are no deposit values
+type DepositValuesEmptyErr struct{}
+
+func (e DepositValuesEmptyErr) Error() string {
+	return "No deposit values available"
+}
+
+// DepositValueExistsErr is returned when a deposit value already exists
+type DepositValueExistsErr struct{}
+
+func (e DepositValueExistsErr) Error() string {
+	return "Deposit value already exists"
+}
+
+// DuplicateDepositAddressErr is returned if a certain deposit address already
+// exists when adding it to a bucket
+type DuplicateDepositAddressErr struct {
+	Address string
+}
+
+func (e DuplicateDepositAddressErr) Error() string {
+	return fmt.Sprintf("Deposit address \"%s\" already exists", e.Address)
+}
+
+// NewDuplicateDepositAddressErr return a DuplicateDepositAddressErr
+func NewDuplicateDepositAddressErr(addr string) error {
+	return DuplicateDepositAddressErr{
+		Address: addr,
+	}
+}
 
 // store records scanner meta info
 type store struct {
-	db    *bolt.DB
-	cache *cache
+	db *bolt.DB
 }
 
 func newStore(db *bolt.DB) (*store, error) {
@@ -35,416 +60,252 @@ func newStore(db *bolt.DB) (*store, error) {
 	}
 
 	if err := db.Update(func(tx *bolt.Tx) error {
-		// create lastScanBlock bucket if not exist
+		// create LastScanBlock bucket if not exist
 		if _, err := tx.CreateBucketIfNotExists(scanMetaBkt); err != nil {
 			return err
 		}
 
-		if _, err := tx.CreateBucketIfNotExists(depositValueBkt); err != nil {
-			return err
-		}
-
-		return nil
+		_, err := tx.CreateBucketIfNotExists(depositValueBkt)
+		return err
 	}); err != nil {
 		return nil, err
 	}
 
-	s := &store{
-		db:    db,
-		cache: newCache(),
-	}
-
-	if err := s.loadCache(); err != nil {
-		return nil, fmt.Errorf("load cache failed: %v", err)
-	}
-
-	return s, nil
+	return &store{
+		db: db,
+	}, nil
 }
 
-// lastScanBlock struct in bucket
-type lastScanBlock struct {
+// LastScanBlock stores the last scanned block's hash and height
+type LastScanBlock struct {
 	Hash   string
 	Height int64
 }
 
-func (s *store) loadCache() error {
-	return s.db.View(func(tx *bolt.Tx) error {
-		// load last scanblock from db
-		metaBkt := tx.Bucket(scanMetaBkt)
-		if metaBkt == nil {
-			return bucketNotExistErr(lastScanBlockKey)
-		}
-
-		var lsb lastScanBlock
-		if v := metaBkt.Get(lastScanBlockKey); v != nil {
-			if err := json.Unmarshal(v, &lsb); err != nil {
-				return err
-			}
-		}
-
-		s.cache.setLastScanBlock(lsb)
-
-		// load scan addresses
-		var addrs []string
-		if v := metaBkt.Get(depositAddressesKey); v != nil {
-			if err := json.Unmarshal(v, &addrs); err != nil {
-				return err
-			}
-			for _, a := range addrs {
-				s.cache.addScanAddress(a)
-			}
-		}
-
-		dvBkt := tx.Bucket(depositValueBkt)
-		if dvBkt == nil {
-			return bucketNotExistErr(depositValueBkt)
-		}
-
-		if iv := metaBkt.Get(dvIndexListKey); iv != nil {
-			var idxs []string
-			if err := json.Unmarshal(iv, &idxs); err != nil {
-				return err
-			}
-
-			for _, idx := range idxs {
-				dvb := dvBkt.Get([]byte(idx))
-				if dvb == nil {
-					return fmt.Errorf("deposit value of %s doesn't exist in db", idx)
-				}
-				var dv DepositValue
-				if err := json.Unmarshal(dvb, &dv); err != nil {
-					return err
-				}
-
-				s.cache.pushDepositValue(dv)
-			}
-		}
-
-		return nil
-	})
-}
-
 // getLastScanBlock returns the last scanned block hash and height
-func (s *store) getLastScanBlock() (string, int64, error) {
-	lsb := s.cache.getLastScanBlock()
-	return lsb.Hash, lsb.Height, nil
+func (s *store) getLastScanBlock() (LastScanBlock, error) {
+	var lsb LastScanBlock
+
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		return dbutil.GetBucketObject(tx, scanMetaBkt, lastScanBlockKey, &lsb)
+	}); err != nil {
+		switch err.(type) {
+		case dbutil.ObjectNotExistErr:
+			err = nil
+		default:
+			return LastScanBlock{}, err
+		}
+	}
+
+	return lsb, nil
 }
 
-func (s *store) setLastScanBlock(b lastScanBlock) error {
+func (s *store) setLastScanBlock(lsb LastScanBlock) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(scanMetaBkt)
-		if bkt == nil {
-			return bucketNotExistErr(lastScanBlockKey)
-		}
-		v, err := json.Marshal(b)
-		if err != nil {
-			return err
-		}
-
-		if err := bkt.Put(lastScanBlockKey, v); err != nil {
-			return err
-		}
-
-		s.cache.setLastScanBlock(b)
-		return nil
+		return dbutil.PutBucketValue(tx, scanMetaBkt, lastScanBlockKey, lsb)
 	})
 }
 
-func (s *store) getScanAddresses() []string {
-	return s.cache.getScanAddreses()
+func (s *store) setLastScanBlockTx(tx *bolt.Tx, lsb LastScanBlock) error {
+	return dbutil.PutBucketValue(tx, scanMetaBkt, lastScanBlockKey, lsb)
+}
+
+func (s *store) getScanAddressesTx(tx *bolt.Tx) ([]string, error) {
+	var addrs []string
+
+	if err := dbutil.GetBucketObject(tx, scanMetaBkt, depositAddressesKey, &addrs); err != nil {
+		switch err.(type) {
+		case dbutil.ObjectNotExistErr:
+			err = nil
+		default:
+			return nil, err
+		}
+	}
+
+	if len(addrs) == 0 {
+		addrs = nil
+	}
+
+	return addrs, nil
+}
+
+func (s *store) getScanAddresses() ([]string, error) {
+	var addrs []string
+
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		var err error
+		addrs, err = s.getScanAddressesTx(tx)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+
+	return addrs, nil
 }
 
 func (s *store) addScanAddress(addr string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(scanMetaBkt)
-		if bkt == nil {
-			return bucketNotExistErr(depositAddressesKey)
+		addrs, err := s.getScanAddressesTx(tx)
+		if err != nil {
+			return err
 		}
-		var addrs []string
-		if v := bkt.Get(depositAddressesKey); v != nil {
-			if err := json.Unmarshal(v, &addrs); err != nil {
-				return err
-			}
-		}
+
 		for _, a := range addrs {
 			if a == addr {
-				return dupDepositAddrErr(addr)
+				return NewDuplicateDepositAddressErr(addr)
 			}
 		}
 
 		addrs = append(addrs, addr)
-		v, err := json.Marshal(addrs)
-		if err != nil {
-			return err
-		}
 
-		if err := bkt.Put(depositAddressesKey, v); err != nil {
-			return err
-		}
-
-		s.cache.addScanAddress(addr)
-		return nil
+		return dbutil.PutBucketValue(tx, scanMetaBkt, depositAddressesKey, addrs)
 	})
 }
 
 func (s *store) removeScanAddr(addr string) error {
+	// FIXME: This will be very slow with large number of scan addresses.
+	// FIXME: Save scan addresses differently
+
 	return s.db.Update(func(tx *bolt.Tx) error {
-		// remove scan address from db
-		var addrs []string
-		if err := getBktValue(tx, scanMetaBkt, depositAddressesKey, &addrs); err != nil {
+		addrs, err := s.getScanAddressesTx(tx)
+		if err != nil {
 			return err
 		}
 
-		addrMap := make(map[string]int)
+		idx := -1
+
 		for i, a := range addrs {
-			addrMap[a] = i
-		}
-
-		if idx, ok := addrMap[addr]; ok {
-			addrs = append(addrs[:idx], addrs[idx+1:]...)
-			// write back to db
-			if err := putBktValue(tx, scanMetaBkt, depositAddressesKey, addrs); err != nil {
-				return err
+			if a == addr {
+				idx = i
+				break
 			}
 		}
 
-		s.cache.removeScanAddr(addr)
-
-		return nil
-	})
-}
-
-func (s *store) getHeadDepositValue() (DepositValue, bool) {
-	return s.cache.getHeadDepositValue()
-}
-
-func (s *store) pushDepositValue(dv DepositValue) error {
-	return s.db.Update(func(tx *bolt.Tx) error {
-		// persist deposit value
-		dvBkt := tx.Bucket(depositValueBkt)
-		if dvBkt == nil {
-			return bucketNotExistErr(depositValueBkt)
-		}
-
-		key := fmt.Sprintf("%v:%v", dv.Tx, dv.N)
-		// check if already exist
-		if v := dvBkt.Get([]byte(key)); v != nil {
-			return ErrDepositValueExist
-		}
-
-		v, err := json.Marshal(dv)
-		if err != nil {
-			return err
-		}
-
-		if err := dvBkt.Put([]byte(key), v); err != nil {
-			return err
-		}
-
-		// update deposit value index
-		metaBkt := tx.Bucket(scanMetaBkt)
-		if metaBkt == nil {
-			return bucketNotExistErr(scanMetaBkt)
-		}
-
-		var index []string
-		if iv := metaBkt.Get(dvIndexListKey); iv != nil {
-			if err := json.Unmarshal(iv, &index); err != nil {
-				return err
-			}
-		}
-
-		index = append(index, key)
-		ivx, err := json.Marshal(index)
-		if err != nil {
-			return err
-		}
-
-		if err := metaBkt.Put(dvIndexListKey, ivx); err != nil {
-			return err
-		}
-
-		// update cache
-		s.cache.pushDepositValue(dv)
-
-		return nil
-	})
-}
-
-func (s *store) popDepositValue() (DepositValue, bool, error) {
-	var dv DepositValue
-	var ok bool
-	if err := s.db.Update(func(tx *bolt.Tx) error {
-		metaBkt := tx.Bucket(scanMetaBkt)
-		if metaBkt == nil {
-			return bucketNotExistErr(scanMetaBkt)
-		}
-
-		v := metaBkt.Get(dvIndexListKey)
-		if v == nil {
+		if idx == -1 {
 			return nil
 		}
 
-		var index []string
-		if err := json.Unmarshal(v, &index); err != nil {
+		addrs = append(addrs[:idx], addrs[idx+1:]...)
+		return dbutil.PutBucketValue(tx, scanMetaBkt, depositAddressesKey, addrs)
+	})
+}
+
+func (s *store) getHeadDepositValue() (DepositValue, error) {
+	var dv DepositValue
+
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		index, err := s.getDepositValueIndexTx(tx)
+		if err != nil {
 			return err
 		}
 
 		if len(index) == 0 {
-			ok = false
-			return nil
+			return DepositValuesEmptyErr{}
+		}
+
+		head := index[0]
+
+		return dbutil.GetBucketObject(tx, depositValueBkt, head, &dv)
+	}); err != nil {
+		return DepositValue{}, err
+	}
+
+	return dv, nil
+}
+
+func (s *store) pushDepositValueTx(tx *bolt.Tx, dv DepositValue) error {
+	key := dv.TxN()
+
+	// Check if the deposit value already exists
+	if hasKey, err := dbutil.BucketHasKey(tx, depositValueBkt, key); err != nil {
+		return err
+	} else if hasKey {
+		return DepositValueExistsErr{}
+	}
+
+	// Save deposit value
+	if err := dbutil.PutBucketValue(tx, depositValueBkt, key, dv); err != nil {
+		return err
+	}
+
+	// Update deposit value index
+	index, err := s.getDepositValueIndexTx(tx)
+	if err != nil {
+		return err
+	}
+
+	index = append(index, key)
+
+	return dbutil.PutBucketValue(tx, scanMetaBkt, dvIndexListKey, index)
+}
+
+func (s *store) popDepositValue() (DepositValue, error) {
+	var dv DepositValue
+
+	if err := s.db.Update(func(tx *bolt.Tx) error {
+		index, err := s.getDepositValueIndexTx(tx)
+		if err != nil {
+			return err
+		}
+
+		if len(index) == 0 {
+			return DepositValuesEmptyErr{}
 		}
 
 		head := index[0]
 		index = index[1:]
+
 		// write index back to db
-		if err := putBktValue(tx, scanMetaBkt, dvIndexListKey, index); err != nil {
+		if err := dbutil.PutBucketValue(tx, scanMetaBkt, dvIndexListKey, index); err != nil {
 			return err
 		}
 
 		// mark deposit value in bucket as used
-		if err := getBktValue(tx, depositValueBkt, []byte(head), &dv); err != nil {
+		if err := dbutil.GetBucketObject(tx, depositValueBkt, head, &dv); err != nil {
 			return err
 		}
 
 		dv.IsUsed = true
 
-		if err := putBktValue(tx, depositValueBkt, []byte(head), dv); err != nil {
-			return err
-		}
-
-		dv, ok = s.cache.popDepositValue()
-		if !ok {
-			return errors.New("pop deposit value failed, it's empty")
-		}
-
-		if head != fmt.Sprintf("%v:%v", dv.Tx, dv.N) {
-			return errors.New("head deposit value in cache is different from db")
-		}
-
-		return nil
+		return dbutil.PutBucketValue(tx, depositValueBkt, head, dv)
 	}); err != nil {
-		return DepositValue{}, false, err
+		return DepositValue{}, err
 	}
 
-	return dv, ok, nil
+	return dv, nil
 }
 
-func bucketNotExistErr(bktName []byte) error {
-	return fmt.Errorf("%s bucket does not exist", string(bktName))
-}
-
-func dupDepositAddrErr(addr string) error {
-	return fmt.Errorf("deposit address %s already exist", addr)
-}
-
-func getBktValue(tx *bolt.Tx, bktName []byte, key []byte, value interface{}) error {
-	refV := reflect.ValueOf(value)
-	if refV.Kind() != reflect.Ptr {
-		return fmt.Errorf("value is not setable")
+// Returns the deposit value index from the db.
+// If there is no deposit value index in the db, nil is returned instead of
+// dbutil.ObjectNotExistErr
+func (s *store) getDepositValueIndexTx(tx *bolt.Tx) ([]string, error) {
+	var index []string
+	if err := dbutil.GetBucketObject(tx, scanMetaBkt, dvIndexListKey, &index); err != nil {
+		switch err.(type) {
+		case dbutil.ObjectNotExistErr:
+			err = nil
+		default:
+			return nil, err
+		}
 	}
 
-	bkt := tx.Bucket(bktName)
-	if bkt == nil {
-		return bucketNotExistErr(bktName)
+	if len(index) == 0 {
+		index = nil
 	}
 
-	v := bkt.Get(key)
-	if v == nil {
-		return fmt.Errorf("value of key %v does not exist in bucket %v", string(key), string(bktName))
+	return index, nil
+}
+
+func (s *store) getDepositValueIndex() ([]string, error) {
+	var index []string
+
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		var err error
+		index, err = s.getDepositValueIndexTx(tx)
+		return err
+	}); err != nil {
+		return nil, err
 	}
 
-	if err := json.Unmarshal(v, value); err != nil {
-		return fmt.Errorf("decode value failed: %v", err)
-	}
-
-	return nil
-}
-
-func putBktValue(tx *bolt.Tx, bktName []byte, key []byte, value interface{}) error {
-	bkt := tx.Bucket(bktName)
-	if bkt == nil {
-		return bucketNotExistErr(bktName)
-	}
-	v, err := json.Marshal(value)
-	if err != nil {
-		return fmt.Errorf("encode value failed: %v", err)
-	}
-
-	return bkt.Put(key, v)
-}
-
-type cache struct {
-	sync.RWMutex
-	scanAddresses map[string]struct{}
-	lastScanBlock lastScanBlock
-	depositValues []DepositValue
-}
-
-func newCache() *cache {
-	return &cache{
-		scanAddresses: make(map[string]struct{}),
-	}
-}
-
-func (c *cache) addScanAddress(addr string) {
-	c.Lock()
-	c.scanAddresses[addr] = struct{}{}
-	c.Unlock()
-}
-
-func (c *cache) getScanAddreses() []string {
-	c.RLock()
-	defer c.RUnlock()
-	var addrs []string
-	for addr := range c.scanAddresses {
-		addrs = append(addrs, addr)
-	}
-	return addrs
-}
-
-func (c *cache) setLastScanBlock(lsb lastScanBlock) {
-	c.Lock()
-	c.lastScanBlock = lsb
-	c.Unlock()
-}
-
-func (c *cache) getLastScanBlock() lastScanBlock {
-	c.RLock()
-	defer c.RUnlock()
-	return c.lastScanBlock
-}
-
-func (c *cache) pushDepositValue(dv DepositValue) {
-	c.Lock()
-	c.depositValues = append(c.depositValues, dv)
-	c.Unlock()
-}
-
-func (c *cache) popDepositValue() (DepositValue, bool) {
-	c.Lock()
-	defer c.Unlock()
-	if len(c.depositValues) == 0 {
-		return DepositValue{}, false
-	}
-
-	dv := c.depositValues[0]
-	c.depositValues = c.depositValues[1:]
-	return dv, true
-}
-
-func (c *cache) getHeadDepositValue() (DepositValue, bool) {
-	c.RLock()
-	defer c.RUnlock()
-	if len(c.depositValues) == 0 {
-		return DepositValue{}, false
-	}
-
-	return c.depositValues[0], true
-}
-
-func (c *cache) removeScanAddr(addr string) {
-	c.Lock()
-	delete(c.scanAddresses, addr)
-	c.Unlock()
+	return index, nil
 }

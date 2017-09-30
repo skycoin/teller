@@ -78,7 +78,9 @@ func TestNewAddress(t *testing.T) {
 	require.False(t, ok)
 
 	// check if the addr is in used storage
-	require.True(t, btca.used.IsExsit(addr))
+	exists, err := btca.used.IsExist(addr)
+	require.NoError(t, err)
+	require.True(t, exists)
 
 	btca1, err := New(db, bytes.NewReader(v), logger.NewLogger("", true))
 	require.Nil(t, err)
@@ -90,7 +92,8 @@ func TestNewAddress(t *testing.T) {
 	_, ok = addrMap1[addr]
 	require.False(t, ok)
 
-	require.True(t, btca1.used.IsExsit(addr))
+	exists, err = btca1.used.IsExist(addr)
+	require.True(t, exists)
 
 	// run out all addresses
 	for i := 0; i < 2; i++ {

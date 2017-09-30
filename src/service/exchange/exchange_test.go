@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/teller/src/dbutil"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/scanner"
 	"github.com/skycoin/teller/src/service/sender"
@@ -347,10 +348,16 @@ func TestRunExchangeService(t *testing.T) {
 
 			// check the info
 			dpTxN := fmt.Sprintf("%s:%d", tc.dpTx, tc.dpN)
-			dpi, ok := service.store.GetDepositInfo(dpTxN)
-			require.Equal(t, tc.writeToDBOk, ok)
+			dpi, err := service.store.GetDepositInfo(dpTxN)
 
-			if ok {
+			if tc.writeToDBOk {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				require.IsType(t, dbutil.ObjectNotExistErr{}, err)
+			}
+
+			if tc.writeToDBOk {
 				require.Equal(t, tc.expectStatus, dpi.Status)
 
 				if len(tc.initDpis) == 0 && tc.sendErr == nil {
