@@ -9,15 +9,15 @@ import (
 	"github.com/skycoin/skycoin/src/wallet"
 )
 
-// Rpc provides methods for sending coins
-type Rpc struct {
+// RPC provides methods for sending coins
+type RPC struct {
 	walletFile string
 	changeAddr string
 	rpcClient  *webrpc.Client
 }
 
-// New creates Rpc instance
-func New(wltFile, rpcAddr string) *Rpc {
+// New creates RPC instance
+func New(wltFile, rpcAddr string) *RPC {
 	wlt, err := wallet.Load(wltFile)
 	if err != nil {
 		panic(err)
@@ -31,7 +31,7 @@ func New(wltFile, rpcAddr string) *Rpc {
 		Addr: rpcAddr,
 	}
 
-	return &Rpc{
+	return &RPC{
 		walletFile: wltFile,
 		changeAddr: wlt.Entries[0].Address.String(),
 		rpcClient:  rpcClient,
@@ -39,24 +39,25 @@ func New(wltFile, rpcAddr string) *Rpc {
 }
 
 // Send sends coins to recv address
-func (c *Rpc) Send(recvAddr string, amount int64) (string, error) {
+func (c *RPC) Send(recvAddr string, amount uint64) (string, error) {
 	// validate the recvAddr
 	if _, err := cipher.DecodeBase58Address(recvAddr); err != nil {
 		return "", err
 	}
-	if amount < 1 {
-		return "", fmt.Errorf("Can't send %d coins", amount)
+
+	if amount == 0 {
+		return "", fmt.Errorf("Can't send 0 coins", amount)
 	}
 
 	sendAmount := cli.SendAmount{
 		Addr:  recvAddr,
-		Coins: uint64(amount),
+		Coins: amount,
 	}
 
 	return cli.SendFromWallet(c.rpcClient, c.walletFile, c.changeAddr, []cli.SendAmount{sendAmount})
 }
 
 // GetTransaction returns transaction by txid
-func (c *Rpc) GetTransaction(txid string) (*webrpc.TxnResult, error) {
+func (c *RPC) GetTransaction(txid string) (*webrpc.TxnResult, error) {
 	return c.rpcClient.GetTransactionByID(txid)
 }

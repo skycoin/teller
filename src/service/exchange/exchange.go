@@ -159,7 +159,7 @@ func (s *Service) Run() error {
 			// try to send skycoin
 			skyAmt := calculateSkyValue(dv.Value, float64(s.cfg.Rate))
 			s.Printf("Send %d skycoin to %s\n", skyAmt, skyAddr)
-			rspC, _ := s.sender.SendAsync(skyAddr, skyAmt, nil)
+			rspC, _ := s.sender.SendAsync(skyAddr, uint64(skyAmt), nil)
 			var rsp sender.Response
 			select {
 			case r := <-rspC:

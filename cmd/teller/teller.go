@@ -60,12 +60,12 @@ func (s *dummyBtcScanner) GetScanAddresses() ([]string, error) {
 
 type dummySkySender struct{}
 
-func (s *dummySkySender) Send(destAddr string, coins int64, opt *sender.SendOption) (string, error) {
+func (s *dummySkySender) Send(destAddr string, coins uint64, opt *sender.SendOption) (string, error) {
 	log.Println("dummySkySender.Send", destAddr, coins, opt)
 	return "", errors.New("dummy sky sender")
 }
 
-func (s *dummySkySender) SendAsync(destAddr string, coins int64, opt *sender.SendOption) (<-chan interface{}, error) {
+func (s *dummySkySender) SendAsync(destAddr string, coins uint64, opt *sender.SendOption) (<-chan interface{}, error) {
 	log.Println("dummySkySender.Send", destAddr, coins, opt)
 	return nil, errors.New("dummy sky sender")
 }

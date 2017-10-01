@@ -39,9 +39,7 @@ func (send *dummySender) Send(destAddr string, coins int64, opt *sender.SendOpti
 	return send.txid, send.err
 }
 
-func (send *dummySender) SendAsync(destAddr string,
-	coins int64,
-	opt *sender.SendOption) (<-chan interface{}, error) {
+func (send *dummySender) SendAsync(destAddr string, coins uint64, opt *sender.SendOption) (<-chan interface{}, error) {
 	rspC := make(chan interface{}, 1)
 	if send.err != nil {
 		return rspC, send.err

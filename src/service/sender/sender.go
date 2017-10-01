@@ -29,7 +29,7 @@ type SendOption struct {
 }
 
 // SendAsync send coins to dest address, should return immediately or timeout
-func (s *Sender) SendAsync(destAddr string, coins int64, opt *SendOption) (<-chan interface{}, error) {
+func (s *Sender) SendAsync(destAddr string, coins uint64, opt *SendOption) (<-chan interface{}, error) {
 	rspC := make(chan interface{}, 1)
 	req := Request{
 		Address: destAddr,
@@ -51,7 +51,7 @@ func (s *Sender) SendAsync(destAddr string, coins int64, opt *SendOption) (<-cha
 }
 
 // Send send coins to dest address, won't return until the tx is confirmed
-func (s *Sender) Send(destAddr string, coins int64, opt *SendOption) (string, error) {
+func (s *Sender) Send(destAddr string, coins uint64, opt *SendOption) (string, error) {
 	c, err := s.SendAsync(destAddr, coins, opt)
 	if err != nil {
 		return "", err

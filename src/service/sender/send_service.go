@@ -28,7 +28,7 @@ const (
 
 // Request send coin request struct
 type Request struct {
-	Coins   int64            // coin number
+	Coins   uint64           // coin number (in droplets)
 	Address string           // recv address
 	RspC    chan interface{} // response
 }
@@ -65,7 +65,7 @@ type Config struct {
 }
 
 type skyclient interface {
-	Send(recvAddr string, coins int64) (string, error)
+	Send(recvAddr string, coins uint64) (string, error)
 	GetTransaction(txid string) (*webrpc.TxnResult, error)
 }
 

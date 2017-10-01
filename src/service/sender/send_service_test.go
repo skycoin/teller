@@ -24,7 +24,7 @@ func newDummySkycli() *dummySkycli {
 	return &dummySkycli{}
 }
 
-func (ds *dummySkycli) Send(addr string, coins int64) (string, error) {
+func (ds *dummySkycli) Send(addr string, coins uint64) (string, error) {
 	return ds.sendTxid, ds.sendErr
 }
 
