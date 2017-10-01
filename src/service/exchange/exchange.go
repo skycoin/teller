@@ -8,11 +8,21 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/shopspring/decimal"
+
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/dbutil"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/scanner"
 	"github.com/skycoin/teller/src/service/sender"
+)
+
+const (
+	// TODO: import this from skycoin library once added there
+	dropletPrecision int32 = 1
+	dropletsPerSKY   int64 = 1e6
+
+	satoshiPerBTC int64 = 1e8
 )
 
 // SkySender provids apis for sending skycoin
@@ -29,12 +39,27 @@ type BtcScanner interface {
 	GetDepositValue() <-chan scanner.DepositNote
 }
 
-func calculateSkyValue(btcValue float64, rate float64) (uint64, error) {
-	v := btcValue * rate
-	if v < 0 {
-		return 0, errors.New("negative sky value")
+// calculateSkyValue returns the amount of SKY (in droplets) to give for an
+// amount of BTC (in satoshis).
+// Rate is measured in SKY per BTC.
+func calculateSkyValue(satoshis, skyPerBTC int64) (int64, error) {
+	if satoshis < 0 || skyPerBTC < 0 {
+		return 0, errors.New("negative satoshis or skyPerBTC")
 	}
-	return uint64(v), nil
+
+	btc := decimal.New(satoshis, 0)
+	btcToSatoshi := decimal.New(satoshiPerBTC, 0)
+	btc = btc.DivRound(btcToSatoshi, 8)
+
+	rate := decimal.New(skyPerBTC, 0)
+
+	sky := btc.Mul(rate)
+	sky := sky.Truncate(dropletPrecision)
+
+	skyToDroplets := decimal.New(dropletsPerSKY, 0)
+	droplets := sky.Mul(skyToDroplets)
+
+	return droplets.IntPart()
 }
 
 // Service manages coin exchange between deposits and skycoin
@@ -162,13 +187,19 @@ func (s *Service) Run() error {
 			}
 
 			// try to send skycoin
-			skyAmt, err := calculateSkyValue(dv.Value, float64(s.cfg.Rate))
+			skyAmt, err := calculateSkyValue(dv.Value, s.cfg.Rate)
 			if err != nil {
 				s.Printf("calculateSkyValue error: %v", err)
 				continue
 			}
 
-			s.Printf("Send %d skycoin to %s\n", skyAmt, skyAddr)
+			s.Printf("Trying to send %d skycoin droplets to %s\n", skyAmt, skyAddr)
+
+			if skyAmt == 0 {
+				s.Printf("skycoin amount is 0, not sending")
+				continue
+			}
+
 			rspC, _ := s.sender.SendAsync(skyAddr, skyAmt, nil)
 			var rsp sender.Response
 			select {
@@ -184,6 +215,8 @@ func (s *Service) Run() error {
 				dv.AckC <- struct{}{}
 				continue
 			}
+
+			s.Printf("Sent %d skycoin droplets to %s\n", skyAmt, skyAddr)
 
 			// update the txid
 			if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
