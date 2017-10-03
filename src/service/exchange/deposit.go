@@ -47,4 +47,6 @@ type DepositInfo struct {
 	BtcAddress string
 	BtcTx      string
 	Txid       string
+	SkySent    uint64 // SKY sent, measured in droplets
+	SkyBtcRate int64  // SKY per BTC rate
 }
