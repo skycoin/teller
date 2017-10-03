@@ -10,7 +10,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 // ErrDepositAddressEmpty represents all deposit addresses are used

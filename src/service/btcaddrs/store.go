@@ -2,7 +2,7 @@ package btcaddrs
 
 import (
 	"github.com/boltdb/bolt"
-	"github.com/skycoin/teller/src/dbutil"
+	"github.com/skycoin/teller/src/util/dbutil"
 )
 
 var usedAddrBkt = []byte("used_btc_address")

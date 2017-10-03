@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/util/logger"
 	"github.com/skycoin/teller/src/service/exchange"
 	"github.com/stretchr/testify/require"
 )

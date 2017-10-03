@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 // ErrResponse write error message and code

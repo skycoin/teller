@@ -18,8 +18,8 @@ import (
 
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/httputil"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/util/httputil"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 const (

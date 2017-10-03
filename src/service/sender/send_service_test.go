@@ -9,7 +9,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/visor"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/util/logger"
 	"github.com/stretchr/testify/require"
 )
 

@@ -24,7 +24,7 @@ import (
 	"github.com/skycoin/skycoin/src/cipher"
 
 	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/util/logger"
 	"github.com/skycoin/teller/src/service"
 	"github.com/skycoin/teller/src/service/btcaddrs"
 	"github.com/skycoin/teller/src/service/config"
