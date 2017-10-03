@@ -10,6 +10,9 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/shopspring/decimal"
 
+	skydaemon "github.com/skycoin/skycoin/src/daemon"
+	"github.com/skycoin/skycoin/src/util/droplet"
+
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/dbutil"
 	"github.com/skycoin/teller/src/logger"
@@ -17,13 +20,7 @@ import (
 	"github.com/skycoin/teller/src/service/sender"
 )
 
-const (
-	// TODO: import this from skycoin library once added there
-	dropletPrecision int32 = 1
-	dropletsPerSKY   int64 = 1e6
-
-	satoshiPerBTC int64 = 1e8
-)
+const satoshiPerBTC int64 = 1e8
 
 // SkySender provids apis for sending skycoin
 type SkySender interface {
@@ -54,9 +51,9 @@ func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
 	rate := decimal.New(skyPerBTC, 0)
 
 	sky := btc.Mul(rate)
-	sky = sky.Truncate(dropletPrecision)
+	sky = sky.Truncate(skydaemon.MaxDropletPrecision)
 
-	skyToDroplets := decimal.New(dropletsPerSKY, 0)
+	skyToDroplets := decimal.New(droplet.Multiplier, 0)
 	droplets := sky.Mul(skyToDroplets)
 
 	amt := droplets.IntPart()
