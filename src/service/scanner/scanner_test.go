@@ -13,7 +13,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/teller/src/dbutil"
+	"github.com/skycoin/teller/src/util/dbutil"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/testutil"
 )

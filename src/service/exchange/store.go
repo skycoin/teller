@@ -13,7 +13,7 @@ import (
 	"sort"
 
 	"github.com/boltdb/bolt"
-	"github.com/skycoin/teller/src/dbutil"
+	"github.com/skycoin/teller/src/util/dbutil"
 )
 
 var (
