@@ -1,6 +1,6 @@
 package proxy
 
-import "github.com/skycoin/teller/src/logger"
+import "github.com/skycoin/teller/src/util/logger"
 
 // Option represents the proxy option
 type Option func(px *Proxy)

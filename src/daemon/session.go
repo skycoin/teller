@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 var (

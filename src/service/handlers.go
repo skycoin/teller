@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 var (

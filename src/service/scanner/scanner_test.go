@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/util/dbutil"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/util/logger"
 	"github.com/skycoin/teller/src/service/testutil"
 )
 
