@@ -13,13 +13,13 @@ import (
 
 	"github.com/NYTimes/gziphandler"
 	"github.com/didip/tollbooth"
+	"github.com/sirupsen/logrus"
 	"github.com/unrolled/secure"
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/httputil"
-	"github.com/skycoin/teller/src/logger"
 )
 
 const (
@@ -44,7 +44,7 @@ type Throttle struct {
 }
 
 type httpServ struct {
-	logger.Logger
+	log           *logrus.Logger
 	Addr          string
 	HTTPSAddr     string
 	StaticDir     string
@@ -64,14 +64,14 @@ type httpServ struct {
 }
 
 func (hs *httpServ) Run() error {
-	hs.Println("Http service start")
+	hs.log.Println("Http service start")
 	if hs.Addr != "" {
-		hs.Println("Http service address:", hs.Addr)
+		hs.log.Println("Http service address:", hs.Addr)
 	}
 	if hs.HTTPSAddr != "" {
-		hs.Println("Https service address:", hs.HTTPSAddr)
+		hs.log.Println("Https service address:", hs.HTTPSAddr)
 	}
-	defer hs.Debugln("Http service closed")
+	defer hs.log.Debugln("Http service closed")
 
 	hs.quit = make(chan struct{})
 
@@ -94,12 +94,12 @@ func (hs *httpServ) Run() error {
 	}
 
 	if len(allowedHosts) == 0 {
-		hs.Println("Allowed hosts: all")
+		hs.log.Println("Allowed hosts: all")
 	} else {
-		hs.Println("Allowed hosts:", allowedHosts)
+		hs.log.Println("Allowed hosts:", allowedHosts)
 	}
 
-	hs.Println("SSL Host:", sslHost)
+	hs.log.Println("SSL Host:", sslHost)
 
 	secureMiddleware := configureSecureMiddleware(sslHost, allowedHosts)
 	mux = secureMiddleware.Handler(mux)
@@ -114,7 +114,7 @@ func (hs *httpServ) Run() error {
 			case <-hs.quit:
 				return nil
 			default:
-				hs.Println("ListenAndServe or ListenAndServeTLS error:", err)
+				hs.log.Println("ListenAndServe or ListenAndServeTLS error:", err)
 				return fmt.Errorf("http serve failed: %v", err)
 			}
 		}
@@ -122,7 +122,7 @@ func (hs *httpServ) Run() error {
 	}
 
 	if hs.HTTPSAddr != "" {
-		hs.Println("Using TLS")
+		hs.log.Println("Using TLS")
 
 		hs.httpsListener = setupHTTPListener(hs.HTTPSAddr, mux)
 
@@ -130,7 +130,7 @@ func (hs *httpServ) Run() error {
 		tlsKey := hs.TLSKey
 
 		if hs.AutoTLSHost != "" {
-			hs.Println("Using Let's Encrypt autocert with host", hs.AutoTLSHost)
+			hs.log.Println("Using Let's Encrypt autocert with host", hs.AutoTLSHost)
 			// https://godoc.org/golang.org/x/crypto/acme/autocert
 			// https://stackoverflow.com/a/40494806
 			certManager := autocert.Manager{
@@ -162,7 +162,7 @@ func (hs *httpServ) Run() error {
 			go func() {
 				defer wg.Done()
 				if err := hs.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
-					hs.Println("ListenAndServeTLS error:", err)
+					hs.log.Println("ListenAndServeTLS error:", err)
 					errC <- err
 				}
 			}()
@@ -170,7 +170,7 @@ func (hs *httpServ) Run() error {
 			go func() {
 				defer wg.Done()
 				if err := hs.httpListener.ListenAndServe(); err != nil {
-					hs.Println("ListenAndServe error:", err)
+					hs.log.Println("ListenAndServe error:", err)
 					errC <- err
 				}
 			}()
@@ -251,7 +251,7 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	handleAPI := func(path string, f http.HandlerFunc) {
-		mux.Handle(path, gziphandler.GzipHandler(rateLimiter(hs.Throttle, httputil.LogHandler(hs.Logger, f))))
+		mux.Handle(path, gziphandler.GzipHandler(rateLimiter(hs.Throttle, httputil.LogHandler(hs.log, f))))
 	}
 
 	if !hs.WithoutTeller {
@@ -281,12 +281,12 @@ func (hs *httpServ) Shutdown() {
 		if ln == nil {
 			return
 		}
-		hs.Printf("Shutting down %s server, %s timeout\n", proto, shutdownTimeout)
+		hs.log.Printf("Shutting down %s server, %s timeout\n", proto, shutdownTimeout)
 
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := ln.Shutdown(ctx); err != nil {
-			hs.Println("HTTP server shutdown error:", err)
+			hs.log.Println("HTTP server shutdown error:", err)
 		}
 	}
 
@@ -340,7 +340,7 @@ func BindHandler(srv *httpServ) http.HandlerFunc {
 
 		daemonBindReq := daemon.BindRequest{SkyAddress: userBindReq.SkyAddr}
 
-		srv.Println("Sending BindRequest to teller, skyaddr", userBindReq.SkyAddr)
+		srv.log.Println("Sending BindRequest to teller, skyaddr", userBindReq.SkyAddr)
 
 		rsp, err := srv.Gateway.BindAddress(cxt, &daemonBindReq)
 		if err != nil {
@@ -348,16 +348,16 @@ func BindHandler(srv *httpServ) http.HandlerFunc {
 			return
 		}
 
-		srv.Printf("Received response to BindRequest: %+v\n", *rsp)
+		srv.log.Printf("Received response to BindRequest: %+v\n", *rsp)
 
 		if rsp.Error != "" {
 			httputil.ErrResponse(w, http.StatusBadRequest, rsp.Error)
-			srv.Println(rsp.Error)
+			srv.log.Println(rsp.Error)
 			return
 		}
 
 		if err := httputil.JSONResponse(w, makeBindHTTPResponse(*rsp)); err != nil {
-			srv.Println(err)
+			srv.log.Println(err)
 		}
 	}
 }
@@ -396,7 +396,7 @@ func StatusHandler(srv *httpServ) http.HandlerFunc {
 
 		stReq := daemon.StatusRequest{SkyAddress: skyAddr}
 
-		srv.Println("Sending StatusRequest to teller, skyaddr", skyAddr)
+		srv.log.Println("Sending StatusRequest to teller, skyaddr", skyAddr)
 
 		rsp, err := srv.Gateway.GetDepositStatuses(cxt, &stReq)
 		if err != nil {
@@ -404,16 +404,16 @@ func StatusHandler(srv *httpServ) http.HandlerFunc {
 			return
 		}
 
-		srv.Printf("Received response to StatusRequest: %+v\n", *rsp)
+		srv.log.Printf("Received response to StatusRequest: %+v\n", *rsp)
 
 		if rsp.Error != "" {
 			httputil.ErrResponse(w, http.StatusBadRequest, rsp.Error)
-			srv.Println(rsp.Error)
+			srv.log.Println(rsp.Error)
 			return
 		}
 
 		if err := httputil.JSONResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
-			srv.Println(err)
+			srv.log.Println(err)
 		}
 	}
 }
@@ -425,7 +425,7 @@ func readyToStart(w http.ResponseWriter, gw gatewayer, startAt time.Time) bool {
 
 	msg := fmt.Sprintf("Event starts at %v", startAt)
 	httputil.ErrResponse(w, http.StatusForbidden, msg)
-	gw.Println(http.StatusForbidden, msg)
+	gw.Logger().Println(http.StatusForbidden, msg)
 
 	return false
 }
@@ -449,7 +449,7 @@ func verifySkycoinAddress(w http.ResponseWriter, gw gatewayer, skyAddr string) b
 	if _, err := cipher.DecodeBase58Address(skyAddr); err != nil {
 		msg := fmt.Sprintf("Invalid skycoin address: %v", err)
 		httputil.ErrResponse(w, http.StatusBadRequest, msg)
-		gw.Println(http.StatusBadRequest, "Invalid skycoin address:", err, skyAddr)
+		gw.Logger().Println(http.StatusBadRequest, "Invalid skycoin address:", err, skyAddr)
 		return false
 	}
 	return true
@@ -470,6 +470,6 @@ func handleGatewayResponseError(w http.ResponseWriter, gw gatewayer, err error) 
 }
 
 func errorResponse(w http.ResponseWriter, gw gatewayer, code int, msgs ...interface{}) {
-	gw.Println(append([]interface{}{code, http.StatusText(code)}, msgs...)...)
+	gw.Logger().Println(append([]interface{}{code, http.StatusText(code)}, msgs...)...)
 	httputil.ErrResponse(w, code)
 }

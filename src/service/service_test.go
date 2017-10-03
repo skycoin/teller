@@ -14,7 +14,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
 func pingHandler(w daemon.ResponseWriteCloser, msg daemon.Messager) {
@@ -27,6 +27,7 @@ func pingHandler(w daemon.ResponseWriteCloser, msg daemon.Messager) {
 }
 
 func makeProxy(t *testing.T, auth *daemon.Auth, msgHandler map[daemon.MsgType]daemon.Handler) (net.Listener, func()) {
+	log := testutil.NewLogger(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
@@ -41,12 +42,12 @@ func makeProxy(t *testing.T, auth *daemon.Auth, msgHandler map[daemon.MsgType]da
 				return
 			}
 
-			mux := daemon.NewMux(logger.NewLogger("", true))
+			mux := daemon.NewMux(testutil.NewLogger(t))
 			for tp, hd := range msgHandler {
 				mux.HandleFunc(tp, hd)
 			}
 
-			s, err = daemon.NewSession(conn, auth, mux, false)
+			s, err = daemon.NewSession(log, conn, auth, mux, false)
 			assert.NoError(t, err)
 			if err != nil {
 				return
@@ -177,7 +178,7 @@ func TestRunService(t *testing.T) {
 			defer stop()
 			proxyAddr := s.Addr().String()
 
-			lg := logger.NewLogger("", true)
+			lg := testutil.NewLogger(t)
 
 			service := New(Config{
 				ProxyAddr: proxyAddr,

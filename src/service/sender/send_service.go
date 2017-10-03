@@ -8,10 +8,9 @@ import (
 
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/cipher"
-
-	"github.com/skycoin/teller/src/logger"
 )
 
 const sendCoinCheckTime = 3 * time.Second
@@ -50,7 +49,7 @@ func makeResponse(txid string, err string) Response {
 
 // SendService is in charge of sending skycoin
 type SendService struct {
-	logger.Logger
+	log      *logrus.Logger
 	cfg      Config
 	skycli   skyclient
 	quit     chan struct{}
@@ -70,9 +69,9 @@ type skyclient interface {
 }
 
 // NewService creates sender instance
-func NewService(cfg Config, log logger.Logger, skycli skyclient) *SendService {
+func NewService(cfg Config, log *logrus.Logger, skycli skyclient) *SendService {
 	return &SendService{
-		Logger:  log,
+		log:     log,
 		cfg:     cfg,
 		skycli:  skycli,
 		quit:    make(chan struct{}),
@@ -82,8 +81,8 @@ func NewService(cfg Config, log logger.Logger, skycli skyclient) *SendService {
 
 // Run start the send service
 func (s *SendService) Run() error {
-	s.Println("Start skycoin send service...")
-	defer s.Println("Skycoin send service closed")
+	s.log.Println("Start skycoin send service...")
+	defer s.log.Println("Skycoin send service closed")
 	for {
 		select {
 		case <-s.quit:
@@ -100,7 +99,7 @@ func (s *SendService) Run() error {
 
 				txid, err := s.skycli.Send(req.Address, req.Coins)
 				if err != nil {
-					s.Debugln("Send coin failed:", err, "try to send again..")
+					s.log.Debugln("Send coin failed:", err, "try to send again..")
 					select {
 					case <-s.quit:
 						return nil
@@ -124,14 +123,14 @@ func (s *SendService) Run() error {
 							return nil
 						default:
 						}
-						s.Debugln(err)
+						s.log.Debugln(err)
 						time.Sleep(sendCoinCheckTime)
 						continue
 					}
 
 					if ok {
 						go func() { rsp.StatusC <- TxConfirmed }()
-						// s.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
+						// s.log.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
 						break sendLoop
 					}
 					time.Sleep(sendCoinCheckTime)

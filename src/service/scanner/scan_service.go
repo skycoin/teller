@@ -18,8 +18,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcrpcclient"
 	"github.com/btcsuite/btcutil"
-
-	"github.com/skycoin/teller/src/logger"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -51,7 +50,7 @@ func makeDepositNote(dv DepositValue) DepositNote {
 
 // ScanService blockchain scanner to check if there're deposit coins
 type ScanService struct {
-	logger.Logger
+	log       *logrus.Logger
 	cfg       Config
 	btcClient BtcRPCClient
 	store     *store
@@ -81,14 +80,14 @@ func (d DepositValue) TxN() string {
 }
 
 // NewService creates scanner instance
-func NewService(cfg Config, db *bolt.DB, log logger.Logger, btc BtcRPCClient) (*ScanService, error) {
+func NewService(cfg Config, db *bolt.DB, log *logrus.Logger, btc BtcRPCClient) (*ScanService, error) {
 	s, err := newStore(db)
 	if err != nil {
 		return nil, err
 	}
 	return &ScanService{
 		btcClient: btc,
-		Logger:    log,
+		log:       log,
 		cfg:       cfg,
 		store:     s,
 		depositC:  make(chan DepositNote),
@@ -98,8 +97,8 @@ func NewService(cfg Config, db *bolt.DB, log logger.Logger, btc BtcRPCClient) (*
 
 // Run starts the scanner
 func (scan *ScanService) Run() error {
-	scan.Println("Start bitcoin blockchain scan service...")
-	defer scan.Println("Bitcoin blockchain scan service closed")
+	scan.log.Println("Start bitcoin blockchain scan service...")
+	defer scan.log.Println("Bitcoin blockchain scan service closed")
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -116,7 +115,7 @@ func (scan *ScanService) Run() error {
 						return
 					}
 				default:
-					scan.Println("getHeadDepositValue failed:", err)
+					scan.log.Println("getHeadDepositValue failed:", err)
 					return
 				}
 			}
@@ -130,9 +129,9 @@ func (scan *ScanService) Run() error {
 				case <-dn.AckC:
 					// pop the head deposit value in store
 					if ddv, err := scan.store.popDepositValue(); err != nil {
-						scan.Println("pop deposit value failed:", err)
+						scan.log.Println("pop deposit value failed:", err)
 					} else {
-						scan.Debugf("deposit value: %+v is processed\n", ddv)
+						scan.log.Debugf("deposit value: %+v is processed\n", ddv)
 					}
 				case <-scan.quit:
 					return
@@ -185,7 +184,7 @@ func (scan *ScanService) Run() error {
 			}
 
 			if nxtBlock == nil {
-				scan.Debugln("No new block to scan...")
+				scan.log.Debugln("No new block to scan...")
 				select {
 				case <-scan.quit:
 					return
@@ -198,7 +197,7 @@ func (scan *ScanService) Run() error {
 			hash = block.Hash
 			height = block.Height
 
-			scan.Debugf("scan height: %v hash:%s\n", height, hash)
+			scan.log.Debugf("scan height: %v hash:%s\n", height, hash)
 			if err := scan.scanBlock(block); err != nil {
 				select {
 				case <-scan.quit:
@@ -243,7 +242,7 @@ func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 				case DepositValueExistsErr:
 					continue
 				default:
-					scan.Printf("Persist deposit value %+v failed: %v\n", dv, err)
+					scan.log.Printf("Persist deposit value %+v failed: %v\n", dv, err)
 				}
 			}
 		}

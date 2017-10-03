@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/dbutil"
-	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/scanner"
 	"github.com/skycoin/teller/src/service/sender"
 	"github.com/skycoin/teller/src/service/testutil"
@@ -325,7 +324,7 @@ func TestRunExchangeService(t *testing.T) {
 			require.NotPanics(t, func() {
 				service = NewService(Config{
 					Rate: tc.rate,
-				}, db, logger.NewLogger("", true), scan, send)
+				}, db, testutil.NewLogger(t), scan, send)
 
 				// init the deposit infos
 				for _, dpi := range tc.initDpis {

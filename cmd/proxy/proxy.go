@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"os/user"
@@ -19,6 +20,12 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	proxyAddr := flag.String("teller-proxy-addr", "0.0.0.0:7070", "teller proxy listen address")
 	httpAddr := flag.String("http-service-addr", "127.0.0.1:7071", "http api service address")
 	httpsAddr := flag.String("https-service-addr", "", "https api service address")
@@ -34,9 +41,16 @@ func main() {
 	thrMax := flag.Int64("throttle-max", 5, "max allowd per ip in specific duration")
 	thrDur := flag.Int64("throttle-duration", int64(time.Minute), "throttle duration")
 	withoutTeller := flag.Bool("without-teller", false, "disable the listener for teller")
+	logFilename := flag.String("log-file", "proxy.log", "proxy log filename")
+
 	flag.Parse()
 
-	log := logger.NewLogger("", *debug)
+	// init logger
+	log, err := logger.NewLogger(*logFilename, *debug)
+	if err != nil {
+		fmt.Println("Failed to create Logrus logger:", err)
+		return err
+	}
 
 	// start gops agent, for profilling
 	if *prof {
@@ -44,17 +58,16 @@ func main() {
 			NoShutdownCleanup: true,
 		}); err != nil {
 			log.Println("Start profile agent failed:", err)
-			return
+			return err
 		}
 	}
 
 	var lseckey cipher.SecKey
-	var err error
 	if *seckey != "" {
 		lseckey, err = cipher.SecKeyFromHex(*seckey)
 		if err != nil {
 			log.Println("Invalid seckey:", *seckey, err)
-			return
+			return err
 		}
 	} else {
 		_, lseckey = cipher.GenerateKeyPair()
@@ -72,7 +85,8 @@ func main() {
 		var err error
 		startAtStamp, err = time.Parse(time.RFC3339, *startAt)
 		if err != nil {
-			log.Fatalln("Invalid -start-time, must be in RCF3339 format", time.RFC3339)
+			log.Println("Invalid -start-time, must be in RCF3339 format", time.RFC3339)
+			return err
 		}
 		startAtStamp = startAtStamp.UTC()
 	}
@@ -94,7 +108,7 @@ func main() {
 		WithoutTeller: *withoutTeller,
 	}
 
-	px := proxy.New(pxCfg, auth, proxy.Logger(log))
+	px := proxy.New(log, pxCfg, auth)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -108,11 +122,12 @@ func main() {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, os.Interrupt)
 
+	var finalErr error
 	select {
 	case <-sigchan:
-	case err := <-errC:
-		if err != nil {
-			log.Println("ERROR:", err)
+	case finalErr = <-errC:
+		if finalErr != nil {
+			log.Println("ERROR:", finalErr)
 		}
 	}
 
@@ -122,6 +137,8 @@ func main() {
 	px.Shutdown()
 	wg.Wait()
 	log.Println("Shutdown complete")
+
+	return finalErr
 }
 
 func createAppDirIfNotExist(app string) (string, error) {

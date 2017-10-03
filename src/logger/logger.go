@@ -1,72 +1,57 @@
 package logger
 
 import (
-	"fmt"
+	"context"
 	"io"
-	"log"
 	"os"
+
+	"github.com/sirupsen/logrus"
+	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 )
 
-// A Logger is similar to log.Logger with Debug(ln|f)? methods
-type Logger interface {
-	// SetDebug is used to change debug logs flag. The method is not
-	// safe for async usage
-	SetDebug(bool)
+// NewLogger creates a logrus.Logger, which logs to os.Stdout.
+// If debug is true, the log level is logrus.DebugLevel, otherwise logrus.InfoLevel.
+// If logFilename is not the empty string, logs will also be written to that file,
+// in addition to os.Stdout.
+func NewLogger(logFilename string, debug bool) (*logrus.Logger, error) {
+	var out io.Writer = os.Stdout
 
-	SetPrefix(string)    //
-	SetFlags(int)        //
-	SetOutput(io.Writer) //
+	if logFilename != "" {
+		logFile, err := os.OpenFile(logFilename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		if err != nil {
+			return nil, err
+		}
 
-	Print(...interface{})          //
-	Println(...interface{})        //
-	Printf(string, ...interface{}) //
-
-	Panic(...interface{})          //
-	Panicln(...interface{})        //
-	Panicf(string, ...interface{}) //
-
-	Fatal(...interface{})          //
-	Fatalln(...interface{})        //
-	Fatalf(string, ...interface{}) //
-
-	Debug(...interface{})          //
-	Debugln(...interface{})        //
-	Debugf(string, ...interface{}) //
-}
-
-type logger struct {
-	*log.Logger
-	debug bool
-}
-
-// NewLogger create new Logger with given prefix and debug-enabling value.
-// By default flags of the Logger is log.Lshortfile|log.Ltime
-func NewLogger(prefix string, debug bool, multiW ...io.Writer) Logger {
-	mw := io.MultiWriter(append(multiW, os.Stdout)...)
-	return &logger{
-		Logger: log.New(mw, prefix, log.Lshortfile|log.Ltime|log.Ldate),
-		debug:  debug,
+		out = io.MultiWriter(os.Stdout, logFile)
 	}
-}
 
-func (l *logger) Debug(args ...interface{}) {
-	if l.debug {
-		l.Output(2, fmt.Sprint(args...))
+	level := logrus.InfoLevel
+	if debug {
+		level = logrus.DebugLevel
 	}
+
+	return &logrus.Logger{
+		Out: out,
+		Formatter: &prefixed.TextFormatter{
+			FullTimestamp: true,
+		},
+		Level: level,
+	}, nil
 }
 
-func (l *logger) Debugln(args ...interface{}) {
-	if l.debug {
-		l.Output(2, fmt.Sprintln(args...))
+type loggerCtxKey struct{}
+
+// FromContext return a *logrus.Logger from a context
+func FromContext(ctx context.Context) *logrus.Logger {
+	lg := ctx.Value(loggerCtxKey{})
+	ruslogger, ok := lg.(*logrus.Logger)
+	if !ok {
+		return nil
 	}
+	return ruslogger
 }
 
-func (l *logger) Debugf(format string, args ...interface{}) {
-	if l.debug {
-		l.Output(2, fmt.Sprintf(format, args...))
-	}
-}
-
-func (l *logger) SetDebug(debug bool) {
-	l.debug = debug
+// WithContext puts a *logrus.Logger into a context
+func WithContext(ctx context.Context, lg *logrus.Logger) context.Context {
+	return context.WithValue(ctx, lg, loggerCtxKey{})
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/skycoin/teller/src/logger"
+	"github.com/sirupsen/logrus"
 )
 
 // ErrResponse write error message and code
@@ -33,7 +33,7 @@ func JSONResponse(w http.ResponseWriter, data interface{}) error {
 }
 
 // LogHandler log middleware
-func LogHandler(log logger.Logger, hd http.HandlerFunc) http.HandlerFunc {
+func LogHandler(log *logrus.Logger, hd http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		t := time.Now()
 		hd(w, r)

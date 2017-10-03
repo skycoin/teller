@@ -9,7 +9,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/visor"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/service/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,7 +58,7 @@ func (ds *dummySkycli) changeGetTxErr(err error) {
 }
 
 func TestSendService(t *testing.T) {
-	log := logger.NewLogger("", true)
+	log := testutil.NewLogger(t)
 	dsc := newDummySkycli()
 	dsc.sendTxid = "1111"
 	s := NewService(Config{}, log, dsc)

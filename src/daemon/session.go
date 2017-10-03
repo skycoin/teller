@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/skycoin/teller/src/logger"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -32,11 +32,11 @@ type Handler func(w ResponseWriteCloser, data Messager)
 // Mux for records the message handlers
 type Mux struct {
 	handlers map[MsgType]Handler
-	log      logger.Logger
+	log      *logrus.Logger
 }
 
 // NewMux creates mux
-func NewMux(log logger.Logger) *Mux {
+func NewMux(log *logrus.Logger) *Mux {
 	return &Mux{
 		handlers: make(map[MsgType]Handler),
 		log:      log,
@@ -69,7 +69,7 @@ type Session struct {
 	ts        *transport
 	wc        chan Messager // write channel
 	quit      chan struct{}
-	log       logger.Logger
+	log       *logrus.Logger
 	subs      map[int]func(Messager) // subscribers
 	idGenC    chan int               // subscribe id generator channel
 	reqC      chan func()
@@ -77,7 +77,7 @@ type Session struct {
 }
 
 // NewSession creates a new session
-func NewSession(conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Option) (*Session, error) {
+func NewSession(log *logrus.Logger, conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Option) (*Session, error) {
 	if auth == nil {
 		return nil, errors.New("auth is nil")
 	}
@@ -93,7 +93,7 @@ func NewSession(conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Opti
 		ts:        ts,
 		wcBufSize: 100, // default value, can be changed by Option
 		quit:      make(chan struct{}),
-		log:       logger.NewLogger("", false),
+		log:       log,
 		subs:      make(map[int]func(Messager)),
 		idGenC:    make(chan int),
 		reqC:      make(chan func()),

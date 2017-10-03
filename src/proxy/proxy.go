@@ -9,8 +9,8 @@ import (
 	"net"
 	"sync"
 
+	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/logger"
 
 	"io"
 	"time"
@@ -22,7 +22,7 @@ const (
 
 // Proxy represents the ico proxy server
 type Proxy struct {
-	logger.Logger
+	log           *logrus.Logger
 	srvAddr       string // listen address, eg: 0.0.0.0:12345
 	httpSrvAddr   string
 	withoutTeller bool
@@ -58,7 +58,7 @@ type Config struct {
 }
 
 // New creates proxy instance
-func New(cfg Config, auth *daemon.Auth, ops ...Option) *Proxy {
+func New(log *logrus.Logger, cfg Config, auth *daemon.Auth) *Proxy {
 	if auth == nil {
 		panic("Auth is nil")
 	}
@@ -84,8 +84,7 @@ func New(cfg Config, auth *daemon.Auth, ops ...Option) *Proxy {
 	}
 
 	px := &Proxy{
-		// default logger does not turn on debug mode, can use Logger option to set it.
-		Logger:        logger.NewLogger("", false),
+		log:           log,
 		srvAddr:       cfg.SrvAddr,
 		httpSrvAddr:   cfg.HTTPSrvAddr,
 		withoutTeller: cfg.WithoutTeller,
@@ -95,21 +94,17 @@ func New(cfg Config, auth *daemon.Auth, ops ...Option) *Proxy {
 		quit:          make(chan struct{}),
 	}
 
-	for _, op := range ops {
-		op(px)
-	}
-
-	px.mux = daemon.NewMux(px.Logger)
+	px.mux = daemon.NewMux(px.log)
 
 	bindHandlers(px)
 
 	gw := &gateway{
-		p:      px,
-		Logger: px.Logger,
+		p:   px,
+		log: log,
 	}
 
 	px.httpServ = &httpServ{
-		Logger:        px.Logger,
+		log:           log,
 		Addr:          cfg.HTTPSrvAddr,
 		StaticDir:     cfg.HTMLStaticDir,
 		HTMLInterface: cfg.HTMLInterface,
@@ -137,8 +132,8 @@ func (px *Proxy) Run() error {
 			return err
 		}
 
-		px.Println("Proxy start, serve on", px.srvAddr)
-		defer px.Println("Proxy service closed")
+		px.log.Println("Proxy start, serve on", px.srvAddr)
+		defer px.log.Println("Proxy service closed")
 
 		// start connection handler process
 		wg.Add(1)
@@ -157,14 +152,14 @@ func (px *Proxy) Run() error {
 					case <-px.quit:
 						return
 					default:
-						px.Println("Accept error:", err)
+						px.log.Println("Accept error:", err)
 						continue
 					}
 				}
 
 				select {
 				case <-time.After(1 * time.Second):
-					px.Printf("Close connection:%s, only one connection is allowed\n", conn.RemoteAddr())
+					px.log.Printf("Close connection:%s, only one connection is allowed\n", conn.RemoteAddr())
 					conn.Close()
 				case px.connC <- conn:
 				}
@@ -240,7 +235,7 @@ func (px *Proxy) handleConnection() {
 		case conn := <-px.connC:
 			select {
 			case <-time.After(2 * time.Second):
-				px.Printf("Close connection %s, only one connection is allowed", conn.RemoteAddr())
+				px.log.Printf("Close connection %s, only one connection is allowed", conn.RemoteAddr())
 				conn.Close()
 				return
 			case exec := <-execFuncC:
@@ -257,11 +252,11 @@ func (px *Proxy) handleConnection() {
 }
 
 func (px *Proxy) newSession(conn net.Conn) {
-	px.Debugln("New session")
-	defer px.Debugln("Session closed")
-	sn, err := daemon.NewSession(conn, px.auth, px.mux, false, daemon.Logger(px.Logger))
+	px.log.Debugln("New session")
+	defer px.log.Debugln("Session closed")
+	sn, err := daemon.NewSession(px.log, conn, px.auth, px.mux, false)
 	if err != nil {
-		px.Println(err)
+		px.log.Println(err)
 		return
 	}
 
@@ -280,7 +275,7 @@ func (px *Proxy) newSession(conn net.Conn) {
 	select {
 	case err := <-errC:
 		if err != io.EOF && err != nil {
-			px.Println(err)
+			px.log.Println(err)
 		}
 	case <-px.pingTimer.C:
 		conn.Close()
@@ -332,9 +327,9 @@ func (px *Proxy) openStream(f func(daemon.Messager)) (int, closeStream, error) {
 	}
 
 	id := px.sn.Sub(f)
-	px.Debugln("Open stream:", id)
+	px.log.Debugln("Open stream:", id)
 	cf := func() {
-		defer px.Debugln("Close stream:", id)
+		defer px.log.Debugln("Close stream:", id)
 		px.Lock()
 		if px.sn != nil {
 			px.sn.Unsub(id)

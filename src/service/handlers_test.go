@@ -3,17 +3,22 @@ package service
 import (
 	"testing"
 
-	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/daemon"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
 type dummyGateway struct {
-	// resetPongTimer bool
-	logger.Logger
+	log     *logrus.Logger
 	bindErr error
 	skyAddr string
 	btcAddr string
+}
+
+func (dg *dummyGateway) Logger() *logrus.Logger {
+	return dg.log
 }
 
 func (dg *dummyGateway) ResetPongTimer() {
@@ -46,7 +51,7 @@ func (wc *ResWC) Close() {
 
 func TestBindMessage(t *testing.T) {
 	dg := dummyGateway{
-		Logger:  logger.NewLogger("", true),
+		log:     testutil.NewLogger(t),
 		btcAddr: "14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
 	}
 

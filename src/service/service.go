@@ -8,8 +8,8 @@ import (
 
 	"io"
 
+	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/logger"
 )
 
 const (
@@ -42,7 +42,7 @@ type Exchanger interface {
 
 // Service provides the ico service
 type Service struct {
-	logger.Logger
+	log     *logrus.Logger
 	cfg     Config      // service configuration info
 	session *session    // connection is maintained in session, and when session done, means this connection is done.
 	mux     *daemon.Mux // used for dispatching message to corresponding handler
@@ -69,7 +69,7 @@ type Config struct {
 }
 
 // New creates a ico service
-func New(cfg Config, auth *daemon.Auth, log logger.Logger, excli Exchanger, btcAddrGen BtcAddrGenerator) *Service {
+func New(cfg Config, auth *daemon.Auth, log *logrus.Logger, excli Exchanger, btcAddrGen BtcAddrGenerator) *Service {
 	if cfg.ReconnectTime == 0 {
 		cfg.ReconnectTime = reconnectTime
 	}
@@ -92,7 +92,7 @@ func New(cfg Config, auth *daemon.Auth, log logger.Logger, excli Exchanger, btcA
 
 	s := &Service{
 		cfg:        cfg,
-		Logger:     log,
+		log:        log,
 		auth:       auth,
 		excli:      excli,
 		btcAddrGen: btcAddrGen,
@@ -100,11 +100,11 @@ func New(cfg Config, auth *daemon.Auth, log logger.Logger, excli Exchanger, btcA
 		quit:       make(chan struct{}),
 	}
 
-	s.mux = daemon.NewMux(s.Logger)
+	s.mux = daemon.NewMux(log)
 
 	s.gateway = &gateway{
-		Logger: s.Logger,
-		s:      s,
+		log: log,
+		s:   s,
 	}
 
 	// bind message handlers
@@ -115,18 +115,18 @@ func New(cfg Config, auth *daemon.Auth, log logger.Logger, excli Exchanger, btcA
 
 // Run starts the service
 func (s *Service) Run() error {
-	s.Println("Start teller service...")
-	defer s.Println("Teller Service closed")
+	s.log.Println("Start teller service...")
+	defer s.log.Println("Teller Service closed")
 
 	for {
 		if err := s.newSession(); err != nil {
 			switch err {
 			case io.EOF:
-				s.Println("Proxy connection break..")
+				s.log.Println("Proxy connection break..")
 			case daemon.ErrAuth:
 				return err
 			default:
-				s.Println(err)
+				s.log.Println(err)
 			}
 		}
 
@@ -151,24 +151,19 @@ func (s *Service) HandleFunc(tp daemon.MsgType, h daemon.Handler) {
 }
 
 func (s *Service) newSession() error {
-	s.Debugln("New session")
+	s.log.Debugln("New session")
 
-	defer s.Debugln("Session closed")
-	s.Println("Connect to proxy address", s.cfg.ProxyAddr)
+	defer s.log.Debugln("Session closed")
+	s.log.Println("Connect to proxy address", s.cfg.ProxyAddr)
 
 	conn, err := net.DialTimeout("tcp", s.cfg.ProxyAddr, s.cfg.DialTimeout)
 	if err != nil {
 		return err
 	}
 
-	s.Println("Connect success")
+	s.log.Println("Connect success")
 
-	sn, err := daemon.NewSession(conn,
-		s.auth,
-		s.mux,
-		true,
-		daemon.Logger(s.Logger),
-		daemon.WriteBufferSize(s.cfg.SessionWriteBufSize))
+	sn, err := daemon.NewSession(s.log, conn, s.auth, s.mux, true, daemon.WriteBufferSize(s.cfg.SessionWriteBufSize))
 	if err != nil {
 		return err
 	}
@@ -192,13 +187,13 @@ func (s *Service) newSession() error {
 		case err := <-errC:
 			return err
 		case <-s.session.pongTimer.C:
-			s.Debugln("Pong message time out")
+			s.log.Debugln("Pong message time out")
 			s.session.close()
 			s.session = nil
 			return ErrPongTimeout
 		case <-s.session.pingTicker.C:
 			// send ping message
-			s.Debugln("Send ping message")
+			s.log.Debugln("Send ping message")
 			s.sendPing()
 		case req := <-s.reqc:
 			req()

@@ -7,19 +7,23 @@ import (
 
 	"fmt"
 
+	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/logger"
 )
 
 type gatewayer interface {
-	logger.Logger
+	Logger() *logrus.Logger
 	BindAddress(context.Context, *daemon.BindRequest) (*daemon.BindResponse, error)
 	GetDepositStatuses(context.Context, *daemon.StatusRequest) (*daemon.StatusResponse, error)
 }
 
 type gateway struct {
-	logger.Logger
-	p *Proxy
+	log *logrus.Logger
+	p   *Proxy
+}
+
+func (gw *gateway) Logger() *logrus.Logger {
+	return gw.log
 }
 
 func (gw *gateway) BindAddress(cxt context.Context, req *daemon.BindRequest) (*daemon.BindResponse, error) {
@@ -50,7 +54,7 @@ func (gw *gateway) sendMessage(cxt context.Context, msg daemon.Messager, ackMsg 
 		msgC := make(chan daemon.Messager, 1)
 		// open the data stream
 		id, closeStream, er := gw.p.openStream(func(m daemon.Messager) {
-			gw.Debugf("Recv %s message", m.Type())
+			gw.log.Debugf("Recv %s message", m.Type())
 			msgC <- m
 		})
 		if er != nil {

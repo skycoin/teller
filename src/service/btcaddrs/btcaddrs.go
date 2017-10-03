@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"github.com/boltdb/bolt"
+	"github.com/sirupsen/logrus"
 	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/teller/src/logger"
 )
 
 // ErrDepositAddressEmpty represents all deposit addresses are used
@@ -29,7 +29,7 @@ type addressJSON struct {
 }
 
 // New creates BtcAddrs instance, will load and verify the addresses
-func New(db *bolt.DB, addrsReader io.Reader, log logger.Logger) (*BtcAddrs, error) {
+func New(db *bolt.DB, addrsReader io.Reader, log *logrus.Logger) (*BtcAddrs, error) {
 	if db == nil {
 		return nil, errors.New("db is nil")
 	}
