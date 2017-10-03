@@ -29,8 +29,7 @@ type SendOption struct {
 }
 
 // SendAsync send coins to dest address, should return immediately or timeout
-func (s *Sender) SendAsync(destAddr string, coins int64, opt *SendOption) (<-chan interface{}, error) {
-	// TODO: convert droplets to skycoin string
+func (s *Sender) SendAsync(destAddr string, coins uint64, opt *SendOption) (<-chan interface{}, error) {
 	rspC := make(chan interface{}, 1)
 	req := Request{
 		Address: destAddr,

@@ -42,7 +42,7 @@ type BtcScanner interface {
 // calculateSkyValue returns the amount of SKY (in droplets) to give for an
 // amount of BTC (in satoshis).
 // Rate is measured in SKY per BTC.
-func calculateSkyValue(satoshis, skyPerBTC int64) (int64, error) {
+func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
 	if satoshis < 0 || skyPerBTC < 0 {
 		return 0, errors.New("negative satoshis or skyPerBTC")
 	}
@@ -54,12 +54,17 @@ func calculateSkyValue(satoshis, skyPerBTC int64) (int64, error) {
 	rate := decimal.New(skyPerBTC, 0)
 
 	sky := btc.Mul(rate)
-	sky := sky.Truncate(dropletPrecision)
+	sky = sky.Truncate(dropletPrecision)
 
 	skyToDroplets := decimal.New(dropletsPerSKY, 0)
 	droplets := sky.Mul(skyToDroplets)
 
-	return droplets.IntPart()
+	amt := droplets.IntPart()
+	if amt < 0 {
+		return 0, errors.New("calculated sky amount is negative")
+	}
+
+	return uint64(amt), nil
 }
 
 // Service manages coin exchange between deposits and skycoin
