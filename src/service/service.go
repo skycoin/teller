@@ -112,18 +112,18 @@ func New(cfg Config, auth *daemon.Auth, log *logrus.Logger, excli Exchanger, btc
 
 // Run starts the service
 func (s *Service) Run() error {
-	s.log.Println("Start teller service...")
-	defer s.log.Println("Teller Service closed")
+	s.log.Info("Start teller service...")
+	defer s.log.Info("Teller Service closed")
 
 	for {
 		if err := s.newSession(); err != nil {
 			switch err {
 			case io.EOF:
-				s.log.Println("Proxy connection break..")
+				s.log.Info("Proxy connection break..")
 			case daemon.ErrAuth:
 				return err
 			default:
-				s.log.Println(err)
+				s.log.WithError(err).Error()
 			}
 		}
 
@@ -148,17 +148,17 @@ func (s *Service) HandleFunc(tp daemon.MsgType, h daemon.Handler) {
 }
 
 func (s *Service) newSession() error {
-	s.log.Debugln("New session")
+	s.log.Debug("New session")
 
-	defer s.log.Debugln("Session closed")
-	s.log.Println("Connect to proxy address", s.cfg.ProxyAddr)
+	defer s.log.Debug("Session closed")
+	s.log.WithField("proxyAddr", s.cfg.ProxyAddr).Info("Connect to proxy address")
 
 	conn, err := net.DialTimeout("tcp", s.cfg.ProxyAddr, s.cfg.DialTimeout)
 	if err != nil {
 		return err
 	}
 
-	s.log.Println("Connect success")
+	s.log.Info("Connect success")
 
 	sn, err := daemon.NewSession(s.log, conn, s.auth, s.mux, true, daemon.WriteBufferSize(s.cfg.SessionWriteBufSize))
 	if err != nil {
@@ -184,13 +184,13 @@ func (s *Service) newSession() error {
 		case err := <-errC:
 			return err
 		case <-s.session.pongTimer.C:
-			s.log.Debugln("Pong message time out")
+			s.log.Debug("Pong message time out")
 			s.session.close()
 			s.session = nil
 			return ErrPongTimeout
 		case <-s.session.pingTicker.C:
 			// send ping message
-			s.log.Debugln("Send ping message")
+			s.log.Debug("Send ping message")
 			s.sendPing()
 		case req := <-s.reqc:
 			req()

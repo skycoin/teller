@@ -3,10 +3,10 @@ package service
 import (
 	"context"
 	"errors"
-
 	"fmt"
 
 	"github.com/sirupsen/logrus"
+
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
 )
@@ -38,13 +38,14 @@ func PongMessageHandler(gw Gatewayer) daemon.Handler {
 		log := logger.FromContext(ctx)
 
 		if msg == nil {
-			log.Println(ErrRequestMessageIsNil)
+			log.WithError(ErrRequestMessageIsNil).Error()
 			return
 		}
+
 		// reset the service's pong timer
 		pm := daemon.PongMessage{}
 		if msg.Type() != pm.Type() {
-			log.Printf("Expect pong message, but got:%v\n", msg.Type())
+			log.WithField("msgType", msg.Type()).Error("Expected PongMsgType")
 			return
 		}
 
@@ -58,20 +59,20 @@ func BindRequestHandler(gw Gatewayer) daemon.Handler {
 		log := logger.FromContext(ctx)
 
 		if msg == nil {
-			log.Println(ErrRequestMessageIsNil)
+			log.WithError(ErrRequestMessageIsNil).Error()
 			return
 		}
 
 		gw.ResetPongTimer()
 
 		if msg.Type() != daemon.BindRequestMsgType {
-			log.Printf("Expect bind request message, but got: %v\n", msg.Type())
+			log.WithField("msgType", msg.Type()).Error("Expected BindRequestMsgType")
 			return
 		}
 
 		req, ok := msg.(*daemon.BindRequest)
 		if !ok {
-			log.Println("Assert *daemon.BindRequest failed")
+			log.Error("Assert *daemon.BindRequest failed")
 			return
 		}
 
@@ -80,7 +81,7 @@ func BindRequestHandler(gw Gatewayer) daemon.Handler {
 
 		btcAddr, err := gw.BindAddress(req.SkyAddress)
 		if err != nil {
-			log.Printf("Bind address failed: %v", err)
+			log.WithError(err).WithField(logger.SkyAddrField, req.SkyAddress).Error("BindAddress failed")
 			ack.Error = fmt.Sprintf("Bind address failed: %v", err)
 		} else {
 			ack.BtcAddress = btcAddr
@@ -101,20 +102,20 @@ func StatusRequestHandler(gw Gatewayer) daemon.Handler {
 		log := logger.FromContext(ctx)
 
 		if msg == nil {
-			log.Println(ErrRequestMessageIsNil)
+			log.WithError(ErrRequestMessageIsNil).Error()
 			return
 		}
 
 		gw.ResetPongTimer()
 
 		if msg.Type() != daemon.StatusRequestMsgType {
-			log.Printf("Expect status request message, but got:%v\n", msg.Type())
+			log.WithField("msgType", msg.Type()).Error("Expected StatusRequestMsgType")
 			return
 		}
 
 		req, ok := msg.(*daemon.StatusRequest)
 		if !ok {
-			log.Println("Assert *daemon.StatusRequest failed")
+			log.Error("Assert *daemon.StatusRequest failed")
 			return
 		}
 
@@ -123,9 +124,8 @@ func StatusRequestHandler(gw Gatewayer) daemon.Handler {
 
 		sts, err := gw.GetDepositStatuses(req.SkyAddress)
 		if err != nil {
-			errStr := fmt.Sprintf("Get status of %s failed: %v", req.SkyAddress, err)
-			log.Println(errStr)
-			ack.Error = errStr
+			log.WithError(err).WithField(logger.SkyAddrField, req.SkyAddress).Error("GetDepositStatuses failed")
+			ack.Error = fmt.Sprintf("Get status of %s failed: %v", req.SkyAddress, err)
 		} else {
 			ack.Statuses = sts
 		}

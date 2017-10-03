@@ -16,6 +16,7 @@ import (
 
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/dbutil"
+	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/scanner"
 	"github.com/skycoin/teller/src/service/sender"
 )
@@ -68,12 +69,12 @@ func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
 
 // Service manages coin exchange between deposits and skycoin
 type Service struct {
-	log     *logrus.Logger
-	cfg     Config
-	scanner BtcScanner // scanner provides apis for interacting with scan service
-	sender  SkySender  // sender provides apis for sending skycoin
-	store   *store     // deposit info storage
-	quit    chan struct{}
+	logEntry *logrus.Entry
+	cfg      Config
+	scanner  BtcScanner // scanner provides apis for interacting with scan service
+	sender   SkySender  // sender provides apis for sending skycoin
+	store    *store     // deposit info storage
+	quit     chan struct{}
 }
 
 // Config exchange config struct
@@ -89,8 +90,11 @@ func NewService(cfg Config, db *bolt.DB, log *logrus.Logger, scanner BtcScanner,
 	}
 
 	return &Service{
-		cfg:     cfg,
-		log:     log,
+		cfg: cfg,
+		logEntry: log.WithFields(logrus.Fields{
+			"pkg": "exchange",
+			"obj": "Service",
+		}),
 		scanner: scanner,
 		sender:  sender,
 		store:   s,
@@ -100,43 +104,50 @@ func NewService(cfg Config, db *bolt.DB, log *logrus.Logger, scanner BtcScanner,
 
 // Run starts the exchange process
 func (s *Service) Run() error {
-	s.log.Println("Start exchange service...")
-	defer s.log.Println("Exchange service closed")
+	log := s.logEntry.WithField("func", "Run")
+	log.Info("Start exchange service...")
+	defer log.Info("Exchange service closed")
 
 	s.processUnconfirmedTx()
 
 	for {
 		select {
 		case <-s.quit:
-			s.log.Println("exhange.Service quit")
+			log.Info("exhange.Service quit")
 			return nil
 		case dv, ok := <-s.scanner.GetDepositValue():
+			log = log.WithField("depositValue", dv)
+
 			if !ok {
-				s.log.Println("Scan service closed")
+				log.Warn("Scan service closed")
 				return nil
 			}
 
-			s.log.Printf("Receive %f deposit bitcoin from %s\n", dv.Value, dv.Address)
+			log.Info("Receive bitcoin deposit")
 			btcTxIndex := dv.TxN()
 			// get deposit info of given btc address
 			di, err := s.store.GetDepositInfo(btcTxIndex)
 
+			// TODO, can rewrite this method a little better
 			switch err.(type) {
 			case nil:
+				log = log.WithField("depositInfo", di)
 			case dbutil.ObjectNotExistErr:
-				// s.log.Printf("Deposit info from btc address %s with tx %s doesn't exist\n", dv.Address, dv.Tx)
-				// continue
+				log.Info("DepositInfo not found in DB, attempting to backfill")
+
 				skyAddr, err := s.store.GetBindAddress(dv.Address)
 				if err != nil {
-					s.log.Printf("GetBindAddress failed: %+v %v\n", dv, err)
+					log.WithError(err).Error("GetBindAddress failed")
 					continue
 				}
 
 				if skyAddr == "" {
-					s.log.Printf("Deposit from %s has no bind skycoin address\n", dv.Address)
+					log.Warn("Deposit has no bound skycoin address")
 					dv.AckC <- struct{}{}
 					continue
 				}
+
+				log = log.WithField(logger.SkyAddrField, skyAddr)
 
 				di = DepositInfo{
 					SkyAddress: skyAddr,
@@ -145,18 +156,20 @@ func (s *Service) Run() error {
 					Status:     StatusWaitSend,
 				}
 
+				log = log.WithField("depositInfo", di)
+
 				if err := s.store.AddDepositInfo(di); err != nil {
-					s.log.Printf("Add deposit info %v failed: %v\n", di, err)
+					log.WithError(err).Error("Add DepositInfo failed")
 					continue
 				}
 			default:
-				s.log.Printf("GetDepositInfo failed: %s %v", btcTxIndex, err)
+				log.WithError(err).Error("GetDepositInfo failed")
 				continue
 			}
 
 			if di.Status >= StatusWaitConfirm {
 				dv.AckC <- struct{}{}
-				s.log.Printf("Deposit info from btc address %s with tx %s already processed\n", dv.Address, dv.Tx)
+				log.Warn("DepositInfo already processed")
 				continue
 			}
 
@@ -166,41 +179,47 @@ func (s *Service) Run() error {
 					dpi.Status = StatusWaitSend
 					return dpi
 				}); err != nil {
-					s.log.Printf("Update deposit status of btc tx %s failed: %v\n", dv.Tx, err)
+					log.WithError(err).Error("Update DepositStatus failed")
 					continue
 				}
 			}
 
 			// send skycoins
-			// get binded skycoin address
+			// get bound skycoin address
 			skyAddr, err := s.store.GetBindAddress(dv.Address)
 			if err != nil {
-				s.log.Printf("GetBindAddress failed: %+v %v\n", dv, err)
+				log.WithError(err).Error("GetBindAddress failed")
 				continue
 			}
 
 			if skyAddr == "" {
-				s.log.Println("No bound skycoin address found for btc address", dv.Address)
+				log.Error("Deposit has no bound skycoin address")
 				continue
 			}
 
+			log = log.WithField(logger.SkyAddrField, skyAddr)
+
 			// checks if the send service is closed
 			if s.sender.IsClosed() {
-				s.log.Println("Send service closed")
+				log.Warn("Send service closed")
 				return nil
 			}
+
+			log = log.WithField("skyRate", s.cfg.Rate)
 
 			// try to send skycoin
 			skyAmt, err := calculateSkyValue(dv.Value, s.cfg.Rate)
 			if err != nil {
-				s.log.Printf("calculateSkyValue error: %v", err)
+				log.WithError(err).Error("calculateSkyValue failed")
 				continue
 			}
 
-			s.log.Printf("Trying to send %d skycoin droplets to %s\n", skyAmt, skyAddr)
+			log = log.WithField("sendSkyDroplets", skyAmt)
+
+			log.Info("Trying to send skycoin")
 
 			if skyAmt == 0 {
-				s.log.Printf("skycoin amount is 0, not sending")
+				log.Warn("skycoin amount is 0, not sending")
 				continue
 			}
 
@@ -210,17 +229,19 @@ func (s *Service) Run() error {
 			case r := <-rspC:
 				rsp = r.(sender.Response)
 			case <-s.quit:
-				s.log.Println("exhange.Service quit")
+				log.Warn("exhange.Service quit")
 				return nil
 			}
 
+			log = log.WithField("response", rsp)
+
 			if rsp.Err != "" {
-				s.log.Println("Send skycoin failed:", rsp.Err)
+				log.Error("Send skycoin failed")
 				dv.AckC <- struct{}{}
 				continue
 			}
 
-			s.log.Printf("Sent %d skycoin droplets to %s\n", skyAmt, skyAddr)
+			log.Info("Sent skycoin")
 
 			// update the txid
 			if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
@@ -229,40 +250,44 @@ func (s *Service) Run() error {
 				dpi.SkyBtcRate = s.cfg.Rate
 				return dpi
 			}); err != nil {
-				s.log.Printf("Update deposit info failed: btcAddr=%s rate=%d skySent=%d txid=%s err=%v\n", dv.Address, s.cfg.Rate, skyAmt, rsp.Txid, err)
+				log.WithError(err).Error("Update deposit info failed")
 			}
 
 		loop:
 			for {
 				select {
 				case <-s.quit:
-					s.log.Println("exhange.Service quit")
+					log.Warn("exhange.Service quit")
 					return nil
 				case st := <-rsp.StatusC:
+					log = log.WithField("responseStatus", st)
 					switch st {
 					case sender.Sent:
-						s.log.Printf("Status=%s, skycoin address=%s\n", StatusWaitConfirm, skyAddr)
+						log = log.WithField("exchangeStatus", StatusWaitConfirm)
+						log.Info("Handling response status channel result")
+
 						if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
 							dpi.Status = StatusWaitConfirm
 							return dpi
 						}); err != nil {
-							s.log.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
+							log.WithError(err).Error("Update DepositInfo failed")
 						}
 					case sender.TxConfirmed:
+						log = log.WithField("exchangeStatus", StatusDone)
+						log.Info("Handling response status channel result")
+
 						if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
 							dpi.Status = StatusDone
 							return dpi
 						}); err != nil {
-							s.log.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
+							log.WithError(err).Error("Update DepositInfo failed")
 						}
 
 						dv.AckC <- struct{}{}
 
-						s.log.Printf("Status=%s, txid=%s, skycoin address=%s\n", StatusDone, rsp.Txid, skyAddr)
-
 						break loop
 					default:
-						s.log.Panicln("Unknown sender.Response.StatusC value", st)
+						log.Panic("Unknown responseStatus value")
 						return nil
 					}
 				}
@@ -281,23 +306,28 @@ func (s *Service) Shutdown() {
 // ProcessUnconfirmedTx wait until all unconfirmed tx to be confirmed and update
 // it's status in db
 func (s *Service) processUnconfirmedTx() {
-	s.log.Println("Checking the unconfirmed tx...")
-	defer s.log.Println("Checking confirmed tx finished")
+	log := s.logEntry.WithField("func", "processUnconfirmedTx")
+
+	log.Info("Checking the unconfirmed tx...")
+	defer log.Info("Checking confirmed tx finished")
 
 	dpis, err := s.store.GetDepositInfoArray(func(dpi DepositInfo) bool {
 		return dpi.Status == StatusWaitConfirm
 	})
 
 	if err != nil {
-		s.log.Println("GetDepositInfoArray failed:", err)
+		log.WithError(err).Println("GetDepositInfoArray failed")
 		return
 	}
+
+	log = log.WithField("depositInfosLen", len(dpis))
 
 	if len(dpis) == 0 {
 		return
 	}
 
 	for _, dpi := range dpis {
+		dpiLog := log.WithField("depositInfo", dpi)
 		// check if the tx is confirmed
 	loop:
 		for {
@@ -307,12 +337,12 @@ func (s *Service) processUnconfirmedTx() {
 					dpi.Status = StatusDone
 					return dpi
 				}); err != nil {
-					s.log.Println("Update deposit info status in ProcessUnconfirmedTx failed:", err)
+					dpiLog.WithError(err).Error("Update DepositInfo.Status")
 				}
 				break loop
 			}
 
-			s.log.Debugf("Txid %s is not confirmed...", dpi.Txid)
+			dpiLog.Debug("Txid is not confirmed")
 			select {
 			case <-time.After(3 * time.Second):
 				continue

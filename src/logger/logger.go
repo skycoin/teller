@@ -9,6 +9,13 @@ import (
 	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 )
 
+const (
+	// SkyAddrField should be used for logging skycoin addresses in the logger
+	SkyAddrField = "skyAddr"
+	// BtcAddrField should be used for logging skycoin addresses in the logger
+	BtcAddrField = "btcAddr"
+)
+
 // NewLogger creates a logrus.Logger, which logs to os.Stdout.
 // If debug is true, the log level is logrus.DebugLevel, otherwise logrus.InfoLevel.
 // If logFilename is not the empty string, logs will also be written to that file,
