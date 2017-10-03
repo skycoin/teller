@@ -175,13 +175,13 @@ func main() {
 	case "addbtcaddress":
 		v, err := ioutil.ReadFile(*btcAddrFile)
 		if err != nil {
-			fmt.Println("Read btcjson file failed:", err)
+			fmt.Println("Read btcAddr json file failed:", err)
 			return
 		}
 
 		var addrJSON addressJSON
 		if err := json.NewDecoder(bytes.NewReader(v)).Decode(&addrJSON); err != nil {
-			fmt.Println("Decode btcaddr json failed:", err)
+			fmt.Println("Decode btcAddr json file failed:", err)
 			return
 		}
 
@@ -195,7 +195,7 @@ func main() {
 	case "getbtcaddress":
 		v, err := ioutil.ReadFile(*btcAddrFile)
 		if err != nil {
-			fmt.Println("Read btcjson file failed:", err)
+			fmt.Println("Read btcAddr json file failed:", err)
 			return
 		}
 		fmt.Println(string(v))

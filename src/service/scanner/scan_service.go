@@ -11,13 +11,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"sync"
-
 	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcrpcclient"
+	"github.com/btcsuite/btcutil"
+
 	"github.com/skycoin/teller/src/logger"
 )
 
@@ -66,12 +67,12 @@ type Config struct {
 
 // DepositValue struct
 type DepositValue struct {
-	Address string  // deposit address
-	Value   float64 // deposit coins
-	Height  int64   // the block height
-	Tx      string  // the transaction id
-	N       uint32  // the index of vout in the tx
-	IsUsed  bool    // whether this dv is used
+	Address string // deposit address
+	Value   int64  // deposit BTC amount, in satoshis
+	Height  int64  // the block height
+	Tx      string // the transaction id
+	N       uint32 // the index of vout in the tx
+	IsUsed  bool   // whether this dv is used
 }
 
 // TxN returns $tx:$n formatted ID string
@@ -231,7 +232,11 @@ func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 			return err
 		}
 
-		dvs := scanBlock(block, addrs)
+		dvs, err := scanBlock(block, addrs)
+		if err != nil {
+			return err
+		}
+
 		for _, dv := range dvs {
 			if err := scan.store.pushDepositValueTx(tx, dv); err != nil {
 				switch err.(type) {
@@ -256,7 +261,7 @@ func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 }
 
 // scanBlock scan the given block and returns the next block hash or error
-func scanBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) []DepositValue {
+func scanBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) ([]DepositValue, error) {
 	addrMap := map[string]struct{}{}
 	for _, a := range depositAddrs {
 		addrMap[a] = struct{}{}
@@ -265,11 +270,16 @@ func scanBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) []De
 	var dv []DepositValue
 	for _, tx := range block.RawTx {
 		for _, v := range tx.Vout {
+			amt, err := btcutil.NewAmount(v.Value)
+			if err != nil {
+				return nil, err
+			}
+
 			for _, a := range v.ScriptPubKey.Addresses {
 				if _, ok := addrMap[a]; ok {
 					dv = append(dv, DepositValue{
 						Address: a,
-						Value:   v.Value,
+						Value:   int64(amt),
 						Height:  block.Height,
 						Tx:      tx.Txid,
 						N:       v.N,
@@ -279,7 +289,7 @@ func scanBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) []De
 		}
 	}
 
-	return dv
+	return dv, nil
 }
 
 // AddScanAddress adds new scan address
