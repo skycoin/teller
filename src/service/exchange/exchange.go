@@ -225,9 +225,11 @@ func (s *Service) Run() error {
 			// update the txid
 			if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
 				dpi.Txid = rsp.Txid
+				dpi.SkySent = skyAmt
+				dpi.SkyBtcRate = s.cfg.Rate
 				return dpi
 			}); err != nil {
-				s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
+				s.Printf("Update deposit info failed: btcAddr=%s rate=%d skySent=%d txid=%s err=%v\n", dv.Address, s.cfg.Rate, skyAmt, rsp.Txid, err)
 			}
 
 		loop:
