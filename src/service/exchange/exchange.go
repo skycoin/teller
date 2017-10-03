@@ -41,7 +41,7 @@ type BtcScanner interface {
 // Rate is measured in SKY per BTC.
 func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
 	if satoshis < 0 || skyPerBTC < 0 {
-		return 0, errors.New("negative satoshis or skyPerBTC")
+		return 0, errors.New("negative satoshis or negative skyPerBTC")
 	}
 
 	btc := decimal.New(satoshis, 0)
@@ -58,6 +58,8 @@ func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
 
 	amt := droplets.IntPart()
 	if amt < 0 {
+		// This should never occur, but double check before we convert to uint64,
+		// otherwise we would send all the coins due to integer wrapping.
 		return 0, errors.New("calculated sky amount is negative")
 	}
 
