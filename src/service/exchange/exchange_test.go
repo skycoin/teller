@@ -21,13 +21,13 @@ type dummySender struct {
 	sleepTime time.Duration
 	sent      struct {
 		Address string
-		Value   int64
+		Value   uint64
 	}
 	closed         bool
 	txidConfirmMap map[string]bool
 }
 
-func (send *dummySender) Send(destAddr string, coins int64, opt *sender.SendOption) (string, error) {
+func (send *dummySender) Send(destAddr string, coins uint64, opt *sender.SendOption) (string, error) {
 	time.Sleep(send.sleepTime)
 
 	if send.err != nil && send.err != sender.ErrServiceClosed {
@@ -39,9 +39,7 @@ func (send *dummySender) Send(destAddr string, coins int64, opt *sender.SendOpti
 	return send.txid, send.err
 }
 
-func (send *dummySender) SendAsync(destAddr string,
-	coins int64,
-	opt *sender.SendOption) (<-chan interface{}, error) {
+func (send *dummySender) SendAsync(destAddr string, coins uint64, opt *sender.SendOption) (<-chan interface{}, error) {
 	rspC := make(chan interface{}, 1)
 	if send.err != nil {
 		return rspC, send.err
@@ -362,7 +360,7 @@ func TestRunExchangeService(t *testing.T) {
 
 				if len(tc.initDpis) == 0 && tc.sendErr == nil {
 					require.Equal(t, tc.bindSkyAddr, send.sent.Address)
-					require.Equal(t, int64(tc.dpValue*500), send.sent.Value)
+					require.Equal(t, uint64(tc.dpValue*500), send.sent.Value)
 				}
 			}
 

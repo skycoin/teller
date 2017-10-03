@@ -89,10 +89,16 @@
   version = "v1.0.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/shopspring/decimal"
+  packages = ["."]
+  revision = "aed1bfe463fa3c9cc268d60dcc1491db613bff7e"
+
+[[projects]]
   name = "github.com/skycoin/skycoin"
-  packages = ["src/cipher","src/cipher/base58","src/cipher/chacha20","src/cipher/ripemd160","src/cipher/secp256k1-go","src/cipher/secp256k1-go/secp256k1-go2","src/util/logging"]
-  revision = "dd924e1f2de8fab945e05b3245dbeabf267f2910"
-  version = "v0.19.0"
+  packages = ["src/api/cli","src/api/webrpc","src/cipher","src/cipher/base58","src/cipher/chacha20","src/cipher/encoder","src/cipher/go-bip39","src/cipher/ripemd160","src/cipher/secp256k1-go","src/cipher/secp256k1-go/secp256k1-go2","src/coin","src/daemon","src/daemon/gnet","src/daemon/pex","src/util/droplet","src/util/file","src/util/http","src/util/logging","src/util/utc","src/visor","src/visor/blockdb","src/visor/bucket","src/visor/historydb","src/wallet"]
+  revision = "f725fbbeacf65c448fc6e639cc64c966cc61c878"
+  version = "v0.20.0-alpha.1"
 
 [[projects]]
   name = "github.com/stretchr/testify"
@@ -107,9 +113,15 @@
   revision = "a80c09da9c7bd84aaf622507fd339a9281b8acd1"
 
 [[projects]]
+  name = "github.com/urfave/cli"
+  packages = ["."]
+  revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
+  version = "v1.20.0"
+
+[[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
-  packages = ["acme","acme/autocert","ripemd160"]
+  packages = ["acme","acme/autocert","pbkdf2","ripemd160"]
   revision = "558b6879de74bc843225cde5686419267ff707ca"
 
 [[projects]]
@@ -133,6 +145,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "b43e12a0c08c616cb2a71e82c6be64aa638c975bb01910998c2504492b18f8cf"
+  inputs-digest = "c8d327ca3d8fa6eb70f33cd63c201292e526e86cec15878e910bb5877a3121b1"
   solver-name = "gps-cdcl"
   solver-version = 1

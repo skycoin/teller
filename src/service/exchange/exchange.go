@@ -4,6 +4,7 @@
 package exchange
 
 import (
+	"errors"
 	"time"
 
 	"github.com/boltdb/bolt"
@@ -16,7 +17,7 @@ import (
 
 // SkySender provids apis for sending skycoin
 type SkySender interface {
-	SendAsync(destAddr string, coins int64, opt *sender.SendOption) (<-chan interface{}, error)
+	SendAsync(destAddr string, coins uint64, opt *sender.SendOption) (<-chan interface{}, error)
 	IsTxConfirmed(txid string) bool
 	IsClosed() bool
 }
@@ -28,8 +29,12 @@ type BtcScanner interface {
 	GetDepositValue() <-chan scanner.DepositNote
 }
 
-func calculateSkyValue(btcValue float64, rate float64) int64 {
-	return int64(btcValue * rate)
+func calculateSkyValue(btcValue float64, rate float64) (uint64, error) {
+	v := btcValue * rate
+	if v < 0 {
+		return 0, errors.New("negative sky value")
+	}
+	return uint64(v), nil
 }
 
 // Service manages coin exchange between deposits and skycoin
@@ -157,7 +162,12 @@ func (s *Service) Run() error {
 			}
 
 			// try to send skycoin
-			skyAmt := calculateSkyValue(dv.Value, float64(s.cfg.Rate))
+			skyAmt, err := calculateSkyValue(dv.Value, float64(s.cfg.Rate))
+			if err != nil {
+				s.Printf("calculateSkyValue error: %v", err)
+				continue
+			}
+
 			s.Printf("Send %d skycoin to %s\n", skyAmt, skyAddr)
 			rspC, _ := s.sender.SendAsync(skyAddr, skyAmt, nil)
 			var rsp sender.Response
@@ -168,6 +178,7 @@ func (s *Service) Run() error {
 				s.Println("exhange.Service quit")
 				return nil
 			}
+
 			if rsp.Err != "" {
 				s.Println("Send skycoin failed:", rsp.Err)
 				dv.AckC <- struct{}{}
