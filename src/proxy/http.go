@@ -20,6 +20,7 @@ import (
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/httputil"
+	"github.com/skycoin/teller/src/logger"
 )
 
 const (
@@ -304,47 +305,48 @@ func (hs *httpServ) Shutdown() {
 //    {"skyaddr": "..."}
 func BindHandler(srv *httpServ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
 		w.Header().Set("Accept", "application/json")
 
 		if !validMethod(w, r, srv.Gateway, []string{http.MethodPost}) {
 			return
 		}
 		if r.Header.Get("Content-Type") != "application/json" {
-			errorResponse(w, srv.Gateway, http.StatusUnsupportedMediaType)
+			errorResponse(ctx, w, srv.Gateway, http.StatusUnsupportedMediaType)
 			return
 		}
 
 		userBindReq := &bindRequest{}
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&userBindReq); err != nil {
-			errorResponse(w, srv.Gateway, http.StatusBadRequest, "Invalid json request body:", err)
+			errorResponse(ctx, w, srv.Gateway, http.StatusBadRequest, "Invalid json request body:", err)
 			return
 		}
 		defer r.Body.Close()
 
 		if userBindReq.SkyAddr == "" {
-			errorResponse(w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
+			errorResponse(ctx, w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
 			return
 		}
 
-		if !verifySkycoinAddress(w, srv.Gateway, userBindReq.SkyAddr) {
+		if !verifySkycoinAddress(ctx, w, srv.Gateway, userBindReq.SkyAddr) {
 			return
 		}
 
-		if !readyToStart(w, srv.Gateway, srv.StartAt) {
+		if !readyToStart(ctx, w, srv.Gateway, srv.StartAt) {
 			return
 		}
 
-		cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
+		ctx, cancel := context.WithTimeout(ctx, proxyRequestTimeout)
 		defer cancel()
 
-		daemonBindReq := daemon.BindRequest{SkyAddress: userBindReq.SkyAddr}
+		daemonBindReq := &daemon.BindRequest{SkyAddress: userBindReq.SkyAddr}
 
 		srv.log.Println("Sending BindRequest to teller, skyaddr", userBindReq.SkyAddr)
 
-		rsp, err := srv.Gateway.BindAddress(cxt, &daemonBindReq)
+		rsp, err := srv.Gateway.BindAddress(ctx, daemonBindReq)
 		if err != nil {
-			handleGatewayResponseError(w, srv.Gateway, err)
+			handleGatewayResponseError(ctx, w, srv.Gateway, err)
 			return
 		}
 
@@ -373,34 +375,36 @@ type bindRequest struct {
 //     skyaddr
 func StatusHandler(srv *httpServ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
 		if !validMethod(w, r, srv.Gateway, []string{http.MethodGet}) {
 			return
 		}
 
 		skyAddr := r.URL.Query().Get("skyaddr")
 		if skyAddr == "" {
-			errorResponse(w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
+			errorResponse(ctx, w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
 			return
 		}
 
-		if !verifySkycoinAddress(w, srv.Gateway, skyAddr) {
+		if !verifySkycoinAddress(ctx, w, srv.Gateway, skyAddr) {
 			return
 		}
 
-		if !readyToStart(w, srv.Gateway, srv.StartAt) {
+		if !readyToStart(ctx, w, srv.Gateway, srv.StartAt) {
 			return
 		}
 
-		cxt, cancel := context.WithTimeout(r.Context(), proxyRequestTimeout)
+		ctx, cancel := context.WithTimeout(ctx, proxyRequestTimeout)
 		defer cancel()
 
-		stReq := daemon.StatusRequest{SkyAddress: skyAddr}
+		stReq := &daemon.StatusRequest{SkyAddress: skyAddr}
 
 		srv.log.Println("Sending StatusRequest to teller, skyaddr", skyAddr)
 
-		rsp, err := srv.Gateway.GetDepositStatuses(cxt, &stReq)
+		rsp, err := srv.Gateway.GetDepositStatuses(ctx, stReq)
 		if err != nil {
-			handleGatewayResponseError(w, srv.Gateway, err)
+			handleGatewayResponseError(ctx, w, srv.Gateway, err)
 			return
 		}
 
@@ -418,14 +422,16 @@ func StatusHandler(srv *httpServ) http.HandlerFunc {
 	}
 }
 
-func readyToStart(w http.ResponseWriter, gw gatewayer, startAt time.Time) bool {
+func readyToStart(ctx context.Context, w http.ResponseWriter, gw gatewayer, startAt time.Time) bool {
 	if time.Now().UTC().After(startAt.UTC()) {
 		return true
 	}
 
+	log := logger.FromContext(ctx)
+
 	msg := fmt.Sprintf("Event starts at %v", startAt)
 	httputil.ErrResponse(w, http.StatusForbidden, msg)
-	gw.Logger().Println(http.StatusForbidden, msg)
+	log.Println(http.StatusForbidden, msg)
 
 	return false
 }
@@ -440,36 +446,40 @@ func validMethod(w http.ResponseWriter, r *http.Request, gw gatewayer, allowed [
 	w.Header().Set("Allow", strings.Join(allowed, ", "))
 
 	status := http.StatusMethodNotAllowed
-	errorResponse(w, gw, status, "Invalid request method:", r.Method)
+	errorResponse(r.Context(), w, gw, status, "Invalid request method:", r.Method)
 
 	return false
 }
 
-func verifySkycoinAddress(w http.ResponseWriter, gw gatewayer, skyAddr string) bool {
+func verifySkycoinAddress(ctx context.Context, w http.ResponseWriter, gw gatewayer, skyAddr string) bool {
+	log := logger.FromContext(ctx)
+
 	if _, err := cipher.DecodeBase58Address(skyAddr); err != nil {
 		msg := fmt.Sprintf("Invalid skycoin address: %v", err)
 		httputil.ErrResponse(w, http.StatusBadRequest, msg)
-		gw.Logger().Println(http.StatusBadRequest, "Invalid skycoin address:", err, skyAddr)
+		log.Println(http.StatusBadRequest, "Invalid skycoin address:", err, skyAddr)
 		return false
 	}
+
 	return true
 }
 
-func handleGatewayResponseError(w http.ResponseWriter, gw gatewayer, err error) {
+func handleGatewayResponseError(ctx context.Context, w http.ResponseWriter, gw gatewayer, err error) {
 	if err == nil {
 		return
 	}
 
 	if err == context.DeadlineExceeded {
-		errorResponse(w, gw, http.StatusRequestTimeout)
+		errorResponse(ctx, w, gw, http.StatusRequestTimeout)
 		return
 	}
 
-	errorResponse(w, gw, http.StatusInternalServerError, err)
+	errorResponse(ctx, w, gw, http.StatusInternalServerError, err)
 	return
 }
 
-func errorResponse(w http.ResponseWriter, gw gatewayer, code int, msgs ...interface{}) {
-	gw.Logger().Println(append([]interface{}{code, http.StatusText(code)}, msgs...)...)
+func errorResponse(ctx context.Context, w http.ResponseWriter, gw gatewayer, code int, msgs ...interface{}) {
+	log := logger.FromContext(ctx)
+	log.Println(append([]interface{}{code, http.StatusText(code)}, msgs...)...)
 	httputil.ErrResponse(w, code)
 }

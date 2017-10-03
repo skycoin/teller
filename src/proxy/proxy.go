@@ -99,8 +99,7 @@ func New(log *logrus.Logger, cfg Config, auth *daemon.Auth) *Proxy {
 	bindHandlers(px)
 
 	gw := &gateway{
-		p:   px,
-		log: log,
+		p: px,
 	}
 
 	px.httpServ = &httpServ{
@@ -306,14 +305,14 @@ func (px *Proxy) write(m daemon.Messager) (err error) {
 	return
 }
 
-func (px *Proxy) writeWithContext(cxt context.Context, m daemon.Messager) error {
+func (px *Proxy) writeWithContext(ctx context.Context, m daemon.Messager) error {
 	px.Lock()
 	defer px.Unlock()
 	if px.sn == nil {
 		return errors.New("write failed, session is nil")
 	}
 
-	return px.sn.WriteWithContext(cxt, m)
+	return px.sn.WriteWithContext(ctx, m)
 }
 
 type closeStream func()

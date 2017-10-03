@@ -2,11 +2,9 @@ package service
 
 import (
 	"errors"
-	"net"
-
-	"time"
-
 	"io"
+	"net"
+	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/daemon"

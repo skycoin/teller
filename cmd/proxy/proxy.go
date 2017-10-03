@@ -57,7 +57,7 @@ func run() error {
 		if err := agent.Listen(&agent.Options{
 			NoShutdownCleanup: true,
 		}); err != nil {
-			log.Println("Start profile agent failed:", err)
+			log.WithError(err).Error("Start profile agent failed")
 			return err
 		}
 	}
@@ -66,7 +66,7 @@ func run() error {
 	if *seckey != "" {
 		lseckey, err = cipher.SecKeyFromHex(*seckey)
 		if err != nil {
-			log.Println("Invalid seckey:", *seckey, err)
+			log.WithError(err).WithField("seckey", *seckey).Error("Invalid seckey")
 			return err
 		}
 	} else {
@@ -74,7 +74,7 @@ func run() error {
 	}
 
 	pubkey := cipher.PubKeyFromSecKey(lseckey).Hex()
-	log.Println("Pubkey:", pubkey)
+	log.WithField("pubkey", pubkey).Info()
 
 	auth := &daemon.Auth{
 		LSeckey: lseckey,
@@ -85,7 +85,7 @@ func run() error {
 		var err error
 		startAtStamp, err = time.Parse(time.RFC3339, *startAt)
 		if err != nil {
-			log.Println("Invalid -start-time, must be in RCF3339 format", time.RFC3339)
+			log.WithField("format", time.RFC3339).Error("Invalid -start-time, must be in RCF3339 format")
 			return err
 		}
 		startAtStamp = startAtStamp.UTC()
@@ -127,16 +127,16 @@ func run() error {
 	case <-sigchan:
 	case finalErr = <-errC:
 		if finalErr != nil {
-			log.Println("ERROR:", finalErr)
+			log.WithError(finalErr).Error()
 		}
 	}
 
 	signal.Stop(sigchan)
-	log.Println("Shutting down...")
+	log.Info("Shutting down...")
 
 	px.Shutdown()
 	wg.Wait()
-	log.Println("Shutdown complete")
+	log.Info("Shutdown complete")
 
 	return finalErr
 }

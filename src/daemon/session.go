@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/skycoin/teller/src/logger"
 )
 
 var (
+	// ErrWriteChanFull is returned when the write channel is full
 	ErrWriteChanFull = errors.New("write channel is full")
+	// ErrSessionClosed is returned if the session has closed
 	ErrSessionClosed = errors.New("session is closed")
 )
 
@@ -27,7 +30,7 @@ type ResponseWriteCloser interface {
 }
 
 // Handler callback function when receiving message.
-type Handler func(w ResponseWriteCloser, data Messager)
+type Handler func(ctx context.Context, w ResponseWriteCloser, data Messager)
 
 // Mux for records the message handlers
 type Mux struct {
@@ -53,10 +56,10 @@ func (m *Mux) HandleFunc(tp MsgType, handler Handler) error {
 }
 
 // Handle process the given message
-func (m *Mux) Handle(w ResponseWriteCloser, msg Messager) {
+func (m *Mux) Handle(ctx context.Context, w ResponseWriteCloser, msg Messager) {
 	if hd, ok := m.handlers[msg.Type()]; ok {
 		m.log.Debugln("Handling msg type", msg.Type())
-		hd(w, msg)
+		hd(ctx, w, msg)
 		return
 	}
 	m.log.Debugln("No handler found for msg type", msg.Type())
@@ -161,6 +164,8 @@ func (sn *Session) Run() error {
 		<-c
 	}()
 
+	ctx := logger.WithContext(context.Background(), sn.log)
+
 	for {
 		select {
 		case <-sn.quit:
@@ -173,7 +178,7 @@ func (sn *Session) Run() error {
 		case msg := <-msgChan:
 			sn.log.Debugln("Recv msg:", msg.Type())
 			if sn.mux != nil {
-				sn.mux.Handle(sn, msg)
+				sn.mux.Handle(ctx, sn, msg)
 			}
 
 			// find the message subscriber and push data
@@ -212,14 +217,14 @@ func (sn *Session) Write(msg Messager) {
 }
 
 // WriteWithContext write message
-func (sn *Session) WriteWithContext(cxt context.Context, msg Messager) error {
+func (sn *Session) WriteWithContext(ctx context.Context, msg Messager) error {
 	select {
 	case <-sn.quit:
 		return ErrSessionClosed
 	case sn.wc <- msg:
 		return nil
-	case <-cxt.Done():
-		return cxt.Err()
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
