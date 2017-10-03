@@ -1,19 +1,12 @@
 package service
 
 import (
-	"github.com/sirupsen/logrus"
-
 	"github.com/skycoin/teller/src/daemon"
 )
 
 // gateway is used to limit the service's direct Export methods.
 type gateway struct {
-	log *logrus.Logger
-	s   *Service
-}
-
-func (gw *gateway) Logger() *logrus.Logger {
-	return gw.log
+	s *Service
 }
 
 // ResetPongTimer resets the pong timer

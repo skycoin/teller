@@ -101,8 +101,7 @@ func New(cfg Config, auth *daemon.Auth, log *logrus.Logger, excli Exchanger, btc
 	s.mux = daemon.NewMux(log)
 
 	s.gateway = &gateway{
-		log: log,
-		s:   s,
+		s: s,
 	}
 
 	// bind message handlers

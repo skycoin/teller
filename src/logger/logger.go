@@ -39,11 +39,13 @@ func NewLogger(logFilename string, debug bool) (*logrus.Logger, error) {
 	}, nil
 }
 
-type loggerCtxKey struct{}
+type key int
+
+const loggerCtxKey key = 0
 
 // FromContext return a *logrus.Logger from a context
 func FromContext(ctx context.Context) *logrus.Logger {
-	lg := ctx.Value(loggerCtxKey{})
+	lg := ctx.Value(loggerCtxKey)
 	ruslogger, ok := lg.(*logrus.Logger)
 	if !ok {
 		return nil
@@ -53,5 +55,5 @@ func FromContext(ctx context.Context) *logrus.Logger {
 
 // WithContext puts a *logrus.Logger into a context
 func WithContext(ctx context.Context, lg *logrus.Logger) context.Context {
-	return context.WithValue(ctx, lg, loggerCtxKey{})
+	return context.WithValue(ctx, loggerCtxKey, lg)
 }
