@@ -14,13 +14,13 @@ func bindHandlers(px *Proxy) {
 func PingMessageHandler(px *Proxy) daemon.Handler {
 	return func(ctx context.Context, w daemon.ResponseWriteCloser, msg daemon.Messager) {
 		if msg.Type() != daemon.PingMsgType {
-			px.log.Printf("Mux error, dispatch %s message to ping message handler\n", msg.Type())
+			px.log.WithField("msgType", msg.Type()).Error("PingMessageHandler expected PingMsgType")
 			return
 		}
 
 		px.ResetPingTimer()
 
 		w.Write(&daemon.PongMessage{Value: "PONG"})
-		px.log.Debugln("Send pong message")
+		px.log.WithField("msgType", msg.Type()).Debug("Send")
 	}
 }

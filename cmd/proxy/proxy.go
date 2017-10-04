@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/google/gops/agent"
+
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
@@ -46,18 +47,20 @@ func run() error {
 	flag.Parse()
 
 	// init logger
-	log, err := logger.NewLogger(*logFilename, *debug)
+	ruslogger, err := logger.NewLogger(*logFilename, *debug)
 	if err != nil {
 		fmt.Println("Failed to create Logrus logger:", err)
 		return err
 	}
+
+	log := ruslogger.WithField("prefix", "proxy")
 
 	// start gops agent, for profilling
 	if *prof {
 		if err := agent.Listen(&agent.Options{
 			NoShutdownCleanup: true,
 		}); err != nil {
-			log.WithError(err).Error("Start profile agent failed")
+			log.WithError(err).Error("Start gops profiling agent failed")
 			return err
 		}
 	}
@@ -66,7 +69,7 @@ func run() error {
 	if *seckey != "" {
 		lseckey, err = cipher.SecKeyFromHex(*seckey)
 		if err != nil {
-			log.WithError(err).WithField("seckey", *seckey).Error("Invalid seckey")
+			log.WithError(err).Error("Invalid seckey")
 			return err
 		}
 	} else {

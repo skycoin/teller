@@ -69,12 +69,12 @@ func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
 
 // Service manages coin exchange between deposits and skycoin
 type Service struct {
-	logEntry *logrus.Entry
-	cfg      Config
-	scanner  BtcScanner // scanner provides apis for interacting with scan service
-	sender   SkySender  // sender provides apis for sending skycoin
-	store    *store     // deposit info storage
-	quit     chan struct{}
+	log     logrus.FieldLogger
+	cfg     Config
+	scanner BtcScanner // scanner provides apis for interacting with scan service
+	sender  SkySender  // sender provides apis for sending skycoin
+	store   *store     // deposit info storage
+	quit    chan struct{}
 }
 
 // Config exchange config struct
@@ -83,7 +83,7 @@ type Config struct {
 }
 
 // NewService creates exchange service
-func NewService(cfg Config, db *bolt.DB, log *logrus.Logger, scanner BtcScanner, sender SkySender) *Service {
+func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, scanner BtcScanner, sender SkySender) *Service {
 	s, err := newStore(db)
 	if err != nil {
 		panic(err)
@@ -91,9 +91,9 @@ func NewService(cfg Config, db *bolt.DB, log *logrus.Logger, scanner BtcScanner,
 
 	return &Service{
 		cfg: cfg,
-		logEntry: log.WithFields(logrus.Fields{
-			"pkg": "exchange",
-			"obj": "Service",
+		log: log.WithFields(logrus.Fields{
+			"prefix": "exchange",
+			"obj":    "Service",
 		}),
 		scanner: scanner,
 		sender:  sender,
@@ -104,7 +104,7 @@ func NewService(cfg Config, db *bolt.DB, log *logrus.Logger, scanner BtcScanner,
 
 // Run starts the exchange process
 func (s *Service) Run() error {
-	log := s.logEntry.WithField("func", "Run")
+	log := s.log.WithField("func", "Run")
 	log.Info("Start exchange service...")
 	defer log.Info("Exchange service closed")
 
@@ -306,7 +306,7 @@ func (s *Service) Shutdown() {
 // ProcessUnconfirmedTx wait until all unconfirmed tx to be confirmed and update
 // it's status in db
 func (s *Service) processUnconfirmedTx() {
-	log := s.logEntry.WithField("func", "processUnconfirmedTx")
+	log := s.log.WithField("func", "processUnconfirmedTx")
 
 	log.Info("Checking the unconfirmed tx...")
 	defer log.Info("Checking confirmed tx finished")

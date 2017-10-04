@@ -35,14 +35,17 @@ type Handler func(ctx context.Context, w ResponseWriteCloser, data Messager)
 // Mux for records the message handlers
 type Mux struct {
 	handlers map[MsgType]Handler
-	log      *logrus.Logger
+	log      logrus.FieldLogger
 }
 
 // NewMux creates mux
-func NewMux(log *logrus.Logger) *Mux {
+func NewMux(log logrus.FieldLogger) *Mux {
 	return &Mux{
 		handlers: make(map[MsgType]Handler),
-		log:      log,
+		log: log.WithFields(logrus.Fields{
+			"obj":    "Mux",
+			"prefix": "daemon",
+		}),
 	}
 }
 
@@ -72,7 +75,7 @@ type Session struct {
 	ts        *transport
 	wc        chan Messager // write channel
 	quit      chan struct{}
-	log       *logrus.Logger
+	log       logrus.FieldLogger
 	subs      map[int]func(Messager) // subscribers
 	idGenC    chan int               // subscribe id generator channel
 	reqC      chan func()
@@ -80,7 +83,7 @@ type Session struct {
 }
 
 // NewSession creates a new session
-func NewSession(log *logrus.Logger, conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Option) (*Session, error) {
+func NewSession(log logrus.FieldLogger, conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Option) (*Session, error) {
 	if auth == nil {
 		return nil, errors.New("auth is nil")
 	}
@@ -96,10 +99,13 @@ func NewSession(log *logrus.Logger, conn net.Conn, auth *Auth, mux *Mux, solicit
 		ts:        ts,
 		wcBufSize: 100, // default value, can be changed by Option
 		quit:      make(chan struct{}),
-		log:       log,
-		subs:      make(map[int]func(Messager)),
-		idGenC:    make(chan int),
-		reqC:      make(chan func()),
+		log: log.WithFields(logrus.Fields{
+			"prefix": "daemon",
+			"obj":    "Session",
+		}),
+		subs:   make(map[int]func(Messager)),
+		idGenC: make(chan int),
+		reqC:   make(chan func()),
 	}
 
 	for _, op := range ops {
@@ -135,7 +141,7 @@ func (sn *Session) Run() error {
 			select {
 			case msgChan <- msg:
 			case <-time.After(5 * time.Second):
-				sn.log.Debugln("Put message timeout")
+				sn.log.Debug("Put message timeout")
 				return
 			}
 		}
@@ -171,12 +177,12 @@ func (sn *Session) Run() error {
 		case <-sn.quit:
 			return nil
 		case err := <-errC:
-			sn.log.Debugln(err)
+			sn.log.WithError(err).Debug()
 			return err
 		case req := <-sn.reqC:
 			req()
 		case msg := <-msgChan:
-			sn.log.Debugln("Recv msg:", msg.Type())
+			sn.log.WithField("msgType", msg.Type()).Debug("Recv msg")
 			if sn.mux != nil {
 				sn.mux.Handle(ctx, sn, msg)
 			}
@@ -188,7 +194,7 @@ func (sn *Session) Run() error {
 
 		case msg := <-sn.wc:
 			if err := sn.ts.Write(msg); err != nil {
-				sn.log.Debugln(err)
+				sn.log.WithError(err).Debug()
 				return err
 			}
 		}
@@ -200,7 +206,7 @@ func (sn *Session) Close() {
 	close(sn.quit)
 
 	if err := sn.ts.Close(); err != nil {
-		sn.log.Println(err)
+		sn.log.WithError(err).Error()
 	}
 }
 
@@ -211,7 +217,7 @@ func (sn *Session) Write(msg Messager) {
 		return
 	case sn.wc <- msg:
 	case <-time.After(writeTimeout):
-		sn.log.Println(ErrWriteChanFull)
+		sn.log.WithError(ErrWriteChanFull).Error()
 		sn.Close()
 	}
 }

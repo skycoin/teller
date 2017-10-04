@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -39,13 +40,14 @@ const (
 	tlsAutoCertCache = "cert-cache"
 )
 
+// Throttle is used for ratelimiting requests to the http server
 type Throttle struct {
 	Max      int64
 	Duration time.Duration
 }
 
 type httpServ struct {
-	log           *logrus.Logger
+	log           logrus.FieldLogger
 	Addr          string
 	HTTPSAddr     string
 	StaticDir     string
@@ -65,14 +67,16 @@ type httpServ struct {
 }
 
 func (hs *httpServ) Run() error {
-	hs.log.Println("Http service start")
-	if hs.Addr != "" {
-		hs.log.Println("Http service address:", hs.Addr)
-	}
-	if hs.HTTPSAddr != "" {
-		hs.log.Println("Https service address:", hs.HTTPSAddr)
-	}
-	defer hs.log.Debugln("Http service closed")
+	log := hs.log.WithFields(logrus.Fields{
+		"func":        "Run",
+		"httpAddr":    hs.Addr,
+		"httpsAddr":   hs.HTTPSAddr,
+		"autoTLSHost": hs.AutoTLSHost,
+		"prefix":      "proxy.http",
+	})
+
+	log.Info("HTTP service start")
+	defer log.Debug("HTTP service closed")
 
 	hs.quit = make(chan struct{})
 
@@ -95,12 +99,14 @@ func (hs *httpServ) Run() error {
 	}
 
 	if len(allowedHosts) == 0 {
-		hs.log.Println("Allowed hosts: all")
+		log = log.WithField("allowedHosts", "all")
 	} else {
-		hs.log.Println("Allowed hosts:", allowedHosts)
+		log = log.WithField("allowedHosts", allowedHosts)
 	}
 
-	hs.log.Println("SSL Host:", sslHost)
+	log = log.WithField("sslHost", sslHost)
+
+	log.Info("Configured")
 
 	secureMiddleware := configureSecureMiddleware(sslHost, allowedHosts)
 	mux = secureMiddleware.Handler(mux)
@@ -115,7 +121,7 @@ func (hs *httpServ) Run() error {
 			case <-hs.quit:
 				return nil
 			default:
-				hs.log.Println("ListenAndServe or ListenAndServeTLS error:", err)
+				log.WithError(err).Error("ListenAndServe or ListenAndServeTLS error")
 				return fmt.Errorf("http serve failed: %v", err)
 			}
 		}
@@ -123,7 +129,7 @@ func (hs *httpServ) Run() error {
 	}
 
 	if hs.HTTPSAddr != "" {
-		hs.log.Println("Using TLS")
+		log.Info("Using TLS")
 
 		hs.httpsListener = setupHTTPListener(hs.HTTPSAddr, mux)
 
@@ -131,7 +137,7 @@ func (hs *httpServ) Run() error {
 		tlsKey := hs.TLSKey
 
 		if hs.AutoTLSHost != "" {
-			hs.log.Println("Using Let's Encrypt autocert with host", hs.AutoTLSHost)
+			log.Info("Using Let's Encrypt autocert")
 			// https://godoc.org/golang.org/x/crypto/acme/autocert
 			// https://stackoverflow.com/a/40494806
 			certManager := autocert.Manager{
@@ -163,7 +169,7 @@ func (hs *httpServ) Run() error {
 			go func() {
 				defer wg.Done()
 				if err := hs.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
-					hs.log.Println("ListenAndServeTLS error:", err)
+					log.WithError(err).Error("ListenAndServeTLS error")
 					errC <- err
 				}
 			}()
@@ -171,7 +177,7 @@ func (hs *httpServ) Run() error {
 			go func() {
 				defer wg.Done()
 				if err := hs.httpListener.ListenAndServe(); err != nil {
-					hs.log.Println("ListenAndServe error:", err)
+					log.WithError(err).Println("ListenAndServe error")
 					errC <- err
 				}
 			}()
@@ -257,8 +263,8 @@ func (hs *httpServ) setupMux() *http.ServeMux {
 
 	if !hs.WithoutTeller {
 		// API Methods
-		handleAPI("/api/bind", BindHandler(hs))
-		handleAPI("/api/status", StatusHandler(hs))
+		handleAPI("/api/bind", httputil.LogHandler(hs.log, BindHandler(hs)))
+		handleAPI("/api/status", httputil.LogHandler(hs.log, StatusHandler(hs)))
 	}
 
 	// Static files
@@ -274,6 +280,8 @@ func rateLimiter(thr Throttle, hd http.HandlerFunc) http.Handler {
 }
 
 func (hs *httpServ) Shutdown() {
+	log := hs.log.WithField("func", "Shutdown")
+
 	if hs.quit != nil {
 		close(hs.quit)
 	}
@@ -282,12 +290,15 @@ func (hs *httpServ) Shutdown() {
 		if ln == nil {
 			return
 		}
-		hs.log.Printf("Shutting down %s server, %s timeout\n", proto, shutdownTimeout)
+		log.WithFields(logrus.Fields{
+			"proto":   proto,
+			"timeout": shutdownTimeout,
+		}).Info("Shutting down server")
 
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := ln.Shutdown(ctx); err != nil {
-			hs.log.Println("HTTP server shutdown error:", err)
+			log.WithError(err).Error("HTTP server shutdown error")
 		}
 	}
 
@@ -306,28 +317,37 @@ func (hs *httpServ) Shutdown() {
 func BindHandler(srv *httpServ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
 		w.Header().Set("Accept", "application/json")
 
-		if !validMethod(w, r, srv.Gateway, []string{http.MethodPost}) {
+		if !validMethod(ctx, w, r, srv.Gateway, []string{http.MethodPost}) {
 			return
 		}
 		if r.Header.Get("Content-Type") != "application/json" {
-			errorResponse(ctx, w, srv.Gateway, http.StatusUnsupportedMediaType)
+			errorResponse(ctx, w, srv.Gateway, http.StatusUnsupportedMediaType, errors.New("Invalid content type"))
 			return
 		}
 
 		userBindReq := &bindRequest{}
 		decoder := json.NewDecoder(r.Body)
 		if err := decoder.Decode(&userBindReq); err != nil {
-			errorResponse(ctx, w, srv.Gateway, http.StatusBadRequest, "Invalid json request body:", err)
+			err = fmt.Errorf("Invalid json request body: %v", err)
+			errorResponse(ctx, w, srv.Gateway, http.StatusBadRequest, err)
 			return
 		}
 		defer r.Body.Close()
 
 		if userBindReq.SkyAddr == "" {
-			errorResponse(ctx, w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
+			errorResponse(ctx, w, srv.Gateway, http.StatusBadRequest, errors.New("Missing skyaddr"))
 			return
 		}
+
+		log = log.WithField("userBindReq", userBindReq)
+		ctx = logger.WithContext(ctx, log)
+		r = r.WithContext(ctx)
+
+		log.Info()
 
 		if !verifySkycoinAddress(ctx, w, srv.Gateway, userBindReq.SkyAddr) {
 			return
@@ -342,7 +362,7 @@ func BindHandler(srv *httpServ) http.HandlerFunc {
 
 		daemonBindReq := &daemon.BindRequest{SkyAddress: userBindReq.SkyAddr}
 
-		srv.log.Println("Sending BindRequest to teller, skyaddr", userBindReq.SkyAddr)
+		log.Info("Sending BindRequest to teller")
 
 		rsp, err := srv.Gateway.BindAddress(ctx, daemonBindReq)
 		if err != nil {
@@ -350,16 +370,16 @@ func BindHandler(srv *httpServ) http.HandlerFunc {
 			return
 		}
 
-		srv.log.Printf("Received response to BindRequest: %+v\n", *rsp)
+		log.WithField("resp", rsp).Info("Received response to BindRequest")
 
 		if rsp.Error != "" {
 			httputil.ErrResponse(w, http.StatusBadRequest, rsp.Error)
-			srv.log.Println(rsp.Error)
+			log.WithField(logrus.ErrorKey, rsp.Error).Error()
 			return
 		}
 
 		if err := httputil.JSONResponse(w, makeBindHTTPResponse(*rsp)); err != nil {
-			srv.log.Println(err)
+			log.WithError(err).Error()
 		}
 	}
 }
@@ -376,16 +396,25 @@ type bindRequest struct {
 func StatusHandler(srv *httpServ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
+		log := logger.FromContext(ctx)
 
-		if !validMethod(w, r, srv.Gateway, []string{http.MethodGet}) {
+		if !validMethod(ctx, w, r, srv.Gateway, []string{http.MethodGet}) {
 			return
 		}
 
 		skyAddr := r.URL.Query().Get("skyaddr")
 		if skyAddr == "" {
-			errorResponse(ctx, w, srv.Gateway, http.StatusBadRequest, "Missing skyaddr")
+			errorResponse(ctx, w, srv.Gateway, http.StatusBadRequest, errors.New("Missing skyaddr"))
 			return
 		}
+
+		stReq := &daemon.StatusRequest{SkyAddress: skyAddr}
+
+		log = log.WithField("statusRequest", stReq)
+		ctx = logger.WithContext(ctx, log)
+		r = r.WithContext(ctx)
+
+		log.Info()
 
 		if !verifySkycoinAddress(ctx, w, srv.Gateway, skyAddr) {
 			return
@@ -398,9 +427,7 @@ func StatusHandler(srv *httpServ) http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(ctx, proxyRequestTimeout)
 		defer cancel()
 
-		stReq := &daemon.StatusRequest{SkyAddress: skyAddr}
-
-		srv.log.Println("Sending StatusRequest to teller, skyaddr", skyAddr)
+		log.Info("Sending StatusRequest to teller")
 
 		rsp, err := srv.Gateway.GetDepositStatuses(ctx, stReq)
 		if err != nil {
@@ -408,16 +435,16 @@ func StatusHandler(srv *httpServ) http.HandlerFunc {
 			return
 		}
 
-		srv.log.Printf("Received response to StatusRequest: %+v\n", *rsp)
+		log.WithField("resp", rsp).Info("Received response to StatusRequest")
 
 		if rsp.Error != "" {
 			httputil.ErrResponse(w, http.StatusBadRequest, rsp.Error)
-			srv.log.Println(rsp.Error)
+			log.WithField(logrus.ErrorKey, rsp.Error).Error()
 			return
 		}
 
 		if err := httputil.JSONResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
-			srv.log.Println(err)
+			log.WithError(err).Info()
 		}
 	}
 }
@@ -427,16 +454,16 @@ func readyToStart(ctx context.Context, w http.ResponseWriter, gw gatewayer, star
 		return true
 	}
 
-	log := logger.FromContext(ctx)
-
 	msg := fmt.Sprintf("Event starts at %v", startAt)
 	httputil.ErrResponse(w, http.StatusForbidden, msg)
-	log.Println(http.StatusForbidden, msg)
+
+	log := logger.FromContext(ctx)
+	log.WithField("status", http.StatusForbidden).Info(msg)
 
 	return false
 }
 
-func validMethod(w http.ResponseWriter, r *http.Request, gw gatewayer, allowed []string) bool {
+func validMethod(ctx context.Context, w http.ResponseWriter, r *http.Request, gw gatewayer, allowed []string) bool {
 	for _, m := range allowed {
 		if r.Method == m {
 			return true
@@ -446,7 +473,7 @@ func validMethod(w http.ResponseWriter, r *http.Request, gw gatewayer, allowed [
 	w.Header().Set("Allow", strings.Join(allowed, ", "))
 
 	status := http.StatusMethodNotAllowed
-	errorResponse(r.Context(), w, gw, status, "Invalid request method:", r.Method)
+	errorResponse(ctx, w, gw, status, errors.New("Invalid request method"))
 
 	return false
 }
@@ -457,7 +484,10 @@ func verifySkycoinAddress(ctx context.Context, w http.ResponseWriter, gw gateway
 	if _, err := cipher.DecodeBase58Address(skyAddr); err != nil {
 		msg := fmt.Sprintf("Invalid skycoin address: %v", err)
 		httputil.ErrResponse(w, http.StatusBadRequest, msg)
-		log.Println(http.StatusBadRequest, "Invalid skycoin address:", err, skyAddr)
+		log.WithFields(logrus.Fields{
+			"status":            http.StatusBadRequest,
+			logger.SkyAddrField: skyAddr,
+		}).WithError(err).Info("Invalid skycoin address")
 		return false
 	}
 
@@ -470,7 +500,7 @@ func handleGatewayResponseError(ctx context.Context, w http.ResponseWriter, gw g
 	}
 
 	if err == context.DeadlineExceeded {
-		errorResponse(ctx, w, gw, http.StatusRequestTimeout)
+		errorResponse(ctx, w, gw, http.StatusRequestTimeout, errors.New("gateway request deadline exceeded"))
 		return
 	}
 
@@ -478,8 +508,12 @@ func handleGatewayResponseError(ctx context.Context, w http.ResponseWriter, gw g
 	return
 }
 
-func errorResponse(ctx context.Context, w http.ResponseWriter, gw gatewayer, code int, msgs ...interface{}) {
+func errorResponse(ctx context.Context, w http.ResponseWriter, gw gatewayer, code int, err error) {
 	log := logger.FromContext(ctx)
-	log.Println(append([]interface{}{code, http.StatusText(code)}, msgs...)...)
+	log.WithFields(logrus.Fields{
+		"status":    code,
+		"statusMsg": http.StatusText(code),
+	}).WithError(err).Info()
+
 	httputil.ErrResponse(w, code)
 }

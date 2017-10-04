@@ -35,9 +35,15 @@ func JSONResponse(w http.ResponseWriter, data interface{}) error {
 }
 
 // LogHandler log middleware
-func LogHandler(log *logrus.Logger, hd http.HandlerFunc) http.HandlerFunc {
+func LogHandler(log logrus.FieldLogger, hd http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx := logger.WithContext(r.Context(), log)
+		ctx := r.Context()
+		log = log.WithFields(logrus.Fields{
+			"method":     r.Method,
+			"remoteAddr": r.RemoteAddr,
+			"url":        r.URL.String(),
+		})
+		ctx = logger.WithContext(ctx, log)
 		r = r.WithContext(ctx)
 
 		t := time.Now()
@@ -45,9 +51,7 @@ func LogHandler(log *logrus.Logger, hd http.HandlerFunc) http.HandlerFunc {
 		hd(w, r)
 
 		log.WithFields(logrus.Fields{
-			"method":   r.Method,
 			"duration": fmt.Sprintf("%dms", time.Since(t)/time.Millisecond),
-			"url":      r.URL.String(),
 		}).Info("HTTP Request")
 	}
 }

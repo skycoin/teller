@@ -50,7 +50,7 @@ func (gw *gateway) sendMessage(ctx context.Context, msg daemon.Messager, ackMsg 
 		msgC := make(chan daemon.Messager, 1)
 		// open the data stream
 		id, closeStream, er := gw.p.openStream(func(m daemon.Messager) {
-			log.Debugf("Recv %s message", m.Type())
+			log.WithField("msgType", m.Type()).Debug("Recv message")
 			msgC <- m
 		})
 		if er != nil {
