@@ -30,10 +30,15 @@ type addressJSON struct {
 }
 
 // New creates BtcAddrs instance, will load and verify the addresses
-func New(db *bolt.DB, addrsReader io.Reader, log *logrus.Logger) (*BtcAddrs, error) {
+func New(db *bolt.DB, addrsReader io.Reader, log logrus.FieldLogger) (*BtcAddrs, error) {
 	if db == nil {
 		return nil, errors.New("db is nil")
 	}
+
+	log = log.WithFields(logrus.Fields{
+		"prefix": "btcaddrs",
+		"obj":    "BtcAddrs",
+	})
 
 	log.Info("Loading deposit address...")
 	var addrs addressJSON

@@ -49,7 +49,7 @@ func makeResponse(txid string, err string) Response {
 
 // SendService is in charge of sending skycoin
 type SendService struct {
-	log      *logrus.Logger
+	log      logrus.FieldLogger
 	cfg      Config
 	skycli   skyclient
 	quit     chan struct{}
@@ -69,9 +69,12 @@ type skyclient interface {
 }
 
 // NewService creates sender instance
-func NewService(cfg Config, log *logrus.Logger, skycli skyclient) *SendService {
+func NewService(cfg Config, log logrus.FieldLogger, skycli skyclient) *SendService {
 	return &SendService{
-		log:     log,
+		log: log.WithFields(logrus.Fields{
+			"prefix": "sender",
+			"obj":    "SendService",
+		}),
 		cfg:     cfg,
 		skycli:  skycli,
 		quit:    make(chan struct{}),

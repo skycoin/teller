@@ -50,7 +50,7 @@ func makeDepositNote(dv DepositValue) DepositNote {
 
 // ScanService blockchain scanner to check if there're deposit coins
 type ScanService struct {
-	log       *logrus.Logger
+	log       logrus.FieldLogger
 	cfg       Config
 	btcClient BtcRPCClient
 	store     *store
@@ -80,18 +80,21 @@ func (d DepositValue) TxN() string {
 }
 
 // NewService creates scanner instance
-func NewService(cfg Config, db *bolt.DB, log *logrus.Logger, btc BtcRPCClient) (*ScanService, error) {
+func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, btc BtcRPCClient) (*ScanService, error) {
 	s, err := newStore(db)
 	if err != nil {
 		return nil, err
 	}
 	return &ScanService{
 		btcClient: btc,
-		log:       log,
-		cfg:       cfg,
-		store:     s,
-		depositC:  make(chan DepositNote),
-		quit:      make(chan struct{}),
+		log: log.WithFields(logrus.Fields{
+			"prefix": "scanner",
+			"obj":    "ScanService",
+		}),
+		cfg:      cfg,
+		store:    s,
+		depositC: make(chan DepositNote),
+		quit:     make(chan struct{}),
 	}, nil
 }
 

@@ -48,7 +48,7 @@ type Config struct {
 
 // Monitor monitor service struct
 type Monitor struct {
-	log *logrus.Logger
+	log logrus.FieldLogger
 	BtcAddrManager
 	DepositStatusGetter
 	ScanAddressGetter
@@ -58,9 +58,12 @@ type Monitor struct {
 }
 
 // New creates monitor service
-func New(cfg Config, log *logrus.Logger, btcAddrMgr BtcAddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
+func New(cfg Config, log logrus.FieldLogger, btcAddrMgr BtcAddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
 	return &Monitor{
-		log:                 log,
+		log: log.WithFields(logrus.Fields{
+			"prefix": "monitor",
+			"obj":    "Monitor",
+		}),
 		cfg:                 cfg,
 		BtcAddrManager:      btcAddrMgr,
 		DepositStatusGetter: dpstget,

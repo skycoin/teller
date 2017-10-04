@@ -41,7 +41,7 @@ const (
 )
 
 type dummyBtcScanner struct {
-	log *logrus.Logger
+	log logrus.FieldLogger
 }
 
 func (s *dummyBtcScanner) AddScanAddress(addr string) error {
@@ -61,7 +61,7 @@ func (s *dummyBtcScanner) GetScanAddresses() ([]string, error) {
 }
 
 type dummySkySender struct {
-	log *logrus.Logger
+	log logrus.FieldLogger
 }
 
 func (s *dummySkySender) Send(destAddr string, coins uint64, opt *sender.SendOption) (string, error) {
@@ -108,11 +108,13 @@ func run() error {
 	flag.Parse()
 
 	// init logger
-	log, err := logger.NewLogger(*logFilename, *debug)
+	rusloggger, err := logger.NewLogger(*logFilename, *debug)
 	if err != nil {
 		fmt.Println("Failed to create Logrus logger:", err)
 		return err
 	}
+
+	log := rusloggger.WithField("prefix", "teller")
 
 	if *proxyPubkey == "" {
 		log.Error("-proxy-pubkey missing")

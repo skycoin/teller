@@ -40,7 +40,7 @@ type Exchanger interface {
 
 // Service provides the ico service
 type Service struct {
-	log     *logrus.Logger
+	log     logrus.FieldLogger
 	cfg     Config      // service configuration info
 	session *session    // connection is maintained in session, and when session done, means this connection is done.
 	mux     *daemon.Mux // used for dispatching message to corresponding handler
@@ -67,7 +67,7 @@ type Config struct {
 }
 
 // New creates a ico service
-func New(cfg Config, auth *daemon.Auth, log *logrus.Logger, excli Exchanger, btcAddrGen BtcAddrGenerator) *Service {
+func New(cfg Config, auth *daemon.Auth, log logrus.FieldLogger, excli Exchanger, btcAddrGen BtcAddrGenerator) *Service {
 	if cfg.ReconnectTime == 0 {
 		cfg.ReconnectTime = reconnectTime
 	}
@@ -89,8 +89,11 @@ func New(cfg Config, auth *daemon.Auth, log *logrus.Logger, excli Exchanger, btc
 	}
 
 	s := &Service{
-		cfg:        cfg,
-		log:        log,
+		cfg: cfg,
+		log: log.WithFields(logrus.Fields{
+			"prefix": "service",
+			"obj":    "Service",
+		}),
 		auth:       auth,
 		excli:      excli,
 		btcAddrGen: btcAddrGen,
