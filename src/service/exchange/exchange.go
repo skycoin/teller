@@ -4,19 +4,27 @@
 package exchange
 
 import (
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/shopspring/decimal"
+
+	skydaemon "github.com/skycoin/skycoin/src/daemon"
+	"github.com/skycoin/skycoin/src/util/droplet"
+
 	"github.com/skycoin/teller/src/daemon"
+	"github.com/skycoin/teller/src/dbutil"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/scanner"
 	"github.com/skycoin/teller/src/service/sender"
 )
 
+const satoshiPerBTC int64 = 1e8
+
 // SkySender provids apis for sending skycoin
 type SkySender interface {
-	SendAsync(destAddr string, coins int64, opt *sender.SendOption) (<-chan interface{}, error)
+	SendAsync(destAddr string, coins uint64, opt *sender.SendOption) (<-chan interface{}, error)
 	IsTxConfirmed(txid string) bool
 	IsClosed() bool
 }
@@ -24,12 +32,38 @@ type SkySender interface {
 // BtcScanner provids apis for interact with scan service
 type BtcScanner interface {
 	AddScanAddress(addr string) error
-	GetScanAddresses() []string
+	GetScanAddresses() ([]string, error)
 	GetDepositValue() <-chan scanner.DepositNote
 }
 
-func calculateSkyValue(btcValue float64, rate float64) int64 {
-	return int64(btcValue * rate)
+// calculateSkyValue returns the amount of SKY (in droplets) to give for an
+// amount of BTC (in satoshis).
+// Rate is measured in SKY per BTC.
+func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
+	if satoshis < 0 || skyPerBTC < 0 {
+		return 0, errors.New("negative satoshis or negative skyPerBTC")
+	}
+
+	btc := decimal.New(satoshis, 0)
+	btcToSatoshi := decimal.New(satoshiPerBTC, 0)
+	btc = btc.DivRound(btcToSatoshi, 8)
+
+	rate := decimal.New(skyPerBTC, 0)
+
+	sky := btc.Mul(rate)
+	sky = sky.Truncate(skydaemon.MaxDropletPrecision)
+
+	skyToDroplets := decimal.New(droplet.Multiplier, 0)
+	droplets := sky.Mul(skyToDroplets)
+
+	amt := droplets.IntPart()
+	if amt < 0 {
+		// This should never occur, but double check before we convert to uint64,
+		// otherwise we would send all the coins due to integer wrapping.
+		return 0, errors.New("calculated sky amount is negative")
+	}
+
+	return uint64(amt), nil
 }
 
 // Service manages coin exchange between deposits and skycoin
@@ -83,20 +117,29 @@ func (s *Service) Run() error {
 			}
 
 			s.Printf("Receive %f deposit bitcoin from %s\n", dv.Value, dv.Address)
-			btcTxIndex := fmt.Sprintf("%v:%v", dv.Tx, dv.N)
+			btcTxIndex := dv.TxN()
 			// get deposit info of given btc address
-			di, ok := s.store.GetDepositInfo(btcTxIndex)
-			if !ok {
+			di, err := s.store.GetDepositInfo(btcTxIndex)
+
+			switch err.(type) {
+			case nil:
+			case dbutil.ObjectNotExistErr:
 				// s.Printf("Deposit info from btc address %s with tx %s doesn't exist\n", dv.Address, dv.Tx)
 				// continue
-				skyaddr, ok := s.store.GetBindAddress(dv.Address)
-				if !ok {
+				skyAddr, err := s.store.GetBindAddress(dv.Address)
+				if err != nil {
+					s.Printf("GetBindAddress failed: %+v %v\n", dv, err)
+					continue
+				}
+
+				if skyAddr == "" {
 					s.Printf("Deposit from %s has no bind skycoin address\n", dv.Address)
 					dv.AckC <- struct{}{}
 					continue
 				}
+
 				di = DepositInfo{
-					SkyAddress: skyaddr,
+					SkyAddress: skyAddr,
 					BtcAddress: dv.Address,
 					BtcTx:      btcTxIndex,
 					Status:     StatusWaitSend,
@@ -106,6 +149,9 @@ func (s *Service) Run() error {
 					s.Printf("Add deposit info %v failed: %v\n", di, err)
 					continue
 				}
+			default:
+				s.Printf("GetDepositInfo failed: %s %v", btcTxIndex, err)
+				continue
 			}
 
 			if di.Status >= StatusWaitConfirm {
@@ -116,12 +162,10 @@ func (s *Service) Run() error {
 
 			if di.Status == StatusWaitDeposit {
 				// update status to waiting_sky_send
-				err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
+				if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
 					dpi.Status = StatusWaitSend
 					return dpi
-				})
-
-				if err != nil {
+				}); err != nil {
 					s.Printf("Update deposit status of btc tx %s failed: %v\n", dv.Tx, err)
 					continue
 				}
@@ -129,9 +173,14 @@ func (s *Service) Run() error {
 
 			// send skycoins
 			// get binded skycoin address
-			skyAddr, ok := s.store.GetBindAddress(dv.Address)
-			if !ok {
-				s.Println("Find no bind skycoin address for btc address", dv.Address)
+			skyAddr, err := s.store.GetBindAddress(dv.Address)
+			if err != nil {
+				s.Printf("GetBindAddress failed: %+v %v\n", dv, err)
+				continue
+			}
+
+			if skyAddr == "" {
+				s.Println("No bound skycoin address found for btc address", dv.Address)
 				continue
 			}
 
@@ -142,8 +191,19 @@ func (s *Service) Run() error {
 			}
 
 			// try to send skycoin
-			skyAmt := calculateSkyValue(dv.Value, float64(s.cfg.Rate))
-			s.Printf("Send %d skycoin to %s\n", skyAmt, skyAddr)
+			skyAmt, err := calculateSkyValue(dv.Value, s.cfg.Rate)
+			if err != nil {
+				s.Printf("calculateSkyValue error: %v", err)
+				continue
+			}
+
+			s.Printf("Trying to send %d skycoin droplets to %s\n", skyAmt, skyAddr)
+
+			if skyAmt == 0 {
+				s.Printf("skycoin amount is 0, not sending")
+				continue
+			}
+
 			rspC, _ := s.sender.SendAsync(skyAddr, skyAmt, nil)
 			var rsp sender.Response
 			select {
@@ -153,18 +213,23 @@ func (s *Service) Run() error {
 				s.Println("exhange.Service quit")
 				return nil
 			}
+
 			if rsp.Err != "" {
 				s.Println("Send skycoin failed:", rsp.Err)
 				dv.AckC <- struct{}{}
 				continue
 			}
 
+			s.Printf("Sent %d skycoin droplets to %s\n", skyAmt, skyAddr)
+
 			// update the txid
 			if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
 				dpi.Txid = rsp.Txid
+				dpi.SkySent = skyAmt
+				dpi.SkyBtcRate = s.cfg.Rate
 				return dpi
 			}); err != nil {
-				s.Printf("Update deposit info for btc address %s failed: %v\n", dv.Address, err)
+				s.Printf("Update deposit info failed: btcAddr=%s rate=%d skySent=%d txid=%s err=%v\n", dv.Address, s.cfg.Rate, skyAmt, rsp.Txid, err)
 			}
 
 		loop:
@@ -219,9 +284,14 @@ func (s *Service) processUnconfirmedTx() {
 	s.Println("Checking the unconfirmed tx...")
 	defer s.Println("Checking confirmed tx finished")
 
-	dpis := s.store.GetDepositInfoArray(func(dpi DepositInfo) bool {
+	dpis, err := s.store.GetDepositInfoArray(func(dpi DepositInfo) bool {
 		return dpi.Status == StatusWaitConfirm
 	})
+
+	if err != nil {
+		s.Println("GetDepositInfoArray failed:", err)
+		return
+	}
 
 	if len(dpis) == 0 {
 		return
@@ -231,7 +301,7 @@ func (s *Service) processUnconfirmedTx() {
 		// check if the tx is confirmed
 	loop:
 		for {
-			if ok := s.sender.IsTxConfirmed(dpi.Txid); ok {
+			if s.sender.IsTxConfirmed(dpi.Txid) {
 				// update the dpi status
 				if err := s.store.UpdateDepositInfo(dpi.BtcTx, func(dpi DepositInfo) DepositInfo {
 					dpi.Status = StatusDone
@@ -283,7 +353,10 @@ func (s *Service) getDepositStatuses(skyAddr string) ([]daemon.DepositStatus, er
 type DepositFilter func(dpi DepositInfo) bool
 
 func (s *Service) getDepositStatusDetail(flt DepositFilter) ([]daemon.DepositStatusDetail, error) {
-	dpis := s.store.GetDepositInfoArray(flt)
+	dpis, err := s.store.GetDepositInfoArray(flt)
+	if err != nil {
+		return nil, err
+	}
 
 	dss := make([]daemon.DepositStatusDetail, 0, len(dpis))
 	for _, dpi := range dpis {
@@ -299,6 +372,7 @@ func (s *Service) getDepositStatusDetail(flt DepositFilter) ([]daemon.DepositSta
 	return dss, nil
 }
 
-func (s *Service) getBindNum(skyAddr string) int {
-	return len(s.store.GetSkyBindBtcAddresses(skyAddr))
+func (s *Service) getBindNum(skyAddr string) (int, error) {
+	addrs, err := s.store.GetSkyBindBtcAddresses(skyAddr)
+	return len(addrs), err
 }

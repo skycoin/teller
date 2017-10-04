@@ -11,8 +11,11 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/skycoin/teller/src/logger"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/dbutil"
+	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
 var dummyBlocksBktName = []byte("blocks")
@@ -81,7 +84,7 @@ func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.
 }
 
 func TestScannerRun(t *testing.T) {
-	db, shutdown := setupDB(t)
+	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	log := logger.NewLogger("", true)
@@ -106,9 +109,9 @@ func TestScannerRun(t *testing.T) {
 
 	scr := NewScanner(s)
 
-	scr.AddDepositAddress("1ATjE4kwZ5R1ww9SEi4eseYTCenVgaxPWu")
-	scr.AddDepositAddress("1EYQ7Fnct6qu1f3WpTSib1UhDhxkrww1WH")
-	scr.AddDepositAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
+	scr.AddScanAddress("1ATjE4kwZ5R1ww9SEi4eseYTCenVgaxPWu")
+	scr.AddScanAddress("1EYQ7Fnct6qu1f3WpTSib1UhDhxkrww1WH")
+	scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
 
 	time.AfterFunc(time.Second, func() {
 		var dvs []DepositNote
@@ -124,23 +127,20 @@ func TestScannerRun(t *testing.T) {
 			for _, dv := range dvs {
 				key := fmt.Sprintf("%v:%v", dv.Tx, dv.N)
 				var d DepositValue
-				require.Nil(t, getBktValue(tx, depositValueBkt, []byte(key), &d))
+				require.Nil(t, dbutil.GetBucketObject(tx, depositValueBkt, key, &d))
 				require.True(t, d.IsUsed)
 
-				var idxs []string
-				require.Nil(t, getBktValue(tx, scanMetaBkt, dvIndexListKey, &idxs))
-				require.Equal(t, 0, len(idxs))
+				idxs, err := scr.s.store.getDepositValueIndexTx(tx)
+				require.NoError(t, err)
+				require.Len(t, idxs, 0)
 			}
 
 			return nil
 		})
 
-		_, ok, err := scr.s.store.popDepositValue()
-		require.Nil(t, err)
-		require.False(t, ok)
-
-		_, ok = scr.s.store.cache.popDepositValue()
-		require.False(t, ok)
+		_, err := scr.s.store.popDepositValue()
+		require.Error(t, err)
+		require.IsType(t, DepositValuesEmptyErr{}, err)
 	})
 
 	time.AfterFunc(15*time.Second, func() {

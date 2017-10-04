@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/skycoin/skycoin/src/api/webrpc"
+	"github.com/skycoin/skycoin/src/visor"
 	"github.com/skycoin/teller/src/logger"
-	"github.com/skycoin/teller/src/service/cli"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,14 +25,16 @@ func newDummySkycli() *dummySkycli {
 	return &dummySkycli{}
 }
 
-func (ds *dummySkycli) Send(addr string, coins int64) (string, error) {
+func (ds *dummySkycli) Send(addr string, coins uint64) (string, error) {
 	return ds.sendTxid, ds.sendErr
 }
 
-func (ds *dummySkycli) GetTransaction(txid string) (*cli.TxJSON, error) {
+func (ds *dummySkycli) GetTransaction(txid string) (*webrpc.TxnResult, error) {
 	ds.Lock()
 	defer ds.Unlock()
-	txjson := cli.TxJSON{}
+	txjson := webrpc.TxnResult{
+		Transaction: &visor.TransactionResult{},
+	}
 	txjson.Transaction.Status.Confirmed = ds.txConfirmed
 	return &txjson, ds.getTxErr
 }

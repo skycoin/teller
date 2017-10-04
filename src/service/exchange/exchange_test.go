@@ -1,15 +1,19 @@
 package exchange
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
 	"time"
 
+	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/dbutil"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/scanner"
 	"github.com/skycoin/teller/src/service/sender"
-	"github.com/stretchr/testify/require"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
 type dummySender struct {
@@ -18,13 +22,13 @@ type dummySender struct {
 	sleepTime time.Duration
 	sent      struct {
 		Address string
-		Value   int64
+		Value   uint64
 	}
 	closed         bool
 	txidConfirmMap map[string]bool
 }
 
-func (send *dummySender) Send(destAddr string, coins int64, opt *sender.SendOption) (string, error) {
+func (send *dummySender) Send(destAddr string, coins uint64, opt *sender.SendOption) (string, error) {
 	time.Sleep(send.sleepTime)
 
 	if send.err != nil && send.err != sender.ErrServiceClosed {
@@ -36,9 +40,7 @@ func (send *dummySender) Send(destAddr string, coins int64, opt *sender.SendOpti
 	return send.txid, send.err
 }
 
-func (send *dummySender) SendAsync(destAddr string,
-	coins int64,
-	opt *sender.SendOption) (<-chan interface{}, error) {
+func (send *dummySender) SendAsync(destAddr string, coins uint64, opt *sender.SendOption) (<-chan interface{}, error) {
 	rspC := make(chan interface{}, 1)
 	if send.err != nil {
 		return rspC, send.err
@@ -95,8 +97,8 @@ func (scan *dummyScanner) GetDepositValue() <-chan scanner.DepositNote {
 	return scan.dvC
 }
 
-func (scan *dummyScanner) GetScanAddresses() []string {
-	return []string{}
+func (scan *dummyScanner) GetScanAddresses() ([]string, error) {
+	return []string{}, nil
 }
 
 func TestRunExchangeService(t *testing.T) {
@@ -107,7 +109,9 @@ func TestRunExchangeService(t *testing.T) {
 		bindBtcAddr string
 		bindSkyAddr string
 		dpAddr      string
-		dpValue     float64
+		dpValue     int64
+		dpTx        string
+		dpN         uint32
 
 		sendSleepTime  time.Duration
 		sendReturnTxid string
@@ -123,6 +127,9 @@ func TestRunExchangeService(t *testing.T) {
 		putDVTime    time.Duration
 		writeToDBOk  bool
 		expectStatus Status
+
+		rate int64
+		sent uint64
 	}{
 		{
 			name:           "ok",
@@ -130,45 +137,9 @@ func TestRunExchangeService(t *testing.T) {
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
-			dpValue:        0.002,
-			sendSleepTime:  time.Second * 1,
-			sendReturnTxid: "1111",
-			sendErr:        nil,
-
-			dvC:         make(chan scanner.DepositValue, 1),
-			notifyAfter: 3 * time.Second,
-			txmap:       make(map[string]bool),
-
-			putDVTime:    1 * time.Second,
-			writeToDBOk:  true,
-			expectStatus: StatusDone,
-		},
-		{
-			name:           "deposit_addr_not_exist",
-			initDpis:       []DepositInfo{},
-			bindBtcAddr:    "btcaddr",
-			bindSkyAddr:    "skyaddr",
-			dpAddr:         "btcaddr1",
-			dpValue:        0.002,
-			sendSleepTime:  time.Second * 1,
-			sendReturnTxid: "1111",
-			sendErr:        nil,
-			dvC:            make(chan scanner.DepositValue, 1),
-			notifyAfter:    3 * time.Second,
-			txmap:          make(map[string]bool),
-			putDVTime:      1 * time.Second,
-			writeToDBOk:    false,
-			expectStatus:   StatusWaitDeposit,
-		},
-		{
-			name: "deposit_status_above_waiting_btc_deposit",
-			initDpis: []DepositInfo{
-				{BtcAddress: "btcaddr", SkyAddress: "skyaddr", Status: StatusDone},
-			},
-			bindBtcAddr:    "btcaddr",
-			bindSkyAddr:    "skyaddr",
-			dpAddr:         "btcaddr",
-			dpValue:        0.002,
+			dpValue:        200000,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
 			sendErr:        nil,
@@ -178,14 +149,68 @@ func TestRunExchangeService(t *testing.T) {
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
 			expectStatus:   StatusDone,
+			rate:           500,
+			sent:           1000000,
 		},
+
+		{
+			name:           "deposit_addr_not_exist",
+			initDpis:       []DepositInfo{},
+			bindBtcAddr:    "btcaddr",
+			bindSkyAddr:    "skyaddr",
+			dpAddr:         "btcaddr1",
+			dpValue:        200000,
+			dpTx:           "dptx",
+			dpN:            1,
+			sendSleepTime:  time.Second * 1,
+			sendReturnTxid: "1111",
+			sendErr:        nil,
+			dvC:            make(chan scanner.DepositValue, 1),
+			notifyAfter:    3 * time.Second,
+			txmap:          make(map[string]bool),
+			putDVTime:      1 * time.Second,
+			writeToDBOk:    false,
+			expectStatus:   StatusWaitDeposit,
+			rate:           500,
+			sent:           1000000,
+		},
+
+		{
+			name: "deposit_status_above_waiting_btc_deposit",
+			initDpis: []DepositInfo{{
+				BtcAddress: "btcaddr",
+				SkyAddress: "skyaddr",
+				Status:     StatusDone,
+				BtcTx:      "dptx:1",
+			}},
+			bindBtcAddr:    "btcaddr",
+			bindSkyAddr:    "skyaddr",
+			dpAddr:         "btcaddr",
+			dpValue:        200000,
+			dpTx:           "dptx",
+			dpN:            1,
+			sendSleepTime:  time.Second * 1,
+			sendReturnTxid: "1111",
+			sendErr:        nil,
+			dvC:            make(chan scanner.DepositValue, 1),
+			notifyAfter:    3 * time.Second,
+			txmap:          make(map[string]bool),
+			putDVTime:      1 * time.Second,
+			writeToDBOk:    true,
+			expectStatus:   StatusDone,
+			rate:           500,
+			sent:           1000000,
+		},
+
 		{
 			name:           "send_service_closed",
 			initDpis:       []DepositInfo{},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
-			dpValue:        0.002,
+			dpValue:        200000,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
 			sendErr:        sender.ErrServiceClosed,
@@ -196,14 +221,19 @@ func TestRunExchangeService(t *testing.T) {
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
 			expectStatus:   StatusWaitSend,
+			rate:           500,
+			sent:           1000000,
 		},
+
 		{
 			name:           "send_failed",
 			initDpis:       []DepositInfo{},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
-			dpValue:        0.002,
+			dpValue:        200000,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 3,
 			sendReturnTxid: "",
 			sendErr:        fmt.Errorf("send skycoin failed"),
@@ -213,14 +243,19 @@ func TestRunExchangeService(t *testing.T) {
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
 			expectStatus:   StatusWaitSend,
+			rate:           500,
+			sent:           1000000,
 		},
+
 		{
 			name:           "scan_service_closed",
 			initDpis:       []DepositInfo{},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
-			dpValue:        0.002,
+			dpValue:        200000,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 3,
 			sendReturnTxid: "",
 			sendErr:        fmt.Errorf("send skycoin failed"),
@@ -231,16 +266,25 @@ func TestRunExchangeService(t *testing.T) {
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
 			expectStatus:   StatusWaitSend,
+			rate:           500,
+			sent:           1000000,
 		},
+
 		{
-			name: "has_unconfrimed_tx",
-			initDpis: []DepositInfo{
-				{BtcAddress: "btcaddr", SkyAddress: "skyaddr", Txid: "t1", Status: StatusWaitConfirm},
-			},
+			name: "has_unconfirmed_tx",
+			initDpis: []DepositInfo{{
+				BtcAddress: "btcaddr",
+				SkyAddress: "skyaddr",
+				Txid:       "t1",
+				Status:     StatusWaitConfirm,
+				BtcTx:      "dptx:1",
+			}},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
 			dpAddr:         "btcaddr",
-			dpValue:        0.002,
+			dpValue:        200000,
+			dpTx:           "dptx",
+			dpN:            1,
 			sendSleepTime:  time.Second * 3,
 			sendReturnTxid: "",
 			sendErr:        fmt.Errorf("send skycoin failed"),
@@ -251,12 +295,14 @@ func TestRunExchangeService(t *testing.T) {
 			putDVTime:      1 * time.Second,
 			writeToDBOk:    true,
 			expectStatus:   StatusWaitSend,
+			rate:           500,
+			sent:           1000000,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := setupDB(t)
+			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
 
 			send := &dummySender{
@@ -278,12 +324,13 @@ func TestRunExchangeService(t *testing.T) {
 
 			require.NotPanics(t, func() {
 				service = NewService(Config{
-					Rate: 500,
+					Rate: tc.rate,
 				}, db, logger.NewLogger("", true), scan, send)
 
 				// init the deposit infos
 				for _, dpi := range tc.initDpis {
-					service.store.AddDepositInfo(dpi)
+					err := service.store.AddDepositInfo(dpi)
+					require.NoError(t, err)
 				}
 			})
 
@@ -291,7 +338,8 @@ func TestRunExchangeService(t *testing.T) {
 
 			excli := NewClient(service)
 			if len(tc.initDpis) == 0 {
-				require.Nil(t, excli.BindAddress(tc.bindBtcAddr, tc.bindSkyAddr))
+				err := excli.BindAddress(tc.bindBtcAddr, tc.bindSkyAddr)
+				require.NoError(t, err)
 			}
 
 			// fake deposit value
@@ -304,6 +352,8 @@ func TestRunExchangeService(t *testing.T) {
 					DepositValue: scanner.DepositValue{
 						Address: tc.dpAddr,
 						Value:   tc.dpValue,
+						Tx:      tc.dpTx,
+						N:       tc.dpN,
 					},
 					AckC: make(chan struct{}, 1),
 				}
@@ -316,19 +366,86 @@ func TestRunExchangeService(t *testing.T) {
 			}
 
 			// check the info
-			dpi, ok := service.store.GetDepositInfo(tc.dpAddr)
-			require.Equal(t, tc.writeToDBOk, ok)
-			if ok {
+			dpTxN := fmt.Sprintf("%s:%d", tc.dpTx, tc.dpN)
+			dpi, err := service.store.GetDepositInfo(dpTxN)
+
+			if tc.writeToDBOk {
+				require.NoError(t, err)
+			} else {
+				require.Error(t, err)
+				require.IsType(t, dbutil.ObjectNotExistErr{}, err)
+			}
+
+			if tc.writeToDBOk {
 				require.Equal(t, tc.expectStatus, dpi.Status)
 
 				if len(tc.initDpis) == 0 && tc.sendErr == nil {
 					require.Equal(t, tc.bindSkyAddr, send.sent.Address)
-					require.Equal(t, int64(tc.dpValue*500), send.sent.Value)
+					require.Equal(t, tc.sent, send.sent.Value)
 				}
 			}
 
 			service.Shutdown()
 		})
 	}
+}
 
+func TestCalculateSkyValue(t *testing.T) {
+	cases := []struct {
+		satoshis int64
+		rate     int64
+		result   uint64
+		err      error
+	}{
+		{
+			satoshis: -1,
+			rate:     1,
+			err:      errors.New("negative satoshis or negative skyPerBTC"),
+		},
+
+		{
+			satoshis: 1,
+			rate:     -1,
+			err:      errors.New("negative satoshis or negative skyPerBTC"),
+		},
+
+		{
+			satoshis: 1e8,
+			rate:     1,
+			result:   1e6,
+		},
+
+		{
+			satoshis: 1e8,
+			rate:     500,
+			result:   500e6,
+		},
+
+		{
+			satoshis: 100e8,
+			rate:     500,
+			result:   50000e6,
+		},
+
+		{
+			satoshis: 2e5, // 0.002 BTC
+			rate:     500, // 500 SKY/BTC = 1 SKY / 0.002 BTC
+			result:   1e6, // 1 SKY
+		},
+	}
+
+	for _, tc := range cases {
+		name := fmt.Sprintf("satoshis=%d rate=%d", tc.satoshis, tc.rate)
+		t.Run(name, func(t *testing.T) {
+			result, err := calculateSkyValue(tc.satoshis, tc.rate)
+			if tc.err == nil {
+				require.NoError(t, err)
+				require.Equal(t, tc.result, result, "%d != %d", tc.result, result)
+			} else {
+				require.Error(t, err)
+				require.Equal(t, tc.err, err)
+				require.Equal(t, uint64(0), result, "%d != 0", result)
+			}
+		})
+	}
 }
