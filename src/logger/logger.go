@@ -80,7 +80,7 @@ func NewFileWriteHook(filename string) (*WriteHook, error) {
 
 	return &WriteHook{
 		w: f,
-		formatter: &logrus.TextFormatter{
+		formatter: &TextFormatter{
 			DisableColors: true,
 			FullTimestamp: true,
 		},
