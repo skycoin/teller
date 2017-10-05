@@ -184,7 +184,7 @@ func run() error {
 	} else {
 		// check skycoin setup
 		if err := checkSkycoinSetup(*cfg); err != nil {
-			log.Println(err)
+			log.WithError(err).Error("checkSkycoinSetup failed")
 			return err
 		}
 

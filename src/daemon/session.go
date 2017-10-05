@@ -44,7 +44,7 @@ func NewMux(log logrus.FieldLogger) *Mux {
 		handlers: make(map[MsgType]Handler),
 		log: log.WithFields(logrus.Fields{
 			"obj":    "Mux",
-			"prefix": "daemon",
+			"prefix": "daemon.Mux",
 		}),
 	}
 }
@@ -60,12 +60,13 @@ func (m *Mux) HandleFunc(tp MsgType, handler Handler) error {
 
 // Handle process the given message
 func (m *Mux) Handle(ctx context.Context, w ResponseWriteCloser, msg Messager) {
+	log := m.log.WithField("msgType", msg.Type())
 	if hd, ok := m.handlers[msg.Type()]; ok {
-		m.log.Debugln("Handling msg type", msg.Type())
+		log.Debug("Handling message")
 		hd(ctx, w, msg)
 		return
 	}
-	m.log.Debugln("No handler found for msg type", msg.Type())
+	log.Warn("No handler found for message")
 }
 
 // Session represents a connection Session, when this Session is done, the connection will be close.
@@ -100,7 +101,7 @@ func NewSession(log logrus.FieldLogger, conn net.Conn, auth *Auth, mux *Mux, sol
 		wcBufSize: 100, // default value, can be changed by Option
 		quit:      make(chan struct{}),
 		log: log.WithFields(logrus.Fields{
-			"prefix": "daemon",
+			"prefix": "daemon.Session",
 			"obj":    "Session",
 		}),
 		subs:   make(map[int]func(Messager)),
@@ -141,7 +142,9 @@ func (sn *Session) Run() error {
 			select {
 			case msgChan <- msg:
 			case <-time.After(5 * time.Second):
-				sn.log.Debug("Put message timeout")
+				sn.log.Info("Put message timeout")
+				return
+			case <-sn.quit:
 				return
 			}
 		}

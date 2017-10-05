@@ -84,8 +84,11 @@ func NewService(cfg Config, log logrus.FieldLogger, skycli skyclient) *SendServi
 
 // Run start the send service
 func (s *SendService) Run() error {
-	s.log.Println("Start skycoin send service...")
-	defer s.log.Println("Skycoin send service closed")
+	log := s.log.WithField("func", "Run")
+
+	log.Info("Start skycoin send service")
+	defer log.Info("Skycoin send service closed")
+
 	for {
 		select {
 		case <-s.quit:
@@ -93,7 +96,9 @@ func (s *SendService) Run() error {
 		case req := <-s.reqChan:
 			// verify the request
 			if err := verifyRequest(req); err != nil {
-				req.RspC <- Response{Err: fmt.Sprintf("Invalid request: %v", err)}
+				req.RspC <- Response{
+					Err: fmt.Sprintf("Invalid request: %v", err),
+				}
 				continue
 			}
 
@@ -102,18 +107,21 @@ func (s *SendService) Run() error {
 
 				txid, err := s.skycli.Send(req.Address, req.Coins)
 				if err != nil {
-					s.log.Debugln("Send coin failed:", err, "try to send again..")
+					log.WithError(err).Error("skycli.Send failed, trying again...")
+
 					select {
 					case <-s.quit:
 						return nil
-					default:
+					case <-time.After(sendCoinCheckTime):
 					}
-					time.Sleep(sendCoinCheckTime)
+
 					continue
 				}
 
 				rsp := makeResponse(txid, "")
-				go func() { rsp.StatusC <- Sent }()
+				go func() {
+					rsp.StatusC <- Sent
+				}()
 
 				req.RspC <- rsp
 
@@ -121,22 +129,29 @@ func (s *SendService) Run() error {
 				for {
 					ok, err := s.isTxConfirmed(txid)
 					if err != nil {
+						log.WithError(err).Error("isTxConfirmed failed, trying again...")
+
 						select {
 						case <-s.quit:
 							return nil
-						default:
+						case <-time.After(sendCoinCheckTime):
 						}
-						s.log.Debugln(err)
-						time.Sleep(sendCoinCheckTime)
+
 						continue
 					}
 
 					if ok {
-						go func() { rsp.StatusC <- TxConfirmed }()
-						// s.log.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
+						go func() {
+							rsp.StatusC <- TxConfirmed
+						}()
 						break sendLoop
 					}
-					time.Sleep(sendCoinCheckTime)
+
+					select {
+					case <-s.quit:
+						return nil
+					case <-time.After(sendCoinCheckTime):
+					}
 				}
 			}
 		}
@@ -152,6 +167,7 @@ func verifyRequest(req Request) error {
 	if req.Coins < 1 {
 		return errors.New("send coins must >= 1")
 	}
+
 	return nil
 }
 

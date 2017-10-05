@@ -28,10 +28,8 @@ func JSONResponse(w http.ResponseWriter, data interface{}) error {
 		return err
 	}
 
-	if _, err := w.Write(d); err != nil {
-		return err
-	}
-	return nil
+	_, err = w.Write(d)
+	return err
 }
 
 // LogHandler log middleware

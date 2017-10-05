@@ -128,7 +128,7 @@ func TestRunMonitor(t *testing.T) {
 				dpis[3:5],
 			},
 			{
-				"get unknow status",
+				"get unknown status",
 				"invalid",
 				http.StatusBadRequest,
 				nil,

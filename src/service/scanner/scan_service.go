@@ -100,8 +100,11 @@ func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, btc BtcRPCClien
 
 // Run starts the scanner
 func (scan *ScanService) Run() error {
-	scan.log.Println("Start bitcoin blockchain scan service...")
-	defer scan.log.Println("Bitcoin blockchain scan service closed")
+	log := scan.log.WithField("func", "Run")
+
+	log.Info("Start bitcoin blockchain scan service")
+	defer log.Info("Bitcoin blockchain scan service closed")
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -118,7 +121,7 @@ func (scan *ScanService) Run() error {
 						return
 					}
 				default:
-					scan.log.Println("getHeadDepositValue failed:", err)
+					log.WithError(err).Error("getHeadDepositValue failed")
 					return
 				}
 			}
@@ -132,9 +135,9 @@ func (scan *ScanService) Run() error {
 				case <-dn.AckC:
 					// pop the head deposit value in store
 					if ddv, err := scan.store.popDepositValue(); err != nil {
-						scan.log.Println("pop deposit value failed:", err)
+						log.WithError(err).Error("popDepositValue failed")
 					} else {
-						scan.log.Debugf("deposit value: %+v is processed\n", ddv)
+						log.WithField("depositValue", ddv).Info("DepositValue is processed")
 					}
 				case <-scan.quit:
 					return
@@ -152,12 +155,15 @@ func (scan *ScanService) Run() error {
 	height := lsb.Height
 	hash := lsb.Hash
 
-	var block *btcjson.GetBlockVerboseResult
+	log = log.WithFields(logrus.Fields{
+		"blockHeight": height,
+		"blockHash":   hash,
+	})
 
 	if height == 0 {
 		// the first time the bot start
 		// get the best block
-		block, err = scan.getBestBlock()
+		block, err := scan.getBestBlock()
 		if err != nil {
 			return err
 		}
@@ -167,6 +173,7 @@ func (scan *ScanService) Run() error {
 		}
 
 		hash = block.Hash
+		log = log.WithField("blockHash", hash)
 	}
 
 	wg.Add(1)
@@ -175,8 +182,9 @@ func (scan *ScanService) Run() error {
 		defer wg.Done()
 
 		for {
-			nxtBlock, err := scan.getNextBlock(hash)
+			nextBlock, err := scan.getNextBlock(hash)
 			if err != nil {
+				log.WithError(err).Error("getNextBlock failed")
 				select {
 				case <-scan.quit:
 					return
@@ -186,8 +194,8 @@ func (scan *ScanService) Run() error {
 				}
 			}
 
-			if nxtBlock == nil {
-				scan.log.Debugln("No new block to scan...")
+			if nextBlock == nil {
+				log.Debug("No new block to scan...")
 				select {
 				case <-scan.quit:
 					return
@@ -196,17 +204,20 @@ func (scan *ScanService) Run() error {
 				}
 			}
 
-			block = nxtBlock
-			hash = block.Hash
-			height = block.Height
+			hash = nextBlock.Hash
+			height = nextBlock.Height
+			log = log.WithFields(logrus.Fields{
+				"blockHeight": height,
+				"blockHash":   hash,
+			})
 
-			scan.log.Debugf("scan height: %v hash:%s\n", height, hash)
-			if err := scan.scanBlock(block); err != nil {
+			log.Debug("Scanned new block")
+			if err := scan.scanBlock(nextBlock); err != nil {
 				select {
 				case <-scan.quit:
 					return
 				default:
-					errC <- fmt.Errorf("Scan block %s failed: %v", block.Hash, err)
+					errC <- fmt.Errorf("Scan block %s failed: %v", nextBlock.Hash, err)
 					return
 				}
 			}
@@ -228,6 +239,8 @@ func (scan *ScanService) Run() error {
 }
 
 func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
+	log := scan.log.WithField("func", "scanBlock")
+
 	return scan.store.db.View(func(tx *bolt.Tx) error {
 		addrs, err := scan.store.getScanAddressesTx(tx)
 		if err != nil {
@@ -245,7 +258,7 @@ func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 				case DepositValueExistsErr:
 					continue
 				default:
-					scan.log.Printf("Persist deposit value %+v failed: %v\n", dv, err)
+					log.WithError(err).WithField("depositValue", dv).Error("pushDepositValueTx failed")
 				}
 			}
 		}

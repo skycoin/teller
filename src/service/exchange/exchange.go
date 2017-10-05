@@ -84,7 +84,7 @@ type Config struct {
 
 // NewService creates exchange service
 func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, scanner BtcScanner, sender SkySender) *Service {
-	s, err := newStore(db)
+	s, err := newStore(db, log)
 	if err != nil {
 		panic(err)
 	}

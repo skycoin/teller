@@ -76,7 +76,7 @@ func (hs *httpServ) Run() error {
 	})
 
 	log.Info("HTTP service start")
-	defer log.Debug("HTTP service closed")
+	defer log.Info("HTTP service closed")
 
 	hs.quit = make(chan struct{})
 

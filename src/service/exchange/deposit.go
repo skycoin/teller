@@ -8,7 +8,7 @@ const (
 	StatusWaitSend
 	StatusWaitConfirm
 	StatusDone
-	StatusUnknow
+	StatusUnknown
 )
 
 var statusString = []string{
@@ -34,7 +34,7 @@ func NewStatusFromStr(st string) Status {
 	case statusString[StatusDone]:
 		return StatusDone
 	default:
-		return StatusUnknow
+		return StatusUnknown
 	}
 }
 
