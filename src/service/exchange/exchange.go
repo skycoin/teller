@@ -90,7 +90,7 @@ func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, scanner BtcScan
 
 	return &Service{
 		cfg:     cfg,
-		log:     log.WithField("prefix", "exchange.service"),
+		log:     log.WithField("prefix", "teller.exchange"),
 		scanner: scanner,
 		sender:  sender,
 		store:   s,

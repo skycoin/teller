@@ -252,7 +252,7 @@ func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 				case DepositValueExistsErr:
 					continue
 				default:
-					log.WithError(err).WithField("depositValue", dv).Error("pushDepositValueTx failed")
+					scan.log.WithError(err).WithField("depositValue", dv).Error("pushDepositValueTx failed")
 				}
 			}
 		}

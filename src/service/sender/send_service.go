@@ -81,6 +81,7 @@ func NewService(cfg Config, log logrus.FieldLogger, skycli skyclient) *SendServi
 
 // Run start the send service
 func (s *SendService) Run() error {
+	log := s.log
 	log.Info("Start skycoin send service")
 	defer log.Info("Skycoin send service closed")
 
