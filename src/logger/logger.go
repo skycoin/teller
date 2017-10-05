@@ -4,9 +4,12 @@ import (
 	"context"
 	"io"
 	"os"
+	"path"
+	"runtime"
+	"strings"
 
+	prefixed "github.com/gz-c/logrus-prefixed-formatter"
 	"github.com/sirupsen/logrus"
-	prefixed "github.com/x-cray/logrus-prefixed-formatter"
 )
 
 type ctxKey int
@@ -45,7 +48,9 @@ func NewLogger(logFilename string, debug bool) (*logrus.Logger, error) {
 	log := logrus.New()
 	log.Out = os.Stdout
 	log.Formatter = &prefixed.TextFormatter{
-		FullTimestamp: true,
+		FullTimestamp:      true,
+		AlwaysQuoteStrings: true,
+		QuoteEmptyFields:   true,
 	}
 	log.Level = logrus.InfoLevel
 
@@ -61,6 +66,8 @@ func NewLogger(logFilename string, debug bool) (*logrus.Logger, error) {
 
 		log.Hooks.Add(hook)
 	}
+
+	log.Hooks.Add(contextHook{})
 
 	return log, nil
 }
@@ -92,7 +99,9 @@ func NewStdoutWriteHook() *WriteHook {
 	return &WriteHook{
 		w: os.Stdout,
 		formatter: &prefixed.TextFormatter{
-			FullTimestamp: true,
+			FullTimestamp:      true,
+			AlwaysQuoteStrings: true,
+			QuoteEmptyFields:   true,
 		},
 	}
 }
@@ -112,4 +121,34 @@ func (f *WriteHook) Fire(e *logrus.Entry) error {
 
 	_, err = f.w.Write(b)
 	return err
+}
+
+// Adds file:func:lineno context to log lines
+type contextHook struct{}
+
+func (hook contextHook) Levels() []logrus.Level {
+	return logrus.AllLevels
+}
+
+func (hook contextHook) Fire(entry *logrus.Entry) error {
+	pc := make([]uintptr, 3)
+	n := runtime.Callers(6, pc)
+
+	frames := runtime.CallersFrames(pc[:n])
+
+	for {
+		frame, more := frames.Next()
+		if strings.Contains(frame.File, "github.com/sirupsen/logrus") {
+			continue
+		}
+		if !more {
+			break
+		}
+
+		entry.Data["file"] = path.Base(frame.File)
+		entry.Data["func"] = path.Base(frame.Function)
+		entry.Data["line"] = frame.Line
+	}
+
+	return nil
 }

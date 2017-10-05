@@ -1,5 +1,5 @@
 # Logrus Prefixed Log Formatter
-[![Build Status](https://travis-ci.org/x-cray/logrus-prefixed-formatter.svg?branch=master)](https://travis-ci.org/x-cray/logrus-prefixed-formatter)
+[![Build Status](https://travis-ci.org/gz-c/logrus-prefixed-formatter.svg?branch=master)](https://travis-ci.org/gz-c/logrus-prefixed-formatter)
 
 [Logrus](https://github.com/sirupsen/logrus) formatter mainly based on original `logrus.TextFormatter` but with slightly
 modified colored output and support for log entry prefixes, e.g. message source followed by a colon. In addition, custom
@@ -20,11 +20,19 @@ time="Oct 27 00:44:26" level=fatal msg="The ice breaks!" number=100 omg=true
 exit status 1
 ```
 
+## This is a fork of github.com/x-cray/logrus-prefixed-formatter
+
+Changes:
+
+* Fix double spaces printed when message is empty
+* Treat `"file"`, `"func"` and `"line"` values in `logrus.Entry.Data` as calling
+  context and include it in the format if present.
+
 ## Installation
 To install formatter, use `go get`:
 
 ```sh
-$ go get github.com/x-cray/logrus-prefixed-formatter
+$ go get github.com/gz-c/logrus-prefixed-formatter
 ```
 
 ## Usage
@@ -35,7 +43,7 @@ package main
 
 import (
 	"github.com/sirupsen/logrus"
-	prefixed "github.com/x-cray/logrus-prefixed-formatter"
+	prefixed "github.com/gz-c/logrus-prefixed-formatter"
 )
 
 var log = logrus.New()

@@ -46,10 +46,32 @@ func LogHandler(log logrus.FieldLogger, hd http.HandlerFunc) http.HandlerFunc {
 
 		t := time.Now()
 
-		hd(w, r)
+		lrw := newLoggingResponseWriter(w)
+
+		hd(lrw, r)
 
 		log.WithFields(logrus.Fields{
-			"duration": fmt.Sprintf("%dms", time.Since(t)/time.Millisecond),
+			"duration":   fmt.Sprintf("%dms", time.Since(t)/time.Millisecond),
+			"status":     lrw.statusCode,
+			"statusText": http.StatusText(lrw.statusCode),
 		}).Info("HTTP Request")
 	}
+}
+
+// Captures the response status of a http handler
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
+	return &loggingResponseWriter{
+		ResponseWriter: w,
+		statusCode:     http.StatusOK,
+	}
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
 }

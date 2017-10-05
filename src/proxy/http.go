@@ -444,7 +444,7 @@ func StatusHandler(srv *httpServ) http.HandlerFunc {
 		}
 
 		if err := httputil.JSONResponse(w, makeStatusHTTPResponse(*rsp)); err != nil {
-			log.WithError(err).Info()
+			log.WithError(err).Error()
 		}
 	}
 }

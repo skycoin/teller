@@ -71,6 +71,12 @@
   version = "v0.3.1"
 
 [[projects]]
+  name = "github.com/gz-c/logrus-prefixed-formatter"
+  packages = ["."]
+  revision = "727ac21431fc93ba46b0076711e2e0d62e44aae7"
+  version = "v0.6.5"
+
+[[projects]]
   name = "github.com/mattn/go-colorable"
   packages = ["."]
   revision = "167de6bfdfba052fa6b2d3664c8f5272e23c9072"
@@ -143,12 +149,6 @@
   version = "v1.20.0"
 
 [[projects]]
-  name = "github.com/x-cray/logrus-prefixed-formatter"
-  packages = ["."]
-  revision = "bb2702d423886830dee131692131d35648c382e2"
-  version = "v0.5.2"
-
-[[projects]]
   branch = "master"
   name = "golang.org/x/crypto"
   packages = ["acme","acme/autocert","pbkdf2","ripemd160","ssh/terminal"]
@@ -175,6 +175,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "cc4656a5641f912e7a1caeec8a83900f598ad2d142b2aeb0f644651651adc1f6"
+  inputs-digest = "54dc80b9f546d82ac101e6374587b663469b3150ce456eee9267528e517a1c94"
   solver-name = "gps-cdcl"
   solver-version = 1
