@@ -60,10 +60,7 @@ type Monitor struct {
 // New creates monitor service
 func New(cfg Config, log logrus.FieldLogger, btcAddrMgr BtcAddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
 	return &Monitor{
-		log: log.WithFields(logrus.Fields{
-			"prefix": "monitor",
-			"obj":    "Monitor",
-		}),
+		log:                 log.WithField("prefix", "monitor"),
 		cfg:                 cfg,
 		BtcAddrManager:      btcAddrMgr,
 		DepositStatusGetter: dpstget,
@@ -74,10 +71,8 @@ func New(cfg Config, log logrus.FieldLogger, btcAddrMgr BtcAddrManager, dpstget 
 
 // Run starts the monitor service
 func (m *Monitor) Run() error {
-	log := m.log.WithField("func", "Run")
-
-	log.Info("Start monitor service...")
-	defer log.Info("Monitor Service closed")
+	m.log.Info("Start monitor service...")
+	defer m.log.Info("Monitor Service closed")
 
 	mux := m.setupMux()
 
@@ -110,10 +105,7 @@ func (m *Monitor) setupMux() *http.ServeMux {
 
 // Shutdown close the monitor service
 func (m *Monitor) Shutdown() {
-	log := m.log.WithFields(logrus.Fields{
-		"timeout": shutdownTimeout,
-		"func":    "Shutdown",
-	})
+	log := m.log.WithField("timeout", shutdownTimeout)
 
 	close(m.quit)
 	if m.ln != nil {

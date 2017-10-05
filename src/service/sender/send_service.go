@@ -71,10 +71,7 @@ type skyclient interface {
 // NewService creates sender instance
 func NewService(cfg Config, log logrus.FieldLogger, skycli skyclient) *SendService {
 	return &SendService{
-		log: log.WithFields(logrus.Fields{
-			"prefix": "sender",
-			"obj":    "SendService",
-		}),
+		log:     log.WithField("prefix", "sender.service"),
 		cfg:     cfg,
 		skycli:  skycli,
 		quit:    make(chan struct{}),
@@ -84,8 +81,6 @@ func NewService(cfg Config, log logrus.FieldLogger, skycli skyclient) *SendServi
 
 // Run start the send service
 func (s *SendService) Run() error {
-	log := s.log.WithField("func", "Run")
-
 	log.Info("Start skycoin send service")
 	defer log.Info("Skycoin send service closed")
 

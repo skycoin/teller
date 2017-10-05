@@ -73,11 +73,8 @@ func newStore(db *bolt.DB, log logrus.FieldLogger) (*store, error) {
 	}
 
 	return &store{
-		db: db,
-		log: log.WithFields(logrus.Fields{
-			"prefix": "exchange.store",
-			"obj":    "Store",
-		}),
+		db:  db,
+		log: log.WithField("prefix", "exchange.store"),
 	}, nil
 }
 
@@ -145,10 +142,7 @@ func isValidBtcTx(btcTx string) bool {
 
 // AddDepositInfo adds deposit info into storage, return seq or error
 func (s *store) AddDepositInfo(dpinfo DepositInfo) error {
-	log := s.log.WithFields(logrus.Fields{
-		"func":        "AddDepositInfo",
-		"depositInfo": dpinfo,
-	})
+	log := s.log.WithField("depositInfo", dpinfo)
 
 	if !isValidBtcTx(dpinfo.BtcTx) {
 		log.Error("Invalid depositInfo.BtcTx")
@@ -234,10 +228,7 @@ func (s *store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
 // UpdateDepositInfo updates deposit info. The update func takes a DepositInfo
 // and returns a modified copy of it.
 func (s *store) UpdateDepositInfo(btcTx string, update func(DepositInfo) DepositInfo) error {
-	log := s.log.WithFields(logrus.Fields{
-		"func":  "UpdateDepositInfo",
-		"btcTx": btcTx,
-	})
+	log := s.log.WithField("btcTx", btcTx)
 
 	return s.db.Update(func(tx *bolt.Tx) error {
 		var dpi DepositInfo

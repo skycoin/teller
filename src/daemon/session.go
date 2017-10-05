@@ -42,10 +42,7 @@ type Mux struct {
 func NewMux(log logrus.FieldLogger) *Mux {
 	return &Mux{
 		handlers: make(map[MsgType]Handler),
-		log: log.WithFields(logrus.Fields{
-			"obj":    "Mux",
-			"prefix": "daemon.Mux",
-		}),
+		log:      log.WithField("prefix", "daemon.mux"),
 	}
 }
 
@@ -100,13 +97,10 @@ func NewSession(log logrus.FieldLogger, conn net.Conn, auth *Auth, mux *Mux, sol
 		ts:        ts,
 		wcBufSize: 100, // default value, can be changed by Option
 		quit:      make(chan struct{}),
-		log: log.WithFields(logrus.Fields{
-			"prefix": "daemon.Session",
-			"obj":    "Session",
-		}),
-		subs:   make(map[int]func(Messager)),
-		idGenC: make(chan int),
-		reqC:   make(chan func()),
+		log:       log.WithField("prefix", "daemon.session"),
+		subs:      make(map[int]func(Messager)),
+		idGenC:    make(chan int),
+		reqC:      make(chan func()),
 	}
 
 	for _, op := range ops {

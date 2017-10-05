@@ -89,11 +89,8 @@ func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, scanner BtcScan
 	}
 
 	return &Service{
-		cfg: cfg,
-		log: log.WithFields(logrus.Fields{
-			"prefix": "exchange",
-			"obj":    "Service",
-		}),
+		cfg:     cfg,
+		log:     log.WithField("prefix", "exchange.service"),
 		scanner: scanner,
 		sender:  sender,
 		store:   s,
@@ -103,7 +100,7 @@ func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, scanner BtcScan
 
 // Run starts the exchange process
 func (s *Service) Run() error {
-	log := s.log.WithField("func", "Run")
+	log := s.log
 	log.Info("Start exchange service...")
 	defer log.Info("Exchange service closed")
 
@@ -305,8 +302,7 @@ func (s *Service) Shutdown() {
 // ProcessUnconfirmedTx wait until all unconfirmed tx to be confirmed and update
 // it's status in db
 func (s *Service) processUnconfirmedTx() {
-	log := s.log.WithField("func", "processUnconfirmedTx")
-
+	log := s.log
 	log.Info("Checking the unconfirmed tx...")
 	defer log.Info("Checking confirmed tx finished")
 

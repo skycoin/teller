@@ -68,7 +68,6 @@ type httpServ struct {
 
 func (hs *httpServ) Run() error {
 	log := hs.log.WithFields(logrus.Fields{
-		"func":        "Run",
 		"httpAddr":    hs.Addr,
 		"httpsAddr":   hs.HTTPSAddr,
 		"autoTLSHost": hs.AutoTLSHost,
@@ -280,8 +279,6 @@ func rateLimiter(thr Throttle, hd http.HandlerFunc) http.Handler {
 }
 
 func (hs *httpServ) Shutdown() {
-	log := hs.log.WithField("func", "Shutdown")
-
 	if hs.quit != nil {
 		close(hs.quit)
 	}
@@ -290,10 +287,12 @@ func (hs *httpServ) Shutdown() {
 		if ln == nil {
 			return
 		}
-		log.WithFields(logrus.Fields{
+		log := hs.log.WithFields(logrus.Fields{
 			"proto":   proto,
 			"timeout": shutdownTimeout,
-		}).Info("Shutting down server")
+		})
+
+		log.Info("Shutting down server")
 
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()

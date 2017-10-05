@@ -89,11 +89,8 @@ func New(cfg Config, auth *daemon.Auth, log logrus.FieldLogger, excli Exchanger,
 	}
 
 	s := &Service{
-		cfg: cfg,
-		log: log.WithFields(logrus.Fields{
-			"prefix": "service",
-			"obj":    "Service",
-		}),
+		cfg:        cfg,
+		log:        log.WithField("prefix", "service"),
 		auth:       auth,
 		excli:      excli,
 		btcAddrGen: btcAddrGen,

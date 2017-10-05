@@ -84,10 +84,7 @@ func New(log logrus.FieldLogger, cfg Config, auth *daemon.Auth) *Proxy {
 	}
 
 	px := &Proxy{
-		log: log.WithFields(logrus.Fields{
-			"prefix": "proxy",
-			"obj":    "Proxy",
-		}),
+		log:           log.WithField("prefix", "proxy"),
 		srvAddr:       cfg.SrvAddr,
 		httpSrvAddr:   cfg.HTTPSrvAddr,
 		withoutTeller: cfg.WithoutTeller,
@@ -125,8 +122,7 @@ func New(log logrus.FieldLogger, cfg Config, auth *daemon.Auth) *Proxy {
 
 // Run start the proxy
 func (px *Proxy) Run() error {
-	log := px.log.WithField("func", "Run")
-
+	log := px.log
 	var wg sync.WaitGroup
 	errC := make(chan error, 1)
 	if !px.withoutTeller {
@@ -256,8 +252,7 @@ func (px *Proxy) handleConnection() {
 }
 
 func (px *Proxy) newSession(conn net.Conn) {
-	log := px.log.WithField("func", "newSession")
-
+	log := px.log
 	log.Debug("New session")
 	defer log.Debug("Session closed")
 	sn, err := daemon.NewSession(px.log, conn, px.auth, px.mux, false)
@@ -329,15 +324,13 @@ func (px *Proxy) openStream(f func(daemon.Messager)) (int, closeStream, error) {
 	px.Lock()
 	defer px.Unlock()
 
-	log := px.log.WithField("func", "openStream")
-
 	if px.sn == nil {
 		return 0, func() {}, errors.New("session is nil")
 	}
 
 	id := px.sn.Sub(f)
 
-	log = log.WithField("streamId", id)
+	log := px.log.WithField("streamId", id)
 
 	log.Debug("Open stream")
 	cf := func() {

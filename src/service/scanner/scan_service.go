@@ -87,21 +87,17 @@ func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, btc BtcRPCClien
 	}
 	return &ScanService{
 		btcClient: btc,
-		log: log.WithFields(logrus.Fields{
-			"prefix": "scanner",
-			"obj":    "ScanService",
-		}),
-		cfg:      cfg,
-		store:    s,
-		depositC: make(chan DepositNote),
-		quit:     make(chan struct{}),
+		log:       log.WithField("prefix", "scanner.service"),
+		cfg:       cfg,
+		store:     s,
+		depositC:  make(chan DepositNote),
+		quit:      make(chan struct{}),
 	}, nil
 }
 
 // Run starts the scanner
 func (scan *ScanService) Run() error {
-	log := scan.log.WithField("func", "Run")
-
+	log := scan.log
 	log.Info("Start bitcoin blockchain scan service")
 	defer log.Info("Bitcoin blockchain scan service closed")
 
@@ -239,8 +235,6 @@ func (scan *ScanService) Run() error {
 }
 
 func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
-	log := scan.log.WithField("func", "scanBlock")
-
 	return scan.store.db.View(func(tx *bolt.Tx) error {
 		addrs, err := scan.store.getScanAddressesTx(tx)
 		if err != nil {

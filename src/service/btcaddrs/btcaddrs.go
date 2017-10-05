@@ -34,11 +34,7 @@ func New(db *bolt.DB, addrsReader io.Reader, log logrus.FieldLogger) (*BtcAddrs,
 		return nil, errors.New("db is nil")
 	}
 
-	log = log.WithFields(logrus.Fields{
-		"prefix": "btcaddrs",
-		"obj":    "BtcAddrs",
-		"func":   "New",
-	})
+	log = log.WithField("prefix", "btcaddrs")
 
 	log.Info("Loading deposit address...")
 	var addrs addressJSON
