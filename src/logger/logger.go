@@ -14,16 +14,7 @@ import (
 
 type ctxKey int
 
-const (
-	loggerCtxKey ctxKey = iota
-)
-
-const (
-	// SkyAddrField should be used for logging skycoin addresses in the logger
-	SkyAddrField = "skyAddr"
-	// BtcAddrField should be used for logging skycoin addresses in the logger
-	BtcAddrField = "btcAddr"
-)
+const loggerCtxKey ctxKey = iota
 
 // FromContext return a *logrus.Logger from a context
 func FromContext(ctx context.Context) logrus.FieldLogger {
@@ -67,7 +58,7 @@ func NewLogger(logFilename string, debug bool) (*logrus.Logger, error) {
 		log.Hooks.Add(hook)
 	}
 
-	log.Hooks.Add(contextHook{})
+	log.Hooks.Add(ContextHook{})
 
 	return log, nil
 }
@@ -123,14 +114,16 @@ func (f *WriteHook) Fire(e *logrus.Entry) error {
 	return err
 }
 
-// Adds file:func:lineno context to log lines
-type contextHook struct{}
+// ContextHook adds "file", "func", "lineno" context to log lines
+type ContextHook struct{}
 
-func (hook contextHook) Levels() []logrus.Level {
+// Levels returns logrus.AllLevels
+func (hook ContextHook) Levels() []logrus.Level {
 	return logrus.AllLevels
 }
 
-func (hook contextHook) Fire(entry *logrus.Entry) error {
+// Fire attaches "file", "func" and "line" to the logrus.Entry data
+func (hook ContextHook) Fire(entry *logrus.Entry) error {
 	pc := make([]uintptr, 3)
 	n := runtime.Callers(6, pc)
 

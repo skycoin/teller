@@ -16,7 +16,6 @@ import (
 
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/dbutil"
-	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/scanner"
 	"github.com/skycoin/teller/src/service/sender"
 )
@@ -147,7 +146,7 @@ func (s *Service) Run() error {
 					continue
 				}
 
-				log = log.WithField(logger.SkyAddrField, skyAddr)
+				log = log.WithField("skyAddr", skyAddr)
 
 				di = DepositInfo{
 					SkyAddress: skyAddr,
@@ -197,7 +196,7 @@ func (s *Service) Run() error {
 				continue
 			}
 
-			log = log.WithField(logger.SkyAddrField, skyAddr)
+			log = log.WithField("skyAddr", skyAddr)
 
 			// checks if the send service is closed
 			if s.sender.IsClosed() {

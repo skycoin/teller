@@ -485,8 +485,8 @@ func verifySkycoinAddress(ctx context.Context, w http.ResponseWriter, gw gateway
 		msg := fmt.Sprintf("Invalid skycoin address: %v", err)
 		httputil.ErrResponse(w, http.StatusBadRequest, msg)
 		log.WithFields(logrus.Fields{
-			"status":            http.StatusBadRequest,
-			logger.SkyAddrField: skyAddr,
+			"status":  http.StatusBadRequest,
+			"skyAddr": skyAddr,
 		}).WithError(err).Info("Invalid skycoin address")
 		return false
 	}

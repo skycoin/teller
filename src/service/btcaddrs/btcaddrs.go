@@ -11,7 +11,6 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/teller/src/logger"
 )
 
 // ErrDepositAddressEmpty represents all deposit addresses are used
@@ -62,14 +61,14 @@ func New(db *bolt.DB, addrsReader io.Reader, log logrus.FieldLogger) (*BtcAddrs,
 	for _, addr := range addrs.BtcAddresses {
 		// dup check
 		if _, ok := addrMap[addr]; ok {
-			log.WithField(logger.BtcAddrField, addr).Warn("Dup deposit btc address")
+			log.WithField("btcAddr", addr).Warn("Dup deposit btc address")
 			continue
 		}
 
 		// verify the address
 		_, err := cipher.BitcoinDecodeBase58Address(addr)
 		if err != nil {
-			log.WithError(err).WithField(logger.BtcAddrField, addr).Error("Invalid bitcoin address")
+			log.WithError(err).WithField("btcAddr", addr).Error("Invalid bitcoin address")
 			return nil, err
 		}
 

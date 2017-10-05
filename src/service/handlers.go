@@ -81,7 +81,7 @@ func BindRequestHandler(gw Gatewayer) daemon.Handler {
 
 		btcAddr, err := gw.BindAddress(req.SkyAddress)
 		if err != nil {
-			log.WithError(err).WithField(logger.SkyAddrField, req.SkyAddress).Error("BindAddress failed")
+			log.WithError(err).WithField("skyAddr", req.SkyAddress).Error("BindAddress failed")
 			ack.Error = fmt.Sprintf("Bind address failed: %v", err)
 		} else {
 			ack.BtcAddress = btcAddr
@@ -124,7 +124,7 @@ func StatusRequestHandler(gw Gatewayer) daemon.Handler {
 
 		sts, err := gw.GetDepositStatuses(req.SkyAddress)
 		if err != nil {
-			log.WithError(err).WithField(logger.SkyAddrField, req.SkyAddress).Error("GetDepositStatuses failed")
+			log.WithError(err).WithField("skyAddr", req.SkyAddress).Error("GetDepositStatuses failed")
 			ack.Error = fmt.Sprintf("Get status of %s failed: %v", req.SkyAddress, err)
 		} else {
 			ack.Statuses = sts
