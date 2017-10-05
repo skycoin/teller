@@ -9,7 +9,6 @@ import { Flex, Box } from 'grid-styled';
 import { FormattedMessage, FormattedHTMLMessage, injectIntl } from 'react-intl';
 import { rem } from 'polished';
 
-import { COLORS, SPACE, BOX_SHADOWS, BORDER_RADIUS, DISTRIBUTION_END, DISTRIBUTION_START } from '@skycoin/config';
 import { media } from '@skycoin/utils';
 import Button from '@skycoin/button';
 import Container from '@skycoin/container';
@@ -19,6 +18,7 @@ import Heading from '@skycoin/heading';
 import Input from '@skycoin/input';
 import Modal, { styles } from '@skycoin/modal';
 import Text from '@skycoin/text';
+import { COLORS, SPACE, BOX_SHADOWS, BORDER_RADIUS, DISTRIBUTION_END, DISTRIBUTION_START } from '../../config';
 
 import { checkStatus, getAddress } from '../../utils/distributionAPI';
 
