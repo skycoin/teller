@@ -14,7 +14,7 @@ func TestNewStore(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	_, err := newStore(db)
+	_, err := newStore(db, testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	// check the buckets
@@ -32,7 +32,7 @@ func TestAddDepositInfo(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db)
+	s, err := newStore(db, testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	err = s.AddDepositInfo(DepositInfo{
@@ -95,7 +95,7 @@ func TestAddDepositInfo(t *testing.T) {
 func TestBindAddress(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
-	s, err := newStore(db)
+	s, err := newStore(db, testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	err = s.BindAddress("sa1", "ba1")
@@ -120,7 +120,7 @@ func TestGetBindAddress(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db)
+	s, err := newStore(db, testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	// init the bind address bucket
@@ -185,7 +185,7 @@ func TestGetDepositInfo(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db)
+	s, err := newStore(db, testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	err = s.AddDepositInfo(DepositInfo{
@@ -208,7 +208,7 @@ func TestUpdateDepositInfo(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db)
+	s, err := newStore(db, testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	err = s.AddDepositInfo(DepositInfo{
@@ -281,7 +281,7 @@ func TestGetDepositInfoOfSkyAddr(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db)
+	s, err := newStore(db, testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	s.BindAddress("skyaddr1", "btcaddr1")
@@ -304,7 +304,7 @@ func TestGetDepositInfoArray(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db)
+	s, err := newStore(db, testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	dpis := []DepositInfo{
