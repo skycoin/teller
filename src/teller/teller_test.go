@@ -1,4 +1,4 @@
-package service
+package teller
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
-	"github.com/skycoin/teller/src/service/testutil"
+	"github.com/skycoin/teller/src/teller/testutil"
 )
 
 func newPingHandler(t *testing.T) daemon.Handler {

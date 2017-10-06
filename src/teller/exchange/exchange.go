@@ -16,8 +16,8 @@ import (
 
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/dbutil"
-	"github.com/skycoin/teller/src/service/scanner"
-	"github.com/skycoin/teller/src/service/sender"
+	"github.com/skycoin/teller/src/teller/scanner"
+	"github.com/skycoin/teller/src/teller/sender"
 )
 
 const satoshiPerBTC int64 = 1e8

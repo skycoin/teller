@@ -12,7 +12,7 @@ import (
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/httputil"
 	"github.com/skycoin/teller/src/logger"
-	"github.com/skycoin/teller/src/service/exchange"
+	"github.com/skycoin/teller/src/teller/exchange"
 )
 
 const (

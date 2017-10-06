@@ -17,14 +17,8 @@ const (
 
 // Config represents the configuration root
 type Config struct {
-	ProxyAddress        string        `json:"proxy_address"`
-	ReconnectTime       time.Duration `json:"reconnect_time"`
-	DialTimeout         time.Duration `json:"dial_timeout"`
-	PingTimeout         time.Duration `json:"ping_timeout"`
-	PongTimeout         time.Duration `json:"pong_timeout"`
-	MaxBind             int           `json:"max_bind"`        // max number of btc addresses a skycoin address can bind
-	MonitorAddr         string        `json:"monitor_address"` // monitor service address
-	SessionWriteBufSize int           `json:"session_write_bufer_size"`
+	MaxBind     int    `json:"max_bind"`        // max number of btc addresses a skycoin address can bind
+	MonitorAddr string `json:"monitor_address"` // monitor service address
 
 	Skynode Skynode `json:"skynode"`
 
@@ -58,11 +52,6 @@ func New(path string) (*Config, error) {
 	if err := json.NewDecoder(bytes.NewReader(v)).Decode(&cfg); err != nil {
 		return nil, err
 	}
-
-	cfg.PingTimeout = cfg.PingTimeout * time.Second
-	cfg.PongTimeout = cfg.PongTimeout * time.Second
-	cfg.DialTimeout = cfg.DialTimeout * time.Second
-	cfg.ReconnectTime = cfg.ReconnectTime * time.Second
 
 	if cfg.MonitorAddr == "" {
 		cfg.MonitorAddr = defaultMonitorAddr

@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/service/exchange"
-	"github.com/skycoin/teller/src/service/testutil"
+	"github.com/skycoin/teller/src/teller/exchange"
+	"github.com/skycoin/teller/src/teller/testutil"
 	"github.com/stretchr/testify/require"
 )
 

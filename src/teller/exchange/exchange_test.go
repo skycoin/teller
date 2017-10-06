@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/dbutil"
-	"github.com/skycoin/teller/src/service/scanner"
-	"github.com/skycoin/teller/src/service/sender"
-	"github.com/skycoin/teller/src/service/testutil"
+	"github.com/skycoin/teller/src/teller/scanner"
+	"github.com/skycoin/teller/src/teller/sender"
+	"github.com/skycoin/teller/src/teller/testutil"
 )
 
 type dummySender struct {

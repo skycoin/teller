@@ -4,7 +4,6 @@ package main
 
 import (
 	"bytes"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -21,18 +20,15 @@ import (
 	"github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/skycoin/src/cipher"
-
-	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
-	"github.com/skycoin/teller/src/service"
-	"github.com/skycoin/teller/src/service/btcaddrs"
-	"github.com/skycoin/teller/src/service/config"
-	"github.com/skycoin/teller/src/service/exchange"
-	"github.com/skycoin/teller/src/service/monitor"
-	"github.com/skycoin/teller/src/service/rpc"
-	"github.com/skycoin/teller/src/service/scanner"
-	"github.com/skycoin/teller/src/service/sender"
+	"github.com/skycoin/teller/src/teller"
+	"github.com/skycoin/teller/src/teller/btcaddrs"
+	"github.com/skycoin/teller/src/teller/config"
+	"github.com/skycoin/teller/src/teller/exchange"
+	"github.com/skycoin/teller/src/teller/monitor"
+	"github.com/skycoin/teller/src/teller/rpc"
+	"github.com/skycoin/teller/src/teller/scanner"
+	"github.com/skycoin/teller/src/teller/sender"
 )
 
 const (
@@ -94,11 +90,21 @@ func main() {
 func run() error {
 	configFile := flag.String("cfg", "config.json", "config.json file")
 	btcAddrs := flag.String("btc-addrs", "btc_addresses.json", "btc_addresses.json file")
-	proxyPubkey := flag.String("proxy-pubkey", "", "proxy pubkey")
 	debug := flag.Bool("debug", false, "debug mode will show more detail logs")
 	dummyMode := flag.Bool("dummy", false, "run without real btcd or skyd service")
 	profile := flag.Bool("prof", false, "start gops profiling tool")
 	logFilename := flag.String("log-file", "teller.log", "teller log filename")
+
+	// TODO -- merge flags with config.json loading -- should use a library for this
+	httpAddr := flag.String("http-service-addr", "127.0.0.1:7071", "http api service address")
+	httpsAddr := flag.String("https-service-addr", "", "https api service address")
+	autoTLSHost := flag.String("auto-tls-host", "", "generate certificate with Let's Encrypt for this hostname and use it")
+	tlsKey := flag.String("tls-key", "", "tls key file (if not using -auto-tls-host)")
+	tlsCert := flag.String("tls-cert", "", "tls cert file (if not using -auto-tls-host)")
+	staticDir := flag.String("static-dir", "./web/build", "static directory to serve html interface from")
+	startAt := flag.String("start-time", "", "Don't process API requests until after this timestamp (RFC3339 format)")
+	thrMax := flag.Int64("throttle-max", 5, "max allowd per ip in specific duration")
+	thrDur := flag.Int64("throttle-duration", int64(time.Minute), "throttle duration")
 
 	flag.Parse()
 
@@ -110,25 +116,6 @@ func run() error {
 	}
 
 	log := rusloggger.WithField("prefix", "teller")
-
-	if *proxyPubkey == "" {
-		log.Error("-proxy-pubkey missing")
-		return errors.New("-proxy-pubkey missing")
-	}
-
-	rpubkey, err := cipher.PubKeyFromHex(*proxyPubkey)
-	if err != nil {
-		log.WithError(err).Error("Invalid proxy pubkey")
-		return err
-	}
-
-	// generate local private key
-	_, lseckey := cipher.GenerateKeyPair()
-
-	auth := &daemon.Auth{
-		RPubkey: rpubkey,
-		LSeckey: lseckey,
-	}
 
 	if *profile {
 		// start gops agent, for profilling
@@ -150,6 +137,36 @@ func run() error {
 		return err
 	}
 
+	startAtStamp := time.Time{}
+	if *startAt != "" {
+		var err error
+		startAtStamp, err = time.Parse(time.RFC3339, *startAt)
+		if err != nil {
+			log.WithField("format", time.RFC3339).Error("Invalid -start-time, must be in RCF3339 format")
+			return err
+		}
+		startAtStamp = startAtStamp.UTC()
+	}
+
+	httpConfig := teller.HTTPConfig{
+		HTTPAddr:    *httpAddr,
+		HTTPSAddr:   *httpsAddr,
+		StaticDir:   *staticDir,
+		StartAt:     startAtStamp,
+		AutoTLSHost: *autoTLSHost,
+		TLSCert:     *tlsCert,
+		TLSKey:      *tlsKey,
+		Throttle: teller.Throttle{
+			Max:      *thrMax,
+			Duration: time.Duration(*thrDur),
+		},
+	}
+
+	if err := httpConfig.Validate(); err != nil {
+		log.WithError(err).Error("Invalid HTTP config")
+		return err
+	}
+
 	appDir, err := createAppDirIfNotExist(appDir)
 	if err != nil {
 		log.WithError(err).Error("Create AppDir failed")
@@ -158,7 +175,9 @@ func run() error {
 
 	// open db
 	dbPath := filepath.Join(appDir, dbName)
-	db, err := bolt.Open(dbPath, 0700, &bolt.Options{Timeout: 1 * time.Second})
+	db, err := bolt.Open(dbPath, 0700, &bolt.Options{
+		Timeout: 1 * time.Second,
+	})
 	if err != nil {
 		log.WithError(err).Error("Open db failed")
 		return err
@@ -246,7 +265,12 @@ func run() error {
 		return err
 	}
 
-	srv := service.New(makeServiceConfig(*cfg), auth, log, excCli, btcAddrMgr)
+	srv := teller.New(log, excCli, btcAddrMgr, teller.Config{
+		Service: teller.ServiceConfig{
+			MaxBind: cfg.MaxBind,
+		},
+		HTTP: httpConfig,
+	})
 
 	// Run the service
 	wg.Add(1)
@@ -302,20 +326,6 @@ func run() error {
 	log.Info("Shutdown complete")
 
 	return finalErr
-}
-
-func makeServiceConfig(cfg config.Config) service.Config {
-	return service.Config{
-		ProxyAddr: cfg.ProxyAddress,
-
-		ReconnectTime: cfg.ReconnectTime,
-		PingTimeout:   cfg.PingTimeout,
-		PongTimeout:   cfg.PongTimeout,
-		DialTimeout:   cfg.DialTimeout,
-
-		MaxBind:             cfg.MaxBind,
-		SessionWriteBufSize: cfg.SessionWriteBufSize,
-	}
 }
 
 func makeExchangeConfig(cfg config.Config) exchange.Config {

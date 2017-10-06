@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/dbutil"
-	"github.com/skycoin/teller/src/service/testutil"
+	"github.com/skycoin/teller/src/teller/testutil"
 )
 
 var dummyBlocksBktName = []byte("blocks")

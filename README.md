@@ -110,7 +110,7 @@ config.json:
 
 ```json
 {
-    "proxy_address": "127.0.0.1:7070",
+    "http_address": "127.0.0.1:7070",
     "reconnect_time": 5,
     "dial_timeout": 5,
     "ping_timeout": 5,
