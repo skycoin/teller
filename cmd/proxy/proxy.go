@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"os/user"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/google/gops/agent"
+
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
@@ -19,6 +21,12 @@ import (
 )
 
 func main() {
+	if err := run(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	proxyAddr := flag.String("teller-proxy-addr", "0.0.0.0:7070", "teller proxy listen address")
 	httpAddr := flag.String("http-service-addr", "127.0.0.1:7071", "http api service address")
 	httpsAddr := flag.String("https-service-addr", "", "https api service address")
@@ -34,34 +42,42 @@ func main() {
 	thrMax := flag.Int64("throttle-max", 5, "max allowd per ip in specific duration")
 	thrDur := flag.Int64("throttle-duration", int64(time.Minute), "throttle duration")
 	withoutTeller := flag.Bool("without-teller", false, "disable the listener for teller")
+	logFilename := flag.String("log-file", "proxy.log", "proxy log filename")
+
 	flag.Parse()
 
-	log := logger.NewLogger("", *debug)
+	// init logger
+	ruslogger, err := logger.NewLogger(*logFilename, *debug)
+	if err != nil {
+		fmt.Println("Failed to create Logrus logger:", err)
+		return err
+	}
+
+	log := ruslogger.WithField("prefix", "proxy")
 
 	// start gops agent, for profilling
 	if *prof {
 		if err := agent.Listen(&agent.Options{
 			NoShutdownCleanup: true,
 		}); err != nil {
-			log.Println("Start profile agent failed:", err)
-			return
+			log.WithError(err).Error("Start gops profiling agent failed")
+			return err
 		}
 	}
 
 	var lseckey cipher.SecKey
-	var err error
 	if *seckey != "" {
 		lseckey, err = cipher.SecKeyFromHex(*seckey)
 		if err != nil {
-			log.Println("Invalid seckey:", *seckey, err)
-			return
+			log.WithError(err).Error("Invalid seckey")
+			return err
 		}
 	} else {
 		_, lseckey = cipher.GenerateKeyPair()
 	}
 
 	pubkey := cipher.PubKeyFromSecKey(lseckey).Hex()
-	log.Println("Pubkey:", pubkey)
+	log.WithField("pubkey", pubkey).Info()
 
 	auth := &daemon.Auth{
 		LSeckey: lseckey,
@@ -72,7 +88,8 @@ func main() {
 		var err error
 		startAtStamp, err = time.Parse(time.RFC3339, *startAt)
 		if err != nil {
-			log.Fatalln("Invalid -start-time, must be in RCF3339 format", time.RFC3339)
+			log.WithField("format", time.RFC3339).Error("Invalid -start-time, must be in RCF3339 format")
+			return err
 		}
 		startAtStamp = startAtStamp.UTC()
 	}
@@ -94,7 +111,7 @@ func main() {
 		WithoutTeller: *withoutTeller,
 	}
 
-	px := proxy.New(pxCfg, auth, proxy.Logger(log))
+	px := proxy.New(log, pxCfg, auth)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -108,20 +125,23 @@ func main() {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, os.Interrupt)
 
+	var finalErr error
 	select {
 	case <-sigchan:
-	case err := <-errC:
-		if err != nil {
-			log.Println("ERROR:", err)
+	case finalErr = <-errC:
+		if finalErr != nil {
+			log.WithError(finalErr).Error()
 		}
 	}
 
 	signal.Stop(sigchan)
-	log.Println("Shutting down...")
+	log.Info("Shutting down...")
 
 	px.Shutdown()
 	wg.Wait()
-	log.Println("Shutdown complete")
+	log.Info("Shutdown complete")
+
+	return finalErr
 }
 
 func createAppDirIfNotExist(app string) (string, error) {

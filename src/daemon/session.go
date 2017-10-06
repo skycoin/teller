@@ -6,11 +6,14 @@ import (
 	"net"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/logger"
 )
 
 var (
+	// ErrWriteChanFull is returned when the write channel is full
 	ErrWriteChanFull = errors.New("write channel is full")
+	// ErrSessionClosed is returned if the session has closed
 	ErrSessionClosed = errors.New("session is closed")
 )
 
@@ -27,19 +30,19 @@ type ResponseWriteCloser interface {
 }
 
 // Handler callback function when receiving message.
-type Handler func(w ResponseWriteCloser, data Messager)
+type Handler func(ctx context.Context, w ResponseWriteCloser, data Messager)
 
 // Mux for records the message handlers
 type Mux struct {
 	handlers map[MsgType]Handler
-	log      logger.Logger
+	log      logrus.FieldLogger
 }
 
 // NewMux creates mux
-func NewMux(log logger.Logger) *Mux {
+func NewMux(log logrus.FieldLogger) *Mux {
 	return &Mux{
 		handlers: make(map[MsgType]Handler),
-		log:      log,
+		log:      log.WithField("prefix", "daemon.mux"),
 	}
 }
 
@@ -53,13 +56,14 @@ func (m *Mux) HandleFunc(tp MsgType, handler Handler) error {
 }
 
 // Handle process the given message
-func (m *Mux) Handle(w ResponseWriteCloser, msg Messager) {
+func (m *Mux) Handle(ctx context.Context, w ResponseWriteCloser, msg Messager) {
+	log := m.log.WithField("msgType", msg.Type())
 	if hd, ok := m.handlers[msg.Type()]; ok {
-		m.log.Debugln("Handling msg type", msg.Type())
-		hd(w, msg)
+		log.Debug("Handling message")
+		hd(ctx, w, msg)
 		return
 	}
-	m.log.Debugln("No handler found for msg type", msg.Type())
+	log.Warn("No handler found for message")
 }
 
 // Session represents a connection Session, when this Session is done, the connection will be close.
@@ -69,7 +73,7 @@ type Session struct {
 	ts        *transport
 	wc        chan Messager // write channel
 	quit      chan struct{}
-	log       logger.Logger
+	log       logrus.FieldLogger
 	subs      map[int]func(Messager) // subscribers
 	idGenC    chan int               // subscribe id generator channel
 	reqC      chan func()
@@ -77,7 +81,7 @@ type Session struct {
 }
 
 // NewSession creates a new session
-func NewSession(conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Option) (*Session, error) {
+func NewSession(log logrus.FieldLogger, conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Option) (*Session, error) {
 	if auth == nil {
 		return nil, errors.New("auth is nil")
 	}
@@ -93,7 +97,7 @@ func NewSession(conn net.Conn, auth *Auth, mux *Mux, solicited bool, ops ...Opti
 		ts:        ts,
 		wcBufSize: 100, // default value, can be changed by Option
 		quit:      make(chan struct{}),
-		log:       logger.NewLogger("", false),
+		log:       log.WithField("prefix", "daemon.session"),
 		subs:      make(map[int]func(Messager)),
 		idGenC:    make(chan int),
 		reqC:      make(chan func()),
@@ -132,7 +136,9 @@ func (sn *Session) Run() error {
 			select {
 			case msgChan <- msg:
 			case <-time.After(5 * time.Second):
-				sn.log.Debugln("Put message timeout")
+				sn.log.Info("Put message timeout")
+				return
+			case <-sn.quit:
 				return
 			}
 		}
@@ -161,19 +167,21 @@ func (sn *Session) Run() error {
 		<-c
 	}()
 
+	ctx := logger.WithContext(context.Background(), sn.log)
+
 	for {
 		select {
 		case <-sn.quit:
 			return nil
 		case err := <-errC:
-			sn.log.Debugln(err)
+			sn.log.WithError(err).Debug()
 			return err
 		case req := <-sn.reqC:
 			req()
 		case msg := <-msgChan:
-			sn.log.Debugln("Recv msg:", msg.Type())
+			sn.log.WithField("msgType", msg.Type()).Debug("Recv msg")
 			if sn.mux != nil {
-				sn.mux.Handle(sn, msg)
+				sn.mux.Handle(ctx, sn, msg)
 			}
 
 			// find the message subscriber and push data
@@ -183,7 +191,7 @@ func (sn *Session) Run() error {
 
 		case msg := <-sn.wc:
 			if err := sn.ts.Write(msg); err != nil {
-				sn.log.Debugln(err)
+				sn.log.WithError(err).Debug()
 				return err
 			}
 		}
@@ -195,7 +203,7 @@ func (sn *Session) Close() {
 	close(sn.quit)
 
 	if err := sn.ts.Close(); err != nil {
-		sn.log.Println(err)
+		sn.log.WithError(err).Error()
 	}
 }
 
@@ -206,20 +214,20 @@ func (sn *Session) Write(msg Messager) {
 		return
 	case sn.wc <- msg:
 	case <-time.After(writeTimeout):
-		sn.log.Println(ErrWriteChanFull)
+		sn.log.WithError(ErrWriteChanFull).Error()
 		sn.Close()
 	}
 }
 
 // WriteWithContext write message
-func (sn *Session) WriteWithContext(cxt context.Context, msg Messager) error {
+func (sn *Session) WriteWithContext(ctx context.Context, msg Messager) error {
 	select {
 	case <-sn.quit:
 		return ErrSessionClosed
 	case sn.wc <- msg:
 		return nil
-	case <-cxt.Done():
-		return cxt.Err()
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

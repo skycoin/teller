@@ -1,16 +1,17 @@
 package service
 
 import (
+	"context"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
-	"github.com/stretchr/testify/require"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
 type dummyGateway struct {
-	// resetPongTimer bool
-	logger.Logger
 	bindErr error
 	skyAddr string
 	btcAddr string
@@ -46,7 +47,6 @@ func (wc *ResWC) Close() {
 
 func TestBindMessage(t *testing.T) {
 	dg := dummyGateway{
-		Logger:  logger.NewLogger("", true),
 		btcAddr: "14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
 	}
 
@@ -55,7 +55,13 @@ func TestBindMessage(t *testing.T) {
 	br := daemon.BindRequest{SkyAddress: "a1"}
 	br.Id = 1
 
-	hd(&w, &br)
+	log := testutil.NewLogger(t)
+	ctx := logger.WithContext(context.Background(), log)
+
+	log2 := logger.FromContext(ctx)
+	require.NotNil(t, log2)
+
+	hd(ctx, &w, &br)
 	require.Equal(t, "a1", dg.skyAddr)
 	require.Equal(t, 1, w.ackMsg.ID())
 	require.Equal(t, daemon.BindResponseMsgType, w.ackMsg.Type())

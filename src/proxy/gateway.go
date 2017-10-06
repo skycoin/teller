@@ -12,45 +12,45 @@ import (
 )
 
 type gatewayer interface {
-	logger.Logger
 	BindAddress(context.Context, *daemon.BindRequest) (*daemon.BindResponse, error)
 	GetDepositStatuses(context.Context, *daemon.StatusRequest) (*daemon.StatusResponse, error)
 }
 
 type gateway struct {
-	logger.Logger
 	p *Proxy
 }
 
-func (gw *gateway) BindAddress(cxt context.Context, req *daemon.BindRequest) (*daemon.BindResponse, error) {
+func (gw *gateway) BindAddress(ctx context.Context, req *daemon.BindRequest) (*daemon.BindResponse, error) {
 	var rsp daemon.BindResponse
-	if err := gw.sendMessage(cxt, req, &rsp); err != nil {
+	if err := gw.sendMessage(ctx, req, &rsp); err != nil {
 		return nil, err
 	}
 
 	return &rsp, nil
 }
 
-func (gw *gateway) GetDepositStatuses(cxt context.Context, req *daemon.StatusRequest) (*daemon.StatusResponse, error) {
+func (gw *gateway) GetDepositStatuses(ctx context.Context, req *daemon.StatusRequest) (*daemon.StatusResponse, error) {
 	var rsp daemon.StatusResponse
-	if err := gw.sendMessage(cxt, req, &rsp); err != nil {
+	if err := gw.sendMessage(ctx, req, &rsp); err != nil {
 		return nil, err
 	}
 
 	return &rsp, nil
 }
 
-func (gw *gateway) sendMessage(cxt context.Context, msg daemon.Messager, ackMsg daemon.Messager) (err error) {
+func (gw *gateway) sendMessage(ctx context.Context, msg daemon.Messager, ackMsg daemon.Messager) (err error) {
 	// the ackMsg must be
 	if reflect.TypeOf(ackMsg).Kind() != reflect.Ptr {
 		return errors.New("ack message type must be setable")
 	}
 
+	log := logger.FromContext(ctx)
+
 	gw.p.strand(func() {
 		msgC := make(chan daemon.Messager, 1)
 		// open the data stream
 		id, closeStream, er := gw.p.openStream(func(m daemon.Messager) {
-			gw.Debugf("Recv %s message", m.Type())
+			log.WithField("msgType", m.Type()).Debug("Recv message")
 			msgC <- m
 		})
 		if er != nil {
@@ -62,12 +62,12 @@ func (gw *gateway) sendMessage(cxt context.Context, msg daemon.Messager, ackMsg 
 		// send  message
 		msg.SetID(id)
 
-		if err = gw.p.writeWithContext(cxt, msg); err != nil {
+		if err = gw.p.writeWithContext(ctx, msg); err != nil {
 			return
 		}
 		select {
-		case <-cxt.Done():
-			err = cxt.Err()
+		case <-ctx.Done():
+			err = ctx.Err()
 			return
 		case ack := <-msgC:
 			gw.p.ResetPingTimer()

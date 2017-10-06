@@ -2,10 +2,12 @@ package httputil
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/logger"
 )
 
@@ -26,17 +28,50 @@ func JSONResponse(w http.ResponseWriter, data interface{}) error {
 		return err
 	}
 
-	if _, err := w.Write(d); err != nil {
-		return err
-	}
-	return nil
+	_, err = w.Write(d)
+	return err
 }
 
 // LogHandler log middleware
-func LogHandler(log logger.Logger, hd http.HandlerFunc) http.HandlerFunc {
+func LogHandler(log logrus.FieldLogger, hd http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log = log.WithFields(logrus.Fields{
+			"method":     r.Method,
+			"remoteAddr": r.RemoteAddr,
+			"url":        r.URL.String(),
+		})
+		ctx = logger.WithContext(ctx, log)
+		r = r.WithContext(ctx)
+
 		t := time.Now()
-		hd(w, r)
-		log.Printf("HTTP [%s] %dms %s \n", r.Method, time.Since(t)/time.Millisecond, r.URL.String())
+
+		lrw := newLoggingResponseWriter(w)
+
+		hd(lrw, r)
+
+		log.WithFields(logrus.Fields{
+			"duration":   fmt.Sprintf("%dms", time.Since(t)/time.Millisecond),
+			"status":     lrw.statusCode,
+			"statusText": http.StatusText(lrw.statusCode),
+		}).Info("HTTP Request")
 	}
+}
+
+// Captures the response status of a http handler
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
+	return &loggingResponseWriter{
+		ResponseWriter: w,
+		statusCode:     http.StatusOK,
+	}
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
 }

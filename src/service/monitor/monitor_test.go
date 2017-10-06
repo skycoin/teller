@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/skycoin/teller/src/daemon"
-	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/exchange"
+	"github.com/skycoin/teller/src/service/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -85,7 +85,7 @@ func TestRunMonitor(t *testing.T) {
 		"localhost:7908",
 	}
 
-	m := New(cfg, logger.NewLogger("", true), &dummyBtcAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
+	m := New(cfg, testutil.NewLogger(t), &dummyBtcAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
 
 	time.AfterFunc(1*time.Second, func() {
 		rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/address"))
@@ -128,7 +128,7 @@ func TestRunMonitor(t *testing.T) {
 				dpis[3:5],
 			},
 			{
-				"get unknow status",
+				"get unknown status",
 				"invalid",
 				http.StatusBadRequest,
 				nil,

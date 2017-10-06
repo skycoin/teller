@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/testutil"
 )
 
@@ -27,7 +26,7 @@ func TestNewBtcAddrs(t *testing.T) {
 	v, err := json.Marshal(addrJSON)
 	require.NoError(t, err)
 
-	btca, err := New(db, bytes.NewReader(v), logger.NewLogger("", true))
+	btca, err := New(db, bytes.NewReader(v), testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	addrMap := make(map[string]struct{}, len(btca.addresses))
@@ -58,7 +57,7 @@ func TestNewBtcAddrsContainsInvalid(t *testing.T) {
 	v, err := json.Marshal(invalidAddrJSON)
 	require.NoError(t, err)
 
-	_, err = New(db, bytes.NewReader(v), logger.NewLogger("", true))
+	_, err = New(db, bytes.NewReader(v), testutil.NewLogger(t))
 	require.Error(t, err)
 	require.Equal(t, err, errors.New("Invalid address length"))
 }
@@ -79,7 +78,7 @@ func TestNewAddress(t *testing.T) {
 	v, err := json.Marshal(addrJSON)
 	require.NoError(t, err)
 
-	btca, err := New(db, bytes.NewReader(v), logger.NewLogger("", true))
+	btca, err := New(db, bytes.NewReader(v), testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	addr, err := btca.NewAddress()
@@ -99,7 +98,7 @@ func TestNewAddress(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, exists)
 
-	btca1, err := New(db, bytes.NewReader(v), logger.NewLogger("", true))
+	btca1, err := New(db, bytes.NewReader(v), testutil.NewLogger(t))
 	require.NoError(t, err)
 
 	addrMap1 := make(map[string]struct{})

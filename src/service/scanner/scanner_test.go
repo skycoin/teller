@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/dbutil"
-	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/service/testutil"
 )
 
@@ -87,7 +86,7 @@ func TestScannerRun(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	log := logger.NewLogger("", true)
+	log := testutil.NewLogger(t)
 
 	rpcclient := newDummyBtcrpcclient()
 	rpcclient.lastBlock = blockHashHeight{

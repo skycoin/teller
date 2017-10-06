@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -15,18 +14,25 @@ import (
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/service/testutil"
 )
 
-func pingHandler(w daemon.ResponseWriteCloser, msg daemon.Messager) {
-	switch msg.Type() {
-	case daemon.PingMessage{}.Type():
-		w.Write(&daemon.PongMessage{Value: "PONG"})
-	default:
-		fmt.Println("unknow message type:", msg.Type())
+func newPingHandler(t *testing.T) daemon.Handler {
+	return func(ctx context.Context, w daemon.ResponseWriteCloser, msg daemon.Messager) {
+		log := logger.FromContext(ctx)
+		require.NotNil(t, log)
+
+		switch msg.Type() {
+		case daemon.PingMessage{}.Type():
+			w.Write(&daemon.PongMessage{Value: "PONG"})
+		default:
+			t.Fatalf("unknown message type: %s", msg.Type())
+		}
 	}
 }
 
 func makeProxy(t *testing.T, auth *daemon.Auth, msgHandler map[daemon.MsgType]daemon.Handler) (net.Listener, func()) {
+	log := testutil.NewLogger(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 
@@ -41,12 +47,12 @@ func makeProxy(t *testing.T, auth *daemon.Auth, msgHandler map[daemon.MsgType]da
 				return
 			}
 
-			mux := daemon.NewMux(logger.NewLogger("", true))
+			mux := daemon.NewMux(testutil.NewLogger(t))
 			for tp, hd := range msgHandler {
 				mux.HandleFunc(tp, hd)
 			}
 
-			s, err = daemon.NewSession(conn, auth, mux, false)
+			s, err = daemon.NewSession(log, conn, auth, mux, false)
 			assert.NoError(t, err)
 			if err != nil {
 				return
@@ -148,7 +154,7 @@ func TestRunService(t *testing.T) {
 		{
 			"test_ping_pong",
 			map[daemon.MsgType]daemon.Handler{
-				daemon.PingMsgType: pingHandler,
+				daemon.PingMsgType: newPingHandler(t),
 			},
 			&dummyExchanger{},
 			dummyBtcAddrGenerator{addr: "1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy"},
@@ -157,7 +163,7 @@ func TestRunService(t *testing.T) {
 		{
 			"pong_timeout",
 			map[daemon.MsgType]daemon.Handler{
-				daemon.PingMsgType: func(w daemon.ResponseWriteCloser, msg daemon.Messager) {
+				daemon.PingMsgType: func(ctx context.Context, w daemon.ResponseWriteCloser, msg daemon.Messager) {
 					time.Sleep(pongTimeout + time.Second)
 				},
 			},
@@ -169,7 +175,8 @@ func TestRunService(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			ctx, _ := context.WithTimeout(context.Background(), tc.shutdownTime+time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), tc.shutdownTime+time.Second)
+			defer cancel()
 			defer leaktest.CheckContext(ctx, t)()
 
 			cAuth, sAuth := makeAuthPair()
@@ -177,7 +184,7 @@ func TestRunService(t *testing.T) {
 			defer stop()
 			proxyAddr := s.Addr().String()
 
-			lg := logger.NewLogger("", true)
+			lg := testutil.NewLogger(t)
 
 			service := New(Config{
 				ProxyAddr: proxyAddr,

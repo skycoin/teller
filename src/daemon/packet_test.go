@@ -23,7 +23,7 @@ func (um UnknowMessage) Version() uint16 {
 }
 
 func (um UnknowMessage) Type() MsgType {
-	return stringToMsgType("unknow")
+	return stringToMsgType("unknown")
 }
 
 func (um UnknowMessage) Process(wk *Session) error {

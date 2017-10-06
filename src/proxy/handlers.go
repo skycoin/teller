@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"context"
+
 	"github.com/skycoin/teller/src/daemon"
 )
 
@@ -10,15 +12,15 @@ func bindHandlers(px *Proxy) {
 
 // PingMessageHandler handler for processing the received ping message
 func PingMessageHandler(px *Proxy) daemon.Handler {
-	return func(w daemon.ResponseWriteCloser, msg daemon.Messager) {
+	return func(ctx context.Context, w daemon.ResponseWriteCloser, msg daemon.Messager) {
 		if msg.Type() != daemon.PingMsgType {
-			px.Printf("Mux error, dispatch %s message to ping message handler\n", msg.Type())
+			px.log.WithField("msgType", msg.Type()).Error("PingMessageHandler expected PingMsgType")
 			return
 		}
 
 		px.ResetPingTimer()
 
 		w.Write(&daemon.PongMessage{Value: "PONG"})
-		px.Debugln("Send pong message")
+		px.log.WithField("msgType", msg.Type()).Debug("Send")
 	}
 }

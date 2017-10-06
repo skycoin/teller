@@ -310,6 +310,6 @@ func main() {
 		}
 
 	default:
-		log.Printf("Unknow command: %s\n", cmd)
+		log.Printf("Unknown command: %s\n", cmd)
 	}
 }

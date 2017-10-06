@@ -4,11 +4,11 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
-	"fmt"
-
+	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/httputil"
 	"github.com/skycoin/teller/src/logger"
@@ -48,7 +48,7 @@ type Config struct {
 
 // Monitor monitor service struct
 type Monitor struct {
-	logger.Logger
+	log logrus.FieldLogger
 	BtcAddrManager
 	DepositStatusGetter
 	ScanAddressGetter
@@ -58,13 +58,9 @@ type Monitor struct {
 }
 
 // New creates monitor service
-func New(cfg Config,
-	log logger.Logger,
-	btcAddrMgr BtcAddrManager,
-	dpstget DepositStatusGetter,
-	sag ScanAddressGetter) *Monitor {
+func New(cfg Config, log logrus.FieldLogger, btcAddrMgr BtcAddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
 	return &Monitor{
-		Logger:              log,
+		log:                 log.WithField("prefix", "teller.monitor.btc"),
 		cfg:                 cfg,
 		BtcAddrManager:      btcAddrMgr,
 		DepositStatusGetter: dpstget,
@@ -75,8 +71,8 @@ func New(cfg Config,
 
 // Run starts the monitor service
 func (m *Monitor) Run() error {
-	m.Println("Start monitor service...")
-	defer m.Println("Monitor Service closed")
+	m.log.Info("Start monitor service...")
+	defer m.log.Info("Monitor Service closed")
 
 	mux := m.setupMux()
 
@@ -102,20 +98,22 @@ func (m *Monitor) Run() error {
 func (m *Monitor) setupMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/api/address", m.addressHandler())
-	mux.HandleFunc("/api/deposit_status", m.depositStatus())
+	mux.HandleFunc("/api/address", httputil.LogHandler(m.log, m.addressHandler()))
+	mux.HandleFunc("/api/deposit_status", httputil.LogHandler(m.log, m.depositStatus()))
 	return mux
 }
 
 // Shutdown close the monitor service
 func (m *Monitor) Shutdown() {
+	log := m.log.WithField("timeout", shutdownTimeout)
+
 	close(m.quit)
 	if m.ln != nil {
-		m.Printf("Shutting down monitor service, %s timeout\n", shutdownTimeout)
+		log.Info("Shutting down monitor service")
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := m.ln.Shutdown(ctx); err != nil {
-			m.Println("Monitor service shutdown error:", err)
+			log.WithError(err).Error("Monitor service shutdown failed")
 		}
 	}
 }
@@ -130,16 +128,18 @@ type addressUsage struct {
 // URI: /api/address
 func (m *Monitor) addressHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.Header().Set("Allow", "GET")
+		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
 			httputil.ErrResponse(w, http.StatusMethodNotAllowed)
-			m.Println(http.StatusText(http.StatusMethodNotAllowed))
 			return
 		}
 
 		addrs, err := m.GetScanAddresses()
 		if err != nil {
-			m.Println("GetScanAddresses failed:", err)
+			log.WithError(err).Error("GetScanAddresses failed")
 			httputil.ErrResponse(w, http.StatusInternalServerError)
 			return
 		}
@@ -150,14 +150,10 @@ func (m *Monitor) addressHandler() http.HandlerFunc {
 		}
 
 		if err := httputil.JSONResponse(w, addrUsage); err != nil {
-			m.Println("Write json response failed:", err)
+			log.WithError(err).Error("Write json response failed")
 			return
 		}
 	}
-}
-
-func getAll(dpi exchange.DepositInfo) bool {
-	return true
 }
 
 // depostStatus returns all deposit status
@@ -167,19 +163,24 @@ func getAll(dpi exchange.DepositInfo) bool {
 //     - status # available value("waiting_deposit", "waiting_send", "waiting_confirm", "done")
 func (m *Monitor) depositStatus() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
-			w.Header().Set("Allow", "GET")
+		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
 			httputil.ErrResponse(w, http.StatusMethodNotAllowed)
-			m.Println(http.StatusText(http.StatusMethodNotAllowed))
 			return
 		}
+
 		status := r.FormValue("status")
 		if status == "" {
 			// returns all status
-			dpis, err := m.GetDepositStatusDetail(getAll)
+			dpis, err := m.GetDepositStatusDetail(func(dpi exchange.DepositInfo) bool {
+				return true
+			})
 			if err != nil {
+				log.WithError(err).Error("GetDepositStatusDetail failed")
 				httputil.ErrResponse(w, http.StatusInternalServerError)
-				m.Println(err)
 				return
 			}
 			httputil.JSONResponse(w, dpis)
@@ -188,17 +189,18 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 
 		st := exchange.NewStatusFromStr(status)
 		switch st {
-		case exchange.StatusUnknow:
-			httputil.ErrResponse(w, http.StatusBadRequest, fmt.Sprintf("unknow status %v", status))
-			m.Println("Unknow status", status)
+		case exchange.StatusUnknown:
+			err := fmt.Sprintf("unknown status %v", status)
+			httputil.ErrResponse(w, http.StatusBadRequest, err)
+			log.WithField("depositStatus", status).Error("Unknown status")
 			return
 		default:
 			dpis, err := m.GetDepositStatusDetail(func(dpi exchange.DepositInfo) bool {
 				return dpi.Status == st
 			})
 			if err != nil {
+				log.WithError(err).Error("GetDepositStatusDetail failed")
 				httputil.ErrResponse(w, http.StatusInternalServerError)
-				m.Println(err)
 				return
 			}
 

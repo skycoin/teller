@@ -8,10 +8,9 @@ import (
 
 	"time"
 
+	"github.com/sirupsen/logrus"
 	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/cipher"
-
-	"github.com/skycoin/teller/src/logger"
 )
 
 const sendCoinCheckTime = 3 * time.Second
@@ -28,9 +27,9 @@ const (
 
 // Request send coin request struct
 type Request struct {
-	Coins   uint64           // coin number (in droplets)
-	Address string           // recv address
-	RspC    chan interface{} // response
+	Coins   uint64        // coin number (in droplets)
+	Address string        // recv address
+	RspC    chan Response // response
 }
 
 // Response send response
@@ -50,7 +49,7 @@ func makeResponse(txid string, err string) Response {
 
 // SendService is in charge of sending skycoin
 type SendService struct {
-	logger.Logger
+	log      logrus.FieldLogger
 	cfg      Config
 	skycli   skyclient
 	quit     chan struct{}
@@ -70,9 +69,9 @@ type skyclient interface {
 }
 
 // NewService creates sender instance
-func NewService(cfg Config, log logger.Logger, skycli skyclient) *SendService {
+func NewService(cfg Config, log logrus.FieldLogger, skycli skyclient) *SendService {
 	return &SendService{
-		Logger:  log,
+		log:     log.WithField("prefix", "sender.service"),
 		cfg:     cfg,
 		skycli:  skycli,
 		quit:    make(chan struct{}),
@@ -82,8 +81,10 @@ func NewService(cfg Config, log logger.Logger, skycli skyclient) *SendService {
 
 // Run start the send service
 func (s *SendService) Run() error {
-	s.Println("Start skycoin send service...")
-	defer s.Println("Skycoin send service closed")
+	log := s.log
+	log.Info("Start skycoin send service")
+	defer log.Info("Skycoin send service closed")
+
 	for {
 		select {
 		case <-s.quit:
@@ -91,7 +92,9 @@ func (s *SendService) Run() error {
 		case req := <-s.reqChan:
 			// verify the request
 			if err := verifyRequest(req); err != nil {
-				req.RspC <- Response{Err: fmt.Sprintf("Invalid request: %v", err)}
+				req.RspC <- Response{
+					Err: fmt.Sprintf("Invalid request: %v", err),
+				}
 				continue
 			}
 
@@ -100,18 +103,21 @@ func (s *SendService) Run() error {
 
 				txid, err := s.skycli.Send(req.Address, req.Coins)
 				if err != nil {
-					s.Debugln("Send coin failed:", err, "try to send again..")
+					log.WithError(err).Error("skycli.Send failed, trying again...")
+
 					select {
 					case <-s.quit:
 						return nil
-					default:
+					case <-time.After(sendCoinCheckTime):
 					}
-					time.Sleep(sendCoinCheckTime)
+
 					continue
 				}
 
 				rsp := makeResponse(txid, "")
-				go func() { rsp.StatusC <- Sent }()
+				go func() {
+					rsp.StatusC <- Sent
+				}()
 
 				req.RspC <- rsp
 
@@ -119,22 +125,29 @@ func (s *SendService) Run() error {
 				for {
 					ok, err := s.isTxConfirmed(txid)
 					if err != nil {
+						log.WithError(err).Error("isTxConfirmed failed, trying again...")
+
 						select {
 						case <-s.quit:
 							return nil
-						default:
+						case <-time.After(sendCoinCheckTime):
 						}
-						s.Debugln(err)
-						time.Sleep(sendCoinCheckTime)
+
 						continue
 					}
 
 					if ok {
-						go func() { rsp.StatusC <- TxConfirmed }()
-						// s.Printf("Send %d coins to %s success\n", req.Coins, req.Address)
+						go func() {
+							rsp.StatusC <- TxConfirmed
+						}()
 						break sendLoop
 					}
-					time.Sleep(sendCoinCheckTime)
+
+					select {
+					case <-s.quit:
+						return nil
+					case <-time.After(sendCoinCheckTime):
+					}
 				}
 			}
 		}
@@ -150,6 +163,7 @@ func verifyRequest(req Request) error {
 	if req.Coins < 1 {
 		return errors.New("send coins must >= 1")
 	}
+
 	return nil
 }
 

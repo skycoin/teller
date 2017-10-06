@@ -1,18 +1,16 @@
 package exchange
 
 import (
+	"encoding/json"
 	"errors"
-	"log"
+	"fmt"
+	"sort"
 	"strings"
 	"time"
 
-	"fmt"
-
-	"encoding/json"
-
-	"sort"
-
 	"github.com/boltdb/bolt"
+	"github.com/sirupsen/logrus"
+
 	"github.com/skycoin/teller/src/dbutil"
 )
 
@@ -35,11 +33,12 @@ var (
 
 // store storage for exchange
 type store struct {
-	db *bolt.DB
+	db  *bolt.DB
+	log logrus.FieldLogger
 }
 
 // newStore creates a store instance
-func newStore(db *bolt.DB) (*store, error) {
+func newStore(db *bolt.DB, log logrus.FieldLogger) (*store, error) {
 	if db == nil {
 		return nil, errors.New("new exchange store failed, db is nil")
 	}
@@ -74,7 +73,8 @@ func newStore(db *bolt.DB) (*store, error) {
 	}
 
 	return &store{
-		db: db,
+		db:  db,
+		log: log.WithField("prefix", "exchange.store"),
 	}, nil
 }
 
@@ -142,8 +142,10 @@ func isValidBtcTx(btcTx string) bool {
 
 // AddDepositInfo adds deposit info into storage, return seq or error
 func (s *store) AddDepositInfo(dpinfo DepositInfo) error {
+	log := s.log.WithField("depositInfo", dpinfo)
+
 	if !isValidBtcTx(dpinfo.BtcTx) {
-		log.Println("Invalid dpinfo.BtcTx:", dpinfo.BtcTx)
+		log.Error("Invalid depositInfo.BtcTx")
 		return fmt.Errorf("btc txid \"%s\" is empty/invalid", dpinfo.BtcTx)
 	}
 
@@ -226,15 +228,19 @@ func (s *store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
 // UpdateDepositInfo updates deposit info. The update func takes a DepositInfo
 // and returns a modified copy of it.
 func (s *store) UpdateDepositInfo(btcTx string, update func(DepositInfo) DepositInfo) error {
+	log := s.log.WithField("btcTx", btcTx)
+
 	return s.db.Update(func(tx *bolt.Tx) error {
 		var dpi DepositInfo
 		if err := dbutil.GetBucketObject(tx, depositInfoBkt, btcTx, &dpi); err != nil {
 			return err
 		}
 
+		log = log.WithField("DepositInfo", dpi)
+
 		if dpi.BtcTx != btcTx {
+			log.Error("DepositInfo.BtcTx does not match btcTx")
 			err := fmt.Errorf("DepositInfo %+v saved under different key %s", dpi, btcTx)
-			log.Printf("ERROR: %v\n", err)
 			return err
 		}
 
