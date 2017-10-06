@@ -64,22 +64,17 @@ type dummySkySender struct {
 	log logrus.FieldLogger
 }
 
-func (s *dummySkySender) Send(destAddr string, coins uint64, opt *sender.SendOption) (string, error) {
+func (s *dummySkySender) SendAsync(destAddr string, coins uint64) <-chan sender.Response {
 	s.log.WithFields(logrus.Fields{
 		"destAddr": destAddr,
 		"coins":    coins,
-		"opt":      opt,
-	}).Info("dummySkySender.Send")
-	return "", errors.New("dummy sky sender")
-}
-
-func (s *dummySkySender) SendAsync(destAddr string, coins uint64, opt *sender.SendOption) (<-chan interface{}, error) {
-	s.log.WithFields(logrus.Fields{
-		"destAddr": destAddr,
-		"coins":    coins,
-		"opt":      opt,
 	}).Info("dummySkySender.SendAsync")
-	return nil, errors.New("dummy sky sender")
+
+	c := make(chan sender.Response, 1)
+	c <- sender.Response{
+		Err: fmt.Sprintf("dummySender.SendAsync: %s %d", destAddr, coins),
+	}
+	return c
 }
 
 func (s *dummySkySender) IsClosed() bool {

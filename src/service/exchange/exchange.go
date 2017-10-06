@@ -24,7 +24,7 @@ const satoshiPerBTC int64 = 1e8
 
 // SkySender provids apis for sending skycoin
 type SkySender interface {
-	SendAsync(destAddr string, coins uint64, opt *sender.SendOption) (<-chan interface{}, error)
+	SendAsync(destAddr string, coins uint64) <-chan sender.Response
 	IsTxConfirmed(txid string) bool
 	IsClosed() bool
 }
@@ -219,11 +219,10 @@ func (s *Service) Run() error {
 				continue
 			}
 
-			rspC, _ := s.sender.SendAsync(skyAddr, skyAmt, nil)
+			rspC := s.sender.SendAsync(skyAddr, skyAmt)
 			var rsp sender.Response
 			select {
-			case r := <-rspC:
-				rsp = r.(sender.Response)
+			case rsp = <-rspC:
 			case <-s.quit:
 				log.Warn("exhange.Service quit")
 				return nil

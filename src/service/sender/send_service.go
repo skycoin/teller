@@ -27,9 +27,9 @@ const (
 
 // Request send coin request struct
 type Request struct {
-	Coins   uint64           // coin number (in droplets)
-	Address string           // recv address
-	RspC    chan interface{} // response
+	Coins   uint64        // coin number (in droplets)
+	Address string        // recv address
+	RspC    chan Response // response
 }
 
 // Response send response

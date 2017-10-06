@@ -28,49 +28,19 @@ type SendOption struct {
 	Timeout time.Duration
 }
 
-// SendAsync send coins to dest address, should return immediately or timeout
-func (s *Sender) SendAsync(destAddr string, coins uint64, opt *SendOption) (<-chan interface{}, error) {
-	rspC := make(chan interface{}, 1)
-	req := Request{
-		Address: destAddr,
-		Coins:   coins,
-		RspC:    rspC,
-	}
+// SendAsync send coins to dest address in a goroutine
+func (s *Sender) SendAsync(destAddr string, coins uint64) <-chan Response {
+	rspC := make(chan Response, 1)
 
-	if opt != nil {
-		select {
-		case s.s.reqChan <- req:
-			return rspC, nil
-		case <-time.After(opt.Timeout):
-			return rspC, ErrSendBufferFull
+	go func() {
+		s.s.reqChan <- Request{
+			Address: destAddr,
+			Coins:   coins,
+			RspC:    rspC,
 		}
-	}
+	}()
 
-	go func() { s.s.reqChan <- req }()
-	return rspC, nil
-}
-
-// Send send coins to dest address, won't return until the tx is confirmed
-func (s *Sender) Send(destAddr string, coins uint64, opt *SendOption) (string, error) {
-	c, err := s.SendAsync(destAddr, coins, opt)
-	if err != nil {
-		return "", err
-	}
-
-	rsp := (<-c).(Response)
-
-	if rsp.Err != "" {
-		return "", errors.New(rsp.Err)
-	}
-
-	// waiting for the transaction confirmed
-	for st := range rsp.StatusC {
-		if st == TxConfirmed {
-			break
-		}
-	}
-
-	return rsp.Txid, nil
+	return rspC
 }
 
 // IsClosed checks if the service is closed

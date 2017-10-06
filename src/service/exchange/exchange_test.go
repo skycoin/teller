@@ -27,22 +27,14 @@ type dummySender struct {
 	txidConfirmMap map[string]bool
 }
 
-func (send *dummySender) Send(destAddr string, coins uint64, opt *sender.SendOption) (string, error) {
-	time.Sleep(send.sleepTime)
+func (send *dummySender) SendAsync(destAddr string, coins uint64) <-chan sender.Response {
+	rspC := make(chan sender.Response, 1)
 
-	if send.err != nil && send.err != sender.ErrServiceClosed {
-		return "", send.err
-	}
-
-	send.sent.Address = destAddr
-	send.sent.Value = coins
-	return send.txid, send.err
-}
-
-func (send *dummySender) SendAsync(destAddr string, coins uint64, opt *sender.SendOption) (<-chan interface{}, error) {
-	rspC := make(chan interface{}, 1)
 	if send.err != nil {
-		return rspC, send.err
+		rspC <- sender.Response{
+			Err: send.err.Error(),
+		}
+		return rspC
 	}
 
 	stC := make(chan sender.SendStatus, 2)
@@ -60,7 +52,7 @@ func (send *dummySender) SendAsync(destAddr string, coins uint64, opt *sender.Se
 		stC <- sender.TxConfirmed
 	})
 
-	return rspC, nil
+	return rspC
 }
 
 func (send *dummySender) IsClosed() bool {

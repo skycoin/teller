@@ -27,5 +27,9 @@ install-linters: ## Install linters
 	go get -u github.com/alecthomas/gometalinter
 	go get -u github.com/FiloSottile/vendorcheck
 
+format:  # Formats the code. Must have goimports installed (use make install-linters).
+	goimports -w ./cmd/...
+	goimports -w ./src/...
+
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
