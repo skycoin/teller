@@ -10,9 +10,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/httputil"
-	"github.com/skycoin/teller/src/logger"
-	"github.com/skycoin/teller/src/teller/exchange"
+	"github.com/skycoin/teller/src/exchange"
+	"github.com/skycoin/teller/src/util/httputil"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 const (
@@ -71,8 +71,9 @@ func New(cfg Config, log logrus.FieldLogger, addrManager AddrManager, dpstget De
 
 // Run starts the monitor service
 func (m *Monitor) Run() error {
-	m.log.Info("Start monitor service...")
-	defer m.log.Info("Monitor Service closed")
+	log := m.log.WithField("config", m.cfg)
+	log.Info("Start monitor service...")
+	defer log.Info("Monitor Service closed")
 
 	mux := m.setupMux()
 

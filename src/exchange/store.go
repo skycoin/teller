@@ -11,7 +11,7 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/dbutil"
+	"github.com/skycoin/teller/src/util/dbutil"
 )
 
 var (

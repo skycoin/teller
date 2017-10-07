@@ -22,13 +22,12 @@ import (
 
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
-	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/exchange"
+	"github.com/skycoin/teller/src/monitor"
+	"github.com/skycoin/teller/src/scanner"
+	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/teller"
-	"github.com/skycoin/teller/src/teller/exchange"
-	"github.com/skycoin/teller/src/teller/monitor"
-	"github.com/skycoin/teller/src/teller/rpc"
-	"github.com/skycoin/teller/src/teller/scanner"
-	"github.com/skycoin/teller/src/teller/sender"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 const (
@@ -228,7 +227,7 @@ func run() error {
 
 		scanRPC = scanner.NewScanner(scanServ)
 
-		skyRPC := rpc.New(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
+		skyRPC := sender.NewRPC(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
 
 		// create skycoin send service
 		sendServ = sender.NewService(makeSendConfig(*cfg), log, skyRPC)
@@ -250,7 +249,7 @@ func run() error {
 		errC <- exchangeServ.Run()
 	}()
 
-	excCli := exchange.NewClient(exchangeServ)
+	excClient := exchange.NewClient(exchangeServ)
 
 	// create bitcoin address manager
 	f, err := ioutil.ReadFile(*btcAddrs)
@@ -265,7 +264,7 @@ func run() error {
 		return err
 	}
 
-	srv := teller.New(log, excCli, btcAddrMgr, teller.Config{
+	srv := teller.New(log, excClient, btcAddrMgr, teller.Config{
 		Service: teller.ServiceConfig{
 			MaxBind: cfg.MaxBind,
 		},
@@ -283,7 +282,7 @@ func run() error {
 	monitorCfg := monitor.Config{
 		Addr: cfg.MonitorAddr,
 	}
-	ms := monitor.New(monitorCfg, log, btcAddrMgr, excCli, scanRPC)
+	ms := monitor.New(monitorCfg, log, btcAddrMgr, excClient, scanRPC)
 
 	wg.Add(1)
 	go func() {

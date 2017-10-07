@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/teller/src/testutil"
+	"github.com/skycoin/teller/src/util/testutil"
 )
 
 func TestNewBtcAddrs(t *testing.T) {
