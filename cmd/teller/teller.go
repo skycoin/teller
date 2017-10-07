@@ -39,6 +39,12 @@ type dummyBtcScanner struct {
 	log logrus.FieldLogger
 }
 
+func (s *dummyBtcScanner) Run() error {
+	return nil
+}
+
+func (s *dummyBtcScanner) Shutdown() {}
+
 func (s *dummyBtcScanner) AddScanAddress(addr string) error {
 	s.log.WithField("addr", addr).Info("dummyBtcScanner.AddDepositAddress")
 	return nil
@@ -185,14 +191,14 @@ func run() error {
 	errC := make(chan error, 10)
 	wg := sync.WaitGroup{}
 
-	var scanServ *scanner.ScanService
+	var btcScanner scanner.Scanner
 	var scanRPC exchange.BtcScanner
 	var sendServ *sender.SendService
 	var sendRPC exchange.SkySender
 
 	if *dummyMode {
 		log.Info("btcd and skyd disabled, running in dummy mode")
-		scanRPC = &dummyBtcScanner{log: log}
+		btcScanner = &dummyBtcScanner{log: log}
 		sendRPC = &dummySkySender{log: log}
 	} else {
 		// check skycoin setup
@@ -212,8 +218,9 @@ func run() error {
 		log.Info("Connect to btcd success")
 
 		// create scan service
-		scanConfig := makeScanConfig(*cfg)
-		scanServ, err = scanner.NewService(scanConfig, db, log, btcrpc)
+		btcScanner, err = scanner.NewBTCScanner(log, db, btcrpc, scanner.Config{
+			ScanPeriod: cfg.Btcscan.CheckPeriod,
+		})
 		if err != nil {
 			log.WithError(err).Error("Open scan service failed")
 			return err
@@ -222,10 +229,8 @@ func run() error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			errC <- scanServ.Run()
+			errC <- btcScanner.Run()
 		}()
-
-		scanRPC = scanner.NewScanner(scanServ)
 
 		skyRPC := sender.NewRPC(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
 
@@ -242,7 +247,7 @@ func run() error {
 	}
 
 	// create exchange service
-	exchangeServ := exchange.NewService(makeExchangeConfig(*cfg), db, log, scanRPC, sendRPC)
+	exchangeServ := exchange.NewService(makeExchangeConfig(*cfg), db, log, btcScanner, sendRPC)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -317,9 +322,7 @@ func run() error {
 	srv.Shutdown()
 
 	// close the scan service
-	if scanServ != nil {
-		scanServ.Shutdown()
-	}
+	btcScanner.Shutdown()
 
 	wg.Wait()
 	log.Info("Shutdown complete")
@@ -330,13 +333,6 @@ func run() error {
 func makeExchangeConfig(cfg config.Config) exchange.Config {
 	return exchange.Config{
 		Rate: cfg.ExchangeRate,
-	}
-}
-
-func makeScanConfig(cfg config.Config) scanner.Config {
-	return scanner.Config{
-		ScanPeriod:        cfg.Btcscan.CheckPeriod,
-		DepositBuffersize: cfg.Btcscan.DepositBufferSize,
 	}
 }
 

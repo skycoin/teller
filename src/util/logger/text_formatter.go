@@ -168,11 +168,16 @@ func (f *TextFormatter) needsQuoting(text string) bool {
 		return true
 	}
 	for _, ch := range text {
-		if !((ch >= 'a' && ch <= 'z') ||
-			(ch >= 'A' && ch <= 'Z') ||
-			(ch >= '0' && ch <= '9') ||
-			ch == '-' || ch == '.' || ch == '_' || ch == '/' || ch == '@' || ch == '^' || ch == '+') {
-			return true
+		switch {
+		case ch >= 'a' && ch <= 'z':
+		case ch >= 'A' && ch <= 'Z':
+		case ch >= '0' && ch <= '9':
+		default:
+			switch ch {
+			case '-', '.', '_', '/', '@', '^', '+':
+			default:
+				return true
+			}
 		}
 	}
 	return false
