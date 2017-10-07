@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/skycoin/teller/src/daemon"
+	"github.com/stretchr/testify/require"
+
 	"github.com/skycoin/teller/src/teller/exchange"
 	"github.com/skycoin/teller/src/teller/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 type dummyBtcAddrMgr struct {
@@ -25,11 +25,11 @@ type dummyDepositStatusGetter struct {
 	dpis []exchange.DepositInfo
 }
 
-func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositFilter) ([]daemon.DepositStatusDetail, error) {
-	var ds []daemon.DepositStatusDetail
+func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositFilter) ([]exchange.DepositStatusDetail, error) {
+	var ds []exchange.DepositStatusDetail
 	for _, dpi := range dps.dpis {
 		if flt(dpi) {
-			ds = append(ds, daemon.DepositStatusDetail{
+			ds = append(ds, exchange.DepositStatusDetail{
 				Seq:        dpi.Seq,
 				BtcAddress: dpi.BtcAddress,
 				SkyAddress: dpi.SkyAddress,
@@ -142,7 +142,7 @@ func TestRunMonitor(t *testing.T) {
 				defer rsp.Body.Close()
 				require.Equal(t, tc.expectCode, rsp.StatusCode)
 				if rsp.StatusCode == 200 {
-					var st []daemon.DepositStatusDetail
+					var st []exchange.DepositStatusDetail
 					require.Nil(t, json.NewDecoder(rsp.Body).Decode(&st))
 					dss := make([]exchange.DepositInfo, 0, len(st))
 					for _, s := range st {

@@ -1,11 +1,9 @@
 package scanner
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
-
-	"encoding/json"
-
 	"time"
 
 	"github.com/boltdb/bolt"
