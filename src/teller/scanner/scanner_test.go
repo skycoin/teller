@@ -31,7 +31,7 @@ type dummyBtcrpcclient struct {
 }
 
 func newDummyBtcrpcclient() *dummyBtcrpcclient {
-	db, err := bolt.Open("./gold.db", 0700, nil)
+	db, err := bolt.Open("./test.db", 0600, nil)
 	if err != nil {
 		panic(err)
 	}
