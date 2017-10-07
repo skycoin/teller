@@ -1,7 +1,7 @@
 package teller
 
 import (
-	"github.com/skycoin/teller/src/teller/exchange"
+	"github.com/skycoin/teller/src/exchange"
 )
 
 type dummyExchanger struct {

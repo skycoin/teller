@@ -1,4 +1,4 @@
-package rpc
+package sender
 
 import (
 	"fmt"
@@ -17,7 +17,7 @@ type RPC struct {
 }
 
 // New creates RPC instance
-func New(wltFile, rpcAddr string) *RPC {
+func NewRPC(wltFile, rpcAddr string) *RPC {
 	wlt, err := wallet.Load(wltFile)
 	if err != nil {
 		panic(err)

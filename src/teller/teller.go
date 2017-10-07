@@ -4,7 +4,8 @@ import (
 	"errors"
 
 	"github.com/sirupsen/logrus"
-	"github.com/skycoin/teller/src/teller/exchange"
+
+	"github.com/skycoin/teller/src/exchange"
 )
 
 var (
@@ -42,14 +43,14 @@ type Teller struct {
 }
 
 // New creates a Teller
-func New(log logrus.FieldLogger, excli Exchanger, btcAddrGen BtcAddrGenerator, cfg Config) *Teller {
+func New(log logrus.FieldLogger, exchanger Exchanger, btcAddrGen BtcAddrGenerator, cfg Config) *Teller {
 	return &Teller{
 		cfg:  cfg,
 		log:  log.WithField("prefix", "teller"),
 		quit: make(chan struct{}),
 		httpServ: newHTTPServer(log, cfg.HTTP, &service{
 			cfg:        cfg.Service,
-			excli:      excli,
+			exchanger:  exchanger,
 			btcAddrGen: btcAddrGen,
 		}),
 	}
@@ -87,7 +88,7 @@ type ServiceConfig struct {
 // service combines Exchanger and BtcAddrGenerator
 type service struct {
 	cfg        ServiceConfig
-	excli      Exchanger        // exchange Teller client
+	exchanger  Exchanger        // exchange Teller client
 	btcAddrGen BtcAddrGenerator // btc address generator
 }
 
@@ -95,7 +96,7 @@ type service struct {
 // return btc address
 func (s *service) BindAddress(skyAddr string) (string, error) {
 	if s.cfg.MaxBind != 0 {
-		num, err := s.excli.BindNum(skyAddr)
+		num, err := s.exchanger.BindNum(skyAddr)
 		if err != nil {
 			return "", err
 		}
@@ -110,7 +111,7 @@ func (s *service) BindAddress(skyAddr string) (string, error) {
 		return "", err
 	}
 
-	if err := s.excli.BindAddress(btcAddr, skyAddr); err != nil {
+	if err := s.exchanger.BindAddress(btcAddr, skyAddr); err != nil {
 		return "", err
 	}
 
@@ -119,5 +120,5 @@ func (s *service) BindAddress(skyAddr string) (string, error) {
 
 // GetDepositStatuses returns deposit status of given skycoin address
 func (s *service) GetDepositStatuses(skyAddr string) ([]exchange.DepositStatus, error) {
-	return s.excli.GetDepositStatuses(skyAddr)
+	return s.exchanger.GetDepositStatuses(skyAddr)
 }
