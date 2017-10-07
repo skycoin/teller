@@ -43,7 +43,11 @@ type Teller struct {
 }
 
 // New creates a Teller
-func New(log logrus.FieldLogger, exchanger Exchanger, btcAddrGen BtcAddrGenerator, cfg Config) *Teller {
+func New(log logrus.FieldLogger, exchanger Exchanger, btcAddrGen BtcAddrGenerator, cfg Config) (*Teller, error) {
+	if err := cfg.HTTP.Validate(); err != nil {
+		return nil, err
+	}
+
 	return &Teller{
 		cfg:  cfg,
 		log:  log.WithField("prefix", "teller"),
@@ -53,7 +57,7 @@ func New(log logrus.FieldLogger, exchanger Exchanger, btcAddrGen BtcAddrGenerato
 			exchanger:  exchanger,
 			btcAddrGen: btcAddrGen,
 		}),
-	}
+	}, nil
 }
 
 // Run starts the Teller

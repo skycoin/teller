@@ -81,7 +81,7 @@ type Config struct {
 }
 
 // NewService creates exchange service
-func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, scanner BtcScanner, sender SkySender) *Service {
+func NewService(log logrus.FieldLogger, db *bolt.DB, scanner BtcScanner, sender SkySender, cfg Config) *Service {
 	s, err := newStore(db, log)
 	if err != nil {
 		panic(err)
@@ -101,14 +101,14 @@ func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, scanner BtcScan
 func (s *Service) Run() error {
 	log := s.log
 	log.Info("Start exchange service...")
-	defer log.Info("Exchange service closed")
+	defer log.Info("Closed exchange service")
 
 	s.processUnconfirmedTx()
 
 	for {
 		select {
 		case <-s.quit:
-			log.Info("exhange.Service quit")
+			log.Info("exchange.Service quit")
 			return nil
 		case dv, ok := <-s.scanner.GetDepositValue():
 			log = log.WithField("depositValue", dv)
