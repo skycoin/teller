@@ -1,7 +1,5 @@
 package exchange
 
-import "github.com/skycoin/teller/src/daemon"
-
 // Client provides helper apis to interact with exchange service
 type Client struct {
 	s *Service
@@ -21,7 +19,7 @@ func (ec *Client) BindAddress(btcAddr, skyAddr string) error {
 }
 
 // GetDepositStatuses returns deamon.DepositStatus array of given skycoin address
-func (ec *Client) GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error) {
+func (ec *Client) GetDepositStatuses(skyAddr string) ([]DepositStatus, error) {
 	return ec.s.getDepositStatuses(skyAddr)
 }
 
@@ -31,6 +29,6 @@ func (ec *Client) BindNum(skyAddr string) (int, error) {
 }
 
 // GetDepositStatusDetail returns deposit status details
-func (ec *Client) GetDepositStatusDetail(flt DepositFilter) ([]daemon.DepositStatusDetail, error) {
+func (ec *Client) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error) {
 	return ec.s.getDepositStatusDetail(flt)
 }

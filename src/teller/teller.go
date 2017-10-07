@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"github.com/sirupsen/logrus"
-	"github.com/skycoin/teller/src/daemon"
+	"github.com/skycoin/teller/src/teller/exchange"
 )
 
 var (
@@ -20,7 +20,7 @@ type BtcAddrGenerator interface {
 // Exchanger provids apis to interact with exchange service
 type Exchanger interface {
 	BindAddress(btcAddr, skyAddr string) error
-	GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error)
+	GetDepositStatuses(skyAddr string) ([]exchange.DepositStatus, error)
 	// Returns the number of btc address the skycoin address binded
 	BindNum(skyAddr string) (int, error)
 }
@@ -118,6 +118,6 @@ func (s *service) BindAddress(skyAddr string) (string, error) {
 }
 
 // GetDepositStatuses returns deposit status of given skycoin address
-func (s *service) GetDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error) {
+func (s *service) GetDepositStatuses(skyAddr string) ([]exchange.DepositStatus, error) {
 	return s.excli.GetDepositStatuses(skyAddr)
 }

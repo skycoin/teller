@@ -11,10 +11,9 @@ import (
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 
-	skydaemon "github.com/skycoin/skycoin/src/daemon"
+	"github.com/skycoin/skycoin/src/daemon"
 	"github.com/skycoin/skycoin/src/util/droplet"
 
-	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/dbutil"
 	"github.com/skycoin/teller/src/teller/scanner"
 	"github.com/skycoin/teller/src/teller/sender"
@@ -51,7 +50,7 @@ func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
 	rate := decimal.New(skyPerBTC, 0)
 
 	sky := btc.Mul(rate)
-	sky = sky.Truncate(skydaemon.MaxDropletPrecision)
+	sky = sky.Truncate(daemon.MaxDropletPrecision)
 
 	skyToDroplets := decimal.New(droplet.Multiplier, 0)
 	droplets := sky.Mul(skyToDroplets)
@@ -356,15 +355,32 @@ func (s *Service) bindAddress(btcAddr, skyAddr string) error {
 	return s.scanner.AddScanAddress(btcAddr)
 }
 
-func (s *Service) getDepositStatuses(skyAddr string) ([]daemon.DepositStatus, error) {
+// DepositStatus json struct for deposit status
+type DepositStatus struct {
+	Seq      uint64 `json:"seq"`
+	UpdateAt int64  `json:"update_at"`
+	Status   string `json:"status"`
+}
+
+// DepositStatusDetail deposit status detail info
+type DepositStatusDetail struct {
+	Seq        uint64 `json:"seq"`
+	UpdateAt   int64  `json:"update_at"`
+	Status     string `json:"status"`
+	SkyAddress string `json:"skycoin_address"`
+	BtcAddress string `json:"bitcoin_address"`
+	Txid       string `json:"txid"`
+}
+
+func (s *Service) getDepositStatuses(skyAddr string) ([]DepositStatus, error) {
 	dpis, err := s.store.GetDepositInfoOfSkyAddress(skyAddr)
 	if err != nil {
-		return []daemon.DepositStatus{}, err
+		return []DepositStatus{}, err
 	}
 
-	dss := make([]daemon.DepositStatus, 0, len(dpis))
+	dss := make([]DepositStatus, 0, len(dpis))
 	for _, dpi := range dpis {
-		dss = append(dss, daemon.DepositStatus{
+		dss = append(dss, DepositStatus{
 			Seq:      dpi.Seq,
 			UpdateAt: dpi.UpdatedAt,
 			Status:   dpi.Status.String(),
@@ -376,15 +392,15 @@ func (s *Service) getDepositStatuses(skyAddr string) ([]daemon.DepositStatus, er
 // DepositFilter deposit status filter
 type DepositFilter func(dpi DepositInfo) bool
 
-func (s *Service) getDepositStatusDetail(flt DepositFilter) ([]daemon.DepositStatusDetail, error) {
+func (s *Service) getDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error) {
 	dpis, err := s.store.GetDepositInfoArray(flt)
 	if err != nil {
 		return nil, err
 	}
 
-	dss := make([]daemon.DepositStatusDetail, 0, len(dpis))
+	dss := make([]DepositStatusDetail, 0, len(dpis))
 	for _, dpi := range dpis {
-		dss = append(dss, daemon.DepositStatusDetail{
+		dss = append(dss, DepositStatusDetail{
 			Seq:        dpi.Seq,
 			UpdateAt:   dpi.UpdatedAt,
 			Status:     dpi.Status.String(),

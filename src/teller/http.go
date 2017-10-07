@@ -19,9 +19,9 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/teller/src/daemon"
 	"github.com/skycoin/teller/src/httputil"
 	"github.com/skycoin/teller/src/logger"
+	"github.com/skycoin/teller/src/teller/exchange"
 )
 
 const (
@@ -420,7 +420,7 @@ func BindHandler(hs *httpServer) http.HandlerFunc {
 
 // StatusResponse http response for /api/status
 type StatusResponse struct {
-	Statuses []daemon.DepositStatus `json:"statuses,omitempty"`
+	Statuses []exchange.DepositStatus `json:"statuses,omitempty"`
 }
 
 // StatusHandler returns the deposit status of specific skycoin address

@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"github.com/skycoin/teller/src/daemon"
+
 	"github.com/skycoin/teller/src/httputil"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/teller/exchange"
@@ -33,7 +33,7 @@ type BtcAddrManager interface {
 
 // DepositStatusGetter  interface provides api to access exchange resource
 type DepositStatusGetter interface {
-	GetDepositStatusDetail(flt exchange.DepositFilter) ([]daemon.DepositStatusDetail, error)
+	GetDepositStatusDetail(flt exchange.DepositFilter) ([]exchange.DepositStatusDetail, error)
 }
 
 // ScanAddressGetter get scanning address interface
