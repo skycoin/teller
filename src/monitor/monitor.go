@@ -58,7 +58,7 @@ type Monitor struct {
 }
 
 // New creates monitor service
-func New(cfg Config, log logrus.FieldLogger, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
+func New(log logrus.FieldLogger, cfg Config, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
 	return &Monitor{
 		log:                 log.WithField("prefix", "teller.monitor"),
 		cfg:                 cfg,

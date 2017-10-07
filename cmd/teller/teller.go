@@ -188,12 +188,24 @@ func run() error {
 		return err
 	}
 
-	errC := make(chan error, 10)
+	errC := make(chan error)
 	wg := sync.WaitGroup{}
+
+	background := func(name string, errC chan<- error, f func() error) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := f()
+			if err != nil {
+				log.WithError(err).Errorf("%s failed", name)
+				errC <- err
+			}
+		}()
+	}
 
 	var btcScanner scanner.Scanner
 	var scanRPC exchange.BtcScanner
-	var sendServ *sender.SendService
+	var sendService *sender.SendService
 	var sendRPC exchange.SkySender
 
 	if *dummyMode {
@@ -226,35 +238,25 @@ func run() error {
 			return err
 		}
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			errC <- btcScanner.Run()
-		}()
+		background("btcScanner.Run", errC, btcScanner.Run)
 
 		skyRPC := sender.NewRPC(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
 
 		// create skycoin send service
-		sendServ = sender.NewService(makeSendConfig(*cfg), log, skyRPC)
+		sendService = sender.NewService(makeSendConfig(*cfg), log, skyRPC)
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			errC <- sendServ.Run()
-		}()
+		background("sendService.Run", errC, sendService.Run)
 
-		sendRPC = sender.NewSender(sendServ)
+		sendRPC = sender.NewSender(sendService)
 	}
 
 	// create exchange service
-	exchangeServ := exchange.NewService(makeExchangeConfig(*cfg), db, log, btcScanner, sendRPC)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		errC <- exchangeServ.Run()
-	}()
+	exchangeService := exchange.NewService(log, db, btcScanner, sendRPC, exchange.Config{
+		Rate: cfg.ExchangeRate,
+	})
+	background("exchangeService.Run", errC, exchangeService.Run)
 
-	excClient := exchange.NewClient(exchangeServ)
+	exchangeClient := exchange.NewClient(exchangeService)
 
 	// create bitcoin address manager
 	f, err := ioutil.ReadFile(*btcAddrs)
@@ -269,71 +271,71 @@ func run() error {
 		return err
 	}
 
-	srv := teller.New(log, excClient, btcAddrMgr, teller.Config{
+	tellerServer, err := teller.New(log, exchangeClient, btcAddrMgr, teller.Config{
 		Service: teller.ServiceConfig{
 			MaxBind: cfg.MaxBind,
 		},
 		HTTP: httpConfig,
 	})
+	if err != nil {
+		log.WithError(err).Error("teller.New failed")
+		return err
+	}
 
 	// Run the service
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		errC <- srv.Run()
-	}()
+	background("tellerServer.Run", errC, tellerServer.Run)
 
 	// start monitor service
 	monitorCfg := monitor.Config{
 		Addr: cfg.MonitorAddr,
 	}
-	ms := monitor.New(monitorCfg, log, btcAddrMgr, excClient, scanRPC)
+	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, exchangeClient, scanRPC)
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		errC <- ms.Run()
-	}()
+	background("monitorService.Run", errC, monitorService.Run)
 
 	var finalErr error
 	select {
 	case <-quit:
 	case finalErr = <-errC:
 		if finalErr != nil {
-			log.WithError(finalErr).Error()
+			log.WithError(finalErr).Error("Goroutine error")
 		}
 	}
 
 	log.Info("Shutting down...")
 
-	if ms != nil {
-		ms.Shutdown()
+	if monitorService != nil {
+		log.Info("Shutting down monitorService")
+		monitorService.Shutdown()
 	}
 
 	// close the skycoin send service
-	if sendServ != nil {
-		sendServ.Shutdown()
+	if sendService != nil {
+		log.Info("Shutting down sendService")
+		sendService.Shutdown()
 	}
 
 	// close exchange service
-	exchangeServ.Shutdown()
+	log.Info("Shutting down exchangeService")
+	exchangeService.Shutdown()
 
 	// close the teller service
-	srv.Shutdown()
+	log.Info("Shutting down tellerServer")
+	tellerServer.Shutdown()
 
 	// close the scan service
-	btcScanner.Shutdown()
+	if btcScanner != nil {
+		log.Info("Shutting down btcScanner")
+		btcScanner.Shutdown()
+	}
+
+	log.Info("Waiting for goroutines to exit")
 
 	wg.Wait()
+
 	log.Info("Shutdown complete")
 
 	return finalErr
-}
-
-func makeExchangeConfig(cfg config.Config) exchange.Config {
-	return exchange.Config{
-		Rate: cfg.ExchangeRate,
-	}
 }
 
 func makeBtcrpcConfg(cfg config.Config) btcrpcclient.ConnConfig {

@@ -314,9 +314,9 @@ func TestRunExchangeService(t *testing.T) {
 			var service *Service
 
 			require.NotPanics(t, func() {
-				service = NewService(Config{
+				service = NewService(testutil.NewLogger(t), db, scan, send, Config{
 					Rate: tc.rate,
-				}, db, testutil.NewLogger(t), scan, send)
+				})
 
 				// init the deposit infos
 				for _, dpi := range tc.initDpis {
