@@ -1,4 +1,4 @@
-package btcaddrs
+package addrs
 
 import (
 	"testing"
@@ -7,18 +7,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/dbutil"
-	"github.com/skycoin/teller/src/teller/testutil"
+	"github.com/skycoin/teller/src/testutil"
 )
 
 func TestNewStore(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	_, err := newStore(db)
+	s, err := NewStore(db, "test_bucket")
 	require.NoError(t, err)
 
 	err = db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(usedAddrBkt)
+		bkt := tx.Bucket(s.BucketKey)
 		require.NotNil(t, bkt)
 		return nil
 	})
@@ -29,23 +29,23 @@ func TestStorePut(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db)
+	s, err := NewStore(db, "test_bucket")
 	require.NoError(t, err)
 
 	require.Nil(t, s.Put("a1"))
 	require.Nil(t, s.Put("a2"))
 
 	err = db.View(func(tx *bolt.Tx) error {
-		exists, err := dbutil.BucketHasKey(tx, usedAddrBkt, "a1")
+		used, err := dbutil.BucketHasKey(tx, s.BucketKey, "a1")
 		require.NoError(t, err)
 		if err != nil {
 			return err
 		}
-		require.True(t, exists)
+		require.True(t, used)
 
-		exists, err = dbutil.BucketHasKey(tx, usedAddrBkt, "a2")
+		used, err = dbutil.BucketHasKey(tx, s.BucketKey, "a2")
 		require.NoError(t, err)
-		require.True(t, exists)
+		require.True(t, used)
 
 		return err
 	})
@@ -56,31 +56,31 @@ func TestStoreGet(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db)
+	s, err := NewStore(db, "test_bucket")
 	require.NoError(t, err)
 
 	err = db.Update(func(tx *bolt.Tx) error {
-		err := dbutil.PutBucketValue(tx, usedAddrBkt, "a1", "")
+		err := dbutil.PutBucketValue(tx, s.BucketKey, "a1", "")
 		require.NoError(t, err)
 		if err != nil {
 			return err
 		}
 
-		err = dbutil.PutBucketValue(tx, usedAddrBkt, "a2", "")
+		err = dbutil.PutBucketValue(tx, s.BucketKey, "a2", "")
 		require.NoError(t, err)
 		return err
 	})
 	require.NoError(t, err)
 
-	exists, err := s.IsExist("a1")
+	used, err := s.IsUsed("a1")
 	require.NoError(t, err)
-	require.True(t, exists)
+	require.True(t, used)
 
-	exists, err = s.IsExist("a2")
+	used, err = s.IsUsed("a2")
 	require.NoError(t, err)
-	require.True(t, exists)
+	require.True(t, used)
 
-	exists, err = s.IsExist("a3")
+	used, err = s.IsUsed("a3")
 	require.NoError(t, err)
-	require.False(t, exists)
+	require.False(t, used)
 }

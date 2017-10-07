@@ -26,9 +26,9 @@ const (
 	serverIdleTimeout  = time.Second * 120
 )
 
-// BtcAddrManager interface provides apis to access resource of btc address
-type BtcAddrManager interface {
-	RestNum() uint64 // returns the rest number of btc address in the pool
+// AddrManager interface provides apis to access resource of btc address
+type AddrManager interface {
+	Remaining() uint64 // returns the rest number of btc address in the pool
 }
 
 // DepositStatusGetter  interface provides api to access exchange resource
@@ -49,7 +49,7 @@ type Config struct {
 // Monitor monitor service struct
 type Monitor struct {
 	log logrus.FieldLogger
-	BtcAddrManager
+	AddrManager
 	DepositStatusGetter
 	ScanAddressGetter
 	cfg  Config
@@ -58,11 +58,11 @@ type Monitor struct {
 }
 
 // New creates monitor service
-func New(cfg Config, log logrus.FieldLogger, btcAddrMgr BtcAddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
+func New(cfg Config, log logrus.FieldLogger, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
 	return &Monitor{
-		log:                 log.WithField("prefix", "teller.monitor.btc"),
+		log:                 log.WithField("prefix", "teller.monitor"),
 		cfg:                 cfg,
-		BtcAddrManager:      btcAddrMgr,
+		AddrManager:         addrManager,
 		DepositStatusGetter: dpstget,
 		ScanAddressGetter:   sag,
 		quit:                make(chan struct{}),
@@ -145,7 +145,7 @@ func (m *Monitor) addressHandler() http.HandlerFunc {
 		}
 
 		addrUsage := addressUsage{
-			RestAddrNum:   m.RestNum(),
+			RestAddrNum:   m.Remaining(),
 			ScanningAddrs: addrs,
 		}
 
