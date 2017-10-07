@@ -58,7 +58,9 @@ func NewLogger(logFilename string, debug bool) (*logrus.Logger, error) {
 		log.Hooks.Add(hook)
 	}
 
-	log.Hooks.Add(ContextHook{})
+	log.Hooks.Add(ContextHook{
+		ExcludeFunc: true,
+	})
 
 	return log, nil
 }
@@ -115,7 +117,11 @@ func (f *WriteHook) Fire(e *logrus.Entry) error {
 }
 
 // ContextHook adds "file", "func", "lineno" context to log lines
-type ContextHook struct{}
+type ContextHook struct {
+	ExcludeFile bool
+	ExcludeFunc bool
+	ExcludeLine bool
+}
 
 // Levels returns logrus.AllLevels
 func (hook ContextHook) Levels() []logrus.Level {
@@ -127,20 +133,29 @@ func (hook ContextHook) Fire(entry *logrus.Entry) error {
 	pc := make([]uintptr, 3)
 	n := runtime.Callers(6, pc)
 
+	if n == 0 {
+		return nil
+	}
+
 	frames := runtime.CallersFrames(pc[:n])
 
 	for {
-		frame, more := frames.Next()
+		frame, _ := frames.Next()
 		if strings.Contains(frame.File, "github.com/sirupsen/logrus") {
 			continue
 		}
-		if !more {
-			break
+
+		if !hook.ExcludeFile {
+			entry.Data["file"] = path.Base(frame.File)
+		}
+		if !hook.ExcludeFunc {
+			entry.Data["func"] = path.Base(frame.Function)
+		}
+		if !hook.ExcludeLine {
+			entry.Data["line"] = frame.Line
 		}
 
-		entry.Data["file"] = path.Base(frame.File)
-		entry.Data["func"] = path.Base(frame.Function)
-		entry.Data["line"] = frame.Line
+		break
 	}
 
 	return nil

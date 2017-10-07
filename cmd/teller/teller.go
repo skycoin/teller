@@ -20,10 +20,10 @@ import (
 	"github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/teller/src/addrs"
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/logger"
 	"github.com/skycoin/teller/src/teller"
-	"github.com/skycoin/teller/src/teller/btcaddrs"
-	"github.com/skycoin/teller/src/teller/config"
 	"github.com/skycoin/teller/src/teller/exchange"
 	"github.com/skycoin/teller/src/teller/monitor"
 	"github.com/skycoin/teller/src/teller/rpc"
@@ -259,7 +259,7 @@ func run() error {
 		return err
 	}
 
-	btcAddrMgr, err := btcaddrs.New(db, bytes.NewReader(f), log)
+	btcAddrMgr, err := addrs.NewBTCAddrs(log, db, bytes.NewReader(f))
 	if err != nil {
 		log.WithError(err).Error("Create bitcoin deposit address manager failed")
 		return err

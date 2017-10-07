@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/dbutil"
-	"github.com/skycoin/teller/src/teller/testutil"
+	"github.com/skycoin/teller/src/testutil"
 )
 
 func TestNewStore(t *testing.T) {

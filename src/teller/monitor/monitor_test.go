@@ -10,14 +10,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/teller/exchange"
-	"github.com/skycoin/teller/src/teller/testutil"
+	"github.com/skycoin/teller/src/testutil"
 )
 
 type dummyBtcAddrMgr struct {
 	Num uint64
 }
 
-func (db *dummyBtcAddrMgr) RestNum() uint64 {
+func (db *dummyBtcAddrMgr) Remaining() uint64 {
 	return db.Num
 }
 
