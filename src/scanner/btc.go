@@ -1,6 +1,6 @@
 // Package scanner scans bitcoin blockchain and check all transactions
-// to see if there're addresses in vout that can match our deposit addresses
-// if find, then generate an event and push to deposite even channel
+// to see if there are addresses in vout that can match our deposit addresses.
+// If found, then generate an event and push to deposit event channel
 //
 // current scanner doesn't support reconnect after btcd shutdown, if
 // any error occur when call btcd apis, the scan service will be closed.
@@ -9,14 +9,12 @@ package scanner
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"sync"
 	"time"
 
 	"github.com/boltdb/bolt"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcrpcclient"
 	"github.com/btcsuite/btcutil"
 	"github.com/sirupsen/logrus"
 )
@@ -27,29 +25,11 @@ var (
 
 const (
 	checkHeadDepositValuePeriod = time.Second * 5
+	blockScanPeriod             = time.Second * 5
 )
 
-// BtcRPCClient rpcclient interface
-type BtcRPCClient interface {
-	GetBestBlock() (*chainhash.Hash, int32, error)
-	GetBlockVerboseTx(blockHash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
-	Shutdown()
-}
-
-type DepositNote struct {
-	DepositValue
-	AckC chan struct{}
-}
-
-func makeDepositNote(dv DepositValue) DepositNote {
-	return DepositNote{
-		DepositValue: dv,
-		AckC:         make(chan struct{}, 1),
-	}
-}
-
-// ScanService blockchain scanner to check if there're deposit coins
-type ScanService struct {
+// BTCScanner blockchain scanner to check if there're deposit coins
+type BTCScanner struct {
 	log       logrus.FieldLogger
 	cfg       Config
 	btcClient BtcRPCClient
@@ -58,36 +38,20 @@ type ScanService struct {
 	quit      chan struct{}
 }
 
-// Config scanner config info
-type Config struct {
-	ScanPeriod        time.Duration // scan period in seconds
-	DepositBuffersize uint32        // deposit channel buffer size
-}
-
-// DepositValue struct
-type DepositValue struct {
-	Address string // deposit address
-	Value   int64  // deposit BTC amount, in satoshis
-	Height  int64  // the block height
-	Tx      string // the transaction id
-	N       uint32 // the index of vout in the tx
-	IsUsed  bool   // whether this dv is used
-}
-
-// TxN returns $tx:$n formatted ID string
-func (d DepositValue) TxN() string {
-	return fmt.Sprintf("%s:%d", d.Tx, d.N)
-}
-
-// NewService creates scanner instance
-func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, btc BtcRPCClient) (*ScanService, error) {
+// NewBTCScanner creates scanner instance
+func NewBTCScanner(log logrus.FieldLogger, db *bolt.DB, btc BtcRPCClient, cfg Config) (*BTCScanner, error) {
 	s, err := newStore(db)
 	if err != nil {
 		return nil, err
 	}
-	return &ScanService{
+
+	if cfg.ScanPeriod == 0 {
+		cfg.ScanPeriod = checkHeadDepositValuePeriod
+	}
+
+	return &BTCScanner{
 		btcClient: btc,
-		log:       log.WithField("prefix", "scanner.service"),
+		log:       log.WithField("prefix", "scanner.btc"),
 		cfg:       cfg,
 		store:     s,
 		depositC:  make(chan DepositNote),
@@ -96,8 +60,8 @@ func NewService(cfg Config, db *bolt.DB, log logrus.FieldLogger, btc BtcRPCClien
 }
 
 // Run starts the scanner
-func (scan *ScanService) Run() error {
-	log := scan.log
+func (s *BTCScanner) Run() error {
+	log := s.log
 	log.Info("Start bitcoin blockchain scan service")
 	defer log.Info("Bitcoin blockchain scan service closed")
 
@@ -106,14 +70,14 @@ func (scan *ScanService) Run() error {
 	go func() {
 		defer wg.Done()
 		for {
-			headDv, err := scan.store.getHeadDepositValue()
+			headDv, err := s.store.getHeadDepositValue()
 			if err != nil {
 				switch err.(type) {
 				case DepositValuesEmptyErr:
 					select {
 					case <-time.After(checkHeadDepositValuePeriod):
 						continue
-					case <-scan.quit:
+					case <-s.quit:
 						return
 					}
 				default:
@@ -124,18 +88,18 @@ func (scan *ScanService) Run() error {
 
 			dn := makeDepositNote(headDv)
 			select {
-			case <-scan.quit:
+			case <-s.quit:
 				return
-			case scan.depositC <- dn:
+			case s.depositC <- dn:
 				select {
 				case <-dn.AckC:
 					// pop the head deposit value in store
-					if ddv, err := scan.store.popDepositValue(); err != nil {
+					if ddv, err := s.store.popDepositValue(); err != nil {
 						log.WithError(err).Error("popDepositValue failed")
 					} else {
 						log.WithField("depositValue", ddv).Info("DepositValue is processed")
 					}
-				case <-scan.quit:
+				case <-s.quit:
 					return
 				}
 			}
@@ -143,7 +107,7 @@ func (scan *ScanService) Run() error {
 	}()
 
 	// get last scan block
-	lsb, err := scan.getLastScanBlock()
+	lsb, err := s.getLastScanBlock()
 	if err != nil {
 		return fmt.Errorf("get last scan block failed: %v", err)
 	}
@@ -159,12 +123,12 @@ func (scan *ScanService) Run() error {
 	if height == 0 {
 		// the first time the bot start
 		// get the best block
-		block, err := scan.getBestBlock()
+		block, err := s.getBestBlock()
 		if err != nil {
 			return err
 		}
 
-		if err := scan.scanBlock(block); err != nil {
+		if err := s.scanBlock(block); err != nil {
 			return fmt.Errorf("Scan block %s failed: %v", block.Hash, err)
 		}
 
@@ -178,11 +142,11 @@ func (scan *ScanService) Run() error {
 		defer wg.Done()
 
 		for {
-			nextBlock, err := scan.getNextBlock(hash)
+			nextBlock, err := s.getNextBlock(hash)
 			if err != nil {
 				log.WithError(err).Error("getNextBlock failed")
 				select {
-				case <-scan.quit:
+				case <-s.quit:
 					return
 				default:
 					errC <- err
@@ -191,11 +155,11 @@ func (scan *ScanService) Run() error {
 			}
 
 			if nextBlock == nil {
-				log.Debug("No new block to scan...")
+				log.Debug("No new block to s...")
 				select {
-				case <-scan.quit:
+				case <-s.quit:
 					return
-				case <-time.After(time.Duration(scan.cfg.ScanPeriod) * time.Second):
+				case <-time.After(time.Duration(s.cfg.ScanPeriod) * time.Second):
 					continue
 				}
 			}
@@ -208,9 +172,9 @@ func (scan *ScanService) Run() error {
 			})
 
 			log.Debug("Scanned new block")
-			if err := scan.scanBlock(nextBlock); err != nil {
+			if err := s.scanBlock(nextBlock); err != nil {
 				select {
-				case <-scan.quit:
+				case <-s.quit:
 					return
 				default:
 					errC <- fmt.Errorf("Scan block %s failed: %v", nextBlock.Hash, err)
@@ -234,25 +198,25 @@ func (scan *ScanService) Run() error {
 	}
 }
 
-func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
-	return scan.store.db.View(func(tx *bolt.Tx) error {
-		addrs, err := scan.store.getScanAddressesTx(tx)
+func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) error {
+	return s.store.db.Update(func(tx *bolt.Tx) error {
+		addrs, err := s.store.getScanAddressesTx(tx)
 		if err != nil {
 			return err
 		}
 
-		dvs, err := scanBlock(block, addrs)
+		dvs, err := scanBTCBlock(block, addrs)
 		if err != nil {
 			return err
 		}
 
 		for _, dv := range dvs {
-			if err := scan.store.pushDepositValueTx(tx, dv); err != nil {
+			if err := s.store.pushDepositValueTx(tx, dv); err != nil {
 				switch err.(type) {
 				case DepositValueExistsErr:
 					continue
 				default:
-					scan.log.WithError(err).WithField("depositValue", dv).Error("pushDepositValueTx failed")
+					s.log.WithError(err).WithField("depositValue", dv).Error("pushDepositValueTx failed")
 				}
 			}
 		}
@@ -262,15 +226,15 @@ func (scan *ScanService) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 			return err
 		}
 
-		return scan.store.setLastScanBlockTx(tx, LastScanBlock{
+		return s.store.setLastScanBlockTx(tx, LastScanBlock{
 			Hash:   hash.String(),
 			Height: block.Height,
 		})
 	})
 }
 
-// scanBlock scan the given block and returns the next block hash or error
-func scanBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) ([]DepositValue, error) {
+// scanBTCBlock scan the given block and returns the next block hash or error
+func scanBTCBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) ([]DepositValue, error) {
 	addrMap := map[string]struct{}{}
 	for _, a := range depositAddrs {
 		addrMap[a] = struct{}{}
@@ -302,34 +266,34 @@ func scanBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) ([]D
 }
 
 // AddScanAddress adds new scan address
-func (scan *ScanService) AddScanAddress(addr string) error {
-	return scan.store.addScanAddress(addr)
+func (s *BTCScanner) AddScanAddress(addr string) error {
+	return s.store.addScanAddress(addr)
 }
 
 // GetBestBlock returns the hash and height of the block in the longest (best)
 // chain.
-func (scan *ScanService) getBestBlock() (*btcjson.GetBlockVerboseResult, error) {
-	hash, _, err := scan.btcClient.GetBestBlock()
+func (s *BTCScanner) getBestBlock() (*btcjson.GetBlockVerboseResult, error) {
+	hash, _, err := s.btcClient.GetBestBlock()
 	if err != nil {
 		return nil, err
 	}
 
-	return scan.getBlock(hash)
+	return s.getBlock(hash)
 }
 
 // getBlock returns block of given hash
-func (scan *ScanService) getBlock(hash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error) {
-	return scan.btcClient.GetBlockVerboseTx(hash)
+func (s *BTCScanner) getBlock(hash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error) {
+	return s.btcClient.GetBlockVerboseTx(hash)
 }
 
 // getNextBlock returns the next block of given hash, return nil if next block does not exist
-func (scan *ScanService) getNextBlock(hash string) (*btcjson.GetBlockVerboseResult, error) {
+func (s *BTCScanner) getNextBlock(hash string) (*btcjson.GetBlockVerboseResult, error) {
 	h, err := chainhash.NewHashFromStr(hash)
 	if err != nil {
 		return nil, err
 	}
 
-	b, err := scan.getBlock(h)
+	b, err := s.getBlock(h)
 	if err != nil {
 		return nil, err
 	}
@@ -343,47 +307,35 @@ func (scan *ScanService) getNextBlock(hash string) (*btcjson.GetBlockVerboseResu
 		return nil, err
 	}
 
-	return scan.getBlock(nxtHash)
+	return s.getBlock(nxtHash)
 }
 
 // setLastScanBlock sets the last scan block hash and height
-func (scan *ScanService) setLastScanBlock(hash *chainhash.Hash, height int64) error {
-	return scan.store.setLastScanBlock(LastScanBlock{
+func (s *BTCScanner) setLastScanBlock(hash *chainhash.Hash, height int64) error {
+	return s.store.setLastScanBlock(LastScanBlock{
 		Hash:   hash.String(),
 		Height: height,
 	})
 }
 
 // getLastScanBlock returns the last scanned block hash and height
-func (scan *ScanService) getLastScanBlock() (LastScanBlock, error) {
-	return scan.store.getLastScanBlock()
+func (s *BTCScanner) getLastScanBlock() (LastScanBlock, error) {
+	return s.store.getLastScanBlock()
 }
 
-// getScanAddresses returns the deposit addresses that need to scan
-func (scan *ScanService) getScanAddresses() ([]string, error) {
-	return scan.store.getScanAddresses()
+// GetScanAddresses returns the deposit addresses that need to scan
+func (s *BTCScanner) GetScanAddresses() ([]string, error) {
+	return s.store.getScanAddresses()
+}
+
+// GetDepositValue returns deposit value channel
+func (s *BTCScanner) GetDepositValue() <-chan DepositNote {
+	return s.depositC
 }
 
 // Shutdown shutdown the scanner
-func (scan *ScanService) Shutdown() {
-	close(scan.quit)
-	fmt.Println("Close scan service")
-	scan.btcClient.Shutdown()
-}
-
-// ConnectBTCD connects to the btcd rpcserver
-func ConnectBTCD(server, user, pass, certPath string) (*btcrpcclient.Client, error) {
-	// connect to the btcd
-	certs, err := ioutil.ReadFile(certPath)
-	if err != nil {
-		return nil, err
-	}
-	connCfg := &btcrpcclient.ConnConfig{
-		Host:         server,
-		Endpoint:     "ws",
-		User:         user,
-		Pass:         pass,
-		Certificates: certs,
-	}
-	return btcrpcclient.New(connCfg, nil)
+func (s *BTCScanner) Shutdown() {
+	s.log.Info("Closing BTC scanner")
+	close(s.quit)
+	s.btcClient.Shutdown()
 }

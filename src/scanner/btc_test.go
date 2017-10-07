@@ -97,14 +97,11 @@ func TestScannerRun(t *testing.T) {
 		Height: 235205,
 	}
 
-	s, err := NewService(Config{
-		ScanPeriod:        5,
-		DepositBuffersize: 100,
-	}, db, log, rpcclient)
+	scr, err := NewBTCScanner(log, db, rpcclient, Config{
+		ScanPeriod: 5,
+	})
 
-	require.Nil(t, err)
-
-	scr := NewScanner(s)
+	require.NoError(t, err)
 
 	scr.AddScanAddress("1ATjE4kwZ5R1ww9SEi4eseYTCenVgaxPWu")
 	scr.AddScanAddress("1EYQ7Fnct6qu1f3WpTSib1UhDhxkrww1WH")
@@ -127,7 +124,7 @@ func TestScannerRun(t *testing.T) {
 				require.Nil(t, dbutil.GetBucketObject(tx, depositValueBkt, key, &d))
 				require.True(t, d.IsUsed)
 
-				idxs, err := scr.s.store.getDepositValueIndexTx(tx)
+				idxs, err := scr.store.getDepositValueIndexTx(tx)
 				require.NoError(t, err)
 				require.Len(t, idxs, 0)
 			}
@@ -135,14 +132,15 @@ func TestScannerRun(t *testing.T) {
 			return nil
 		})
 
-		_, err := scr.s.store.popDepositValue()
+		_, err := scr.store.popDepositValue()
 		require.Error(t, err)
 		require.IsType(t, DepositValuesEmptyErr{}, err)
 	})
 
 	time.AfterFunc(15*time.Second, func() {
-		s.Shutdown()
+		scr.Shutdown()
 	})
 
-	s.Run()
+	err = scr.Run()
+	require.NoError(t, err)
 }

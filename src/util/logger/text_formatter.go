@@ -172,9 +172,12 @@ func (f *TextFormatter) needsQuoting(text string) bool {
 		case ch >= 'a' && ch <= 'z':
 		case ch >= 'A' && ch <= 'Z':
 		case ch >= '0' && ch <= '9':
-		case '-', '.', '_', '/', '@', '^', '+':
 		default:
-			return true
+			switch ch {
+			case '-', '.', '_', '/', '@', '^', '+':
+			default:
+				return true
+			}
 		}
 	}
 	return false
