@@ -98,7 +98,7 @@ func TestScannerRun(t *testing.T) {
 	}
 
 	scr, err := NewBTCScanner(log, db, rpcclient, Config{
-		ScanPeriod: 5,
+		ScanPeriod: time.Second * 1,
 	})
 
 	require.NoError(t, err)
@@ -109,10 +109,10 @@ func TestScannerRun(t *testing.T) {
 
 	time.AfterFunc(time.Second, func() {
 		var dvs []DepositNote
-		for dv := range scr.GetDepositValue() {
+		for dv := range scr.GetDeposit() {
 			dvs = append(dvs, dv)
 			time.Sleep(100 * time.Millisecond)
-			dv.AckC <- struct{}{}
+			dv.ErrC <- nil
 		}
 		require.Equal(t, 127, len(dvs))
 
@@ -120,8 +120,8 @@ func TestScannerRun(t *testing.T) {
 		db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				key := fmt.Sprintf("%v:%v", dv.Tx, dv.N)
-				var d DepositValue
-				require.Nil(t, dbutil.GetBucketObject(tx, depositValueBkt, key, &d))
+				var d Deposit
+				require.Nil(t, dbutil.GetBucketObject(tx, depositBkt, key, &d))
 				require.True(t, d.IsUsed)
 
 				idxs, err := scr.store.getDepositValueIndexTx(tx)

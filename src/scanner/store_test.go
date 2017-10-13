@@ -24,7 +24,7 @@ func TestNewStore(t *testing.T) {
 		bkt := tx.Bucket(scanMetaBkt)
 		require.NotNil(t, bkt)
 
-		require.NotNil(t, tx.Bucket(depositValueBkt))
+		require.NotNil(t, tx.Bucket(depositBkt))
 
 		return nil
 	})
@@ -184,7 +184,7 @@ func TestPushDepositValue(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	dvs := []DepositValue{
+	dvs := []Deposit{
 		{
 			Address: "b1",
 			Value:   1,
@@ -229,7 +229,7 @@ func TestPushDepositValue(t *testing.T) {
 }
 
 func TestPopDepositValue(t *testing.T) {
-	dvs := []DepositValue{
+	dvs := []Deposit{
 		{
 			Address: "b1",
 			Value:   1,
@@ -248,8 +248,8 @@ func TestPopDepositValue(t *testing.T) {
 
 	tt := []struct {
 		name  string
-		init  []DepositValue
-		popV  DepositValue
+		init  []Deposit
+		popV  Deposit
 		popOk bool
 	}{
 		{
@@ -261,7 +261,7 @@ func TestPopDepositValue(t *testing.T) {
 		{
 			"pop empty",
 			dvs[:0],
-			DepositValue{},
+			Deposit{},
 			false,
 		},
 	}
@@ -316,8 +316,8 @@ func TestPopDepositValue(t *testing.T) {
 					require.NotEqual(t, idx, key)
 				}
 
-				var dv DepositValue
-				err = dbutil.GetBucketObject(tx, depositValueBkt, key, &dv)
+				var dv Deposit
+				err = dbutil.GetBucketObject(tx, depositBkt, key, &dv)
 				require.Nil(t, err)
 				require.True(t, dv.IsUsed)
 
@@ -333,19 +333,19 @@ func TestPutBktValue(t *testing.T) {
 
 	type kv struct {
 		key   string
-		value DepositValue
+		value Deposit
 	}
 
-	dvs := []DepositValue{
-		DepositValue{
+	dvs := []Deposit{
+		Deposit{
 			Tx: "t1",
 			N:  1,
 		},
-		DepositValue{
+		Deposit{
 			Tx: "t2",
 			N:  2,
 		},
-		DepositValue{
+		Deposit{
 			Tx: "t3",
 			N:  3,
 		},
@@ -372,7 +372,7 @@ func TestPutBktValue(t *testing.T) {
 		name    string
 		putV    []kv
 		key     string
-		expectV DepositValue
+		expectV Deposit
 		err     error
 	}{
 		{
@@ -404,7 +404,7 @@ func TestPutBktValue(t *testing.T) {
 			require.NoError(t, err)
 
 			err = db.View(func(tx *bolt.Tx) error {
-				var dv DepositValue
+				var dv Deposit
 				require.Nil(t, dbutil.GetBucketObject(tx, bktName, tc.key, &dv))
 				require.Equal(t, tc.expectV, dv)
 				return nil
@@ -419,19 +419,19 @@ func TestGetBktValue(t *testing.T) {
 
 	type kv struct {
 		key   string
-		value DepositValue
+		value Deposit
 	}
 
-	dvs := []DepositValue{
-		DepositValue{
+	dvs := []Deposit{
+		Deposit{
 			Tx: "t1",
 			N:  1,
 		},
-		DepositValue{
+		Deposit{
 			Tx: "t2",
 			N:  2,
 		},
-		DepositValue{
+		Deposit{
 			Tx: "t3",
 			N:  3,
 		},
@@ -459,14 +459,14 @@ func TestGetBktValue(t *testing.T) {
 		init    []kv
 		key     string
 		v       interface{}
-		expectV DepositValue
+		expectV Deposit
 		err     error
 	}{
 		{
 			"normal",
 			init,
 			"k1",
-			&DepositValue{},
+			&Deposit{},
 			dvs[0],
 			nil,
 		},
@@ -474,7 +474,7 @@ func TestGetBktValue(t *testing.T) {
 			"not exist",
 			init,
 			"k5",
-			&DepositValue{},
+			&Deposit{},
 			dvs[0],
 			dbutil.NewObjectNotExistErr(bktName, []byte("k5")),
 		},
@@ -482,9 +482,9 @@ func TestGetBktValue(t *testing.T) {
 			"invalid accept value",
 			init,
 			"k3",
-			DepositValue{},
+			Deposit{},
 			dvs[0],
-			errors.New("decode value failed: json: Unmarshal(non-pointer scanner.DepositValue)"),
+			errors.New("decode value failed: json: Unmarshal(non-pointer scanner.Deposit)"),
 		},
 	}
 
@@ -511,7 +511,7 @@ func TestGetBktValue(t *testing.T) {
 				require.Equal(t, tc.err, err)
 
 				if err == nil {
-					v := tc.v.(*DepositValue)
+					v := tc.v.(*Deposit)
 					require.Equal(t, tc.expectV, *v)
 				}
 

@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -9,8 +10,8 @@ import (
 )
 
 var (
-	scanMetaBkt     = []byte("scan_meta")
-	depositValueBkt = []byte("deposit_value")
+	scanMetaBkt = []byte("scan_meta")
+	depositBkt  = []byte("deposit_value")
 
 	lastScanBlockKey    = "last_scan_block"
 	depositAddressesKey = "deposit_addresses"
@@ -65,7 +66,7 @@ func newStore(db *bolt.DB) (*store, error) {
 			return err
 		}
 
-		_, err := tx.CreateBucketIfNotExists(depositValueBkt)
+		_, err := tx.CreateBucketIfNotExists(depositBkt)
 		return err
 	}); err != nil {
 		return nil, err
@@ -190,122 +191,56 @@ func (s *store) removeScanAddr(addr string) error {
 	})
 }
 
-func (s *store) getHeadDepositValue() (DepositValue, error) {
-	var dv DepositValue
-
-	if err := s.db.View(func(tx *bolt.Tx) error {
-		index, err := s.getDepositValueIndexTx(tx)
-		if err != nil {
-			return err
-		}
-
-		if len(index) == 0 {
-			return DepositValuesEmptyErr{}
-		}
-
-		head := index[0]
-
-		return dbutil.GetBucketObject(tx, depositValueBkt, head, &dv)
-	}); err != nil {
-		return DepositValue{}, err
-	}
-
-	return dv, nil
-}
-
-func (s *store) pushDepositValueTx(tx *bolt.Tx, dv DepositValue) error {
+func (s *store) pushDepositValueTx(tx *bolt.Tx, dv Deposit) error {
 	key := dv.TxN()
 
 	// Check if the deposit value already exists
-	if hasKey, err := dbutil.BucketHasKey(tx, depositValueBkt, key); err != nil {
+	if hasKey, err := dbutil.BucketHasKey(tx, depositBkt, key); err != nil {
 		return err
 	} else if hasKey {
 		return DepositValueExistsErr{}
 	}
 
 	// Save deposit value
-	if err := dbutil.PutBucketValue(tx, depositValueBkt, key, dv); err != nil {
-		return err
-	}
-
-	// Update deposit value index
-	index, err := s.getDepositValueIndexTx(tx)
-	if err != nil {
-		return err
-	}
-
-	index = append(index, key)
-
-	return dbutil.PutBucketValue(tx, scanMetaBkt, dvIndexListKey, index)
+	return dbutil.PutBucketValue(tx, depositBkt, key, dv)
 }
 
-func (s *store) popDepositValue() (DepositValue, error) {
-	var dv DepositValue
-
-	if err := s.db.Update(func(tx *bolt.Tx) error {
-		index, err := s.getDepositValueIndexTx(tx)
-		if err != nil {
+func (s *store) setDepositValueProcessed(dvKey string) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		var dv Deposit
+		if err := dbutil.GetBucketObject(tx, depositBkt, dvKey, &dv); err != nil {
 			return err
 		}
 
-		if len(index) == 0 {
-			return DepositValuesEmptyErr{}
+		if dv.TxN() != dvKey {
+			return errors.New("CRITICAL ERROR: dv.Txn() != dvKey")
 		}
 
-		head := index[0]
-		index = index[1:]
+		dv.Processed = true
 
-		// write index back to db
-		if err := dbutil.PutBucketValue(tx, scanMetaBkt, dvIndexListKey, index); err != nil {
-			return err
-		}
-
-		// mark deposit value in bucket as used
-		if err := dbutil.GetBucketObject(tx, depositValueBkt, head, &dv); err != nil {
-			return err
-		}
-
-		dv.IsUsed = true
-
-		return dbutil.PutBucketValue(tx, depositValueBkt, head, dv)
-	}); err != nil {
-		return DepositValue{}, err
-	}
-
-	return dv, nil
+		return dbutil.PutBucketValue(tx, depositBkt, dv.TxN(), dv)
+	})
 }
 
-// Returns the deposit value index from the db.
-// If there is no deposit value index in the db, nil is returned instead of
-// dbutil.ObjectNotExistErr
-func (s *store) getDepositValueIndexTx(tx *bolt.Tx) ([]string, error) {
-	var index []string
-	if err := dbutil.GetBucketObject(tx, scanMetaBkt, dvIndexListKey, &index); err != nil {
-		switch err.(type) {
-		case dbutil.ObjectNotExistErr:
-			err = nil
-		default:
-			return nil, err
-		}
-	}
-
-	if len(index) == 0 {
-		index = nil
-	}
-
-	return index, nil
-}
-
-func (s *store) getDepositValueIndex() ([]string, error) {
-	var index []string
+func (s *store) getUnprocessedDepositValues() ([]Deposit, error) {
+	var dvs []Deposit
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
-		var err error
-		index, err = s.getDepositValueIndexTx(tx)
-		return err
+		return dbutil.ForEach(tx, depositBkt, func(k, v []byte) error {
+			var dv Deposit
+			if err := json.Unmarshal(v, &dvs); err != nil {
+				return err
+			}
+
+			if !dv.Processed {
+				dvs = append(dvs, dv)
+			}
+
+			return nil
+		})
 	}); err != nil {
 		return nil, err
 	}
 
-	return index, nil
+	return dvs, nil
 }

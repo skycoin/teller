@@ -50,8 +50,8 @@ func (s *dummyBtcScanner) AddScanAddress(addr string) error {
 	return nil
 }
 
-func (s *dummyBtcScanner) GetDepositValue() <-chan scanner.DepositNote {
-	s.log.Info("dummyBtcScanner.GetDepositValue")
+func (s *dummyBtcScanner) GetDeposit() <-chan scanner.DepositNote {
+	s.log.Info("dummyBtcScanner.GetDeposit")
 	c := make(chan scanner.DepositNote)
 	close(c)
 	return c
@@ -65,25 +65,38 @@ type dummySkySender struct {
 	log logrus.FieldLogger
 }
 
-func (s *dummySkySender) SendAsync(destAddr string, coins uint64) <-chan sender.Response {
+func (s *dummySkySender) SendAsync(destAddr string, coins uint64) <-chan *sender.SendResponse {
 	s.log.WithFields(logrus.Fields{
 		"destAddr": destAddr,
 		"coins":    coins,
 	}).Info("dummySkySender.SendAsync")
 
-	c := make(chan sender.Response, 1)
-	c <- sender.Response{
-		Err: fmt.Sprintf("dummySender.SendAsync: %s %d", destAddr, coins),
+	c := make(chan *sender.SendResponse, 1)
+	c <- &sender.SendResponse{
+		Err: fmt.Errorf("dummySender.SendAsync: %s %d", destAddr, coins),
 	}
 	return c
+}
+
+func (s *dummySkySender) Send(destAddr string, coins uint64) *sender.SendResponse {
+	s.log.WithFields(logrus.Fields{
+		"destAddr": destAddr,
+		"coins":    coins,
+	}).Info("dummySkySender.Send")
+
+	return &sender.SendResponse{
+		Err: fmt.Errorf("dummySender.SendAsync: %s %d", destAddr, coins),
+	}
 }
 
 func (s *dummySkySender) IsClosed() bool {
 	return true
 }
 
-func (s *dummySkySender) IsTxConfirmed(txid string) bool {
-	return true
+func (s *dummySkySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {
+	return &sender.ConfirmResponse{
+		Confirmed: true,
+	}
 }
 
 func main() {
@@ -204,7 +217,7 @@ func run() error {
 	}
 
 	var btcScanner scanner.Scanner
-	var scanRPC exchange.BtcScanner
+	var scanRPC exchange.BTCScanner
 	var sendService *sender.SendService
 	var sendRPC exchange.SkySender
 
@@ -247,7 +260,7 @@ func run() error {
 
 		background("sendService.Run", errC, sendService.Run)
 
-		sendRPC = sender.NewSender(sendService)
+		sendRPC = sender.NewRetrySender(sendService)
 	}
 
 	// create exchange service

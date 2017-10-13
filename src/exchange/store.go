@@ -227,11 +227,11 @@ func (s *store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
 
 // UpdateDepositInfo updates deposit info. The update func takes a DepositInfo
 // and returns a modified copy of it.
-func (s *store) UpdateDepositInfo(btcTx string, update func(DepositInfo) DepositInfo) error {
+func (s *store) UpdateDepositInfo(btcTx string, update func(DepositInfo) DepositInfo) (DepositInfo, error) {
 	log := s.log.WithField("btcTx", btcTx)
 
-	return s.db.Update(func(tx *bolt.Tx) error {
-		var dpi DepositInfo
+	var dpi DepositInfo
+	if err := s.db.Update(func(tx *bolt.Tx) error {
 		if err := dbutil.GetBucketObject(tx, depositInfoBkt, btcTx, &dpi); err != nil {
 			return err
 		}
@@ -248,7 +248,11 @@ func (s *store) UpdateDepositInfo(btcTx string, update func(DepositInfo) Deposit
 		dpi.UpdatedAt = time.Now().UTC().Unix()
 
 		return dbutil.PutBucketValue(tx, depositInfoBkt, btcTx, dpi)
-	})
+	}); err != nil {
+		return DepositInfo{}, err
+	}
+
+	return dpi, nil
 }
 
 // GetDepositInfoOfSkyAddress returns all deposit info that are bound
@@ -268,27 +272,21 @@ func (s *store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 			if err := dbutil.GetBucketObject(tx, btcTxsBkt, btcAddr, &txns); err != nil {
 				switch err.(type) {
 				case dbutil.ObjectNotExistErr:
-					// TODO: Why is this default DepositInfo included?
-					dpis = append(dpis, DepositInfo{
-						BtcAddress: btcAddr,
-						SkyAddress: skyAddr,
-						UpdatedAt:  time.Now().UTC().Unix(),
-					})
-					continue
 				default:
 					return err
 				}
 			}
 
+			// If this db has no DepositInfo records yet, it means the scanner
+			// has not sent a deposit to the exchange, so the status is
+			// StatusWaitDeposit.
 			if len(txns) == 0 {
-				// TODO: Why is this default DepositInfo included?
 				dpis = append(dpis, DepositInfo{
+					Status:     StatusWaitDeposit,
 					BtcAddress: btcAddr,
 					SkyAddress: skyAddr,
 					UpdatedAt:  time.Now().UTC().Unix(),
 				})
-
-				continue
 			}
 
 			for _, txn := range txns {

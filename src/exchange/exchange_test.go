@@ -55,12 +55,8 @@ func (send *dummySender) SendAsync(destAddr string, coins uint64) <-chan sender.
 	return rspC
 }
 
-func (send *dummySender) IsClosed() bool {
-	return send.closed
-}
-
-func (send *dummySender) IsTxConfirmed(txid string) bool {
-	return send.txidConfirmMap[txid]
+func (send *dummySender) IsTxConfirmed(txid string) (bool, error) {
+	return send.txidConfirmMap[txid], nil
 }
 
 type dummyScanner struct {
@@ -76,7 +72,7 @@ func (scan *dummyScanner) AddScanAddress(addr string) error {
 	return nil
 }
 
-func (scan *dummyScanner) GetDepositValue() <-chan scanner.DepositNote {
+func (scan *dummyScanner) GetDeposit() <-chan scanner.DepositNote {
 	defer func() {
 		go func() {
 			// notify after given duration, so that the test code know
@@ -110,7 +106,7 @@ func TestRunExchangeService(t *testing.T) {
 
 		sendServClosed bool
 
-		dvC           chan scanner.DepositValue
+		dvC           chan scanner.Deposit
 		scanServClose bool
 		notifyAfter   time.Duration
 		txmap         map[string]bool
@@ -134,7 +130,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
 			sendErr:        nil,
-			dvC:            make(chan scanner.DepositValue, 1),
+			dvC:            make(chan scanner.Deposit, 1),
 			notifyAfter:    3 * time.Second,
 			txmap:          make(map[string]bool),
 			putDVTime:      1 * time.Second,
@@ -156,7 +152,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
 			sendErr:        nil,
-			dvC:            make(chan scanner.DepositValue, 1),
+			dvC:            make(chan scanner.Deposit, 1),
 			notifyAfter:    3 * time.Second,
 			txmap:          make(map[string]bool),
 			putDVTime:      1 * time.Second,
@@ -183,7 +179,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
 			sendErr:        nil,
-			dvC:            make(chan scanner.DepositValue, 1),
+			dvC:            make(chan scanner.Deposit, 1),
 			notifyAfter:    3 * time.Second,
 			txmap:          make(map[string]bool),
 			putDVTime:      1 * time.Second,
@@ -206,7 +202,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendReturnTxid: "1111",
 			sendErr:        sender.ErrServiceClosed,
 			sendServClosed: true,
-			dvC:            make(chan scanner.DepositValue, 1),
+			dvC:            make(chan scanner.Deposit, 1),
 			notifyAfter:    3 * time.Second,
 			txmap:          make(map[string]bool),
 			putDVTime:      1 * time.Second,
@@ -228,7 +224,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendSleepTime:  time.Second * 3,
 			sendReturnTxid: "",
 			sendErr:        fmt.Errorf("send skycoin failed"),
-			dvC:            make(chan scanner.DepositValue, 1),
+			dvC:            make(chan scanner.Deposit, 1),
 			notifyAfter:    3 * time.Second,
 			txmap:          make(map[string]bool),
 			putDVTime:      1 * time.Second,
@@ -250,7 +246,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendSleepTime:  time.Second * 3,
 			sendReturnTxid: "",
 			sendErr:        fmt.Errorf("send skycoin failed"),
-			dvC:            make(chan scanner.DepositValue, 1),
+			dvC:            make(chan scanner.Deposit, 1),
 			notifyAfter:    3 * time.Second,
 			txmap:          make(map[string]bool),
 			scanServClose:  true,
@@ -279,7 +275,7 @@ func TestRunExchangeService(t *testing.T) {
 			sendSleepTime:  time.Second * 3,
 			sendReturnTxid: "",
 			sendErr:        fmt.Errorf("send skycoin failed"),
-			dvC:            make(chan scanner.DepositValue, 1),
+			dvC:            make(chan scanner.Deposit, 1),
 			notifyAfter:    3 * time.Second,
 			txmap:          map[string]bool{"t1": true},
 			scanServClose:  true,
@@ -340,13 +336,13 @@ func TestRunExchangeService(t *testing.T) {
 					return
 				}
 				dvC <- scanner.DepositNote{
-					DepositValue: scanner.DepositValue{
+					Deposit: scanner.Deposit{
 						Address: tc.dpAddr,
 						Value:   tc.dpValue,
 						Tx:      tc.dpTx,
 						N:       tc.dpN,
 					},
-					AckC: make(chan struct{}, 1),
+					ErrC: make(chan error, 1),
 				}
 			})
 
