@@ -7,8 +7,8 @@ import (
 var (
 	// ErrSendBufferFull the send service's request channel is full
 	ErrSendBufferFull = errors.New("send service's request queue is full")
-	// ErrServiceClosed the sender has closed
-	ErrServiceClosed = errors.New("send service closed")
+	// ErrClosed the sender has closed
+	ErrClosed = errors.New("send service closed")
 )
 
 // Sender provids apis for sending skycoin

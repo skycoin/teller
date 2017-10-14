@@ -12,8 +12,8 @@ install-skycoin-cli: ## Install skycoin-cli
 	@mv $$GOPATH/bin/cli $$GOPATH/bin/skycoin-cli
 
 test: ## Run tests
-	go test ./cmd/...
-	go test ./src/...
+	go test ./cmd/... -timeout=1m
+	go test ./src/... -timeout=1m
 
 lint: ## Run linters
 	gometalinter --disable-all -E goimports --tests --vendor ./...

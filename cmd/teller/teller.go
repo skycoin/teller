@@ -251,12 +251,10 @@ func run() error {
 	}
 
 	// create exchange service
-	exchangeService := exchange.NewService(log, db, scanRPC, sendRPC, exchange.Config{
+	exchangeClient := exchange.NewExchange(log, db, scanRPC, sendRPC, exchange.Config{
 		Rate: cfg.ExchangeRate,
 	})
-	background("exchangeService.Run", errC, exchangeService.Run)
-
-	exchangeClient := exchange.NewClient(exchangeService)
+	background("exchangeClient.Run", errC, exchangeClient.Run)
 
 	// create bitcoin address manager
 	f, err := ioutil.ReadFile(*btcAddrs)
@@ -316,8 +314,8 @@ func run() error {
 	}
 
 	// close exchange service
-	log.Info("Shutting down exchangeService")
-	exchangeService.Shutdown()
+	log.Info("Shutting down exchangeClient")
+	exchangeClient.Shutdown()
 
 	// close the teller service
 	log.Info("Shutting down tellerServer")

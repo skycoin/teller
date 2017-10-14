@@ -66,12 +66,23 @@ func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
 	return uint64(amt), nil
 }
 
-// Service manages coin exchange between deposits and skycoin
-type Service struct {
+// DepositFilter filters deposits
+type DepositFilter func(di DepositInfo) bool
+
+// Exchanger provides APIs to interact with the exchange service
+type Exchanger interface {
+	BindAddress(btcAddr, skyAddr string) error
+	GetDepositStatuses(skyAddr string) ([]DepositStatus, error)
+	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
+	GetBindNum(skyAddr string) (int, error)
+}
+
+// Exchange manages coin exchange between deposits and skycoin
+type Exchange struct {
 	log         logrus.FieldLogger
 	cfg         Config
-	scanner     scanner.Scanner // scanner provides apis for interacting with scan service
-	sender      sender.Sender   // sender provides apis for sending skycoin
+	scanner     scanner.Scanner // scanner provides APIs for interacting with the scan service
+	sender      sender.Sender   // sender provides APIs for sending skycoin
 	store       *store          // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
@@ -83,14 +94,14 @@ type Config struct {
 	Rate int64 // sky_btc rate
 }
 
-// NewService creates exchange service
-func NewService(log logrus.FieldLogger, db *bolt.DB, scanner scanner.Scanner, sender sender.Sender, cfg Config) *Service {
+// NewExchange creates exchange service
+func NewExchange(log logrus.FieldLogger, db *bolt.DB, scanner scanner.Scanner, sender sender.Sender, cfg Config) *Exchange {
 	s, err := newStore(db, log)
 	if err != nil {
 		panic(err)
 	}
 
-	return &Service{
+	return &Exchange{
 		cfg:         cfg,
 		log:         log.WithField("prefix", "teller.exchange"),
 		scanner:     scanner,
@@ -103,7 +114,7 @@ func NewService(log logrus.FieldLogger, db *bolt.DB, scanner scanner.Scanner, se
 }
 
 // Run starts the exchange process
-func (s *Service) Run() error {
+func (s *Exchange) Run() error {
 	log := s.log
 	log.Info("Start exchange service...")
 	defer func() {
@@ -127,7 +138,7 @@ func (s *Service) Run() error {
 		for {
 			select {
 			case <-s.quit:
-				log.Info("exchange.Service watch deposits loop quit")
+				log.Info("exchange.Exchange watch deposits loop quit")
 				return
 			case dv, ok := <-s.scanner.GetDeposit():
 				if !ok {
@@ -156,7 +167,7 @@ func (s *Service) Run() error {
 		for {
 			select {
 			case <-s.quit:
-				log.Info("exchange.Service send loop quit")
+				log.Info("exchange.Exchange send loop quit")
 				return
 			case d := <-s.depositChan:
 				if err := s.processWaitSendDeposit(d); err != nil {
@@ -172,7 +183,7 @@ func (s *Service) Run() error {
 }
 
 // Shutdown close the exchange service
-func (s *Service) Shutdown() {
+func (s *Exchange) Shutdown() {
 	close(s.quit)
 	s.log.Info("Waiting for Run() to finish")
 	<-s.done
@@ -180,7 +191,7 @@ func (s *Service) Shutdown() {
 }
 
 // saveIncomingDeposit is called when receiving a deposit from the scanner
-func (s *Service) saveIncomingDeposit(dv scanner.Deposit) (DepositInfo, error) {
+func (s *Exchange) saveIncomingDeposit(dv scanner.Deposit) (DepositInfo, error) {
 	log := s.log.WithField("deposit", dv)
 
 	log.Info("Received bitcoin deposit")
@@ -201,7 +212,7 @@ func (s *Service) saveIncomingDeposit(dv scanner.Deposit) (DepositInfo, error) {
 // StatusWaitDeposit -> StatusWaitSend
 // StatusWaitSend -> StatusWaitConfirm
 // StatusWaitConfirm -> StatusDone
-func (s *Service) processWaitSendDeposit(di DepositInfo) error {
+func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
 	log := s.log.WithField("depositInfo", di)
 	log.Info("Processing StatusWaitSend deposit")
 
@@ -238,7 +249,7 @@ func (s *Service) processWaitSendDeposit(di DepositInfo) error {
 	return nil
 }
 
-func (s *Service) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
+func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 	log := s.log.WithField("depositInfo", di)
 
 	switch di.Status {
@@ -340,7 +351,7 @@ func (s *Service) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 	}
 }
 
-func (s *Service) send(di DepositInfo) (*sender.SendResponse, error) {
+func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
 	log := s.log.WithField("deposit", di)
 
 	skyAddr, err := s.store.GetBindAddress(di.Deposit.Address)
@@ -402,7 +413,7 @@ func (s *Service) send(di DepositInfo) (*sender.SendResponse, error) {
 	return rsp, nil
 }
 
-func (s *Service) getOrCreateDepositInfo(dv scanner.Deposit) (DepositInfo, error) {
+func (s *Exchange) getOrCreateDepositInfo(dv scanner.Deposit) (DepositInfo, error) {
 	log := s.log.WithField("deposit", dv)
 
 	di, err := s.store.GetDepositInfo(dv.TxN())
@@ -427,7 +438,7 @@ func (s *Service) getOrCreateDepositInfo(dv scanner.Deposit) (DepositInfo, error
 	}
 }
 
-func (s *Service) createDepositInfo(dv scanner.Deposit) (DepositInfo, error) {
+func (s *Exchange) createDepositInfo(dv scanner.Deposit) (DepositInfo, error) {
 	log := s.log.WithField("deposit", dv)
 
 	skyAddr, err := s.store.GetBindAddress(dv.Address)
@@ -467,7 +478,7 @@ func (s *Service) createDepositInfo(dv scanner.Deposit) (DepositInfo, error) {
 // processUnconfirmedTx waits until all unconfirmed tx are confirmed and updates
 // its status in the db.  This method is called during initialization and will
 // block until all pending transactions are confirmed.
-func (s *Service) processUnconfirmedTx() error {
+func (s *Exchange) processUnconfirmedTx() error {
 	log := s.log
 	log.Info("Checking the unconfirmed tx...")
 	defer log.Info("Checking confirmed tx finished")
@@ -529,7 +540,7 @@ func (s *Service) processUnconfirmedTx() error {
 	return nil
 }
 
-func (s *Service) setDepositInfoStatus(di DepositInfo, status Status) error {
+func (s *Exchange) setDepositInfoStatus(di DepositInfo, status Status) error {
 	// update the DepositInfo status
 	if _, err := s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
 		di.Status = status
@@ -541,7 +552,11 @@ func (s *Service) setDepositInfoStatus(di DepositInfo, status Status) error {
 	return nil
 }
 
-func (s *Service) bindAddress(btcAddr, skyAddr string) error {
+// BindAddress binds deposit btc address with skycoin address, and
+// add the btc address to scan service, when detect deposit coin
+// to the btc address, will send specific skycoin to the binded
+// skycoin address
+func (s *Exchange) BindAddress(btcAddr, skyAddr string) error {
 	if err := s.store.BindAddress(skyAddr, btcAddr); err != nil {
 		return err
 	}
@@ -567,7 +582,8 @@ type DepositStatusDetail struct {
 	Txid       string `json:"txid"`
 }
 
-func (s *Service) getDepositStatuses(skyAddr string) ([]DepositStatus, error) {
+// GetDepositStatuses returns deamon.DepositStatus array of given skycoin address
+func (s *Exchange) GetDepositStatuses(skyAddr string) ([]DepositStatus, error) {
 	dis, err := s.store.GetDepositInfoOfSkyAddress(skyAddr)
 	if err != nil {
 		return []DepositStatus{}, err
@@ -584,10 +600,8 @@ func (s *Service) getDepositStatuses(skyAddr string) ([]DepositStatus, error) {
 	return dss, nil
 }
 
-// DepositFilter deposit status filter
-type DepositFilter func(di DepositInfo) bool
-
-func (s *Service) getDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error) {
+// GetDepositStatusDetail returns deposit status details
+func (s *Exchange) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error) {
 	dis, err := s.store.GetDepositInfoArray(flt)
 	if err != nil {
 		return nil, err
@@ -607,7 +621,8 @@ func (s *Service) getDepositStatusDetail(flt DepositFilter) ([]DepositStatusDeta
 	return dss, nil
 }
 
-func (s *Service) getBindNum(skyAddr string) (int, error) {
+// GetBindNum returns the number of btc address the given sky address binded
+func (s *Exchange) GetBindNum(skyAddr string) (int, error) {
 	addrs, err := s.store.GetSkyBindBtcAddresses(skyAddr)
 	return len(addrs), err
 }

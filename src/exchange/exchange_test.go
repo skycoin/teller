@@ -101,7 +101,7 @@ func (scan *dummyScanner) GetScanAddresses() ([]string, error) {
 	return []string{}, nil
 }
 
-func TestRunExchangeService(t *testing.T) {
+func TestRunExchangeExchange(t *testing.T) {
 
 	var testCases = []struct {
 		name        string
@@ -213,7 +213,7 @@ func TestRunExchangeService(t *testing.T) {
 			dpN:            1,
 			sendSleepTime:  time.Second * 1,
 			sendReturnTxid: "1111",
-			sendErr:        sender.ErrServiceClosed,
+			sendErr:        sender.ErrClosed,
 			sendServClosed: true,
 			dvC:            make(chan scanner.Deposit, 1),
 			notifyAfter:    3 * time.Second,
@@ -248,7 +248,7 @@ func TestRunExchangeService(t *testing.T) {
 		},
 
 		{
-			name:           "scan_service_closed",
+			name:           "scan_exg_closed",
 			initDpis:       []DepositInfo{},
 			bindBtcAddr:    "btcaddr",
 			bindSkyAddr:    "skyaddr",
@@ -320,25 +320,24 @@ func TestRunExchangeService(t *testing.T) {
 				notifyAfter: tc.notifyAfter,
 				closed:      tc.scanServClose,
 			}
-			var service *Service
+			var exg *Exchange
 
 			require.NotPanics(t, func() {
-				service = NewService(testutil.NewLogger(t), db, scan, send, Config{
+				exg = NewExchange(testutil.NewLogger(t), db, scan, send, Config{
 					Rate: tc.rate,
 				})
 
 				// init the deposit infos
 				for _, dpi := range tc.initDpis {
-					err := service.store.AddDepositInfo(dpi)
+					err := exg.store.AddDepositInfo(dpi)
 					require.NoError(t, err)
 				}
 			})
 
-			go service.Run()
+			go exg.Run()
 
-			excli := NewClient(service)
 			if len(tc.initDpis) == 0 {
-				err := excli.BindAddress(tc.bindBtcAddr, tc.bindSkyAddr)
+				err := exg.BindAddress(tc.bindBtcAddr, tc.bindSkyAddr)
 				require.NoError(t, err)
 			}
 
@@ -367,7 +366,7 @@ func TestRunExchangeService(t *testing.T) {
 
 			// check the info
 			dpTxN := fmt.Sprintf("%s:%d", tc.dpTx, tc.dpN)
-			dpi, err := service.store.GetDepositInfo(dpTxN)
+			dpi, err := exg.store.GetDepositInfo(dpTxN)
 
 			if tc.writeToDBOk {
 				require.NoError(t, err)
@@ -385,7 +384,7 @@ func TestRunExchangeService(t *testing.T) {
 				}
 			}
 
-			service.Shutdown()
+			exg.Shutdown()
 		})
 	}
 }

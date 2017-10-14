@@ -5,6 +5,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/exchange"
 )
 
@@ -12,19 +13,6 @@ var (
 	// ErrMaxBind is returned when the maximum number of address to bind to a SKY address has been reached
 	ErrMaxBind = errors.New("max bind reached")
 )
-
-// BtcAddrGenerator generate new deposit address
-type BtcAddrGenerator interface {
-	NewAddress() (string, error)
-}
-
-// Exchanger provids apis to interact with exchange service
-type Exchanger interface {
-	BindAddress(btcAddr, skyAddr string) error
-	GetDepositStatuses(skyAddr string) ([]exchange.DepositStatus, error)
-	// Returns the number of btc address the skycoin address binded
-	BindNum(skyAddr string) (int, error)
-}
 
 // Config configures Teller
 type Config struct {
@@ -43,7 +31,7 @@ type Teller struct {
 }
 
 // New creates a Teller
-func New(log logrus.FieldLogger, exchanger Exchanger, btcAddrGen BtcAddrGenerator, cfg Config) (*Teller, error) {
+func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen addrs.AddrGenerator, cfg Config) (*Teller, error) {
 	if err := cfg.HTTP.Validate(); err != nil {
 		return nil, err
 	}
@@ -53,9 +41,9 @@ func New(log logrus.FieldLogger, exchanger Exchanger, btcAddrGen BtcAddrGenerato
 		log:  log.WithField("prefix", "teller"),
 		quit: make(chan struct{}),
 		httpServ: newHTTPServer(log, cfg.HTTP, &service{
-			cfg:        cfg.Service,
-			exchanger:  exchanger,
-			btcAddrGen: btcAddrGen,
+			cfg:       cfg.Service,
+			exchanger: exchanger,
+			addrGen:   addrGen,
 		}),
 	}, nil
 }
@@ -89,18 +77,18 @@ type ServiceConfig struct {
 	MaxBind int // maximum number of addresses allowed to bind to a SKY address
 }
 
-// service combines Exchanger and BtcAddrGenerator
+// service combines Exchanger and AddrGenerator
 type service struct {
-	cfg        ServiceConfig
-	exchanger  Exchanger        // exchange Teller client
-	btcAddrGen BtcAddrGenerator // btc address generator
+	cfg       ServiceConfig
+	exchanger exchange.Exchanger  // exchange Teller client
+	addrGen   addrs.AddrGenerator // address generator
 }
 
 // BindAddress binds skycoin address with a deposit btc address
 // return btc address
 func (s *service) BindAddress(skyAddr string) (string, error) {
 	if s.cfg.MaxBind != 0 {
-		num, err := s.exchanger.BindNum(skyAddr)
+		num, err := s.exchanger.GetBindNum(skyAddr)
 		if err != nil {
 			return "", err
 		}
@@ -110,7 +98,7 @@ func (s *service) BindAddress(skyAddr string) (string, error) {
 		}
 	}
 
-	btcAddr, err := s.btcAddrGen.NewAddress()
+	btcAddr, err := s.addrGen.NewAddress()
 	if err != nil {
 		return "", err
 	}
