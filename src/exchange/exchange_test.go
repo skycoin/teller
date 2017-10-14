@@ -1,40 +1,42 @@
 package exchange
 
 import (
-	"errors"
-	"fmt"
+	"sync"
 	"testing"
 
 	"time"
 
-	"github.com/stretchr/testify/require"
-
+	"github.com/boltdb/bolt"
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
+	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/stretchr/testify/require"
 )
 
 type dummySender struct {
-	txid      string
-	err       error
-	sleepTime time.Duration
-	sent      struct {
-		Address string
-		Value   uint64
-	}
-	closed         bool
+	sync.RWMutex
+	txid           string
+	sendErr        error
+	confirmErr     error
 	txidConfirmMap map[string]bool
+}
+
+func newDummySender() *dummySender {
+	return &dummySender{
+		txidConfirmMap: make(map[string]bool),
+	}
 }
 
 func (send *dummySender) Send(destAddr string, coins uint64) *sender.SendResponse {
 	req := sender.SendRequest{
 		Coins:   coins,
 		Address: destAddr,
-		RspC:    make(chan *sender.SendResponse, 2),
+		RspC:    make(chan *sender.SendResponse, 1),
 	}
 
-	if send.err != nil {
+	if send.sendErr != nil {
 		return &sender.SendResponse{
-			Err: send.err,
+			Err: send.sendErr,
 			Req: req,
 		}
 	}
@@ -46,36 +48,43 @@ func (send *dummySender) Send(destAddr string, coins uint64) *sender.SendRespons
 }
 
 func (send *dummySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {
+	send.RLock()
+	defer send.RUnlock()
+
 	req := sender.ConfirmRequest{
 		Txid: txid,
 	}
 
-	if send.err != nil {
+	if send.confirmErr != nil {
 		return &sender.ConfirmResponse{
-			Err: send.err,
+			Err: send.confirmErr,
 			Req: req,
 		}
 	}
 
-	if send.txidConfirmMap[txid] {
-		return &sender.ConfirmResponse{
-			Confirmed: true,
-			Req:       req,
-		}
-	}
-
+	confirmed := send.txidConfirmMap[txid]
 	return &sender.ConfirmResponse{
-		Confirmed: false,
+		Confirmed: confirmed,
 		Req:       req,
 	}
 }
 
+func (send *dummySender) setTxConfirmed(txid string) {
+	send.Lock()
+	defer send.Unlock()
+
+	send.txidConfirmMap[txid] = true
+}
+
 type dummyScanner struct {
-	dvC         chan scanner.DepositNote
-	addrs       []string
-	notifyC     chan struct{}
-	notifyAfter time.Duration
-	closed      bool
+	dvC   chan scanner.DepositNote
+	addrs []string
+}
+
+func newDummyScanner() *dummyScanner {
+	return &dummyScanner{
+		dvC: make(chan scanner.DepositNote, 10),
+	}
 }
 
 func (scan *dummyScanner) AddScanAddress(addr string) error {
@@ -84,14 +93,6 @@ func (scan *dummyScanner) AddScanAddress(addr string) error {
 }
 
 func (scan *dummyScanner) GetDeposit() <-chan scanner.DepositNote {
-	defer func() {
-		go func() {
-			// notify after given duration, so that the test code know
-			// it's time do checking
-			time.Sleep(scan.notifyAfter)
-			scan.notifyC <- struct{}{}
-		}()
-	}()
 	return scan.dvC
 }
 
@@ -99,67 +100,174 @@ func (scan *dummyScanner) GetScanAddresses() ([]string, error) {
 	return []string{}, nil
 }
 
-func TestRunExchange(t *testing.T) {
-	// TODO -- write this test, should cover all the main cases of run()
-	// TODO -- if easier, can write separate tests to cover the methods called by run()
+func (scan *dummyScanner) addDeposit(d scanner.DepositNote) {
+	scan.dvC <- d
 }
 
-func TestCalculateSkyValue(t *testing.T) {
-	cases := []struct {
-		satoshis int64
-		rate     int64
-		result   uint64
-		err      error
-	}{
-		{
-			satoshis: -1,
-			rate:     1,
-			err:      errors.New("negative satoshis or negative skyPerBTC"),
-		},
+func (scan *dummyScanner) stop() {
+	close(scan.dvC)
+}
 
-		{
-			satoshis: 1,
-			rate:     -1,
-			err:      errors.New("negative satoshis or negative skyPerBTC"),
-		},
+const testSkyBtcRate = 100
 
-		{
-			satoshis: 1e8,
-			rate:     1,
-			result:   1e6,
-		},
+func newTestExchange(t *testing.T, db *bolt.DB) *Exchange {
+	e, err := NewExchange(testutil.NewLogger(t), db, newDummyScanner(), newDummySender(), Config{
+		Rate: testSkyBtcRate,
+		TxConfirmationCheckWait: time.Millisecond * 100,
+	})
+	require.NoError(t, err)
+	return e
+}
 
-		{
-			satoshis: 1e8,
-			rate:     500,
-			result:   500e6,
-		},
+func testExchange(t *testing.T, f func(t *testing.T, e *Exchange)) {
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
 
-		{
-			satoshis: 100e8,
-			rate:     500,
-			result:   50000e6,
-		},
+	e := newTestExchange(t, db)
 
-		{
-			satoshis: 2e5, // 0.002 BTC
-			rate:     500, // 500 SKY/BTC = 1 SKY / 0.002 BTC
-			result:   1e6, // 1 SKY
+	done := make(chan struct{})
+	go func() {
+		err := e.Run()
+		require.NoError(t, err)
+		close(done)
+	}()
+
+	f(t, e)
+
+	e.Shutdown()
+	<-done
+}
+
+func TestRunShutdown(t *testing.T) {
+	// Tests a simple start and stop, with no scanner activity
+	testExchange(t, func(t *testing.T, e *Exchange) {})
+}
+
+func TestRunScannerClosed(t *testing.T) {
+	// Tests that there is no problem when the scanner closes
+	testExchange(t, func(t *testing.T, e *Exchange) {
+		e.scanner.(*dummyScanner).stop()
+	})
+}
+
+func TestRunSend(t *testing.T) {
+	testExchange(t, testRunSend)
+}
+
+func testRunSend(t *testing.T, e *Exchange) {
+	skyAddr := "foo-sky-addr"
+	btcAddr := "foo-btc-addr"
+	err := e.store.BindAddress(skyAddr, btcAddr)
+	require.NoError(t, err)
+
+	txid := "foo-sky-txid"
+	e.sender.(*dummySender).txid = txid
+
+	dn := scanner.DepositNote{
+		Deposit: scanner.Deposit{
+			Address: btcAddr,
+			Value:   1e8,
+			Height:  20,
+			Tx:      "foo-tx",
+			N:       2,
 		},
+		ErrC: make(chan error, 1),
 	}
+	e.scanner.(*dummyScanner).addDeposit(dn)
 
-	for _, tc := range cases {
-		name := fmt.Sprintf("satoshis=%d rate=%d", tc.satoshis, tc.rate)
-		t.Run(name, func(t *testing.T) {
-			result, err := calculateSkyValue(tc.satoshis, tc.rate)
-			if tc.err == nil {
+	// First loop calls saveIncomingDeposit
+	// nil is written to ErrC after this method finishes
+	err = <-dn.ErrC
+	require.NoError(t, err)
+
+	// Second loop calls processWaitSendDeposit
+	// It sends the coins, then confirms them
+
+	timeout := time.Second * 3
+	checkWaitTime := time.Millisecond * 300
+
+	// Periodically check the database until we observe the sent deposit
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-time.After(checkWaitTime):
+				di, err := e.store.GetDepositInfo(dn.Deposit.TxN())
 				require.NoError(t, err)
-				require.Equal(t, tc.result, result, "%d != %d", tc.result, result)
-			} else {
-				require.Error(t, err)
-				require.Equal(t, tc.err, err)
-				require.Equal(t, uint64(0), result, "%d != 0", result)
+				if di.Status != StatusWaitConfirm {
+					continue
+				}
+
+				require.NotEmpty(t, di.UpdatedAt)
+
+				expectedDeposit := DepositInfo{
+					Seq:        1,
+					UpdatedAt:  di.UpdatedAt,
+					Status:     StatusWaitConfirm,
+					SkyAddress: skyAddr,
+					BtcAddress: dn.Deposit.Address,
+					BtcTx:      dn.Deposit.TxN(),
+					Txid:       txid,
+					SkySent:    100e6,
+					SkyBtcRate: testSkyBtcRate,
+					Deposit:    dn.Deposit,
+				}
+
+				require.Equal(t, expectedDeposit, di)
+				return
 			}
-		})
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		t.Fatal("Waiting for sent deposit timed out")
+	}
+
+	// Mark the deposit as confirmed
+	e.sender.(*dummySender).setTxConfirmed(txid)
+
+	// Periodically check the database until we observe the confirmed deposit
+	done = make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-time.After(checkWaitTime):
+				di, err := e.store.GetDepositInfo(dn.Deposit.TxN())
+				require.NoError(t, err)
+				if di.Status != StatusDone {
+					continue
+				}
+
+				require.NotEmpty(t, di.UpdatedAt)
+
+				expectedDeposit := DepositInfo{
+					Seq:        1,
+					UpdatedAt:  di.UpdatedAt,
+					Status:     StatusDone,
+					SkyAddress: skyAddr,
+					BtcAddress: dn.Deposit.Address,
+					BtcTx:      dn.Deposit.TxN(),
+					Txid:       txid,
+					SkySent:    100e6,
+					SkyBtcRate: testSkyBtcRate,
+					Deposit:    dn.Deposit,
+				}
+
+				require.Equal(t, expectedDeposit, di)
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(timeout):
+		t.Fatal("Waiting for confirmed deposit timed out")
 	}
 }
+
+// TODO -- test various failure cases

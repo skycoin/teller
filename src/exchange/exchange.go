@@ -10,11 +10,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
-
-	"github.com/skycoin/skycoin/src/daemon"
-	"github.com/skycoin/skycoin/src/util/droplet"
 
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
@@ -22,9 +18,8 @@ import (
 )
 
 const (
-	satoshiPerBTC int64 = 1e8
-
-	txConfirmationCheckWait = time.Second * 3
+	satoshiPerBTC           int64 = 1e8
+	txConfirmationCheckWait       = time.Second * 3
 )
 
 var (
@@ -35,36 +30,6 @@ var (
 	// ErrNotConfirmed is returned if the tx is not confirmed yet
 	ErrNotConfirmed = errors.New("Transaction is not confirmed yet")
 )
-
-// calculateSkyValue returns the amount of SKY (in droplets) to give for an
-// amount of BTC (in satoshis).
-// Rate is measured in SKY per BTC.
-func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
-	if satoshis < 0 || skyPerBTC < 0 {
-		return 0, errors.New("negative satoshis or negative skyPerBTC")
-	}
-
-	btc := decimal.New(satoshis, 0)
-	btcToSatoshi := decimal.New(satoshiPerBTC, 0)
-	btc = btc.DivRound(btcToSatoshi, 8)
-
-	rate := decimal.New(skyPerBTC, 0)
-
-	sky := btc.Mul(rate)
-	sky = sky.Truncate(daemon.MaxDropletPrecision)
-
-	skyToDroplets := decimal.New(droplet.Multiplier, 0)
-	droplets := sky.Mul(skyToDroplets)
-
-	amt := droplets.IntPart()
-	if amt < 0 {
-		// This should never occur, but double check before we convert to uint64,
-		// otherwise we would send all the coins due to integer wrapping.
-		return 0, errors.New("calculated sky amount is negative")
-	}
-
-	return uint64(amt), nil
-}
 
 // DepositFilter filters deposits
 type DepositFilter func(di DepositInfo) bool
@@ -91,14 +56,23 @@ type Exchange struct {
 
 // Config exchange config struct
 type Config struct {
-	Rate int64 // sky_btc rate
+	Rate                    int64 // sky_btc rate
+	TxConfirmationCheckWait time.Duration
 }
 
 // NewExchange creates exchange service
-func NewExchange(log logrus.FieldLogger, db *bolt.DB, scanner scanner.Scanner, sender sender.Sender, cfg Config) *Exchange {
+func NewExchange(log logrus.FieldLogger, db *bolt.DB, scanner scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
 	s, err := newStore(db, log)
 	if err != nil {
-		panic(err)
+		return nil, err
+	}
+
+	if cfg.Rate == 0 {
+		return nil, errors.New("SKY/BTC Rate must not be 0")
+	}
+
+	if cfg.TxConfirmationCheckWait == 0 {
+		cfg.TxConfirmationCheckWait = txConfirmationCheckWait
 	}
 
 	return &Exchange{
@@ -110,7 +84,7 @@ func NewExchange(log logrus.FieldLogger, db *bolt.DB, scanner scanner.Scanner, s
 		quit:        make(chan struct{}),
 		done:        make(chan struct{}, 1),
 		depositChan: make(chan DepositInfo, 100),
-	}
+	}, nil
 }
 
 // Run starts the exchange process
@@ -223,6 +197,8 @@ func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
 		default:
 		}
 
+		log.Info("handleDepositInfoState")
+
 		var err error
 		di, err = s.handleDepositInfoState(di)
 		log = log.WithField("depositInfo", di)
@@ -232,7 +208,7 @@ func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
 			break
 		case ErrNotConfirmed:
 			select {
-			case <-time.After(txConfirmationCheckWait):
+			case <-time.After(s.cfg.TxConfirmationCheckWait):
 			case <-s.quit:
 				return nil
 			}

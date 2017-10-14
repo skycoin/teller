@@ -27,10 +27,10 @@ type dummyBtcrpcclient struct {
 	lastBlock blockHashHeight
 }
 
-func newDummyBtcrpcclient() *dummyBtcrpcclient {
+func newDummyBtcrpcclient(t *testing.T) *dummyBtcrpcclient {
 	db, err := bolt.Open("./test.db", 0600, nil)
 	if err != nil {
-		panic(err)
+		t.Fatalf(err)
 	}
 
 	return &dummyBtcrpcclient{db: db}
@@ -85,7 +85,7 @@ func TestScannerRun(t *testing.T) {
 
 	log := testutil.NewLogger(t)
 
-	rpcclient := newDummyBtcrpcclient()
+	rpcclient := newDummyBtcrpcclient(t)
 	rpcclient.lastBlock = blockHashHeight{
 		Hash:   "00000000000001749cf1a15c5af397a04a18d09e9bc902b6ce70f64bc19acc98",
 		Height: 235203,

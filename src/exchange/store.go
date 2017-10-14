@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -133,7 +134,12 @@ func isValidBtcTx(btcTx string) bool {
 		return false
 	}
 
-	if pts[0] == "" {
+	if pts[0] == "" || pts[1] == "" {
+		return false
+	}
+
+	_, err := strconv.ParseInt(pts[1], 10, 64)
+	if err != nil {
 		return false
 	}
 

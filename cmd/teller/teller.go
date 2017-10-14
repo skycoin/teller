@@ -220,7 +220,12 @@ func run() error {
 		}
 
 		// create btc rpc client
-		btcrpcConnConf := makeBtcrpcConfg(*cfg)
+		btcrpcConnConf, err := makeBtcrpcConfg(*cfg)
+		if err != nil {
+			log.WithError(err).Error("makeBtcrpcConfg failed")
+			return err
+		}
+
 		btcrpc, err := btcrpcclient.New(&btcrpcConnConf, nil)
 		if err != nil {
 			log.WithError(err).Error("Connect btcd failed")
@@ -240,7 +245,11 @@ func run() error {
 
 		background("btcScanner.Run", errC, btcScanner.Run)
 
-		skyRPC := sender.NewRPC(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
+		skyRPC, err := sender.NewRPC(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
+		if err != nil {
+			log.WithError(err).Error("sender.NewRPC failed")
+			return err
+		}
 
 		// create skycoin send service
 		sendService = sender.NewService(makeSendConfig(*cfg), log, skyRPC)
@@ -251,9 +260,14 @@ func run() error {
 	}
 
 	// create exchange service
-	exchangeClient := exchange.NewExchange(log, db, scanRPC, sendRPC, exchange.Config{
+	exchangeClient, err := exchange.NewExchange(log, db, scanRPC, sendRPC, exchange.Config{
 		Rate: cfg.ExchangeRate,
 	})
+	if err != nil {
+		log.WithError(err).Error("exchange.NewExchange failed")
+		return err
+	}
+
 	background("exchangeClient.Run", errC, exchangeClient.Run)
 
 	// create bitcoin address manager
@@ -336,10 +350,10 @@ func run() error {
 	return finalErr
 }
 
-func makeBtcrpcConfg(cfg config.Config) btcrpcclient.ConnConfig {
+func makeBtcrpcConfg(cfg config.Config) (btcrpcclient.ConnConfig, error) {
 	certs, err := ioutil.ReadFile(cfg.Btcrpc.Cert)
 	if err != nil {
-		panic(fmt.Sprintf("btc rpc cert file does not exist in %s", cfg.Btcrpc.Cert))
+		return btcrpcclient.ConnConfig{}, fmt.Errorf("btc rpc cert file does not exist in %s", cfg.Btcrpc.Cert)
 	}
 
 	return btcrpcclient.ConnConfig{
@@ -348,7 +362,7 @@ func makeBtcrpcConfg(cfg config.Config) btcrpcclient.ConnConfig {
 		User:         cfg.Btcrpc.User,
 		Pass:         cfg.Btcrpc.Pass,
 		Certificates: certs,
-	}
+	}, nil
 }
 
 func makeSendConfig(cfg config.Config) sender.Config {
