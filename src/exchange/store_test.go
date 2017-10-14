@@ -249,13 +249,15 @@ func TestUpdateDepositInfo(t *testing.T) {
 
 	require.NoError(t, err)
 
-	err = s.UpdateDepositInfo("btx1:1", func(dpi DepositInfo) DepositInfo {
+	dpi, err := s.UpdateDepositInfo("btx1:1", func(dpi DepositInfo) DepositInfo {
 		dpi.Status = StatusWaitSend
 		dpi.Txid = "121212"
 		return dpi
 	})
 
 	require.NoError(t, err)
+	require.Equal(t, dpi.Txid, "121212")
+	require.Equal(t, dpi.Status, StatusWaitSend)
 
 	err = db.View(func(tx *bolt.Tx) error {
 		var dpi1 DepositInfo

@@ -13,6 +13,15 @@ import (
 	"github.com/skycoin/teller/src/util/testutil"
 )
 
+func TestBtcTxN(t *testing.T) {
+	d := Deposit{
+		Tx: "foo",
+		N:  2,
+	}
+
+	require.Equal(t, "foo:2", d.TxN())
+}
+
 func TestNewStore(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
@@ -218,115 +227,6 @@ func TestPushDepositValue(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-
-	// check db
-	idxs, err := s.getDepositValueIndex()
-	require.NoError(t, err)
-	require.Len(t, idxs, len(keyMap))
-	for _, idx := range idxs {
-		require.Contains(t, keyMap, idx)
-	}
-}
-
-func TestPopDepositValue(t *testing.T) {
-	dvs := []Deposit{
-		{
-			Address: "b1",
-			Value:   1,
-			Height:  1,
-			Tx:      "t1",
-			N:       1,
-		},
-		{
-			Address: "b2",
-			Value:   2,
-			Height:  2,
-			Tx:      "t2",
-			N:       2,
-		},
-	}
-
-	tt := []struct {
-		name  string
-		init  []Deposit
-		popV  Deposit
-		popOk bool
-	}{
-		{
-			"normal pop",
-			dvs[:],
-			dvs[0],
-			true,
-		},
-		{
-			"pop empty",
-			dvs[:0],
-			Deposit{},
-			false,
-		},
-	}
-
-	for _, tc := range tt {
-		t.Run(tc.name, func(t *testing.T) {
-			db, shutdown := testutil.PrepareDB(t)
-			defer shutdown()
-
-			s, err := newStore(db)
-			require.NoError(t, err)
-
-			err = db.Update(func(tx *bolt.Tx) error {
-				for _, dv := range tc.init {
-					err := s.pushDepositValueTx(tx, dv)
-					require.NoError(t, err)
-					if err != nil {
-						return err
-					}
-				}
-				return nil
-			})
-
-			require.NoError(t, err)
-
-			dv, err := s.popDepositValue()
-
-			if !tc.popOk {
-				require.Error(t, err)
-				require.IsType(t, DepositValuesEmptyErr{}, err)
-				return
-			}
-
-			require.NoError(t, err)
-
-			tc.popV.IsUsed = true
-			require.Equal(t, tc.popV, dv)
-
-			// check db
-			err = db.View(func(tx *bolt.Tx) error {
-				idxs, err := s.getDepositValueIndexTx(tx)
-				require.NoError(t, err)
-				if err != nil {
-					return err
-				}
-
-				require.Len(t, idxs, len(tc.init)-1)
-
-				// key should already been removed from index, have a check
-				key := dv.TxN()
-				for _, idx := range idxs {
-					require.NotEqual(t, idx, key)
-				}
-
-				var dv Deposit
-				err = dbutil.GetBucketObject(tx, depositBkt, key, &dv)
-				require.Nil(t, err)
-				require.True(t, dv.IsUsed)
-
-				return nil
-			})
-
-			require.NoError(t, err)
-		})
-	}
 }
 
 func TestPutBktValue(t *testing.T) {

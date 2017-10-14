@@ -16,16 +16,6 @@ const (
 	confirmTxRetryWait = 3 * time.Second
 )
 
-// SendStatus represents the send status
-type SendStatus int8
-
-const (
-	// Sent represents coins already sent, but waiting confirm
-	Sent SendStatus = iota + 1
-	// TxConfirmed represents the transaction is confirmed
-	TxConfirmed
-)
-
 // SendRequest send coin request struct
 type SendRequest struct {
 	Coins   uint64             // coin number (in droplets)
@@ -49,10 +39,9 @@ func (r SendRequest) Verify() error {
 
 // SendResponse send response
 type SendResponse struct {
-	Err    error
-	Txid   string
-	Status SendStatus
-	Req    SendRequest
+	Txid string
+	Err  error
+	Req  SendRequest
 }
 
 // ConfirmRequest tx confirmation request struct
@@ -217,9 +206,8 @@ func (s *SendService) Send(req SendRequest) (*SendResponse, error) {
 	}
 
 	return &SendResponse{
-		Txid:   txid,
-		Status: Sent,
-		Req:    req,
+		Txid: txid,
+		Req:  req,
 	}, nil
 }
 
@@ -253,9 +241,8 @@ func (s *SendService) SendRetry(req SendRequest) (*SendResponse, error) {
 		}
 
 		return &SendResponse{
-			Txid:   txid,
-			Status: Sent,
-			Req:    req,
+			Txid: txid,
+			Req:  req,
 		}, nil
 	}
 }

@@ -13,8 +13,6 @@ type Scanner interface {
 	AddScanAddress(string) error
 	GetScanAddresses() ([]string, error)
 	GetDeposit() <-chan DepositNote
-	Run() error
-	Shutdown()
 }
 
 // BtcRPCClient rpcclient interface

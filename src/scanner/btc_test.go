@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
@@ -119,22 +118,13 @@ func TestScannerRun(t *testing.T) {
 		// check all deposit value's
 		db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
-				key := fmt.Sprintf("%v:%v", dv.Tx, dv.N)
 				var d Deposit
-				require.Nil(t, dbutil.GetBucketObject(tx, depositBkt, key, &d))
-				require.True(t, d.IsUsed)
-
-				idxs, err := scr.store.getDepositValueIndexTx(tx)
-				require.NoError(t, err)
-				require.Len(t, idxs, 0)
+				require.Nil(t, dbutil.GetBucketObject(tx, depositBkt, dv.TxN(), &d))
+				require.True(t, d.Processed)
 			}
 
 			return nil
 		})
-
-		_, err := scr.store.popDepositValue()
-		require.Error(t, err)
-		require.IsType(t, DepositValuesEmptyErr{}, err)
 	})
 
 	time.AfterFunc(15*time.Second, func() {

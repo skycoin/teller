@@ -66,20 +66,14 @@ func TestSendService(t *testing.T) {
 	}()
 
 	addr := "KNtZkX2mw1UFuemv6FmEQxxhWCTWTm2Thk"
-	sdr := NewSender(s)
+	sdr := NewRetrySender(s)
 
-	send := func(sender *Sender, addr string, amt uint64) (string, error) {
-		rspC := sdr.SendAsync(addr, amt)
-		rsp := <-rspC
+	send := func(sender Sender, addr string, amt uint64) (string, error) {
+		rsp := sdr.Send(addr, amt)
+		require.NotNil(t, rsp)
 
-		if rsp.Err != "" {
-			return "", errors.New(rsp.Err)
-		}
-
-		for st := range rsp.StatusC {
-			if st == TxConfirmed {
-				break
-			}
+		if rsp.Err != nil {
+			return "", rsp.Err
 		}
 
 		return rsp.Txid, nil
@@ -131,12 +125,12 @@ func TestSendService(t *testing.T) {
 func TestVerifyRequest(t *testing.T) {
 	var testCases = []struct {
 		name string
-		req  Request
+		req  SendRequest
 		err  bool
 	}{
 		{
 			"valid address",
-			Request{
+			SendRequest{
 				Address: "KNtZkX2mw1UFuemv6FmEQxxhWCTWTm2Thk",
 				Coins:   1,
 			},
@@ -144,7 +138,7 @@ func TestVerifyRequest(t *testing.T) {
 		},
 		{
 			"invalid address",
-			Request{
+			SendRequest{
 				Address: "addr1",
 				Coins:   1,
 			},
@@ -152,7 +146,7 @@ func TestVerifyRequest(t *testing.T) {
 		},
 		{
 			"invalid coin amount",
-			Request{
+			SendRequest{
 				Address: "KNtZkX2mw1UFuemv6FmEQxxhWCTWTm2Thk",
 				Coins:   0,
 			},
@@ -162,7 +156,7 @@ func TestVerifyRequest(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := verifyRequest(tc.req)
+			err := tc.req.Verify()
 			require.Equal(t, tc.err, err != nil)
 		})
 	}

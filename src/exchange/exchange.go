@@ -36,19 +36,6 @@ var (
 	ErrNotConfirmed = errors.New("Transaction is not confirmed yet")
 )
 
-// SkySender provids apis for sending skycoin
-type SkySender interface {
-	Send(destAddr string, coins uint64) *sender.SendResponse
-	IsTxConfirmed(txid string) *sender.ConfirmResponse
-}
-
-// BTCScanner provids apis for interact with scan service
-type BTCScanner interface {
-	AddScanAddress(addr string) error
-	GetScanAddresses() ([]string, error)
-	GetDeposit() <-chan scanner.DepositNote
-}
-
 // calculateSkyValue returns the amount of SKY (in droplets) to give for an
 // amount of BTC (in satoshis).
 // Rate is measured in SKY per BTC.
@@ -83,9 +70,9 @@ func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
 type Service struct {
 	log         logrus.FieldLogger
 	cfg         Config
-	scanner     BTCScanner // scanner provides apis for interacting with scan service
-	sender      SkySender  // sender provides apis for sending skycoin
-	store       *store     // deposit info storage
+	scanner     scanner.Scanner // scanner provides apis for interacting with scan service
+	sender      sender.Sender   // sender provides apis for sending skycoin
+	store       *store          // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
 	depositChan chan DepositInfo
@@ -97,7 +84,7 @@ type Config struct {
 }
 
 // NewService creates exchange service
-func NewService(log logrus.FieldLogger, db *bolt.DB, scanner BTCScanner, sender SkySender, cfg Config) *Service {
+func NewService(log logrus.FieldLogger, db *bolt.DB, scanner scanner.Scanner, sender sender.Sender, cfg Config) *Service {
 	s, err := newStore(db, log)
 	if err != nil {
 		panic(err)
@@ -390,7 +377,7 @@ func (s *Service) send(di DepositInfo) (*sender.SendResponse, error) {
 	// If UpdateDepositInfo fails we will send double coins.
 	// We can't just wrap it all in a bolt.Tx, because we need to send the
 	// skycoins first in order to obtain the Txid.
-	// Can we generate the Txid offline, and specify it in the SendAsync request?
+	// Can we generate the Txid offline, and specify it in the SendRequest?
 	// We'd need the wallet loaded with teller.
 	// Possibly we could make two API calls to skycoind, one to prepare the tx,
 	// the other to send it.

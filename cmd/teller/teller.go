@@ -65,19 +65,6 @@ type dummySkySender struct {
 	log logrus.FieldLogger
 }
 
-func (s *dummySkySender) SendAsync(destAddr string, coins uint64) <-chan *sender.SendResponse {
-	s.log.WithFields(logrus.Fields{
-		"destAddr": destAddr,
-		"coins":    coins,
-	}).Info("dummySkySender.SendAsync")
-
-	c := make(chan *sender.SendResponse, 1)
-	c <- &sender.SendResponse{
-		Err: fmt.Errorf("dummySender.SendAsync: %s %d", destAddr, coins),
-	}
-	return c
-}
-
 func (s *dummySkySender) Send(destAddr string, coins uint64) *sender.SendResponse {
 	s.log.WithFields(logrus.Fields{
 		"destAddr": destAddr,
@@ -85,7 +72,7 @@ func (s *dummySkySender) Send(destAddr string, coins uint64) *sender.SendRespons
 	}).Info("dummySkySender.Send")
 
 	return &sender.SendResponse{
-		Err: fmt.Errorf("dummySender.SendAsync: %s %d", destAddr, coins),
+		Err: fmt.Errorf("dummySender.Send: %s %d", destAddr, coins),
 	}
 }
 
@@ -216,14 +203,14 @@ func run() error {
 		}()
 	}
 
-	var btcScanner scanner.Scanner
-	var scanRPC exchange.BTCScanner
+	var btcScanner *scanner.BTCScanner
+	var scanRPC scanner.Scanner
 	var sendService *sender.SendService
-	var sendRPC exchange.SkySender
+	var sendRPC sender.Sender
 
 	if *dummyMode {
 		log.Info("btcd and skyd disabled, running in dummy mode")
-		btcScanner = &dummyBtcScanner{log: log}
+		scanRPC = &dummyBtcScanner{log: log}
 		sendRPC = &dummySkySender{log: log}
 	} else {
 		// check skycoin setup
@@ -264,7 +251,7 @@ func run() error {
 	}
 
 	// create exchange service
-	exchangeService := exchange.NewService(log, db, btcScanner, sendRPC, exchange.Config{
+	exchangeService := exchange.NewService(log, db, scanRPC, sendRPC, exchange.Config{
 		Rate: cfg.ExchangeRate,
 	})
 	background("exchangeService.Run", errC, exchangeService.Run)

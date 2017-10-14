@@ -11,6 +11,12 @@ var (
 	ErrServiceClosed = errors.New("send service closed")
 )
 
+// Sender provids apis for sending skycoin
+type Sender interface {
+	Send(destAddr string, coins uint64) *SendResponse
+	IsTxConfirmed(txid string) *ConfirmResponse
+}
+
 // RetrySender provids helper function to send coins with send service
 // All requests will retry until succeeding.
 type RetrySender struct {

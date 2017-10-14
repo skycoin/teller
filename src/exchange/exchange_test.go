@@ -27,36 +27,49 @@ type dummySender struct {
 	txidConfirmMap map[string]bool
 }
 
-func (send *dummySender) SendAsync(destAddr string, coins uint64) <-chan sender.Response {
-	rspC := make(chan sender.Response, 1)
-
-	if send.err != nil {
-		rspC <- sender.Response{
-			Err: send.err.Error(),
-		}
-		return rspC
+func (send *dummySender) Send(destAddr string, coins uint64) *sender.SendResponse {
+	req := sender.SendRequest{
+		Coins:   coins,
+		Address: destAddr,
+		RspC:    make(chan *sender.SendResponse, 2),
 	}
 
-	stC := make(chan sender.SendStatus, 2)
-	time.AfterFunc(100*time.Millisecond, func() {
-		send.sent.Address = destAddr
-		send.sent.Value = coins
-		rspC <- sender.Response{
-			StatusC: stC,
-			Txid:    send.txid,
+	if send.err != nil {
+		return &sender.SendResponse{
+			Err: send.err,
+			Req: req,
 		}
-		stC <- sender.Sent
-	})
+	}
 
-	time.AfterFunc(send.sleepTime, func() {
-		stC <- sender.TxConfirmed
-	})
-
-	return rspC
+	return &sender.SendResponse{
+		Txid: send.txid,
+		Req:  req,
+	}
 }
 
-func (send *dummySender) IsTxConfirmed(txid string) (bool, error) {
-	return send.txidConfirmMap[txid], nil
+func (send *dummySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {
+	req := sender.ConfirmRequest{
+		Txid: txid,
+	}
+
+	if send.err != nil {
+		return &sender.ConfirmResponse{
+			Err: send.err,
+			Req: req,
+		}
+	}
+
+	if send.txidConfirmMap[txid] {
+		return &sender.ConfirmResponse{
+			Confirmed: true,
+			Req:       req,
+		}
+	}
+
+	return &sender.ConfirmResponse{
+		Confirmed: false,
+		Req:       req,
+	}
 }
 
 type dummyScanner struct {
