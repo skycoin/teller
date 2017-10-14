@@ -118,7 +118,7 @@ func TestSendService(t *testing.T) {
 
 	t.Log("=== Run\tTest invalid request address")
 	txid, err = send(sdr, "invalid address", 20)
-	require.Contains(t, err.Error(), "Invalid request")
+	require.Equal(t, "Invalid address length", err.Error())
 	require.Empty(t, txid)
 }
 
