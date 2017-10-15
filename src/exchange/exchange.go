@@ -107,9 +107,14 @@ func (s *Exchange) Run() error {
 		return err
 	}
 
-	// Confirm all sent deposits before continuining
-	if err := s.confirmSentDeposits(); err != nil {
-		log.WithError(err).Error("confirmSentDeposits failed")
+	// Load StatusWaitConfirm deposits for processing later
+	waitConfirmDeposits, err := s.store.GetDepositInfoArray(func(di DepositInfo) bool {
+		return di.Status == StatusWaitConfirm
+	})
+
+	if err != nil {
+		err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
+		log.WithError(err).Error()
 		return err
 	}
 
@@ -135,6 +140,11 @@ func (s *Exchange) Run() error {
 			}
 		}
 	}()
+
+	// Queue the saved StatusWaitConfirm deposits
+	for _, di := range waitConfirmDeposits {
+		s.depositChan <- di
+	}
 
 	// Queue the saved StatusWaitSend deposits
 	for _, di := range waitSendDeposits {
@@ -475,83 +485,6 @@ func (s *Exchange) createDepositInfo(dv scanner.Deposit) (DepositInfo, error) {
 	}
 
 	return di, nil
-}
-
-// confirmSentDeposits waits until all unconfirmed tx are confirmed and updates
-// its status in the db.  This method is called during initialization and will
-// block until all pending transactions are confirmed.
-func (s *Exchange) confirmSentDeposits() error {
-	log := s.log
-	log.Info("Checking the unconfirmed tx...")
-	defer log.Info("Checking confirmed tx finished")
-
-	dis, err := s.store.GetDepositInfoArray(func(di DepositInfo) bool {
-		return di.Status == StatusWaitConfirm
-	})
-
-	if err != nil {
-		err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
-		log.WithError(err).Error()
-		return err
-	}
-
-	// This loop checks if StatusWaitConfirm deposits have been confirmed.
-	// All pending deposits are checked and their DepositInfo db entry is updated.
-	// If any deposit has not been confirmed, or the db update fails,
-	// the loop waits for txConfirmationCheckWait seconds (3) before reprocessing
-	// those particular DepositInfos.
-	for len(dis) != 0 {
-		log = log.WithField("depositInfosLen", len(dis))
-		log.Println("Processing remaining unconfirmed DepositInfos")
-
-		var unprocessed []DepositInfo
-
-		for _, di := range dis {
-			dLog := log.WithField("depositInfo", di)
-
-			rsp := s.sender.IsTxConfirmed(di.Txid)
-
-			if rsp == nil || rsp.Err != nil || !rsp.Confirmed {
-				dLog.Debug("Txid is not confirmed")
-				unprocessed = append(unprocessed, di)
-				continue
-			}
-
-			if err := s.setDepositInfoStatus(di, StatusDone); err != nil {
-				dLog.WithField("status", StatusDone).WithError(err).Error("setDepositInfoStatus failed")
-				unprocessed = append(unprocessed, di)
-			}
-		}
-
-		if len(unprocessed) == 0 {
-			break
-		}
-
-		dis = unprocessed
-
-		log.Info("Some DepositInfos could not be confirmed, waiting to retry")
-
-		select {
-		case <-time.After(txConfirmationCheckWait):
-			continue
-		case <-s.quit:
-			return nil
-		}
-	}
-
-	return nil
-}
-
-func (s *Exchange) setDepositInfoStatus(di DepositInfo, status Status) error {
-	// update the DepositInfo status
-	if _, err := s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
-		di.Status = status
-		return di
-	}); err != nil {
-		return fmt.Errorf("Update DepositInfo.Status failed: %v", err)
-	}
-
-	return nil
 }
 
 // BindAddress binds deposit btc address with skycoin address, and
