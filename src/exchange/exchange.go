@@ -96,15 +96,53 @@ func (s *Exchange) Run() error {
 		s.done <- struct{}{}
 	}()
 
-	if err := s.processUnconfirmedTx(); err != nil {
-		log.WithError(err).Error("processUnconfirmedTx failed")
+	// Load StatusWaitSend deposits for processing later
+	waitSendDeposits, err := s.store.GetDepositInfoArray(func(di DepositInfo) bool {
+		return di.Status == StatusWaitSend
+	})
+
+	if err != nil {
+		err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
+		log.WithError(err).Error()
+		return err
+	}
+
+	// Confirm all sent deposits before continuining
+	if err := s.confirmSentDeposits(); err != nil {
+		log.WithError(err).Error("confirmSentDeposits failed")
 		return err
 	}
 
 	var wg sync.WaitGroup
 
-	// This loop processes incoming deposits and saves a new DepositInfo
-	// with a status of StatusWaitSend
+	// This loop processes StatusWaitSend deposits.
+	// Only one deposit is processed at a time; it will not send more coins
+	// until it receives confirmation of the previous send.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		for {
+			select {
+			case <-s.quit:
+				log.Info("exchange.Exchange send loop quit")
+				return
+			case d := <-s.depositChan:
+				log := log.WithField("depositInfo", d)
+				if err := s.processWaitSendDeposit(d); err != nil {
+					log.WithError(err).Error("processWaitSendDeposit failed. This deposit will not be reprocessed until teller is restarted.")
+				}
+			}
+		}
+	}()
+
+	// Queue the saved StatusWaitSend deposits
+	for _, di := range waitSendDeposits {
+		s.depositChan <- di
+	}
+
+	// This loop processes incoming deposits from the scanner and saves a
+	// new DepositInfo with a status of StatusWaitSend
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -120,32 +158,19 @@ func (s *Exchange) Run() error {
 					return
 				}
 
+				log := log.WithField("deposit", dv.Deposit)
+
+				// Save a new DepositInfo based upon the scanner.Deposit.
+				// If the save fails, report it to the scanner.
+				// The scanner will mark the deposit as "processed" if no error
+				// occurred.  Any unprocessed deposits held by the scanner
+				// will be resent to the exchange when teller is started.
 				if d, err := s.saveIncomingDeposit(dv.Deposit); err != nil {
-					log.WithError(err).Error("saveIncomingDeposit failed")
+					log.WithError(err).Error("saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted")
 					dv.ErrC <- err
 				} else {
 					dv.ErrC <- nil
 					s.depositChan <- d
-				}
-			}
-		}
-	}()
-
-	// This loop processes StatusWaitSend deposits.
-	// Only one deposit is processed at a time; it will not send more coins
-	// until it receives confirmation of the previous send.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-
-		for {
-			select {
-			case <-s.quit:
-				log.Info("exchange.Exchange send loop quit")
-				return
-			case d := <-s.depositChan:
-				if err := s.processWaitSendDeposit(d); err != nil {
-					log.WithError(err).Error("processWaitSendDeposit failed. This deposit will not be reprocessed until teller is restarted.")
 				}
 			}
 		}
@@ -273,7 +298,6 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 		di, err := s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
 			di.Txid = rsp.Txid
 			di.SkySent = rsp.Req.Coins
-			di.SkyBtcRate = s.cfg.Rate
 			di.Status = StatusWaitConfirm
 			return di
 		})
@@ -438,6 +462,8 @@ func (s *Exchange) createDepositInfo(dv scanner.Deposit) (DepositInfo, error) {
 		BtcTx:      dv.TxN(),
 		Status:     StatusWaitSend,
 		Deposit:    dv,
+		// Save the rate at the time this deposit was noticed
+		SkyBtcRate: s.cfg.Rate,
 	}
 
 	log = log.WithField("depositInfo", di)
@@ -451,10 +477,10 @@ func (s *Exchange) createDepositInfo(dv scanner.Deposit) (DepositInfo, error) {
 	return di, nil
 }
 
-// processUnconfirmedTx waits until all unconfirmed tx are confirmed and updates
+// confirmSentDeposits waits until all unconfirmed tx are confirmed and updates
 // its status in the db.  This method is called during initialization and will
 // block until all pending transactions are confirmed.
-func (s *Exchange) processUnconfirmedTx() error {
+func (s *Exchange) confirmSentDeposits() error {
 	log := s.log
 	log.Info("Checking the unconfirmed tx...")
 	defer log.Info("Checking confirmed tx finished")
@@ -543,15 +569,15 @@ func (s *Exchange) BindAddress(btcAddr, skyAddr string) error {
 
 // DepositStatus json struct for deposit status
 type DepositStatus struct {
-	Seq      uint64 `json:"seq"`
-	UpdateAt int64  `json:"update_at"`
-	Status   string `json:"status"`
+	Seq       uint64 `json:"seq"`
+	UpdatedAt int64  `json:"update_at"`
+	Status    string `json:"status"`
 }
 
 // DepositStatusDetail deposit status detail info
 type DepositStatusDetail struct {
 	Seq        uint64 `json:"seq"`
-	UpdateAt   int64  `json:"update_at"`
+	UpdatedAt  int64  `json:"update_at"`
 	Status     string `json:"status"`
 	SkyAddress string `json:"skycoin_address"`
 	BtcAddress string `json:"bitcoin_address"`
@@ -568,9 +594,9 @@ func (s *Exchange) GetDepositStatuses(skyAddr string) ([]DepositStatus, error) {
 	dss := make([]DepositStatus, 0, len(dis))
 	for _, di := range dis {
 		dss = append(dss, DepositStatus{
-			Seq:      di.Seq,
-			UpdateAt: di.UpdatedAt,
-			Status:   di.Status.String(),
+			Seq:       di.Seq,
+			UpdatedAt: di.UpdatedAt,
+			Status:    di.Status.String(),
 		})
 	}
 	return dss, nil
@@ -587,7 +613,7 @@ func (s *Exchange) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDet
 	for _, di := range dis {
 		dss = append(dss, DepositStatusDetail{
 			Seq:        di.Seq,
-			UpdateAt:   di.UpdatedAt,
+			UpdatedAt:  di.UpdatedAt,
 			Status:     di.Status.String(),
 			SkyAddress: di.SkyAddress,
 			BtcAddress: di.BtcAddress,
