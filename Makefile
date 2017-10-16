@@ -24,10 +24,6 @@ lint: ## Run linters
 check: lint test ## Run tests and linters
 
 cover: ## Runs tests on ./src/ with HTML code coverage
-	go test ./src/... -timeout=1m -cover -coverprofile=cover.out
-	go tool cover -html cover.out
-
-cover:
 	@echo "mode: count" > coverage-all.out
 	$(foreach pkg,$(PACKAGES),\
 		go test -coverprofile=coverage.out -covermode=count $(pkg);\
