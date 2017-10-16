@@ -29,9 +29,7 @@ type dummyBtcrpcclient struct {
 
 func newDummyBtcrpcclient(t *testing.T) *dummyBtcrpcclient {
 	db, err := bolt.Open("./test.db", 0600, nil)
-	if err != nil {
-		t.Fatalf(err)
-	}
+	require.NoError(t, err)
 
 	return &dummyBtcrpcclient{db: db}
 }

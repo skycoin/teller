@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"errors"
 	"sync"
 	"testing"
 
@@ -302,7 +303,124 @@ func TestRunSend(t *testing.T) {
 	case <-time.After(dbScanTimeout):
 		t.Fatal("Waiting for confirmed deposit timed out")
 	}
+}
 
+func TestSendFailure(t *testing.T) {
+	// Test that we save the rate when first creating, not on send
+	// To do this, force the sender to return errors to block the transition to
+	// StatusWaitConfirm
+	e, shutdown := runExchange(t)
+	defer shutdown()
+	defer e.Shutdown()
+
+	skyAddr := "foo-sky-addr"
+	btcAddr := "foo-btc-addr"
+	err := e.store.BindAddress(skyAddr, btcAddr)
+	require.NoError(t, err)
+
+	// Force sender to return a send error so that the deposit stays at StatusWaitSend
+	e.sender.(*dummySender).sendErr = errors.New("fake send error")
+
+	dn := scanner.DepositNote{
+		Deposit: scanner.Deposit{
+			Address: btcAddr,
+			Value:   1e8,
+			Height:  20,
+			Tx:      "foo-tx",
+			N:       2,
+		},
+		ErrC: make(chan error, 1),
+	}
+	e.scanner.(*dummyScanner).addDeposit(dn)
+
+	// First loop calls saveIncomingDeposit
+	// nil is written to ErrC after this method finishes
+	err = <-dn.ErrC
+	require.NoError(t, err)
+
+	// Check the DepositInfo in the database
+	di, err := e.store.GetDepositInfo(dn.Deposit.TxN())
+	require.NoError(t, err)
+	require.NotEmpty(t, di.UpdatedAt)
+	require.Equal(t, DepositInfo{
+		Seq:        1,
+		UpdatedAt:  di.UpdatedAt,
+		SkyAddress: skyAddr,
+		BtcAddress: btcAddr,
+		BtcTx:      dn.Deposit.TxN(),
+		Status:     StatusWaitSend,
+		SkyBtcRate: testSkyBtcRate,
+		Deposit:    dn.Deposit,
+	}, di)
+}
+
+func TestTxConfirmFailure(t *testing.T) {
+	e, shutdown := runExchange(t)
+	defer shutdown()
+	defer e.Shutdown()
+
+	skyAddr := "foo-sky-addr"
+	btcAddr := "foo-btc-addr"
+	err := e.store.BindAddress(skyAddr, btcAddr)
+	require.NoError(t, err)
+
+	txid := "foo-sky-txid"
+	e.sender.(*dummySender).addTxidResponse(txid)
+
+	// Force sender to return a confirm error so that the deposit stays at StatusWaitConfirm
+	e.sender.(*dummySender).confirmErr = errors.New("fake confirm error")
+
+	dn := scanner.DepositNote{
+		Deposit: scanner.Deposit{
+			Address: btcAddr,
+			Value:   1e8,
+			Height:  20,
+			Tx:      "foo-tx",
+			N:       2,
+		},
+		ErrC: make(chan error, 1),
+	}
+	e.scanner.(*dummyScanner).addDeposit(dn)
+
+	// First loop calls saveIncomingDeposit
+	// nil is written to ErrC after this method finishes
+	err = <-dn.ErrC
+	require.NoError(t, err)
+
+	// Wait for StatusWaitSend deposit in the database
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-time.After(dbCheckWaitTime):
+				// Check the DepositInfo in the database
+				di, err := e.store.GetDepositInfo(dn.Deposit.TxN())
+				require.NoError(t, err)
+				require.NotEmpty(t, di.UpdatedAt)
+				require.Equal(t, DepositInfo{
+					Seq:        1,
+					UpdatedAt:  di.UpdatedAt,
+					SkyAddress: skyAddr,
+					BtcAddress: btcAddr,
+					BtcTx:      dn.Deposit.TxN(),
+					Txid:       txid,
+					SkySent:    100e6,
+					Status:     StatusWaitConfirm,
+					SkyBtcRate: testSkyBtcRate,
+					Deposit:    dn.Deposit,
+				}, di)
+
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(dbScanTimeout):
+		t.Fatal("Waiting to check for StatusWaitSend deposits timed out")
+	}
 }
 
 func TestQuitBeforeConfirm(t *testing.T) {
@@ -553,9 +671,4 @@ func TestProcessWaitSendDeposits(t *testing.T) {
 	})
 }
 
-// TODO -- test various failure cases
-// TODO -- test resuming state
-
-// TODO -- test that we save the rate when first creating, not on send
-// To do this, force the sender to return errors to block the transition to
-// StatusWaitConfirm
+// TODO -- mock exchange.Store and test error conditions

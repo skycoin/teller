@@ -14,7 +14,7 @@ func TestNewStore(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	_, err := newStore(db, testutil.NewLogger(t))
+	_, err := NewStore(testutil.NewLogger(t), db)
 	require.NoError(t, err)
 
 	// check the buckets
@@ -32,7 +32,7 @@ func TestAddDepositInfo(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db, testutil.NewLogger(t))
+	s, err := NewStore(testutil.NewLogger(t), db)
 	require.NoError(t, err)
 
 	err = s.AddDepositInfo(DepositInfo{
@@ -95,7 +95,7 @@ func TestAddDepositInfo(t *testing.T) {
 func TestBindAddress(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
-	s, err := newStore(db, testutil.NewLogger(t))
+	s, err := NewStore(testutil.NewLogger(t), db)
 	require.NoError(t, err)
 
 	err = s.BindAddress("sa1", "ba1")
@@ -120,7 +120,7 @@ func TestGetBindAddress(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db, testutil.NewLogger(t))
+	s, err := NewStore(testutil.NewLogger(t), db)
 	require.NoError(t, err)
 
 	// init the bind address bucket
@@ -185,7 +185,7 @@ func TestGetDepositInfo(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db, testutil.NewLogger(t))
+	s, err := NewStore(testutil.NewLogger(t), db)
 	require.NoError(t, err)
 
 	err = s.AddDepositInfo(DepositInfo{
@@ -208,7 +208,7 @@ func TestUpdateDepositInfo(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db, testutil.NewLogger(t))
+	s, err := NewStore(testutil.NewLogger(t), db)
 	require.NoError(t, err)
 
 	err = s.AddDepositInfo(DepositInfo{
@@ -283,7 +283,7 @@ func TestGetDepositInfoOfSkyAddr(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db, testutil.NewLogger(t))
+	s, err := NewStore(testutil.NewLogger(t), db)
 	require.NoError(t, err)
 
 	s.BindAddress("skyaddr1", "btcaddr1")
@@ -306,7 +306,7 @@ func TestGetDepositInfoArray(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := newStore(db, testutil.NewLogger(t))
+	s, err := NewStore(testutil.NewLogger(t), db)
 	require.NoError(t, err)
 
 	dpis := []DepositInfo{
@@ -350,4 +350,49 @@ func TestGetDepositInfoArray(t *testing.T) {
 	require.Equal(t, dpis[0].Status, ds1[0].Status)
 	require.Equal(t, dpis[0].BtcAddress, ds1[0].BtcAddress)
 	require.Equal(t, dpis[0].SkyAddress, ds1[0].SkyAddress)
+}
+
+func TestIsValidBtcTx(t *testing.T) {
+	cases := []struct {
+		name  string
+		valid bool
+		btctx string
+	}{
+		{
+			"empty string",
+			false,
+			"",
+		},
+		{
+			"colon only",
+			false,
+			":",
+		},
+		{
+			"multiple colons",
+			false,
+			"txid:2:2",
+		},
+		{
+			"no txid",
+			false,
+			":2",
+		},
+		{
+			"no n",
+			false,
+			"txid:",
+		},
+		{
+			"n not int",
+			false,
+			"txid:b",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.valid, isValidBtcTx(tc.btctx))
+		})
+	}
 }

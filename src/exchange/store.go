@@ -32,16 +32,16 @@ var (
 	skyDepositSeqsIndexBkt = []byte("sky_deposit_seqs_index")
 )
 
-// store storage for exchange
-type store struct {
+// Store storage for exchange
+type Store struct {
 	db  *bolt.DB
 	log logrus.FieldLogger
 }
 
-// newStore creates a store instance
-func newStore(db *bolt.DB, log logrus.FieldLogger) (*store, error) {
+// NewStore creates a Store instance
+func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 	if db == nil {
-		return nil, errors.New("new exchange store failed, db is nil")
+		return nil, errors.New("new exchange Store failed, db is nil")
 	}
 
 	if err := db.Update(func(tx *bolt.Tx) error {
@@ -73,15 +73,15 @@ func newStore(db *bolt.DB, log logrus.FieldLogger) (*store, error) {
 		return nil, err
 	}
 
-	return &store{
+	return &Store{
 		db:  db,
-		log: log.WithField("prefix", "exchange.store"),
+		log: log.WithField("prefix", "exchange.Store"),
 	}, nil
 }
 
 // GetBindAddress returns bound skycoin address of given bitcoin address.
 // If no skycoin address is found, returns empty string and nil error.
-func (s *store) GetBindAddress(btcAddr string) (string, error) {
+func (s *Store) GetBindAddress(btcAddr string) (string, error) {
 	skyAddr := ""
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
@@ -103,7 +103,7 @@ func (s *store) GetBindAddress(btcAddr string) (string, error) {
 	return skyAddr, nil
 }
 
-func (s *store) BindAddress(skyAddr, btcAddr string) error {
+func (s *Store) BindAddress(skyAddr, btcAddr string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		// update index of skycoin address and the deposit seq
 		var addrs []string
@@ -147,7 +147,7 @@ func isValidBtcTx(btcTx string) bool {
 }
 
 // AddDepositInfo adds deposit info into storage, return seq or error
-func (s *store) AddDepositInfo(dpinfo DepositInfo) error {
+func (s *Store) AddDepositInfo(dpinfo DepositInfo) error {
 	log := s.log.WithField("depositInfo", dpinfo)
 
 	if !isValidBtcTx(dpinfo.BtcTx) {
@@ -195,7 +195,7 @@ func (s *store) AddDepositInfo(dpinfo DepositInfo) error {
 }
 
 // GetDepositInfo returns depsoit info of given btc address
-func (s *store) GetDepositInfo(btcTx string) (DepositInfo, error) {
+func (s *Store) GetDepositInfo(btcTx string) (DepositInfo, error) {
 	var dpi DepositInfo
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
@@ -208,7 +208,7 @@ func (s *store) GetDepositInfo(btcTx string) (DepositInfo, error) {
 }
 
 // GetDepositInfoArray returns filtered deposit info
-func (s *store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
+func (s *Store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
 	var dpis []DepositInfo
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
@@ -231,39 +231,9 @@ func (s *store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
 	return dpis, nil
 }
 
-// UpdateDepositInfo updates deposit info. The update func takes a DepositInfo
-// and returns a modified copy of it.
-func (s *store) UpdateDepositInfo(btcTx string, update func(DepositInfo) DepositInfo) (DepositInfo, error) {
-	log := s.log.WithField("btcTx", btcTx)
-
-	var dpi DepositInfo
-	if err := s.db.Update(func(tx *bolt.Tx) error {
-		if err := dbutil.GetBucketObject(tx, depositInfoBkt, btcTx, &dpi); err != nil {
-			return err
-		}
-
-		log = log.WithField("DepositInfo", dpi)
-
-		if dpi.BtcTx != btcTx {
-			log.Error("DepositInfo.BtcTx does not match btcTx")
-			err := fmt.Errorf("DepositInfo %+v saved under different key %s", dpi, btcTx)
-			return err
-		}
-
-		dpi = update(dpi)
-		dpi.UpdatedAt = time.Now().UTC().Unix()
-
-		return dbutil.PutBucketValue(tx, depositInfoBkt, btcTx, dpi)
-	}); err != nil {
-		return DepositInfo{}, err
-	}
-
-	return dpi, nil
-}
-
 // GetDepositInfoOfSkyAddress returns all deposit info that are bound
 // to the given skycoin address
-func (s *store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error) {
+func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error) {
 	var dpis []DepositInfo
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
@@ -323,8 +293,38 @@ func (s *store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 	return dpis, nil
 }
 
+// UpdateDepositInfo updates deposit info. The update func takes a DepositInfo
+// and returns a modified copy of it.
+func (s *Store) UpdateDepositInfo(btcTx string, update func(DepositInfo) DepositInfo) (DepositInfo, error) {
+	log := s.log.WithField("btcTx", btcTx)
+
+	var dpi DepositInfo
+	if err := s.db.Update(func(tx *bolt.Tx) error {
+		if err := dbutil.GetBucketObject(tx, depositInfoBkt, btcTx, &dpi); err != nil {
+			return err
+		}
+
+		log = log.WithField("DepositInfo", dpi)
+
+		if dpi.BtcTx != btcTx {
+			log.Error("DepositInfo.BtcTx does not match btcTx")
+			err := fmt.Errorf("DepositInfo %+v saved under different key %s", dpi, btcTx)
+			return err
+		}
+
+		dpi = update(dpi)
+		dpi.UpdatedAt = time.Now().UTC().Unix()
+
+		return dbutil.PutBucketValue(tx, depositInfoBkt, btcTx, dpi)
+	}); err != nil {
+		return DepositInfo{}, err
+	}
+
+	return dpi, nil
+}
+
 // GetSkyBindBtcAddresses returns the btc addresses of the given sky address bound
-func (s *store) GetSkyBindBtcAddresses(skyAddr string) ([]string, error) {
+func (s *Store) GetSkyBindBtcAddresses(skyAddr string) ([]string, error) {
 	var addrs []string
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
@@ -339,7 +339,7 @@ func (s *store) GetSkyBindBtcAddresses(skyAddr string) ([]string, error) {
 }
 
 // GetSkyBindBtcAddressesTx returns the btc addresses of the given sky address bound
-func (s *store) GetSkyBindBtcAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, error) {
+func (s *Store) GetSkyBindBtcAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, error) {
 	var addrs []string
 	if err := dbutil.GetBucketObject(tx, skyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
 		switch err.(type) {

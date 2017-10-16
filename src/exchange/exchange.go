@@ -48,7 +48,7 @@ type Exchange struct {
 	cfg         Config
 	scanner     scanner.Scanner // scanner provides APIs for interacting with the scan service
 	sender      sender.Sender   // sender provides APIs for sending skycoin
-	store       *store          // deposit info storage
+	store       *Store          // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
 	depositChan chan DepositInfo
@@ -62,7 +62,7 @@ type Config struct {
 
 // NewExchange creates exchange service
 func NewExchange(log logrus.FieldLogger, db *bolt.DB, scanner scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
-	s, err := newStore(db, log)
+	s, err := NewStore(log, db)
 	if err != nil {
 		return nil, err
 	}
@@ -127,6 +127,7 @@ func (s *Exchange) Run() error {
 	go func() {
 		defer wg.Done()
 
+		log := log.WithField("goroutine", "sendSky")
 		for {
 			select {
 			case <-s.quit:
@@ -157,6 +158,7 @@ func (s *Exchange) Run() error {
 	go func() {
 		defer wg.Done()
 
+		log := log.WithField("goroutine", "watchDeposits")
 		for {
 			select {
 			case <-s.quit:
