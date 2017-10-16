@@ -124,6 +124,7 @@ type TextFormatter struct {
 	isTerminal bool
 
 	sync.Once
+	sync.Mutex
 }
 
 func getCompiledColor(main string, fallback string) func(string) string {
@@ -189,7 +190,7 @@ func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		b = &bytes.Buffer{}
 	}
 
-	prefixFieldClashes(entry.Data)
+	f.prefixFieldClashes(entry.Data)
 
 	f.Do(func() { f.init(entry) })
 
@@ -423,7 +424,10 @@ func (f *TextFormatter) appendValue(b *bytes.Buffer, value interface{}) {
 // it'll be logged as:
 //
 //  {"level": "info", "fields.level": 1, "msg": "hello", "time": "..."}
-func prefixFieldClashes(data logrus.Fields) {
+func (f *TextFormatter) prefixFieldClashes(data logrus.Fields) {
+	f.Lock()
+	defer f.Unlock()
+
 	if t, ok := data["time"]; ok {
 		data["fields.time"] = t
 	}

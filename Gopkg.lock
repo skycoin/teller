@@ -59,12 +59,6 @@
   revision = "c62d95b8416e0a966a4b1483bce7e61a3dfead01"
 
 [[projects]]
-  name = "github.com/fortytw2/leaktest"
-  packages = ["."]
-  revision = "7dad53304f9614c1c365755c1176a8e876fee3e8"
-  version = "v1.1.0"
-
-[[projects]]
   name = "github.com/google/gops"
   packages = ["agent","internal","signal"]
   revision = "fa6968806ca68b7db113256f300d82b5206a2c3c"
@@ -73,8 +67,8 @@
 [[projects]]
   name = "github.com/gz-c/logrus-prefixed-formatter"
   packages = ["."]
-  revision = "727ac21431fc93ba46b0076711e2e0d62e44aae7"
-  version = "v0.6.5"
+  revision = "f9160761b03e8bc692ba96c26940cc56876f7b54"
+  version = "v0.7.0"
 
 [[projects]]
   name = "github.com/mattn/go-colorable"
@@ -175,6 +169,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "54dc80b9f546d82ac101e6374587b663469b3150ce456eee9267528e517a1c94"
+  inputs-digest = "e83dc0ba9b94721bdaec327c17894e84d7ce597dad142f95f2d4443cfb6268cb"
   solver-name = "gps-cdcl"
   solver-version = 1
