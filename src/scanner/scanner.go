@@ -12,9 +12,7 @@ import (
 type Scanner interface {
 	AddScanAddress(string) error
 	GetScanAddresses() ([]string, error)
-	GetDepositValue() <-chan DepositNote
-	Run() error
-	Shutdown()
+	GetDeposit() <-chan DepositNote
 }
 
 // BtcRPCClient rpcclient interface
@@ -24,16 +22,16 @@ type BtcRPCClient interface {
 	Shutdown()
 }
 
-// DepositNote wraps a DepositValue with an ack channel
+// DepositNote wraps a Deposit with an ack channel
 type DepositNote struct {
-	DepositValue
-	AckC chan struct{}
+	Deposit
+	ErrC chan error
 }
 
-func makeDepositNote(dv DepositValue) DepositNote {
+func makeDepositNote(dv Deposit) DepositNote {
 	return DepositNote{
-		DepositValue: dv,
-		AckC:         make(chan struct{}, 1),
+		Deposit: dv,
+		ErrC:    make(chan error, 1),
 	}
 }
 
@@ -42,17 +40,17 @@ type Config struct {
 	ScanPeriod time.Duration // scan period in seconds
 }
 
-// DepositValue struct
-type DepositValue struct {
-	Address string // deposit address
-	Value   int64  // deposit amount. For BTC, measured in satoshis.
-	Height  int64  // the block height
-	Tx      string // the transaction id
-	N       uint32 // the index of vout in the tx
-	IsUsed  bool   // whether this dv is used
+// Deposit struct
+type Deposit struct {
+	Address   string // deposit address
+	Value     int64  // deposit amount. For BTC, measured in satoshis.
+	Height    int64  // the block height
+	Tx        string // the transaction id
+	N         uint32 // the index of vout in the tx
+	Processed bool   // whether this was received by the exchange and saved
 }
 
 // TxN returns $tx:$n formatted ID string
-func (d DepositValue) TxN() string {
+func (d Deposit) TxN() string {
 	return fmt.Sprintf("%s:%d", d.Tx, d.N)
 }

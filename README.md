@@ -312,6 +312,6 @@ Note: Saves list of btc txid:seq (as JSON)
 Bucket: deposit_value
 File: scanner/store.go
 
-Maps: btcTx[%tx:%n] -> scanner.DepositValue
-Note: Maps a btc txid:seq to scanner.DepositValue struct
+Maps: btcTx[%tx:%n] -> scanner.Deposit
+Note: Maps a btc txid:seq to scanner.Deposit struct
 ```

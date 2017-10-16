@@ -189,8 +189,6 @@ func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		b = &bytes.Buffer{}
 	}
 
-	prefixFieldClashes(entry.Data)
-
 	f.Do(func() { f.init(entry) })
 
 	isFormatted := f.ForceFormatting || f.isTerminal
@@ -411,28 +409,5 @@ func (f *TextFormatter) appendValue(b *bytes.Buffer, value interface{}) {
 		}
 	default:
 		fmt.Fprint(b, value)
-	}
-}
-
-// This is to not silently overwrite `time`, `msg` and `level` fields when
-// dumping it. If this code wasn't there doing:
-//
-//  logrus.WithField("level", 1).Info("hello")
-//
-// would just silently drop the user provided level. Instead with this code
-// it'll be logged as:
-//
-//  {"level": "info", "fields.level": 1, "msg": "hello", "time": "..."}
-func prefixFieldClashes(data logrus.Fields) {
-	if t, ok := data["time"]; ok {
-		data["fields.time"] = t
-	}
-
-	if m, ok := data["msg"]; ok {
-		data["fields.msg"] = m
-	}
-
-	if l, ok := data["level"]; ok {
-		data["fields.level"] = l
 	}
 }

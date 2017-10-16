@@ -13,7 +13,12 @@ import (
 // ErrDepositAddressEmpty represents all deposit addresses are used
 var ErrDepositAddressEmpty = errors.New("Deposit address pool is empty")
 
-// Addrs manages deposit bitcoin address
+// AddrGenerator generate new deposit address
+type AddrGenerator interface {
+	NewAddress() (string, error)
+}
+
+// Addrs manages deposit addresses
 type Addrs struct {
 	sync.RWMutex
 	log       logrus.FieldLogger

@@ -1,6 +1,7 @@
 package sender
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/skycoin/skycoin/src/api/cli"
@@ -16,15 +17,15 @@ type RPC struct {
 	rpcClient  *webrpc.Client
 }
 
-// New creates RPC instance
-func NewRPC(wltFile, rpcAddr string) *RPC {
+// NewRPC creates RPC instance
+func NewRPC(wltFile, rpcAddr string) (*RPC, error) {
 	wlt, err := wallet.Load(wltFile)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
 	if len(wlt.Entries) == 0 {
-		panic("Wallet is empty")
+		return nil, errors.New("Wallet is empty")
 	}
 
 	rpcClient := &webrpc.Client{
@@ -35,7 +36,7 @@ func NewRPC(wltFile, rpcAddr string) *RPC {
 		walletFile: wltFile,
 		changeAddr: wlt.Entries[0].Address.String(),
 		rpcClient:  rpcClient,
-	}
+	}, nil
 }
 
 // Send sends coins to recv address

@@ -34,7 +34,7 @@ func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositF
 				BtcAddress: dpi.BtcAddress,
 				SkyAddress: dpi.SkyAddress,
 				Status:     dpi.Status.String(),
-				UpdateAt:   dpi.UpdatedAt,
+				UpdatedAt:  dpi.UpdatedAt,
 				Txid:       dpi.Txid,
 			})
 		}
@@ -148,7 +148,7 @@ func TestRunMonitor(t *testing.T) {
 					for _, s := range st {
 						dss = append(dss, exchange.DepositInfo{
 							Seq:        s.Seq,
-							UpdatedAt:  s.UpdateAt,
+							UpdatedAt:  s.UpdatedAt,
 							Status:     exchange.NewStatusFromStr(s.Status),
 							BtcAddress: s.BtcAddress,
 							SkyAddress: s.SkyAddress,

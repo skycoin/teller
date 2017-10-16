@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
@@ -28,11 +27,9 @@ type dummyBtcrpcclient struct {
 	lastBlock blockHashHeight
 }
 
-func newDummyBtcrpcclient() *dummyBtcrpcclient {
+func newDummyBtcrpcclient(t *testing.T) *dummyBtcrpcclient {
 	db, err := bolt.Open("./test.db", 0600, nil)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
 
 	return &dummyBtcrpcclient{db: db}
 }
@@ -86,7 +83,7 @@ func TestScannerRun(t *testing.T) {
 
 	log := testutil.NewLogger(t)
 
-	rpcclient := newDummyBtcrpcclient()
+	rpcclient := newDummyBtcrpcclient(t)
 	rpcclient.lastBlock = blockHashHeight{
 		Hash:   "00000000000001749cf1a15c5af397a04a18d09e9bc902b6ce70f64bc19acc98",
 		Height: 235203,
@@ -98,7 +95,7 @@ func TestScannerRun(t *testing.T) {
 	}
 
 	scr, err := NewBTCScanner(log, db, rpcclient, Config{
-		ScanPeriod: 5,
+		ScanPeriod: time.Second * 1,
 	})
 
 	require.NoError(t, err)
@@ -109,32 +106,23 @@ func TestScannerRun(t *testing.T) {
 
 	time.AfterFunc(time.Second, func() {
 		var dvs []DepositNote
-		for dv := range scr.GetDepositValue() {
+		for dv := range scr.GetDeposit() {
 			dvs = append(dvs, dv)
 			time.Sleep(100 * time.Millisecond)
-			dv.AckC <- struct{}{}
+			dv.ErrC <- nil
 		}
 		require.Equal(t, 127, len(dvs))
 
 		// check all deposit value's
 		db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
-				key := fmt.Sprintf("%v:%v", dv.Tx, dv.N)
-				var d DepositValue
-				require.Nil(t, dbutil.GetBucketObject(tx, depositValueBkt, key, &d))
-				require.True(t, d.IsUsed)
-
-				idxs, err := scr.store.getDepositValueIndexTx(tx)
-				require.NoError(t, err)
-				require.Len(t, idxs, 0)
+				var d Deposit
+				require.Nil(t, dbutil.GetBucketObject(tx, depositBkt, dv.TxN(), &d))
+				require.True(t, d.Processed)
 			}
 
 			return nil
 		})
-
-		_, err := scr.store.popDepositValue()
-		require.Error(t, err)
-		require.IsType(t, DepositValuesEmptyErr{}, err)
 	})
 
 	time.AfterFunc(15*time.Second, func() {

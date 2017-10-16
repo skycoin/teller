@@ -33,6 +33,10 @@ func (de dummyExchanger) GetDepositStatuses(skyAddr string) ([]exchange.DepositS
 	return nil, nil
 }
 
+func (de dummyExchanger) GetDepositStatusDetail(flt exchange.DepositFilter) ([]exchange.DepositStatusDetail, error) {
+	return nil, nil
+}
+
 func (de dummyExchanger) BindNum(skyAddr string) (int, error) {
 	if de.skyAddrs == nil {
 		return 0, nil
