@@ -63,4 +63,4 @@
 
 [[constraint]]
   name = "github.com/gz-c/logrus-prefixed-formatter"
-  version = "v0.7.0"
+  version = "v0.7.1"

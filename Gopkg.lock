@@ -67,8 +67,8 @@
 [[projects]]
   name = "github.com/gz-c/logrus-prefixed-formatter"
   packages = ["."]
-  revision = "f9160761b03e8bc692ba96c26940cc56876f7b54"
-  version = "v0.7.0"
+  revision = "3f60c5b6f7ebd01d3bbda8ccc53c7bebd881caee"
+  version = "v0.7.1"
 
 [[projects]]
   name = "github.com/mattn/go-colorable"
@@ -169,6 +169,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e83dc0ba9b94721bdaec327c17894e84d7ce597dad142f95f2d4443cfb6268cb"
+  inputs-digest = "3d8e6a80dc8147d01ddea107fd7a858c241a43940f7bef87e5e4bb10ef6278c5"
   solver-name = "gps-cdcl"
   solver-version = 1
