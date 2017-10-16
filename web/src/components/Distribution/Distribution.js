@@ -8,17 +8,17 @@ import Helmet from 'react-helmet';
 import { Flex, Box } from 'grid-styled';
 import { FormattedMessage, FormattedHTMLMessage, injectIntl } from 'react-intl';
 import { rem } from 'polished';
+import { COLORS, SPACE, BOX_SHADOWS, BORDER_RADIUS, DISTRIBUTION_END, DISTRIBUTION_START } from 'config';
 
-import { media } from '@skycoin/utils';
-import Button from '@skycoin/button';
-import Container from '@skycoin/container';
-import Footer from '@skycoin/footer';
-import Header from '@skycoin/header';
-import Heading from '@skycoin/heading';
-import Input from '@skycoin/input';
-import Modal, { styles } from '@skycoin/modal';
-import Text from '@skycoin/text';
-import { COLORS, SPACE, BOX_SHADOWS, BORDER_RADIUS, DISTRIBUTION_END, DISTRIBUTION_START } from '../../config';
+import Button from 'components/Button';
+import Container from 'components/Container';
+import Footer from 'components/Footer';
+import Header from 'components/Header';
+import Heading from 'components/Heading';
+import Input from 'components/Input';
+import Modal, { styles } from 'components/Modal';
+import Text from 'components/Text';
+import media from '../../utils/media';
 
 import { checkStatus, getAddress } from '../../utils/distributionAPI';
 
