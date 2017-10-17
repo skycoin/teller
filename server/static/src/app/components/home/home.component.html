@@ -1,0 +1,55 @@
+<div class="count" *ngIf="count !== undefined">
+  All: {{count.All}}
+  <br>
+  Free: {{count.Free}}
+  <br>
+  Used: {{count.Used}}
+  <br>
+  <br>
+</div>
+
+
+
+
+<div class="buttons_wrap">
+<button mat-raised-button (click)="getBTC()">get addresses</button>
+<button mat-raised-button (click)="getFree()">get free addresses</button>
+<button mat-raised-button (click)="getUsed()">get used addresses</button>
+<button mat-raised-button (click)="getCount()">get count</button>
+</div>
+<ngx-datatable
+  class="material"
+  [rows]="rows"
+  [columns]="columns"
+  [columnMode]="'flex'"
+  [headerHeight]="50"
+  [footerHeight]="50"
+  [rowHeight]="40"
+  [limit]="10"
+  [scrollbarH]="true">
+  <ngx-datatable-column name="currency" [flexGrow]="1">
+    <ng-template let-value="value" ngx-datatable-cell-template>
+      {{value}}
+    </ng-template>
+  </ngx-datatable-column>
+  <ngx-datatable-column name="address" [flexGrow]="3">
+    <ng-template let-row="row" let-value="value" ngx-datatable-cell-template>
+      <a mat-menu-item routerLink="address/{{value}}">{{value}}</a>
+    </ng-template>
+  </ngx-datatable-column>
+  <ngx-datatable-column name="bind" [flexGrow]="1">
+    <ng-template let-row="row" let-value="value" ngx-datatable-cell-template>
+      <button class="bind_button" mat-raised-button color="primary" *ngIf="canBind" (click)="Bind(value)">bind</button>
+    </ng-template>
+  </ngx-datatable-column>
+</ngx-datatable>
+
+<div class="send_wrap">
+<mat-form-field class="example-full-width">
+  <textarea matInput rows="7" placeholder="Bitcoin Address" [(ngModel)]="newaddress"></textarea>
+</mat-form-field>
+<br>
+<button mat-raised-button color="primary" (click)="sendBTC()">send address</button>
+<br>
+</div>
+

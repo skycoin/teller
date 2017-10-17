@@ -1,0 +1,55 @@
+{{address}}
+
+<!--<div class="addr_info" *ngIf="info !== undefined">-->
+
+  <!--<table>-->
+    <!--<tr>-->
+      <!--<th>address:</th>-->
+      <!--<th>{{info.address}}</th>-->
+    <!--</tr>-->
+    <!--<tr>-->
+      <!--<th>hash160:</th>-->
+      <!--<th>{{info.hash160}}</th>-->
+    <!--</tr>-->
+    <!--<tr>-->
+      <!--<th>balance:</th>-->
+      <!--<th>{{info.final_balance}}</th>-->
+    <!--</tr>-->
+    <!--<tr>-->
+      <!--<th>transactions:</th>-->
+      <!--<th>{{info.n_tx}}</th>-->
+    <!--</tr>-->
+  <!--</table>-->
+<!--</div>-->
+
+
+<!--<div class="tx_wrap">-->
+  <!--<div class="table_title">Last transactions:</div>-->
+  <!--<ngx-datatable-->
+    <!--class="material"-->
+    <!--[rows]="rows"-->
+    <!--[columns]="columns"-->
+    <!--[columnMode]="'flex'"-->
+    <!--[headerHeight]="50"-->
+    <!--[footerHeight]="50"-->
+    <!--[rowHeight]="40"-->
+    <!--[limit]="10"-->
+    <!--[scrollbarH]="true">-->
+    <!--<ngx-datatable-column name="index" [flexGrow]="1">-->
+      <!--<ng-template let-value="value" ngx-datatable-cell-template>-->
+        <!--{{value}}-->
+      <!--</ng-template>-->
+    <!--</ngx-datatable-column>-->
+    <!--<ngx-datatable-column name="block" [flexGrow]="1">-->
+      <!--<ng-template let-row="row" let-value="value" ngx-datatable-cell-template>-->
+        <!--{{value}}-->
+      <!--</ng-template>-->
+    <!--</ngx-datatable-column>-->
+    <!--<ngx-datatable-column name="hash" [flexGrow]="4">-->
+      <!--<ng-template let-row="row" let-value="value" ngx-datatable-cell-template>-->
+        <!--{{value}}-->
+      <!--</ng-template>-->
+    <!--</ngx-datatable-column>-->
+  <!--</ngx-datatable>-->
+<!--</div>-->
+

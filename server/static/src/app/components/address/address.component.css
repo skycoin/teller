@@ -1,0 +1,27 @@
+.addr_info {
+  font-family: "Roboto", sans-serif;
+  font-weight: normal;
+  color: #fff;
+  background-color: #29b6f6;
+  margin: 40px;
+  padding: 20px;
+}
+
+.tx_wrap {
+  font-family: "Roboto", sans-serif;
+  font-weight: normal;
+  color: black;
+  margin: 40px;
+}
+
+th {
+  text-align: left;
+  padding-left: 10px;
+}
+
+.table_title {
+  font-size: 15pt;
+  color: black;
+  font-weight: normal;
+  margin-bottom: 5px;
+}
