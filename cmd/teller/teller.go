@@ -260,7 +260,13 @@ func run() error {
 	}
 
 	// create exchange service
-	exchangeClient, err := exchange.NewExchange(log, db, scanRPC, sendRPC, exchange.Config{
+	exchangeStore, err := exchange.NewStore(log, db)
+	if err != nil {
+		log.WithError(err).Error("exchange.NewStore failed")
+		return err
+	}
+
+	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanRPC, sendRPC, exchange.Config{
 		Rate: cfg.ExchangeRate,
 	})
 	if err != nil {

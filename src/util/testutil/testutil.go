@@ -7,6 +7,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
+	logrus_test "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/util/logger"
@@ -27,8 +28,12 @@ func PrepareDB(t *testing.T) (*bolt.DB, func()) {
 }
 
 // NewLogger returns a logger that only writes to stdout and with debug level
-func NewLogger(t *testing.T) *logrus.Logger {
+func NewLogger(t *testing.T) (*logrus.Logger, *logrus_test.Hook) {
 	log, err := logger.NewLogger("", true)
 	require.NoError(t, err)
-	return log
+
+	// Attach a log recorder for test inspection
+	hook := logrus_test.NewLocal(log)
+
+	return log, hook
 }

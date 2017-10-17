@@ -8,10 +8,14 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/sirupsen/logrus"
+	logrus_test "github.com/sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 type dummySender struct {
@@ -133,13 +137,16 @@ func (scan *dummyScanner) stop() {
 }
 
 const (
-	testSkyBtcRate  = 100
-	dbScanTimeout   = time.Second * 3
-	dbCheckWaitTime = time.Millisecond * 300
+	testSkyBtcRate  int64 = 100
+	dbScanTimeout         = time.Second * 3
+	dbCheckWaitTime       = time.Millisecond * 300
 )
 
-func newTestExchange(t *testing.T, db *bolt.DB) *Exchange {
-	e, err := NewExchange(testutil.NewLogger(t), db, newDummyScanner(), newDummySender(), Config{
+func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
+	store, err := NewStore(log, db)
+	require.NoError(t, err)
+
+	e, err := NewExchange(log, store, newDummyScanner(), newDummySender(), Config{
 		Rate: testSkyBtcRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 	})
@@ -147,10 +154,10 @@ func newTestExchange(t *testing.T, db *bolt.DB) *Exchange {
 	return e
 }
 
-func setupExchange(t *testing.T) (*Exchange, func(), func()) {
+func setupExchange(t *testing.T, log *logrus.Logger) (*Exchange, func(), func()) {
 	db, shutdownDB := testutil.PrepareDB(t)
 
-	e := newTestExchange(t, db)
+	e := newTestExchange(t, log, db)
 
 	done := make(chan struct{})
 	run := func() {
@@ -167,29 +174,55 @@ func setupExchange(t *testing.T) (*Exchange, func(), func()) {
 	return e, run, shutdown
 }
 
-func runExchange(t *testing.T) (*Exchange, func()) {
-	e, run, shutdown := setupExchange(t)
+func runExchange(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
+	log, hook := testutil.NewLogger(t)
+	e, run, shutdown := setupExchange(t, log)
 	go run()
-	return e, shutdown
+	return e, shutdown, hook
+}
+
+func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
+	store := &MockStore{}
+	log, hook := testutil.NewLogger(t)
+
+	e, err := NewExchange(log, store, newDummyScanner(), newDummySender(), Config{
+		Rate: testSkyBtcRate,
+		TxConfirmationCheckWait: time.Millisecond * 100,
+	})
+	require.NoError(t, err)
+
+	done := make(chan struct{})
+	run := func() {
+		err := e.Run()
+		require.NoError(t, err)
+		close(done)
+	}
+	go run()
+
+	shutdown := func() {
+		<-done
+	}
+
+	return e, shutdown, hook
 }
 
 func TestRunShutdown(t *testing.T) {
 	// Tests a simple start and stop, with no scanner activity
-	e, shutdown := runExchange(t)
+	e, shutdown, _ := runExchange(t)
 	defer shutdown()
 	defer e.Shutdown()
 }
 
 func TestRunScannerClosed(t *testing.T) {
 	// Tests that there is no problem when the scanner closes
-	e, shutdown := runExchange(t)
+	e, shutdown, _ := runExchange(t)
 	defer shutdown()
 	defer e.Shutdown()
 	e.scanner.(*dummyScanner).stop()
 }
 
 func TestRunSend(t *testing.T) {
-	e, shutdown := runExchange(t)
+	e, shutdown, _ := runExchange(t)
 	defer shutdown()
 	defer e.Shutdown()
 
@@ -309,7 +342,7 @@ func TestSendFailure(t *testing.T) {
 	// Test that we save the rate when first creating, not on send
 	// To do this, force the sender to return errors to block the transition to
 	// StatusWaitConfirm
-	e, shutdown := runExchange(t)
+	e, shutdown, _ := runExchange(t)
 	defer shutdown()
 	defer e.Shutdown()
 
@@ -355,7 +388,7 @@ func TestSendFailure(t *testing.T) {
 }
 
 func TestTxConfirmFailure(t *testing.T) {
-	e, shutdown := runExchange(t)
+	e, shutdown, _ := runExchange(t)
 	defer shutdown()
 	defer e.Shutdown()
 
@@ -424,7 +457,7 @@ func TestTxConfirmFailure(t *testing.T) {
 }
 
 func TestQuitBeforeConfirm(t *testing.T) {
-	e, shutdown := runExchange(t)
+	e, shutdown, _ := runExchange(t)
 	defer shutdown()
 
 	skyAddr := "foo-sky-addr"
@@ -510,7 +543,8 @@ func TestQuitBeforeConfirm(t *testing.T) {
 }
 
 func testRunProcessDepositBacklog(t *testing.T, dis []DepositInfo, configureSender func(*Exchange, DepositInfo)) {
-	e, run, shutdown := setupExchange(t)
+	log, _ := testutil.NewLogger(t)
+	e, run, shutdown := setupExchange(t, log)
 
 	for _, di := range dis {
 		configureSender(e, di)
@@ -669,6 +703,51 @@ func TestProcessWaitSendDeposits(t *testing.T) {
 		e.sender.(*dummySender).addTxidResponse(di.Txid)
 		e.sender.(*dummySender).setTxConfirmed(di.Txid)
 	})
+}
+
+func TestSaveIncomingDepositCreateDepositFailed(t *testing.T) {
+	e, shutdown, hook := runExchangeMockStore(t)
+	defer shutdown()
+	defer e.Shutdown()
+
+	btcAddr := "foo-btc-addr"
+	txid := "foo-sky-txid"
+	e.sender.(*dummySender).addTxidResponse(txid)
+
+	dn := scanner.DepositNote{
+		Deposit: scanner.Deposit{
+			Address: btcAddr,
+			Value:   1e8,
+			Height:  20,
+			Tx:      "foo-tx",
+			N:       2,
+		},
+		ErrC: make(chan error, 1),
+	}
+	e.scanner.(*dummyScanner).addDeposit(dn)
+
+	// Configure database mocks
+
+	// GetDepositInfoArray is called twice on startup
+	e.store.(*MockStore).On("GetDepositInfoArray", mock.MatchedBy(func(filt DepositFilter) bool {
+		return true
+	})).Return(nil, nil).Twice()
+
+	// Return error on GetOrCreateDepositInfo
+	createDepositErr := errors.New("GetOrCreateDepositInfo failed")
+	e.store.(*MockStore).On("GetOrCreateDepositInfo", dn.Deposit, testSkyBtcRate).Return(DepositInfo{}, createDepositErr)
+
+	// First loop calls saveIncomingDeposit
+	// err is written to ErrC after this method finishes
+	err := <-dn.ErrC
+	require.Error(t, err)
+	require.Equal(t, createDepositErr, err)
+
+	// Check that we logged the failed save, so that we can recover it later
+	logEntry := hook.LastEntry()
+	require.Equal(t, logEntry.Message, "saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted")
+	loggedDeposit := logEntry.Data["deposit"].(scanner.Deposit)
+	require.Equal(t, dn.Deposit, loggedDeposit)
 }
 
 // TODO -- mock exchange.Store and test error conditions

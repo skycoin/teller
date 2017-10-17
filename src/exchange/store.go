@@ -12,6 +12,7 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/util/dbutil"
 )
 
@@ -30,7 +31,27 @@ var (
 	// index bucket for skycoin address and deposit seqs, skycoin address as key
 	// deposit info seq array as value
 	skyDepositSeqsIndexBkt = []byte("sky_deposit_seqs_index")
+
+	// ErrNoBoundAddress is returned if no skycoin address is bound to a deposit's address
+	ErrNoBoundAddress = errors.New("Deposit has no bound skycoin address")
 )
+
+// Storer interface for exchange storage
+type Storer interface {
+	GetBindAddress(string) (string, error)
+	GetBindAddressTx(*bolt.Tx, string) (string, error)
+	BindAddress(string, string) error
+	GetOrCreateDepositInfo(scanner.Deposit, int64) (DepositInfo, error)
+	AddDepositInfo(DepositInfo) error
+	AddDepositInfoTx(*bolt.Tx, DepositInfo) error
+	GetDepositInfo(string) (DepositInfo, error)
+	GetDepositInfoTx(*bolt.Tx, string) (DepositInfo, error)
+	GetDepositInfoArray(DepositFilter) ([]DepositInfo, error)
+	GetDepositInfoOfSkyAddress(string) ([]DepositInfo, error)
+	UpdateDepositInfo(string, func(DepositInfo) DepositInfo) (DepositInfo, error)
+	GetSkyBindBtcAddresses(string) ([]string, error)
+	GetSkyBindBtcAddressesTx(*bolt.Tx, string) ([]string, error)
+}
 
 // Store storage for exchange
 type Store struct {
@@ -77,32 +98,37 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 		db:  db,
 		log: log.WithField("prefix", "exchange.Store"),
 	}, nil
+
 }
 
 // GetBindAddress returns bound skycoin address of given bitcoin address.
 // If no skycoin address is found, returns empty string and nil error.
 func (s *Store) GetBindAddress(btcAddr string) (string, error) {
-	skyAddr := ""
-
-	if err := s.db.View(func(tx *bolt.Tx) error {
+	var skyAddr string
+	err := s.db.View(func(tx *bolt.Tx) error {
 		var err error
-		skyAddr, err = dbutil.GetBucketString(tx, bindAddressBkt, btcAddr)
-
-		switch err.(type) {
-		case nil:
-			return nil
-		case dbutil.ObjectNotExistErr:
-			return nil
-		default:
-			return err
-		}
-	}); err != nil {
-		return "", err
-	}
-
-	return skyAddr, nil
+		skyAddr, err = s.GetBindAddressTx(tx, btcAddr)
+		return err
+	})
+	return skyAddr, err
 }
 
+// GetBindAddressTx returns bound skycoin address of given bitcoin address.
+// If no skycoin address is found, returns empty string and nil error.
+func (s *Store) GetBindAddressTx(tx *bolt.Tx, btcAddr string) (string, error) {
+	skyAddr, err := dbutil.GetBucketString(tx, bindAddressBkt, btcAddr)
+
+	switch err.(type) {
+	case nil:
+		return skyAddr, nil
+	case dbutil.ObjectNotExistErr:
+		return "", nil
+	default:
+		return "", err
+	}
+}
+
+// BindAddress binds a skycoin address to a BTC address
 func (s *Store) BindAddress(skyAddr, btcAddr string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		// update index of skycoin address and the deposit seq
@@ -122,6 +148,73 @@ func (s *Store) BindAddress(skyAddr, btcAddr string) error {
 
 		return dbutil.PutBucketValue(tx, bindAddressBkt, btcAddr, skyAddr)
 	})
+}
+
+// GetOrCreateDepositInfo creates a DepositInfo unless one exists with the DepositInfo.BtcTx key,
+// in which case it returns the existing DepositInfo.
+func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositInfo, error) {
+	log := s.log.WithField("deposit", dv)
+	log = log.WithField("rate", rate)
+
+	var finalDepositInfo DepositInfo
+	if err := s.db.Update(func(tx *bolt.Tx) error {
+		di, err := s.GetDepositInfoTx(tx, dv.TxN())
+
+		switch err.(type) {
+		case nil:
+			finalDepositInfo = di
+			return nil
+
+		case dbutil.ObjectNotExistErr:
+			log.Info("DepositInfo not found in DB, inserting")
+			skyAddr, err := s.GetBindAddressTx(tx, dv.Address)
+			if err != nil {
+				err = fmt.Errorf("GetBindAddress failed: %v", err)
+				log.WithError(err).Error()
+				return err
+			}
+
+			if skyAddr == "" {
+				err = ErrNoBoundAddress
+				log.WithError(err).Error()
+				return err
+			}
+
+			log = log.WithField("skyAddr", skyAddr)
+
+			di := DepositInfo{
+				SkyAddress: skyAddr,
+				BtcAddress: dv.Address,
+				BtcTx:      dv.TxN(),
+				Status:     StatusWaitSend,
+				// Save the rate at the time this deposit was noticed
+				SkyBtcRate: rate,
+				Deposit:    dv,
+			}
+
+			log = log.WithField("depositInfo", di)
+
+			if err := s.AddDepositInfoTx(tx, di); err != nil {
+				err = fmt.Errorf("AddDepositInfoTx failed: %v", err)
+				log.WithError(err).Error()
+				return err
+			}
+
+			finalDepositInfo = di
+
+			return nil
+
+		default:
+			err = fmt.Errorf("GetDepositInfo failed: %v", err)
+			log.WithError(err).Error()
+			return err
+		}
+	}); err != nil {
+		return DepositInfo{}, err
+	}
+
+	return finalDepositInfo, nil
+
 }
 
 func isValidBtcTx(btcTx string) bool {
@@ -147,60 +240,76 @@ func isValidBtcTx(btcTx string) bool {
 }
 
 // AddDepositInfo adds deposit info into storage, return seq or error
-func (s *Store) AddDepositInfo(dpinfo DepositInfo) error {
-	log := s.log.WithField("depositInfo", dpinfo)
+func (s *Store) AddDepositInfo(di DepositInfo) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
+		return s.AddDepositInfoTx(tx, di)
+	})
+}
 
-	if !isValidBtcTx(dpinfo.BtcTx) {
+// AddDepositInfoTx adds deposit info into storage, return seq or error
+func (s *Store) AddDepositInfoTx(tx *bolt.Tx, di DepositInfo) error {
+	log := s.log.WithField("depositInfo", di)
+
+	if !isValidBtcTx(di.BtcTx) {
 		log.Error("Invalid depositInfo.BtcTx")
-		return fmt.Errorf("btc txid \"%s\" is empty/invalid", dpinfo.BtcTx)
+		return fmt.Errorf("btc txid \"%s\" is empty/invalid", di.BtcTx)
 	}
 
-	if dpinfo.BtcAddress == "" {
+	if di.BtcAddress == "" {
 		return errors.New("btc address is empty")
 	}
 
-	return s.db.Update(func(tx *bolt.Tx) error {
-		// check if the dpi with BtcTx already exist
-		if hasKey, err := dbutil.BucketHasKey(tx, depositInfoBkt, dpinfo.BtcTx); err != nil {
+	// check if the dpi with BtcTx already exist
+	if hasKey, err := dbutil.BucketHasKey(tx, depositInfoBkt, di.BtcTx); err != nil {
+		return err
+	} else if hasKey {
+		return fmt.Errorf("deposit info of btctx %s already exists", di.BtcTx)
+	}
+
+	seq, err := dbutil.NextSequence(tx, depositInfoBkt)
+	if err != nil {
+		return err
+	}
+
+	di.Seq = seq
+	di.UpdatedAt = time.Now().UTC().Unix()
+
+	if err := dbutil.PutBucketValue(tx, depositInfoBkt, di.BtcTx, di); err != nil {
+		return err
+	}
+
+	// update btc_txids bucket
+	var txs []string
+	if err := dbutil.GetBucketObject(tx, btcTxsBkt, di.BtcAddress, &txs); err != nil {
+		switch err.(type) {
+		case dbutil.ObjectNotExistErr:
+		default:
 			return err
-		} else if hasKey {
-			return fmt.Errorf("deposit info of btctx %s already exists", dpinfo.BtcTx)
 		}
+	}
 
-		seq, err := dbutil.NextSequence(tx, depositInfoBkt)
-		if err != nil {
-			return err
-		}
-
-		dpinfo.Seq = seq
-		dpinfo.UpdatedAt = time.Now().UTC().Unix()
-
-		if err := dbutil.PutBucketValue(tx, depositInfoBkt, dpinfo.BtcTx, dpinfo); err != nil {
-			return err
-		}
-
-		// update btc_txids bucket
-		var txs []string
-		if err := dbutil.GetBucketObject(tx, btcTxsBkt, dpinfo.BtcAddress, &txs); err != nil {
-			switch err.(type) {
-			case dbutil.ObjectNotExistErr:
-			default:
-				return err
-			}
-		}
-
-		txs = append(txs, dpinfo.BtcTx)
-		return dbutil.PutBucketValue(tx, btcTxsBkt, dpinfo.BtcAddress, txs)
-	})
+	txs = append(txs, di.BtcTx)
+	return dbutil.PutBucketValue(tx, btcTxsBkt, di.BtcAddress, txs)
 }
 
 // GetDepositInfo returns depsoit info of given btc address
 func (s *Store) GetDepositInfo(btcTx string) (DepositInfo, error) {
+	var di DepositInfo
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		var err error
+		di, err = s.GetDepositInfoTx(tx, btcTx)
+		return err
+	})
+
+	return di, err
+}
+
+// GetDepositInfoTx returns depsoit info of given btc address
+func (s *Store) GetDepositInfoTx(tx *bolt.Tx, btcTx string) (DepositInfo, error) {
 	var dpi DepositInfo
 
-	if err := s.db.View(func(tx *bolt.Tx) error {
-		return dbutil.GetBucketObject(tx, depositInfoBkt, btcTx, &dpi)
-	}); err != nil {
+	if err := dbutil.GetBucketObject(tx, depositInfoBkt, btcTx, &dpi); err != nil {
 		return DepositInfo{}, err
 	}
 
