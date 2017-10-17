@@ -4,17 +4,113 @@ import (
 	"testing"
 
 	"github.com/boltdb/bolt"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/util/dbutil"
 	"github.com/skycoin/teller/src/util/testutil"
 )
+
+type MockStore struct {
+	mock.Mock
+}
+
+func (m *MockStore) GetBindAddress(btcAddr string) (string, error) {
+	args := m.Called(btcAddr)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockStore) GetBindAddressTx(tx *bolt.Tx, btcAddr string) (string, error) {
+	args := m.Called(tx, btcAddr)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockStore) BindAddress(skyAddr, btcAddr string) error {
+	args := m.Called(skyAddr, btcAddr)
+	return args.Error(0)
+}
+
+func (m *MockStore) AddDepositInfo(di DepositInfo) error {
+	args := m.Called(di)
+	return args.Error(0)
+}
+
+func (m *MockStore) AddDepositInfoTx(tx *bolt.Tx, di DepositInfo) error {
+	args := m.Called(tx, di)
+	return args.Error(0)
+}
+
+func (m *MockStore) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositInfo, error) {
+	args := m.Called(dv, rate)
+	return args.Get(0).(DepositInfo), args.Error(1)
+}
+
+func (m *MockStore) GetDepositInfo(btcTx string) (DepositInfo, error) {
+	args := m.Called(btcTx)
+	return args.Get(0).(DepositInfo), args.Error(1)
+}
+
+func (m *MockStore) GetDepositInfoTx(tx *bolt.Tx, btcTx string) (DepositInfo, error) {
+	args := m.Called(tx, btcTx)
+	return args.Get(0).(DepositInfo), args.Error(1)
+}
+
+func (m *MockStore) GetDepositInfoArray(filt DepositFilter) ([]DepositInfo, error) {
+	args := m.Called(filt)
+
+	dis := args.Get(0)
+	if dis == nil {
+		return nil, args.Error(1)
+	}
+
+	return dis.([]DepositInfo), args.Error(1)
+}
+
+func (m *MockStore) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error) {
+	args := m.Called(skyAddr)
+
+	dis := args.Get(0)
+	if dis == nil {
+		return nil, args.Error(1)
+	}
+
+	return dis.([]DepositInfo), args.Error(1)
+}
+
+func (m *MockStore) UpdateDepositInfo(btcTx string, f func(DepositInfo) DepositInfo) (DepositInfo, error) {
+	args := m.Called(btcTx, f)
+	return args.Get(0).(DepositInfo), args.Error(1)
+}
+
+func (m *MockStore) GetSkyBindBtcAddresses(skyAddr string) ([]string, error) {
+	args := m.Called(skyAddr)
+
+	btcAddrs := args.Get(0)
+	if btcAddrs == nil {
+		return nil, args.Error(1)
+	}
+
+	return btcAddrs.([]string), args.Error(1)
+}
+
+func (m *MockStore) GetSkyBindBtcAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, error) {
+	args := m.Called(tx, skyAddr)
+	addrs := args.Get(0)
+
+	if addrs == nil {
+		return nil, args.Error(1)
+	}
+
+	return addrs.([]string), args.Error(1)
+}
 
 func TestNewStore(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	_, err := NewStore(testutil.NewLogger(t), db)
+	log, _ := testutil.NewLogger(t)
+	_, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	// check the buckets
@@ -32,7 +128,8 @@ func TestAddDepositInfo(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := NewStore(testutil.NewLogger(t), db)
+	log, _ := testutil.NewLogger(t)
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	err = s.AddDepositInfo(DepositInfo{
@@ -95,7 +192,9 @@ func TestAddDepositInfo(t *testing.T) {
 func TestBindAddress(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
-	s, err := NewStore(testutil.NewLogger(t), db)
+
+	log, _ := testutil.NewLogger(t)
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	err = s.BindAddress("sa1", "ba1")
@@ -120,7 +219,8 @@ func TestGetBindAddress(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := NewStore(testutil.NewLogger(t), db)
+	log, _ := testutil.NewLogger(t)
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	// init the bind address bucket
@@ -185,7 +285,8 @@ func TestGetDepositInfo(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := NewStore(testutil.NewLogger(t), db)
+	log, _ := testutil.NewLogger(t)
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	err = s.AddDepositInfo(DepositInfo{
@@ -208,7 +309,8 @@ func TestUpdateDepositInfo(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := NewStore(testutil.NewLogger(t), db)
+	log, _ := testutil.NewLogger(t)
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	err = s.AddDepositInfo(DepositInfo{
@@ -283,7 +385,8 @@ func TestGetDepositInfoOfSkyAddr(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := NewStore(testutil.NewLogger(t), db)
+	log, _ := testutil.NewLogger(t)
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	s.BindAddress("skyaddr1", "btcaddr1")
@@ -306,7 +409,8 @@ func TestGetDepositInfoArray(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := NewStore(testutil.NewLogger(t), db)
+	log, _ := testutil.NewLogger(t)
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	dpis := []DepositInfo{
@@ -395,4 +499,22 @@ func TestIsValidBtcTx(t *testing.T) {
 			require.Equal(t, tc.valid, isValidBtcTx(tc.btctx))
 		})
 	}
+}
+
+func TestGetOrCreateDepositInfoNoBoundSkyAddr(t *testing.T) {
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
+
+	log, _ := testutil.NewLogger(t)
+	s, err := NewStore(log, db)
+	require.NoError(t, err)
+
+	var rate int64 = 100
+	dv := scanner.Deposit{
+		Address: "foo-btc-addr",
+	}
+
+	_, err = s.GetOrCreateDepositInfo(dv, rate)
+	require.Error(t, err)
+	require.Equal(t, err, ErrNoBoundAddress)
 }

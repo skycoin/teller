@@ -114,7 +114,7 @@
 
 [[projects]]
   name = "github.com/sirupsen/logrus"
-  packages = ["."]
+  packages = [".","hooks/test"]
   revision = "f006c2ac4710855cf0f916dd6b77acf6b048dc6e"
   version = "v1.0.3"
 
@@ -125,8 +125,14 @@
   version = "v0.20.0-alpha.1"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/stretchr/objx"
+  packages = ["."]
+  revision = "1a9d0bb9f541897e62256577b352fdbc1fb4fd94"
+
+[[projects]]
   name = "github.com/stretchr/testify"
-  packages = ["assert","require"]
+  packages = ["assert","mock","require"]
   revision = "69483b4bd14f5845b5a1e55bca19e954e827f1d0"
   version = "v1.1.4"
 
@@ -169,6 +175,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3d8e6a80dc8147d01ddea107fd7a858c241a43940f7bef87e5e4bb10ef6278c5"
+  inputs-digest = "10944de94e3288634100b7d0d12a913c8ab34c834480cbaac563949915b5f479"
   solver-name = "gps-cdcl"
   solver-version = 1

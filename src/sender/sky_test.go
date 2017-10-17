@@ -57,7 +57,7 @@ func (ds *dummySkycli) changeGetTxErr(err error) {
 }
 
 func TestSendService(t *testing.T) {
-	log := testutil.NewLogger(t)
+	log, _ := testutil.NewLogger(t)
 	dsc := newDummySkycli()
 	dsc.sendTxid = "1111"
 	s := NewService(Config{}, log, dsc)

@@ -81,7 +81,7 @@ func TestScannerRun(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	log := testutil.NewLogger(t)
+	log, _ := testutil.NewLogger(t)
 
 	rpcclient := newDummyBtcrpcclient(t)
 	rpcclient.lastBlock = blockHashHeight{

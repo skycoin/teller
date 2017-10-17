@@ -9,12 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
-	"github.com/skycoin/teller/src/util/dbutil"
 )
 
 const (
@@ -48,7 +46,7 @@ type Exchange struct {
 	cfg         Config
 	scanner     scanner.Scanner // scanner provides APIs for interacting with the scan service
 	sender      sender.Sender   // sender provides APIs for sending skycoin
-	store       *Store          // deposit info storage
+	store       Storer          // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
 	depositChan chan DepositInfo
@@ -61,12 +59,7 @@ type Config struct {
 }
 
 // NewExchange creates exchange service
-func NewExchange(log logrus.FieldLogger, db *bolt.DB, scanner scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
-	s, err := NewStore(log, db)
-	if err != nil {
-		return nil, err
-	}
-
+func NewExchange(log logrus.FieldLogger, store Storer, scanner scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
 	if cfg.Rate == 0 {
 		return nil, errors.New("SKY/BTC Rate must not be 0")
 	}
@@ -80,7 +73,7 @@ func NewExchange(log logrus.FieldLogger, db *bolt.DB, scanner scanner.Scanner, s
 		log:         log.WithField("prefix", "teller.exchange"),
 		scanner:     scanner,
 		sender:      sender,
-		store:       s,
+		store:       store,
 		quit:        make(chan struct{}),
 		done:        make(chan struct{}, 1),
 		depositChan: make(chan DepositInfo, 100),
@@ -207,9 +200,10 @@ func (s *Exchange) saveIncomingDeposit(dv scanner.Deposit) (DepositInfo, error) 
 
 	log.Info("Received bitcoin deposit")
 
-	di, err := s.getOrCreateDepositInfo(dv)
+	di, err := s.store.GetOrCreateDepositInfo(dv, s.cfg.Rate)
+	// di, err := s.getOrCreateDepositInfo(dv)
 	if err != nil {
-		log.WithError(err).Error("getOrCreateDepositInfo failed")
+		log.WithError(err).Error("GetOrCreateDepositInfo failed")
 		return DepositInfo{}, err
 	}
 
@@ -423,70 +417,6 @@ func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
 	log.Info("Sent skycoin")
 
 	return rsp, nil
-}
-
-func (s *Exchange) getOrCreateDepositInfo(dv scanner.Deposit) (DepositInfo, error) {
-	log := s.log.WithField("deposit", dv)
-
-	di, err := s.store.GetDepositInfo(dv.TxN())
-
-	switch err.(type) {
-	case nil:
-		return di, nil
-
-	case dbutil.ObjectNotExistErr:
-		log.Info("DepositInfo not found in DB, inserting")
-		di, err := s.createDepositInfo(dv)
-		if err != nil {
-			err = fmt.Errorf("createDepositInfo failed: %v", err)
-			log.WithError(err).Error()
-		}
-		return di, err
-
-	default:
-		err = fmt.Errorf("GetDepositInfo failed: %v", err)
-		log.WithError(err).Error()
-		return DepositInfo{}, err
-	}
-}
-
-func (s *Exchange) createDepositInfo(dv scanner.Deposit) (DepositInfo, error) {
-	log := s.log.WithField("deposit", dv)
-
-	skyAddr, err := s.store.GetBindAddress(dv.Address)
-	if err != nil {
-		err = fmt.Errorf("GetBindAddress failed: %v", err)
-		log.WithError(err).Error()
-		return DepositInfo{}, err
-	}
-
-	if skyAddr == "" {
-		err := errors.New("Deposit has no bound skycoin address")
-		log.WithError(err).Error()
-		return DepositInfo{}, err
-	}
-
-	log = log.WithField("skyAddr", skyAddr)
-
-	di := DepositInfo{
-		SkyAddress: skyAddr,
-		BtcAddress: dv.Address,
-		BtcTx:      dv.TxN(),
-		Status:     StatusWaitSend,
-		Deposit:    dv,
-		// Save the rate at the time this deposit was noticed
-		SkyBtcRate: s.cfg.Rate,
-	}
-
-	log = log.WithField("depositInfo", di)
-
-	if err := s.store.AddDepositInfo(di); err != nil {
-		err = fmt.Errorf("AddDepositInfo failed: %v", err)
-		log.WithError(err).Error()
-		return DepositInfo{}, err
-	}
-
-	return di, nil
 }
 
 // BindAddress binds deposit btc address with skycoin address, and
