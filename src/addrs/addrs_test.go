@@ -65,7 +65,7 @@ func TestNewAddress(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, used)
 
-	log, _ := testutil.NewLogger(t)
+	log, _ = testutil.NewLogger(t)
 	btca1, err := NewAddrs(log, db, addresses, "test_bucket")
 	require.NoError(t, err)
 
