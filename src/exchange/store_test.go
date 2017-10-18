@@ -105,16 +105,22 @@ func (m *MockStore) GetSkyBindBtcAddressesTx(tx *bolt.Tx, skyAddr string) ([]str
 	return addrs.([]string), args.Error(1)
 }
 
-func TestNewStore(t *testing.T) {
+func newTestStore(t *testing.T) (*Store, func()) {
 	db, shutdown := testutil.PrepareDB(t)
-	defer shutdown()
 
 	log, _ := testutil.NewLogger(t)
-	_, err := NewStore(log, db)
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
+	return s, shutdown
+}
+
+func TestNewStore(t *testing.T) {
+	s, shutdown := newTestStore(t)
+	defer shutdown()
+
 	// check the buckets
-	db.View(func(tx *bolt.Tx) error {
+	err := s.db.View(func(tx *bolt.Tx) error {
 		require.NotNil(t, tx.Bucket(exchangeMetaBkt))
 		require.NotNil(t, tx.Bucket(depositInfoBkt))
 		require.NotNil(t, tx.Bucket(bindAddressBkt))
@@ -122,17 +128,14 @@ func TestNewStore(t *testing.T) {
 		require.NotNil(t, tx.Bucket(btcTxsBkt))
 		return nil
 	})
+	require.NoError(t, err)
 }
 
 func TestAddDepositInfo(t *testing.T) {
-	db, shutdown := testutil.PrepareDB(t)
+	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	log, _ := testutil.NewLogger(t)
-	s, err := NewStore(log, db)
-	require.NoError(t, err)
-
-	err = s.AddDepositInfo(DepositInfo{
+	err := s.AddDepositInfo(DepositInfo{
 		BtcTx:      "btx1:2",
 		SkyAddress: "skyaddr1",
 		BtcAddress: "btcaddr1",
@@ -140,7 +143,7 @@ func TestAddDepositInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	// check in db
-	err = db.View(func(tx *bolt.Tx) error {
+	err = s.db.View(func(tx *bolt.Tx) error {
 		var dpi DepositInfo
 		err := dbutil.GetBucketObject(tx, depositInfoBkt, "btx1:2", &dpi)
 		require.NoError(t, err)
@@ -170,7 +173,7 @@ func TestAddDepositInfo(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = db.View(func(tx *bolt.Tx) error {
+	err = s.db.View(func(tx *bolt.Tx) error {
 		var dpi DepositInfo
 		err := dbutil.GetBucketObject(tx, depositInfoBkt, "btx1:2", &dpi)
 		require.NoError(t, err)
@@ -190,18 +193,14 @@ func TestAddDepositInfo(t *testing.T) {
 }
 
 func TestBindAddress(t *testing.T) {
-	db, shutdown := testutil.PrepareDB(t)
+	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	log, _ := testutil.NewLogger(t)
-	s, err := NewStore(log, db)
-	require.NoError(t, err)
-
-	err = s.BindAddress("sa1", "ba1")
+	err := s.BindAddress("sa1", "ba1")
 	require.NoError(t, err)
 
 	// check bucekt
-	db.View(func(tx *bolt.Tx) error {
+	err = s.db.View(func(tx *bolt.Tx) error {
 		bkt := tx.Bucket(bindAddressBkt)
 		require.NotNil(t, bkt)
 		v := bkt.Get([]byte("ba1"))
@@ -213,18 +212,15 @@ func TestBindAddress(t *testing.T) {
 		require.Equal(t, "ba1", addrs[0])
 		return nil
 	})
+	require.NoError(t, err)
 }
 
 func TestGetBindAddress(t *testing.T) {
-	db, shutdown := testutil.PrepareDB(t)
+	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	log, _ := testutil.NewLogger(t)
-	s, err := NewStore(log, db)
-	require.NoError(t, err)
-
 	// init the bind address bucket
-	err = s.BindAddress("skyaddr1", "btcaddr1")
+	err := s.BindAddress("skyaddr1", "btcaddr1")
 	require.NoError(t, err)
 	err = s.BindAddress("skyaddr2", "btcaddr2")
 	require.NoError(t, err)
@@ -282,14 +278,10 @@ func TestGetBindAddress(t *testing.T) {
 }
 
 func TestGetDepositInfo(t *testing.T) {
-	db, shutdown := testutil.PrepareDB(t)
+	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	log, _ := testutil.NewLogger(t)
-	s, err := NewStore(log, db)
-	require.NoError(t, err)
-
-	err = s.AddDepositInfo(DepositInfo{
+	err := s.AddDepositInfo(DepositInfo{
 		BtcTx:      "btx1:1",
 		BtcAddress: "btcaddr1",
 		SkyAddress: "skyaddr1",
@@ -306,14 +298,10 @@ func TestGetDepositInfo(t *testing.T) {
 }
 
 func TestUpdateDepositInfo(t *testing.T) {
-	db, shutdown := testutil.PrepareDB(t)
+	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	log, _ := testutil.NewLogger(t)
-	s, err := NewStore(log, db)
-	require.NoError(t, err)
-
-	err = s.AddDepositInfo(DepositInfo{
+	err := s.AddDepositInfo(DepositInfo{
 		BtcTx:      "btx1:1",
 		SkyAddress: "skyaddr1",
 		BtcAddress: "btcaddr1",
@@ -327,7 +315,7 @@ func TestUpdateDepositInfo(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	err = db.View(func(tx *bolt.Tx) error {
+	err = s.db.View(func(tx *bolt.Tx) error {
 		var dpi1 DepositInfo
 		err := dbutil.GetBucketObject(tx, depositInfoBkt, "btx1:1", &dpi1)
 		require.NoError(t, err)
@@ -361,7 +349,7 @@ func TestUpdateDepositInfo(t *testing.T) {
 	require.Equal(t, dpi.Txid, "121212")
 	require.Equal(t, dpi.Status, StatusWaitSend)
 
-	err = db.View(func(tx *bolt.Tx) error {
+	err = s.db.View(func(tx *bolt.Tx) error {
 		var dpi1 DepositInfo
 		err := dbutil.GetBucketObject(tx, depositInfoBkt, "btx1:1", &dpi1)
 		require.NoError(t, err)
@@ -382,12 +370,8 @@ func TestUpdateDepositInfo(t *testing.T) {
 }
 
 func TestGetDepositInfoOfSkyAddr(t *testing.T) {
-	db, shutdown := testutil.PrepareDB(t)
+	s, shutdown := newTestStore(t)
 	defer shutdown()
-
-	log, _ := testutil.NewLogger(t)
-	s, err := NewStore(log, db)
-	require.NoError(t, err)
 
 	s.BindAddress("skyaddr1", "btcaddr1")
 
@@ -406,12 +390,8 @@ func TestGetDepositInfoOfSkyAddr(t *testing.T) {
 }
 
 func TestGetDepositInfoArray(t *testing.T) {
-	db, shutdown := testutil.PrepareDB(t)
+	s, shutdown := newTestStore(t)
 	defer shutdown()
-
-	log, _ := testutil.NewLogger(t)
-	s, err := NewStore(log, db)
-	require.NoError(t, err)
 
 	dpis := []DepositInfo{
 		{
@@ -501,20 +481,64 @@ func TestIsValidBtcTx(t *testing.T) {
 	}
 }
 
-func TestGetOrCreateDepositInfoNoBoundSkyAddr(t *testing.T) {
-	db, shutdown := testutil.PrepareDB(t)
+func TestGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
+	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	log, _ := testutil.NewLogger(t)
-	s, err := NewStore(log, db)
+	di := DepositInfo{
+		Status:     StatusWaitSend,
+		BtcAddress: "foo-btc-addr",
+		BtcTx:      "foo-tx:1",
+		SkyBtcRate: testSkyBtcRate,
+		Deposit: scanner.Deposit{
+			Address: "foo-btc-addr",
+			Value:   1e6,
+			Height:  20,
+			Tx:      "foo-tx",
+			N:       1,
+		},
+	}
+
+	err := s.AddDepositInfo(di)
 	require.NoError(t, err)
+
+	// Check the saved deposit info
+	foundDi, err := s.GetDepositInfo(di.BtcTx)
+	require.NoError(t, err)
+	// Seq and UpdatedAt should be set by AddDepositInfo
+	require.Equal(t, uint64(1), foundDi.Seq)
+	require.NotEmpty(t, foundDi.UpdatedAt)
+
+	// Other fields should be unchanged
+	di.Seq = foundDi.Seq
+	di.UpdatedAt = foundDi.UpdatedAt
+	require.Equal(t, di, foundDi)
+
+	// GetOrCreateDepositInfo, deposit info exists
+	dv := scanner.Deposit{
+		Address: di.Deposit.Address + "-2",
+		Value:   di.Deposit.Value * 2,
+		Height:  di.Deposit.Height + 1,
+		Tx:      di.Deposit.Tx,
+		N:       di.Deposit.N,
+	}
+	require.Equal(t, di.Deposit.TxN(), dv.TxN())
+	existsDi, err := s.GetOrCreateDepositInfo(dv, di.SkyBtcRate*2)
+
+	// di.Deposit won't be changed
+	require.Equal(t, di, existsDi)
+}
+
+func TestGetOrCreateDepositInfoNoBoundSkyAddr(t *testing.T) {
+	s, shutdown := newTestStore(t)
+	defer shutdown()
 
 	var rate int64 = 100
 	dv := scanner.Deposit{
 		Address: "foo-btc-addr",
 	}
 
-	_, err = s.GetOrCreateDepositInfo(dv, rate)
+	_, err := s.GetOrCreateDepositInfo(dv, rate)
 	require.Error(t, err)
 	require.Equal(t, err, ErrNoBoundAddress)
 }

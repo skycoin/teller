@@ -171,7 +171,7 @@ func (s *Exchange) Run() error {
 				// occurred.  Any unprocessed deposits held by the scanner
 				// will be resent to the exchange when teller is started.
 				if d, err := s.saveIncomingDeposit(dv.Deposit); err != nil {
-					log.WithError(err).Error("saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted")
+					log.WithError(err).Error("saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted.")
 					dv.ErrC <- err
 				} else {
 					dv.ErrC <- nil
@@ -201,7 +201,6 @@ func (s *Exchange) saveIncomingDeposit(dv scanner.Deposit) (DepositInfo, error) 
 	log.Info("Received bitcoin deposit")
 
 	di, err := s.store.GetOrCreateDepositInfo(dv, s.cfg.Rate)
-	// di, err := s.getOrCreateDepositInfo(dv)
 	if err != nil {
 		log.WithError(err).Error("GetOrCreateDepositInfo failed")
 		return DepositInfo{}, err
@@ -262,6 +261,8 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 	switch di.Status {
 	case StatusWaitDeposit:
 		// Switch status to StatusWaitSend
+		// NOTE: We don't save any deposits with StatusWaitDeposit.
+		// This code path is never triggered.
 		di, err := s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
 			di.Status = StatusWaitSend
 			return di
