@@ -33,7 +33,7 @@ type BTCScanner struct {
 	log       logrus.FieldLogger
 	cfg       Config
 	btcClient BtcRPCClient
-	store     *store
+	store     *Store
 	// Deposit value channel, exposed by public API, intended for public consumption
 	depositC chan DepositNote
 	// Internal deposit value channel
@@ -44,7 +44,7 @@ type BTCScanner struct {
 
 // NewBTCScanner creates scanner instance
 func NewBTCScanner(log logrus.FieldLogger, db *bolt.DB, btc BtcRPCClient, cfg Config) (*BTCScanner, error) {
-	s, err := newStore(db)
+	s, err := NewStore(db)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (s *BTCScanner) Run() error {
 	var wg sync.WaitGroup
 
 	// get last scan block
-	lsb, err := s.store.getLastScanBlock()
+	lsb, err := s.store.GetLastScanBlock()
 	if err != nil {
 		return fmt.Errorf("Get last scan block failed: %v", err)
 	}
@@ -214,7 +214,7 @@ func (s *BTCScanner) Shutdown() {
 func (s *BTCScanner) loadUnprocessedDeposits() error {
 	s.log.Info("Loading unprocessed deposit values")
 
-	dvs, err := s.store.getUnprocessedDepositValues()
+	dvs, err := s.store.GetUnprocessedDepositValues()
 	if err != nil {
 		return err
 	}
@@ -262,8 +262,8 @@ func (s *BTCScanner) processDepositValue(dv Deposit) error {
 		case err, ok := <-dn.ErrC:
 			if err == nil {
 				if ok {
-					if err := s.store.setDepositValueProcessed(dv.TxN()); err != nil {
-						log.WithError(err).Error("setDepositValueProcessed error")
+					if err := s.store.SetDepositValueProcessed(dv.TxN()); err != nil {
+						log.WithError(err).Error("SetDepositValueProcessed error")
 						return err
 					}
 					log.Info("Deposit is processed")
@@ -284,7 +284,7 @@ func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 	var dvs []Deposit
 
 	if err := s.store.db.Update(func(tx *bolt.Tx) error {
-		addrs, err := s.store.getScanAddressesTx(tx)
+		addrs, err := s.store.GetScanAddressesTx(tx)
 		if err != nil {
 			return err
 		}
@@ -295,14 +295,14 @@ func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 		}
 
 		for _, dv := range dvs {
-			if err := s.store.pushDepositValueTx(tx, dv); err != nil {
+			if err := s.store.PushDepositValueTx(tx, dv); err != nil {
 				log := s.log.WithField("deposit", dv)
 				switch err.(type) {
 				case DepositValueExistsErr:
 					log.Warning("Deposit already exists in db")
 					continue
 				default:
-					log.WithError(err).Error("pushDepositValueTx failed")
+					log.WithError(err).Error("PushDepositValueTx failed")
 					return err
 				}
 			}
@@ -313,7 +313,7 @@ func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 			return err
 		}
 
-		return s.store.setLastScanBlockTx(tx, LastScanBlock{
+		return s.store.SetLastScanBlockTx(tx, LastScanBlock{
 			Hash:   hash.String(),
 			Height: block.Height,
 		})
@@ -366,7 +366,7 @@ func scanBTCBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) (
 
 // AddScanAddress adds new scan address
 func (s *BTCScanner) AddScanAddress(addr string) error {
-	return s.store.addScanAddress(addr)
+	return s.store.AddScanAddress(addr)
 }
 
 // GetBestBlock returns the hash and height of the block in the longest (best)
@@ -411,7 +411,7 @@ func (s *BTCScanner) getNextBlock(hash string) (*btcjson.GetBlockVerboseResult, 
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *BTCScanner) GetScanAddresses() ([]string, error) {
-	return s.store.getScanAddresses()
+	return s.store.GetScanAddresses()
 }
 
 // GetDeposit returns deposit value channel.
