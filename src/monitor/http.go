@@ -1,10 +1,11 @@
-package server
+package monitor
 
 import (
-	"net/http"
-	"github.com/rs/cors"
-	"github.com/boltdb/bolt"
 	"errors"
+	"net/http"
+
+	"github.com/boltdb/bolt"
+	"github.com/rs/cors"
 )
 
 var database *bolt.DB
@@ -19,11 +20,11 @@ func LaunchServer(port string) {
 
 	mux.Handle("/", http.FileServer(http.Dir("../static/dist")))
 	mux.HandleFunc("/addbtc", AddBtcAddresses)
-	//mux.HandleFunc("/getbtc", GetBtcAddresses)
-	//mux.HandleFunc("/getusedbtc", GetBtcUsedAddresses)
-	//mux.HandleFunc("/setusedbtc", SetUsedBtc)
-	//mux.HandleFunc("/allfreebtc", GetAllFreeBTC)
-	//mux.HandleFunc("/getcountbtc", GetCountBTC)
+	mux.HandleFunc("/getbtc", GetBtcAddresses)
+	mux.HandleFunc("/getusedbtc", GetBtcUsedAddresses)
+	mux.HandleFunc("/setusedbtc", SetUsedBtc)
+	mux.HandleFunc("/allfreebtc", GetAllFreeBTC)
+	mux.HandleFunc("/getcountbtc", GetCountBTC)
 
 	handler := cors.Default().Handler(mux)
 	http.ListenAndServe(":"+port, handler)

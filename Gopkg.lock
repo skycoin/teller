@@ -107,6 +107,12 @@
   version = "v1.0.0"
 
 [[projects]]
+  name = "github.com/rs/cors"
+  packages = ["."]
+  revision = "7af7a1e09ba336d2ea14b1ce73bf693c6837dbf6"
+  version = "v1.2"
+
+[[projects]]
   branch = "master"
   name = "github.com/shopspring/decimal"
   packages = ["."]
@@ -169,6 +175,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "3d8e6a80dc8147d01ddea107fd7a858c241a43940f7bef87e5e4bb10ef6278c5"
+  inputs-digest = "a25e7d36d741603eb46c9fd989a68b30f228b5ab512195bcbd292413e8b06707"
   solver-name = "gps-cdcl"
   solver-version = 1

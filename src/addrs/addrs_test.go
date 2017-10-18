@@ -18,7 +18,7 @@ func TestNewBtcAddrs(t *testing.T) {
 		"1JrzSx8a9FVHHCkUFLB2CHULpbz4dTz5Ap",
 	}
 
-	btca, err := NewAddrs(testutil.NewLogger(t), db, addresses, "test_bucket")
+	btca, err := NewAddrs(testutil.NewLogger(t), db, addresses, "test_bucket", "test_bucket2")
 	require.NoError(t, err)
 
 	addrMap := make(map[string]struct{}, len(btca.addresses))
@@ -43,7 +43,7 @@ func TestNewAddress(t *testing.T) {
 		"1JrzSx8a9FVHHCkUFLB2CHULpbz4dTz5Ap",
 	}
 
-	btca, err := NewAddrs(testutil.NewLogger(t), db, addresses, "test_bucket")
+	btca, err := NewAddrs(testutil.NewLogger(t), db, addresses, "test_bucket", "test_bucket2")
 	require.NoError(t, err)
 
 	addr, err := btca.NewAddress()
@@ -63,7 +63,7 @@ func TestNewAddress(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, used)
 
-	btca1, err := NewAddrs(testutil.NewLogger(t), db, addresses, "test_bucket")
+	btca1, err := NewAddrs(testutil.NewLogger(t), db, addresses, "test_bucket", "test_bucket2")
 	require.NoError(t, err)
 
 	for _, a := range btca1.addresses {

@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/boltdb/bolt"
-
 	"github.com/skycoin/teller/src/util/dbutil"
 )
 
@@ -39,6 +38,20 @@ func (s *Store) Put(addr string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(s.BucketKey).Put([]byte(addr), []byte(""))
 	})
+}
+
+// Get all keys from the bucket
+func (s *Store) GetAll() ([]string, error) {
+	var addrs []string
+	s.db.View(func(tx *bolt.Tx) error {
+		tx.Bucket(s.BucketKey).ForEach(func(k, v []byte) error {
+			s := string(k[:])
+			addrs = append(addrs, s)
+			return nil
+		})
+		return nil
+	})
+	return addrs, nil
 }
 
 // IsUsed checks if address is mark as used

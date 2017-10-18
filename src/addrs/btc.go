@@ -12,7 +12,8 @@ import (
 	"github.com/skycoin/skycoin/src/cipher"
 )
 
-const btcBucketKey = "used_btc_address"
+const btcBucketKeyUsed = "used_btc_address"
+const btcBucketKeyAll = "all_btc_address"
 
 // NewBTCAddrs returns an Addrs loaded with BTC addresses
 func NewBTCAddrs(log logrus.FieldLogger, db *bolt.DB, addrsReader io.Reader) (*Addrs, error) {
@@ -20,7 +21,15 @@ func NewBTCAddrs(log logrus.FieldLogger, db *bolt.DB, addrsReader io.Reader) (*A
 	if err != nil {
 		return nil, err
 	}
-	return NewAddrs(log, db, loader, btcBucketKey)
+	return NewAddrs(log, db, loader, btcBucketKeyUsed, btcBucketKeyAll)
+}
+
+func GetBTCManager(log logrus.FieldLogger, db *bolt.DB) (*Addrs, error) {
+	manager, err := GetAddressManager(log, db, btcBucketKeyUsed, btcBucketKeyAll)
+	if err != nil {
+		return nil, err
+	}
+	return manager, nil
 }
 
 func loadBTCAddresses(addrsReader io.Reader) ([]string, error) {

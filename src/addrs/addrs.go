@@ -23,12 +23,37 @@ type Addrs struct {
 	sync.RWMutex
 	log       logrus.FieldLogger
 	used      *Store   // all used addresses
+	all       *Store   // all addresses
 	addresses []string // address pool for deposit
 }
 
+//GetAddressManager create instance for manage addresses
+func GetAddressManager(log logrus.FieldLogger, db *bolt.DB, bucketKeyUsed string, bucketKeyAll string) (*Addrs, error) {
+	used, err := NewStore(db, bucketKeyUsed)
+	if err != nil {
+		return nil, err
+	}
+	all, err := NewStore(db, bucketKeyAll)
+	if err != nil {
+		return nil, err
+	}
+
+	addresses, err := all.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Addrs{
+		log:       log.WithField("prefix", "addrs"),
+		used:      used,
+		all:       all,
+		addresses: addresses,
+	}, nil
+}
+
 // NewAddrs creates Addrs instance, will load and verify the addresses
-func NewAddrs(log logrus.FieldLogger, db *bolt.DB, addresses []string, bucketKey string) (*Addrs, error) {
-	used, err := NewStore(db, bucketKey)
+func NewAddrs(log logrus.FieldLogger, db *bolt.DB, addresses []string, bucketKeyUsed string, bucketKeyAll string) (*Addrs, error) {
+	used, err := NewStore(db, bucketKeyUsed)
 	if err != nil {
 		return nil, err
 	}
@@ -38,9 +63,28 @@ func NewAddrs(log logrus.FieldLogger, db *bolt.DB, addresses []string, bucketKey
 		return nil, err
 	}
 
+	all, err := NewStore(db, bucketKeyAll)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, addr := range addresses {
+		exist, err := all.IsUsed(addr)
+		if err != nil {
+			return nil, fmt.Errorf("Checking exist failed: %v", err)
+		}
+		fmt.Println(exist)
+		if !exist {
+			if err = all.Put(addr); err != nil {
+				return nil, fmt.Errorf("Put address in all pool failed: %v", err)
+			}
+		}
+	}
+
 	return &Addrs{
 		log:       log.WithField("prefix", "addrs"),
 		used:      used,
+		all:       all,
 		addresses: addresses,
 	}, nil
 }
@@ -93,6 +137,56 @@ func (a *Addrs) NewAddress() (string, error) {
 	// remove used addr
 	a.addresses = a.addresses[pt+1:]
 	return chosenAddr, nil
+}
+
+func (a *Addrs) GetAll() ([]string, error) {
+	a.RLock()
+	defer a.RUnlock()
+
+	return a.all.GetAll()
+}
+
+func (a *Addrs) GetUsed() ([]string, error) {
+	a.RLock()
+	defer a.RUnlock()
+
+	return a.used.GetAll()
+}
+
+func (a *Addrs) SetUsed(addr string) error {
+	a.RLock()
+	defer a.RUnlock()
+
+	err := a.used.Put(addr)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (a *Addrs) GetFree() ([]string, error) {
+	a.RLock()
+	defer a.RUnlock()
+	var free []string
+
+	all, err := a.all.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, addr := range all {
+		exist, err := a.used.IsUsed(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		if !exist {
+			free = append(free, addr)
+		}
+	}
+
+	return free, nil
 }
 
 // Remaining returns the rest btc address number
