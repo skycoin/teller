@@ -1,21 +1,21 @@
 package addrs
 
 import (
-    "bytes"
+	"bytes"
 	"errors"
 	"testing"
 
+	"github.com/skycoin/teller/src/util/testutil"
 	"github.com/stretchr/testify/require"
-    "github.com/skycoin/teller/src/util/testutil"
 )
 
 func TestNewBTCAddrsAllValid(t *testing.T) {
-    db, shutdown := testutil.PrepareDB(t)
-    defer shutdown()
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
 
-    log, _ := testutil.NewLogger(t)
+	log, _ := testutil.NewLogger(t)
 
-    addressesJson := `{
+	addressesJson := `{
     "btc_addresses": [
         "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
         "14FG8vQnmK6B7YbLSr6uC5wfGY78JFNCYg",
@@ -25,95 +25,92 @@ func TestNewBTCAddrsAllValid(t *testing.T) {
     ]
 }`
 
-    btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
 
-    require.Nil(t, err)
-    require.NotNil(t, btcAddrMgr)
+	require.Nil(t, err)
+	require.NotNil(t, btcAddrMgr)
 }
 
 func TestNewBtcAddrsContainsInvalid(t *testing.T) {
-    db, shutdown := testutil.PrepareDB(t)
-    defer shutdown()
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
 
-    log, _ := testutil.NewLogger(t)
+	log, _ := testutil.NewLogger(t)
 
-    addressesJson := `{
+	addressesJson := `{
     "btc_addresses": [
-		"14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
-		"1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy",
-		"1JrzSx8a9FVHHCkUFLB2CHULpbz4dTz5Ap",
-		"bad"
+        "14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
+        "1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy",
+        "1JrzSx8a9FVHHCkUFLB2CHULpbz4dTz5Ap",
+        "bad"
     ]
 }`
 
 	expectedErr := errors.New("Invalid deposit address `bad`: Invalid address length")
 
-    btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
 
-    require.Error(t, err)
+	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
 	require.Nil(t, btcAddrMgr)
 }
 
-
 func TestNewBtcAddrsContainsDuplicated(t *testing.T) {
-    db, shutdown := testutil.PrepareDB(t)
-    defer shutdown()
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
 
-    log, _ := testutil.NewLogger(t)
+	log, _ := testutil.NewLogger(t)
 
-    addressesJson := `{
+	addressesJson := `{
       "btc_addresses": [
-		"14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
-		"1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy",
-		"14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
-		"1JrzSx8a9FVHHCkUFLB2CHULpbz4dTz5Ap"
+        "14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
+        "1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy",
+        "14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
+        "1JrzSx8a9FVHHCkUFLB2CHULpbz4dTz5Ap"
     ]
 }`
 
-	expectedErr := errors.New("Duplicate deposit address `14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj`");
+	expectedErr := errors.New("Duplicate deposit address `14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj`")
 
-    btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
 
-    require.Error(t, err);
+	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
-    require.Nil(t, btcAddrMgr)
+	require.Nil(t, btcAddrMgr)
 }
 
 func TestNewBTCAddrsContainsNull(t *testing.T) {
-    db, shutdown := testutil.PrepareDB(t)
-    defer shutdown()
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
 
-    log, _ := testutil.NewLogger(t)
+	log, _ := testutil.NewLogger(t)
 
-    addressesJson := `{
+	addressesJson := `{
       "btc_addresses": []
 }`
 
-    expectedErr := errors.New("No BTC addresses");
+	expectedErr := errors.New("No BTC addresses")
 
+	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
 
-    btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
-
-    require.Error(t, err);
-    require.Equal(t, expectedErr, err)
-    require.Nil(t, btcAddrMgr)
+	require.Error(t, err)
+	require.Equal(t, expectedErr, err)
+	require.Nil(t, btcAddrMgr)
 }
 
 func TestNewBTCAddrsBadFormat(t *testing.T) {
-    db, shutdown := testutil.PrepareDB(t)
-    defer shutdown()
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
 
-    log, _ := testutil.NewLogger(t)
+	log, _ := testutil.NewLogger(t)
 
-    addressesJson := ``
+	addressesJson := ``
 
-    expectedErr := errors.New("Decode loaded address json failed: EOF");
+	expectedErr := errors.New("Decode loaded address json failed: EOF")
 
+	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
 
-    btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
-
-    require.Error(t, err);
-    require.Equal(t, expectedErr, err)
-    require.Nil(t, btcAddrMgr)
+	require.Error(t, err)
+	require.Equal(t, expectedErr, err)
+	require.Nil(t, btcAddrMgr)
 }
