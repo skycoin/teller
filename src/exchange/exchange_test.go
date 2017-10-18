@@ -706,6 +706,7 @@ func TestProcessWaitSendDeposits(t *testing.T) {
 }
 
 func TestSaveIncomingDepositCreateDepositFailed(t *testing.T) {
+	// Tests that we log a message and continue if saveIncomingDeposit fails
 	e, shutdown, hook := runExchangeMockStore(t)
 	defer shutdown()
 	defer e.Shutdown()
@@ -745,9 +746,90 @@ func TestSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 
 	// Check that we logged the failed save, so that we can recover it later
 	logEntry := hook.LastEntry()
-	require.Equal(t, logEntry.Message, "saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted")
+	require.Equal(t, logEntry.Message, "saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted.")
 	loggedDeposit := logEntry.Data["deposit"].(scanner.Deposit)
 	require.Equal(t, dn.Deposit, loggedDeposit)
+}
+
+func TestProcessWaitSendDepositFailed(t *testing.T) {
+	// Tests that we log a message and continue if processWaitSendDeposit fails
+	e, shutdown, hook := runExchangeMockStore(t)
+	defer shutdown()
+	defer e.Shutdown()
+
+	skyAddr := "foo-sky-addr"
+	btcAddr := "foo-btc-addr"
+	txid := "foo-sky-txid"
+	e.sender.(*dummySender).addTxidResponse(txid)
+
+	dn := scanner.DepositNote{
+		Deposit: scanner.Deposit{
+			Address: btcAddr,
+			Value:   1e8,
+			Height:  20,
+			Tx:      "foo-tx",
+			N:       2,
+		},
+		ErrC: make(chan error, 1),
+	}
+	e.scanner.(*dummyScanner).addDeposit(dn)
+
+	// Configure database mocks
+
+	// GetDepositInfoArray is called twice on startup
+	e.store.(*MockStore).On("GetDepositInfoArray", mock.MatchedBy(func(filt DepositFilter) bool {
+		return true
+	})).Return(nil, nil).Twice()
+
+	// GetBindAddress returns a bound address
+	e.store.(*MockStore).On("GetBindAddress", btcAddr).Return(skyAddr, nil)
+
+	// GetOrCreateDepositInfo returns a valid DepositInfo
+	di := DepositInfo{
+		Seq:        1,
+		Status:     StatusWaitSend,
+		SkyAddress: skyAddr,
+		BtcAddress: btcAddr,
+		BtcTx:      dn.Deposit.TxN(),
+		SkyBtcRate: testSkyBtcRate,
+		Deposit:    dn.Deposit,
+	}
+	e.store.(*MockStore).On("GetOrCreateDepositInfo", dn.Deposit, testSkyBtcRate).Return(di, nil)
+
+	// sender.Send() succeeds
+	e.sender.(*dummySender).addTxidResponse(di.Txid)
+
+	// UpdateDepositInfo fails
+	updateDepositInfoErr := errors.New("UpdateDepositInfo error")
+	e.store.(*MockStore).On("UpdateDepositInfo", di.BtcTx, mock.MatchedBy(func(f func(DepositInfo) DepositInfo) bool {
+		return true
+	})).Return(DepositInfo{}, updateDepositInfoErr)
+
+	// First loop calls saveIncomingDeposit
+	// nil is written to ErrC after this method finishes
+	err := <-dn.ErrC
+	require.NoError(t, err)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-time.After(dbCheckWaitTime):
+				logEntry := hook.LastEntry()
+				require.Equal(t, logEntry.Message, "processWaitSendDeposit failed. This deposit will not be reprocessed until teller is restarted.")
+				loggedDepositInfo := logEntry.Data["depositInfo"].(DepositInfo)
+				require.Equal(t, di, loggedDepositInfo)
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(dbScanTimeout):
+		t.Fatal("Waiting for deposit send failure timed out")
+	}
 }
 
 // TODO -- mock exchange.Store and test error conditions
