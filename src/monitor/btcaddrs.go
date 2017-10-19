@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/util/httputil"
@@ -22,12 +23,28 @@ type CountBtc struct {
 	Free int
 }
 
+func openDB() (*bolt.DB, error) {
+	db, err := bolt.Open("test.db", 0600, nil)
+	if err != nil {
+		return nil, err
+	}
+	return db, err
+}
+
 // method: POST
 // url: /addbtc  {"btc_addresses": ["1st_add", "2nd_adr", ...]}
 var AddBtcAddresses = func(w http.ResponseWriter, r *http.Request) {
+	database, e := openDB()
+	if e != nil {
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
+	}
+	defer database.Close()
+
 	_, err := addrs.NewBTCAddrs(logrus.WithField("prefix", "addrs"), database, r.Body)
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't put into db")
+		return
 	}
 	fmt.Fprintf(w, "added.")
 }
@@ -36,38 +53,56 @@ var AddBtcAddresses = func(w http.ResponseWriter, r *http.Request) {
 // url: /getbtc
 var GetBtcAddresses = func(w http.ResponseWriter, r *http.Request) {
 	log.Println("show all.")
-	var btc_adr BtcAddressJSON
+	var btcAddrs BtcAddressJSON
 
-	manager, err := addrs.GetBTCManager(logrus.WithField("prefix", "addrs"), database)
+	database, e := openDB()
+	if e != nil {
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
+	}
+	defer database.Close()
+
+	manager, err := addrs.NewBTCManager(logrus.WithField("prefix", "addrs"), database)
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
 	}
 
-	btc_adr.Addresses, err = manager.GetAll()
+	btcAddrs.Addresses, err = manager.GetAll()
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
 	}
 
-	httputil.JSONResponse(w, btc_adr)
+	httputil.JSONResponse(w, btcAddrs)
 }
 
 // method: GET
 // url: /getusedbtc
 var GetBtcUsedAddresses = func(w http.ResponseWriter, r *http.Request) {
 	log.Println("show used.")
-	var btc_adr BtcAddressJSON
+	var btcAddrs BtcAddressJSON
 
-	manager, err := addrs.GetBTCManager(logrus.WithField("prefix", "addrs"), database)
+	database, e := openDB()
+	if e != nil {
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
+	}
+	defer database.Close()
+
+	manager, err := addrs.NewBTCManager(logrus.WithField("prefix", "addrs"), database)
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
 	}
 
-	btc_adr.Addresses, err = manager.GetUsed()
+	btcAddrs.Addresses, err = manager.GetUsed()
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
 	}
 
-	httputil.JSONResponse(w, btc_adr)
+	httputil.JSONResponse(w, btcAddrs)
 }
 
 // method: GET
@@ -76,14 +111,23 @@ var GetAllFreeBTC = func(w http.ResponseWriter, r *http.Request) {
 	log.Println("show free.")
 	var btc_adr BtcAddressJSON
 
-	manager, err := addrs.GetBTCManager(logrus.WithField("prefix", "addrs"), database)
+	database, e := openDB()
+	if e != nil {
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
+	}
+	defer database.Close()
+
+	manager, err := addrs.NewBTCManager(logrus.WithField("prefix", "addrs"), database)
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
 	}
 
 	btc_adr.Addresses, err = manager.GetFree()
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
 	}
 
 	httputil.JSONResponse(w, btc_adr)
@@ -100,15 +144,24 @@ var SetUsedBtc = func(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	manager, err := addrs.GetBTCManager(logrus.WithField("prefix", "addrs"), database)
+	database, e := openDB()
+	if e != nil {
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
+	}
+	defer database.Close()
+
+	manager, err := addrs.NewBTCManager(logrus.WithField("prefix", "addrs"), database)
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
 	}
 
 	for _, btcAddress := range adr.Addresses {
 		err = manager.SetUsed(btcAddress)
 		if err != nil {
-			fmt.Fprintf(w, "failed.")
+			httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+			return
 		}
 	}
 	fmt.Fprintf(w, "set used.")
@@ -120,20 +173,30 @@ var GetCountBTC = func(w http.ResponseWriter, r *http.Request) {
 	log.Println("show free.")
 	var count CountBtc
 
-	manager, err := addrs.GetBTCManager(logrus.WithField("prefix", "addrs"), database)
+	database, e := openDB()
+	if e != nil {
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
+	}
+	defer database.Close()
+
+	manager, err := addrs.NewBTCManager(logrus.WithField("prefix", "addrs"), database)
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
 	}
 
 	free, err := manager.GetFree()
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
 	}
 	count.Free = len(free)
 
 	used, err := manager.GetUsed()
 	if err != nil {
-		fmt.Fprintf(w, "failed.")
+		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
+		return
 	}
 	count.Used = len(used)
 

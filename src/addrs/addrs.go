@@ -27,8 +27,8 @@ type Addrs struct {
 	addresses []string // address pool for deposit
 }
 
-//GetAddressManager create instance for manage addresses
-func GetAddressManager(log logrus.FieldLogger, db *bolt.DB, bucketKeyUsed string, bucketKeyAll string) (*Addrs, error) {
+//NewAddressManager create instance for manage addresses
+func NewAddressManager(log logrus.FieldLogger, db *bolt.DB, bucketKeyUsed string, bucketKeyAll string) (*Addrs, error) {
 	used, err := NewStore(db, bucketKeyUsed)
 	if err != nil {
 		return nil, err
@@ -73,7 +73,7 @@ func NewAddrs(log logrus.FieldLogger, db *bolt.DB, addresses []string, bucketKey
 		if err != nil {
 			return nil, fmt.Errorf("Checking exist failed: %v", err)
 		}
-		fmt.Println(exist)
+
 		if !exist {
 			if err = all.Put(addr); err != nil {
 				return nil, fmt.Errorf("Put address in all pool failed: %v", err)
@@ -140,22 +140,14 @@ func (a *Addrs) NewAddress() (string, error) {
 }
 
 func (a *Addrs) GetAll() ([]string, error) {
-	a.RLock()
-	defer a.RUnlock()
-
 	return a.all.GetAll()
 }
 
 func (a *Addrs) GetUsed() ([]string, error) {
-	a.RLock()
-	defer a.RUnlock()
-
 	return a.used.GetAll()
 }
 
 func (a *Addrs) SetUsed(addr string) error {
-	a.RLock()
-	defer a.RUnlock()
 
 	err := a.used.Put(addr)
 	if err != nil {
@@ -166,8 +158,6 @@ func (a *Addrs) SetUsed(addr string) error {
 }
 
 func (a *Addrs) GetFree() ([]string, error) {
-	a.RLock()
-	defer a.RUnlock()
 	var free []string
 
 	all, err := a.all.GetAll()

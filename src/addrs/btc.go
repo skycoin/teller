@@ -24,8 +24,8 @@ func NewBTCAddrs(log logrus.FieldLogger, db *bolt.DB, addrsReader io.Reader) (*A
 	return NewAddrs(log, db, loader, btcBucketKeyUsed, btcBucketKeyAll)
 }
 
-func GetBTCManager(log logrus.FieldLogger, db *bolt.DB) (*Addrs, error) {
-	manager, err := GetAddressManager(log, db, btcBucketKeyUsed, btcBucketKeyAll)
+func NewBTCManager(log logrus.FieldLogger, db *bolt.DB) (*Addrs, error) {
+	manager, err := NewAddressManager(log, db, btcBucketKeyUsed, btcBucketKeyAll)
 	if err != nil {
 		return nil, err
 	}
