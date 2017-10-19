@@ -10,13 +10,20 @@ import (
 )
 
 var (
+	// scan meta info bucket
 	scanMetaBkt = []byte("scan_meta")
-	depositBkt  = []byte("deposit_value")
 
-	lastScanBlockKey    = "last_scan_block"
+	// deposit value bucket
+	depositBkt = []byte("deposit_value")
+
+	// last scan block bucket
+	lastScanBlockKey = "last_scan_block"
+
+	// deposit address bucket
 	depositAddressesKey = "deposit_addresses"
-	dvIndexListKey      = "dv_index_list" // deposit value index list
 
+	// deposit values index list bucket
+	dvIndexListKey = "dv_index_list"
 )
 
 // DepositValuesEmptyErr is returned if there are no deposit values
@@ -50,14 +57,28 @@ func NewDuplicateDepositAddressErr(addr string) error {
 	}
 }
 
-// store records scanner meta info
-type store struct {
+// Storer interface for scanner meta info storage
+type Storer interface {
+	GetLastScanBlock() (LastScanBlock, error)
+	SetLastScanBlock(LastScanBlock) error
+	SetLastScanBlockTx(*bolt.Tx, LastScanBlock) error
+	GetScanAddressesTx(*bolt.Tx) ([]string, error)
+	GetScanAddresses() ([]string, error)
+	AddScanAddress(string) error
+	RemoveScanAddress(string) error
+	PushDepositValueTx(*bolt.Tx, Deposit) error
+	SetDepositValueProcessed(string) error
+	GetUnprocessedDepositValues() ([]Deposit, error)
+}
+
+// Store records scanner meta info
+type Store struct {
 	db *bolt.DB
 }
 
-func newStore(db *bolt.DB) (*store, error) {
+func NewStore(db *bolt.DB) (*Store, error) {
 	if db == nil {
-		return nil, errors.New("new store failed: db is nil")
+		return nil, errors.New("new Store failed: db is nil")
 	}
 
 	if err := db.Update(func(tx *bolt.Tx) error {
@@ -72,7 +93,7 @@ func newStore(db *bolt.DB) (*store, error) {
 		return nil, err
 	}
 
-	return &store{
+	return &Store{
 		db: db,
 	}, nil
 }
@@ -83,8 +104,8 @@ type LastScanBlock struct {
 	Height int64
 }
 
-// getLastScanBlock returns the last scanned block hash and height
-func (s *store) getLastScanBlock() (LastScanBlock, error) {
+// GetLastScanBlock returns the last scanned block hash and height
+func (s *Store) GetLastScanBlock() (LastScanBlock, error) {
 	var lsb LastScanBlock
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
@@ -101,17 +122,17 @@ func (s *store) getLastScanBlock() (LastScanBlock, error) {
 	return lsb, nil
 }
 
-func (s *store) setLastScanBlock(lsb LastScanBlock) error {
+func (s *Store) SetLastScanBlock(lsb LastScanBlock) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		return dbutil.PutBucketValue(tx, scanMetaBkt, lastScanBlockKey, lsb)
 	})
 }
 
-func (s *store) setLastScanBlockTx(tx *bolt.Tx, lsb LastScanBlock) error {
+func (s *Store) SetLastScanBlockTx(tx *bolt.Tx, lsb LastScanBlock) error {
 	return dbutil.PutBucketValue(tx, scanMetaBkt, lastScanBlockKey, lsb)
 }
 
-func (s *store) getScanAddressesTx(tx *bolt.Tx) ([]string, error) {
+func (s *Store) GetScanAddressesTx(tx *bolt.Tx) ([]string, error) {
 	var addrs []string
 
 	if err := dbutil.GetBucketObject(tx, scanMetaBkt, depositAddressesKey, &addrs); err != nil {
@@ -130,12 +151,12 @@ func (s *store) getScanAddressesTx(tx *bolt.Tx) ([]string, error) {
 	return addrs, nil
 }
 
-func (s *store) getScanAddresses() ([]string, error) {
+func (s *Store) GetScanAddresses() ([]string, error) {
 	var addrs []string
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		var err error
-		addrs, err = s.getScanAddressesTx(tx)
+		addrs, err = s.GetScanAddressesTx(tx)
 		return err
 	}); err != nil {
 		return nil, err
@@ -144,9 +165,9 @@ func (s *store) getScanAddresses() ([]string, error) {
 	return addrs, nil
 }
 
-func (s *store) addScanAddress(addr string) error {
+func (s *Store) AddScanAddress(addr string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		addrs, err := s.getScanAddressesTx(tx)
+		addrs, err := s.GetScanAddressesTx(tx)
 		if err != nil {
 			return err
 		}
@@ -163,12 +184,12 @@ func (s *store) addScanAddress(addr string) error {
 	})
 }
 
-func (s *store) removeScanAddr(addr string) error {
+func (s *Store) RemoveScanAddress(addr string) error {
 	// FIXME: This will be very slow with large number of scan addresses.
 	// FIXME: Save scan addresses differently
 
 	return s.db.Update(func(tx *bolt.Tx) error {
-		addrs, err := s.getScanAddressesTx(tx)
+		addrs, err := s.GetScanAddressesTx(tx)
 		if err != nil {
 			return err
 		}
@@ -191,7 +212,7 @@ func (s *store) removeScanAddr(addr string) error {
 	})
 }
 
-func (s *store) pushDepositValueTx(tx *bolt.Tx, dv Deposit) error {
+func (s *Store) PushDepositValueTx(tx *bolt.Tx, dv Deposit) error {
 	key := dv.TxN()
 
 	// Check if the deposit value already exists
@@ -205,7 +226,7 @@ func (s *store) pushDepositValueTx(tx *bolt.Tx, dv Deposit) error {
 	return dbutil.PutBucketValue(tx, depositBkt, key, dv)
 }
 
-func (s *store) setDepositValueProcessed(dvKey string) error {
+func (s *Store) SetDepositValueProcessed(dvKey string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		var dv Deposit
 		if err := dbutil.GetBucketObject(tx, depositBkt, dvKey, &dv); err != nil {
@@ -222,7 +243,7 @@ func (s *store) setDepositValueProcessed(dvKey string) error {
 	})
 }
 
-func (s *store) getUnprocessedDepositValues() ([]Deposit, error) {
+func (s *Store) GetUnprocessedDepositValues() ([]Deposit, error) {
 	var dvs []Deposit
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
