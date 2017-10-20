@@ -9,7 +9,7 @@ type dummyExchanger struct {
 	skyAddrs map[string][]string
 }
 
-func (de dummyExchanger) BindAddress(btcAddr, skyAddr string) error {
+func (de dummyExchanger) BindAddress(skyAddr, btcAddr string) error {
 	if de.err != nil {
 		return de.err
 	}

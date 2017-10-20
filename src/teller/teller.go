@@ -103,7 +103,7 @@ func (s *service) BindAddress(skyAddr string) (string, error) {
 		return "", err
 	}
 
-	if err := s.exchanger.BindAddress(btcAddr, skyAddr); err != nil {
+	if err := s.exchanger.BindAddress(skyAddr, btcAddr); err != nil {
 		return "", err
 	}
 
