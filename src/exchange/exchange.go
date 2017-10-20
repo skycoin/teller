@@ -27,6 +27,11 @@ var (
 	ErrNoResponse = errors.New("No response from the send service")
 	// ErrNotConfirmed is returned if the tx is not confirmed yet
 	ErrNotConfirmed = errors.New("Transaction is not confirmed yet")
+	// ErrDepositStatusInvalid is returned when handling a deposit with a status that cannot be processed
+	// This includes StatusWaitDeposit and StatusUnknown
+	ErrDepositStatusInvalid = errors.New("Deposit status cannot be handled")
+	// ErrNoBoundAddress is returned if no skycoin address is bound to a deposit's address
+	ErrNoBoundAddress = errors.New("Deposit has no bound skycoin address")
 )
 
 // DepositFilter filters deposits
@@ -34,7 +39,7 @@ type DepositFilter func(di DepositInfo) bool
 
 // Exchanger provides APIs to interact with the exchange service
 type Exchanger interface {
-	BindAddress(btcAddr, skyAddr string) error
+	BindAddress(skyAddr, btcAddr string) error
 	GetDepositStatuses(skyAddr string) ([]DepositStatus, error)
 	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
 	GetBindNum(skyAddr string) (int, error)
@@ -213,9 +218,9 @@ func (s *Exchange) saveIncomingDeposit(dv scanner.Deposit) (DepositInfo, error) 
 }
 
 // processDeposit advances a single deposit through three states:
-// StatusWaitDeposit -> StatusWaitSend
 // StatusWaitSend -> StatusWaitConfirm
 // StatusWaitConfirm -> StatusDone
+// StatusWaitDeposit is never saved to the database, so it does not transition
 func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
 	log := s.log.WithField("depositInfo", di)
 	log.Info("Processing StatusWaitSend deposit")
@@ -258,22 +263,12 @@ func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
 func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 	log := s.log.WithField("depositInfo", di)
 
+	if err := di.ValidateForStatus(); err != nil {
+		log.WithError(err).Error("handleDepositInfoState's DepositInfo is invalid")
+		return di, err
+	}
+
 	switch di.Status {
-	case StatusWaitDeposit:
-		// Switch status to StatusWaitSend
-		// NOTE: We don't save any deposits with StatusWaitDeposit.
-		// This code path is never triggered.
-		di, err := s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
-			di.Status = StatusWaitSend
-			return di
-		})
-		if err != nil {
-			log.WithError(err).Error("UpdateDeposit set StatusWaitSend failed")
-			return di, err
-		}
-
-		return di, nil
-
 	case StatusWaitSend:
 		// Send
 		rsp, err := s.send(di)
@@ -349,10 +344,15 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 		log.Warn("DepositInfo already processed")
 		return di, nil
 
+	case StatusWaitDeposit:
+		// We don't save any deposits with StatusWaitDeposit.
+		// We can't transition to StatusWaitSend without a scanner.Deposit
+		log.Error("StatusWaitDeposit cannot be processed and should never be handled by this method")
+		fallthrough
 	case StatusUnknown:
 		fallthrough
 	default:
-		err := errors.New("Unknown deposit status")
+		err := ErrDepositStatusInvalid
 		log.WithError(err).Error()
 		return di, err
 	}
@@ -361,22 +361,18 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
 	log := s.log.WithField("deposit", di)
 
-	skyAddr, err := s.store.GetBindAddress(di.Deposit.Address)
-	if err != nil {
-		log.WithError(err).Error("GetBindAddress failed")
-		return nil, err
-	}
-
-	if skyAddr == "" {
-		err := errors.New("Deposit has no bound skycoin address")
+	// This should never occur, the DepositInfo is saved with a SkyAddress
+	// during GetOrCreateDepositInfo().
+	if di.SkyAddress == "" {
+		err := ErrNoBoundAddress
 		log.WithError(err).Error()
 		return nil, err
 	}
 
-	log = log.WithField("skyAddr", skyAddr)
+	log = log.WithField("skyAddr", di.SkyAddress)
 	log = log.WithField("skyRate", s.cfg.Rate)
 
-	skyAmt, err := calculateSkyValue(di.Deposit.Value, s.cfg.Rate)
+	skyAmt, err := calculateSkyValue(di.DepositValue, s.cfg.Rate)
 	if err != nil {
 		log.WithError(err).Error("calculateSkyValue failed")
 		return nil, err
@@ -387,8 +383,9 @@ func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
 	log.Info("Trying to send skycoin")
 
 	if skyAmt == 0 {
+		err := ErrEmptySendAmount
 		log.WithError(err).Error()
-		return nil, ErrEmptySendAmount
+		return nil, err
 	}
 
 	// TODO FIXME:
@@ -400,7 +397,7 @@ func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
 	// Possibly we could make two API calls to skycoind, one to prepare the tx,
 	// the other to send it.
 
-	rsp := s.sender.Send(skyAddr, skyAmt)
+	rsp := s.sender.Send(di.SkyAddress, skyAmt)
 
 	log = log.WithField("sendRsp", rsp)
 
@@ -424,7 +421,7 @@ func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
 // add the btc address to scan service, when detect deposit coin
 // to the btc address, will send specific skycoin to the binded
 // skycoin address
-func (s *Exchange) BindAddress(btcAddr, skyAddr string) error {
+func (s *Exchange) BindAddress(skyAddr, btcAddr string) error {
 	if err := s.store.BindAddress(skyAddr, btcAddr); err != nil {
 		return err
 	}
