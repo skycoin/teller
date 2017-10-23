@@ -18,9 +18,9 @@ type BtcAddressJSON struct {
 }
 
 type CountBtc struct {
-	All  int
-	Used int
-	Free int
+	All  int `json:"all"`
+	Used int `json:"used"`
+	Free int `json:"free"`
 }
 
 func openDB() (*bolt.DB, error) {
@@ -33,7 +33,7 @@ func openDB() (*bolt.DB, error) {
 
 // method: POST
 // url: /addbtc  {"btc_addresses": ["1st_add", "2nd_adr", ...]}
-var AddBtcAddresses = func(w http.ResponseWriter, r *http.Request) {
+func AddBtcAddresses(w http.ResponseWriter, r *http.Request) {
 	database, e := openDB()
 	if e != nil {
 		httputil.ErrResponse(w, http.StatusBadRequest, "Can't access to db")
@@ -51,7 +51,7 @@ var AddBtcAddresses = func(w http.ResponseWriter, r *http.Request) {
 
 // method: GET
 // url: /getbtc
-var GetBtcAddresses = func(w http.ResponseWriter, r *http.Request) {
+func GetBtcAddresses(w http.ResponseWriter, r *http.Request) {
 	log.Println("show all.")
 	var btcAddrs BtcAddressJSON
 
@@ -79,7 +79,7 @@ var GetBtcAddresses = func(w http.ResponseWriter, r *http.Request) {
 
 // method: GET
 // url: /getusedbtc
-var GetBtcUsedAddresses = func(w http.ResponseWriter, r *http.Request) {
+func GetBtcUsedAddresses(w http.ResponseWriter, r *http.Request) {
 	log.Println("show used.")
 	var btcAddrs BtcAddressJSON
 
@@ -107,7 +107,7 @@ var GetBtcUsedAddresses = func(w http.ResponseWriter, r *http.Request) {
 
 // method: GET
 // url: /allfreebtc
-var GetAllFreeBTC = func(w http.ResponseWriter, r *http.Request) {
+func GetAllFreeBTC(w http.ResponseWriter, r *http.Request) {
 	log.Println("show free.")
 	var btc_adr BtcAddressJSON
 
@@ -135,7 +135,7 @@ var GetAllFreeBTC = func(w http.ResponseWriter, r *http.Request) {
 
 // method: POST
 // url: /setusedbtc  {"btc_addresses": ["1st_add", "2nd_adr", ...]}
-var SetUsedBtc = func(w http.ResponseWriter, r *http.Request) {
+func SetUsedBtc(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var adr BtcAddressJSON
 	err := decoder.Decode(&adr)
@@ -169,7 +169,7 @@ var SetUsedBtc = func(w http.ResponseWriter, r *http.Request) {
 
 // method: GET
 // url: /getcountbtc
-var GetCountBTC = func(w http.ResponseWriter, r *http.Request) {
+func GetCountBTC(w http.ResponseWriter, r *http.Request) {
 	log.Println("show free.")
 	var count CountBtc
 

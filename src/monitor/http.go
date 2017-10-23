@@ -11,6 +11,7 @@ func LaunchServer(port string) {
 	mux := http.NewServeMux()
 
 	mux.Handle("/", http.FileServer(http.Dir("../static/dist")))
+	mux.Handle("*", http.FileServer(http.Dir("../static/dist")))
 	mux.HandleFunc("/addbtc", AddBtcAddresses)
 	mux.HandleFunc("/getbtc", GetBtcAddresses)
 	mux.HandleFunc("/getusedbtc", GetBtcUsedAddresses)
