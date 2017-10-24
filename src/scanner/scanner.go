@@ -28,7 +28,8 @@ type DepositNote struct {
 	ErrC chan error
 }
 
-func makeDepositNote(dv Deposit) DepositNote {
+// NewDepositNote returns a DepositNote
+func NewDepositNote(dv Deposit) DepositNote {
 	return DepositNote{
 		Deposit: dv,
 		ErrC:    make(chan error, 1),
