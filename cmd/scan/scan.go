@@ -5,7 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"log"
+	_"log"
 	"os"
 	"path/filepath"
 
@@ -59,7 +59,6 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 		}
 
 	}
-
 	return deposits, nil
 }
 
@@ -128,7 +127,6 @@ func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address
 		}
 
 	}
-
 	return addrs
 }
 
@@ -162,7 +160,6 @@ func NewBTCDClient(username, pass string) (*rpcclient.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	//config settings
 	connCfg := &rpcclient.ConnConfig{
 		Host:         "localhost:8334",
