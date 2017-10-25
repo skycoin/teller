@@ -94,7 +94,6 @@ func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address
 		flag = 0
 
 		if addr.MaxScanBlock == 0 && flag == 0 {
-			log.Println("1st scan")
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MaxScanBlock = blockID
@@ -103,7 +102,6 @@ func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address
 		}
 
 		if addr.MinScanBlock < addr.MaxScanBlock && addr.MinScanBlock == (blockID-1) && flag == 0 {
-			log.Println("change min")
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MinScanBlock = blockID
@@ -114,7 +112,6 @@ func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address
 		}
 
 		if addr.MaxScanBlock > addr.MinScanBlock && addr.MaxScanBlock == (blockID-1) && flag == 0 {
-			log.Println("change max")
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MaxScanBlock = blockID
@@ -122,7 +119,6 @@ func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address
 		}
 
 		if addr.MinScanBlock == addr.MidScanBlock && addr.MinScanBlock == addr.MaxScanBlock && flag == 0 {
-			log.Println("change all")
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MaxScanBlock = blockID
@@ -218,8 +214,6 @@ func main() {
 		}
 
 		addrs = UpdateAddressInfo(addrs, deposits, int64(i))
-		log.Println(addrs[0])
-		fmt.Println("-------------------------------")
 	}
 
 	SaveWallet(*wallet, addrs)
