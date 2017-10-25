@@ -88,42 +88,42 @@ func ExistTx(addr Address, tx Tx) bool {
 }
 
 func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address {
-	flag := 0
+	branch := 0
 	for i, addr := range addrs {
-		flag = 0
+		branch = 0
 
-		if addr.MaxScanBlock == 0 && flag == 0 {
+		if addr.MaxScanBlock == 0 && branch == 0 && blockID > 1 {
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MaxScanBlock = blockID
 			addrs[i].MidScanBlock = blockID
-			flag = 1
+			branch = 1
 		}
 
-		if addr.MinScanBlock < addr.MaxScanBlock && addr.MinScanBlock == (blockID-1) && flag == 0 {
+		if addr.MinScanBlock < addr.MaxScanBlock && addr.MinScanBlock == (blockID-1) && branch == 0 {
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MinScanBlock = blockID
 			if addrs[i].MinScanBlock > addrs[i].MidScanBlock {
 				addrs[i].MidScanBlock = addrs[i].MinScanBlock
 			}
-			flag = 1
+			branch = 1
 		}
 
-		if addr.MaxScanBlock > addr.MinScanBlock && addr.MaxScanBlock == (blockID-1) && flag == 0 {
+		if addr.MaxScanBlock > addr.MinScanBlock && addr.MaxScanBlock == (blockID-1) && branch == 0 {
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MaxScanBlock = blockID
-			flag = 1
+			branch = 1
 		}
 
-		if addr.MinScanBlock == addr.MidScanBlock && addr.MinScanBlock == addr.MaxScanBlock && flag == 0 {
+		if addr.MinScanBlock == addr.MidScanBlock && addr.MinScanBlock == addr.MaxScanBlock && addr.MaxScanBlock == (blockID-1) && branch == 0 {
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MaxScanBlock = blockID
 			addrs[i].MidScanBlock = blockID
 			addrs[i].MinScanBlock = blockID
-			flag = 1
+			branch = 1
 		}
 
 	}
@@ -203,7 +203,7 @@ func main() {
 	defer client.Shutdown()
 
 	for i := int(*blockN); i <= int(*blockM); i++ {
-		fmt.Println("Scannig block: ", i)
+		//fmt.Println("Scannig block: ", i)
 		deposits, err := ScanBlock(client, int64(i))
 		if err != nil {
 			fmt.Println("Block scanning is failed:", err)

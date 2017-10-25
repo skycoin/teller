@@ -1,46 +1,16 @@
 [
     {
-        "address": "13JJjViuM2v19TFsB3XLSzNEytYFpWKN1x",
-        "min_scan_block": 285,
-        "mid_scan_block": 299888,
-        "max_scan_block": 299905,
-        "txs": [
-            {
-                "hash": "",
-                "id": -1,
-                "block_hash": "",
-                "parent_hash": "",
-                "block_height": 0
-            }
-        ]
-    },
-    {
-        "address": "1FvzCLoTPGANNjWoUo6jUGuAG3wg1w4YjR",
-        "min_scan_block": 285,
-        "mid_scan_block": 299888,
-        "max_scan_block": 299905,
-        "txs": [
-            {
-                "hash": "999e1c837c76a1b7fbb7e57baf87b309960f5ffefbf2a9b95dd890602272f644",
-                "id": 0,
-                "block_hash": "0000000082b5015589a3fdf2d4baff403e6f0be035a5d9742c1cae6295464449",
-                "parent_hash": "000000006a625f06636b8bb6ac7b960a8d03705d1ace08b1a19da3fdcc99ddbd",
-                "block_height": 3
-            }
-        ]
-    },
-    {
-        "address": "1NETGLoGW3LRfCEVhpaXtY7DWQMnN9kzCx",
+        "address": "1PDgWCLUa2mKj9ZbPd7ZXaVbXxFyHJQ3KC",
         "min_scan_block": 0,
-        "mid_scan_block": 323459,
-        "max_scan_block": 323459,
+        "mid_scan_block": 280101,
+        "max_scan_block": 280989,
         "txs": [
             {
-                "hash": "915585f052d387bb8bbf97a75be266825f4f01d52b119f8575106f04ef4089bd",
-                "id": 1,
-                "block_hash": "00000000000000000fbd732f9d50f5bf98f3e7bd49ea770e475eafb71867b9c2",
-                "parent_hash": "00000000000000000a54f944561a6096a9b10644ae03200ea40f36341f8abcda",
-                "block_height": 323459
+                "hash": "b04b41f3f7e48e144d3ce502a9ea53fe4e940c0239094aa18763efc14f84876d",
+                "id": 153,
+                "block_hash": "0000000000000001f6e20d520bd703ee7f2b638a3dbe3ddc2ec849c0905ee3f3",
+                "parent_hash": "000000000000000223a105b83fa46e71b3c075af9d738be77e84c0f4bcfd4f8c",
+                "block_height": 280162
             }
         ]
     }
