@@ -26,6 +26,12 @@ const (
 	blockScanPeriod        = time.Second * 5
 )
 
+// Config scanner config info
+type Config struct {
+	ScanPeriod        time.Duration // scan period in seconds
+	DepositBufferSize int           // size of GetDeposit() channel
+}
+
 // BTCScanner blockchain scanner to check if there're deposit coins
 type BTCScanner struct {
 	log       logrus.FieldLogger
@@ -75,6 +81,7 @@ func (s *BTCScanner) Run() error {
 
 	// Load unprocessed deposits
 	if err := s.loadUnprocessedDeposits(); err != nil {
+		log.WithError(err).Error("loadUnprocessedDeposits failed")
 		return err
 	}
 
@@ -205,6 +212,7 @@ func (s *BTCScanner) loadUnprocessedDeposits() error {
 
 	dvs, err := s.store.GetUnprocessedDeposits()
 	if err != nil {
+		s.log.WithError(err).Error("GetUnprocessedDeposits failed")
 		return err
 	}
 

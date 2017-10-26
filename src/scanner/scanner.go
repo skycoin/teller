@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -34,12 +33,6 @@ func NewDepositNote(dv Deposit) DepositNote {
 		Deposit: dv,
 		ErrC:    make(chan error, 1),
 	}
-}
-
-// Config scanner config info
-type Config struct {
-	ScanPeriod        time.Duration // scan period in seconds
-	DepositBufferSize int           // size of GetDeposit() channel
 }
 
 // Deposit struct

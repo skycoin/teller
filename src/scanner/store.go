@@ -225,7 +225,7 @@ func (s *Store) GetUnprocessedDeposits() ([]Deposit, error) {
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		return dbutil.ForEach(tx, depositBkt, func(k, v []byte) error {
 			var dv Deposit
-			if err := json.Unmarshal(v, &dvs); err != nil {
+			if err := json.Unmarshal(v, &dv); err != nil {
 				return err
 			}
 
