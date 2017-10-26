@@ -11,6 +11,7 @@ import (
 
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcutil"
+	"strconv"
 )
 
 type Address struct {
@@ -22,8 +23,7 @@ type Address struct {
 }
 
 type Tx struct {
-	Hash        string `json:"hash"`
-	ID          int64  `json:"id"`
+	TxHash      string `json:"tx_hash"`
 	BlockHash   string `json:"block_hash"`
 	ParentHash  string `json:"parent_hash"`
 	BlockHeight int64  `json:"block_height"`
@@ -50,9 +50,9 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 	depTx.BlockHash = blockHash.String()
 	depTx.ParentHash = parentHash
 	for _, tx := range block.RawTx {
-		depTx.Hash = tx.Txid
 		for i, addr := range tx.Vout {
-			depTx.ID = int64(i)
+			depTx.TxHash = tx.Txid
+			depTx.TxHash = depTx.TxHash + ":" + strconv.Itoa(i)
 			if len(addr.ScriptPubKey.Addresses) > 0 {
 				deposits = append(deposits, Deposit{Addr: addr.ScriptPubKey.Addresses[0], Tx: depTx})
 			}
@@ -65,7 +65,7 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 func CompareAddress(addr Address, deps []Deposit) Address {
 	for _, dep := range deps {
 		if addr.Addr == dep.Addr {
-			if addr.Txs[0].ID == -1 {
+			if addr.Txs[0].BlockHeight == -1 {
 				addr.Txs[0] = dep.Tx
 			} else {
 				if !ExistTx(addr, dep.Tx) {
@@ -187,7 +187,7 @@ func main() {
 	flag.Parse()
 
 	//flags validation
-	if *blockN <= 0 || *blockM <= 0 || *blockM < *blockN {
+	if *blockN < 0 || *blockM < 0 || *blockM < *blockN {
 		fmt.Println("Bad block range")
 		return
 	}
@@ -211,6 +211,7 @@ func main() {
 		}
 
 		addrs = UpdateAddressInfo(addrs, deposits, int64(i))
+
 	}
 
 	SaveWallet(*wallet, addrs)
