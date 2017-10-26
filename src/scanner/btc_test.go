@@ -24,6 +24,7 @@ type dummyBtcrpcclient struct {
 }
 
 func openDummyBtcDB(t *testing.T) *bolt.DB {
+	// Blocks 235205 through 235212 are stored in this DB
 	db, err := bolt.Open("./btc.db", 0600, nil)
 	require.NoError(t, err)
 	return db
@@ -73,8 +74,6 @@ func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.
 		return nil, err
 	}
 
-	fmt.Println("GetBlockVerboseTx returning", block, nil)
-
 	return block, nil
 }
 
@@ -92,28 +91,27 @@ func TestScannerRun(t *testing.T) {
 	btcDB := openDummyBtcDB(t)
 	defer btcDB.Close()
 
-	// TODO -- this uses real data from test.db, but it is opaque.
-	// It is not easy to see what the data should be.
-	// Use hardcoded btcjson.GetBlockVerboseResult responses instead
-	// They can have fake data.
+	// Blocks 235205 through 235212 are stored in btc.db
+	// Refer to https://blockchain.info or another explorer to see the block data
 	rpcclient := newDummyBtcrpcclient(btcDB)
 	rpcclient.lastBlock = LastScanBlock{
-		Hash:   "00000000000001749cf1a15c5af397a04a18d09e9bc902b6ce70f64bc19acc98",
-		Height: 235203,
+		Hash:   "000000000000018d8ece83a004c5a919210d67798d13aa901c4d07f8bf87b719",
+		Height: 235205,
 	}
 
 	rpcclient.bestBlock = LastScanBlock{
-		Hash:   "000000000000018d8ece83a004c5a919210d67798d13aa901c4d07f8bf87b719",
-		Height: 235205,
+		Hash:   "000000000000014e5217c81d6228a9274395a8bee3eb87277dd9e4315ee0f439",
+		Height: 235207,
 	}
 
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
 
-	scr, err := NewBTCScanner(log, store, rpcclient, Config{
+	cfg := Config{
 		ScanPeriod:        time.Millisecond * 10,
 		DepositBufferSize: 5,
-	})
+	}
+	scr, err := NewBTCScanner(log, store, rpcclient, cfg)
 	require.NoError(t, err)
 
 	err = scr.store.(*Store).db.Update(func(tx *bolt.Tx) error {
@@ -121,15 +119,26 @@ func TestScannerRun(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// This address has 0 deposits
-	err = scr.AddScanAddress("1ATjE4kwZ5R1ww9SEi4eseYTCenVgaxPWu")
+	nDeposits := 0
+
+	// This address has 1 deposit, in block 235207
+	err = scr.AddScanAddress("1LcEkgX8DCrQczLMVh9LDTRnkdVV2oun3A")
 	require.NoError(t, err)
-	// This address has 0 deposits
-	err = scr.AddScanAddress("1EYQ7Fnct6qu1f3WpTSib1UhDhxkrww1WH")
+	nDeposits = nDeposits + 1
+
+	// This address has 1 deposit, in block 235206
+	err = scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA")
 	require.NoError(t, err)
-	// This address has 95 deposits
+	nDeposits = nDeposits + 1
+
+	// This address has 95 deposits, in block 235205
 	err = scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
 	require.NoError(t, err)
+	nDeposits = nDeposits + 95
+
+	// Make sure that the deposit buffer size is less than the number of deposits,
+	// to test what happens when the buffer is full
+	require.True(t, cfg.DepositBufferSize < nDeposits)
 
 	done := make(chan struct{})
 	go func() {
@@ -140,7 +149,7 @@ func TestScannerRun(t *testing.T) {
 			dv.ErrC <- nil
 		}
 
-		require.Len(t, dvs, 95)
+		require.Len(t, dvs, nDeposits)
 
 		// check all deposits
 		err := db.View(func(tx *bolt.Tx) error {
