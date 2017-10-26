@@ -183,8 +183,8 @@ func main() {
 
 	//flags
 	wallet := flag.String("wallet", "wallet.json", "wallet.json file")
-	blockN := flag.Int64("n", 0, "btc_addresses.json file")
-	blockM := flag.Int64("m", 0, "debug mode will show more detail logs")
+	blockN := flag.Int64("n", 0, "start blockID")
+	blockM := flag.Int64("m", 0, "finish blockID")
 	flag.Parse()
 
 	//flags validation
