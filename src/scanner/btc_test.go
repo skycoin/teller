@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -16,21 +17,20 @@ import (
 
 var dummyBlocksBktName = []byte("blocks")
 
-type blockHashHeight struct {
-	Hash   string
-	Height int64
-}
-
 type dummyBtcrpcclient struct {
 	db        *bolt.DB
-	bestBlock blockHashHeight
-	lastBlock blockHashHeight
+	bestBlock LastScanBlock
+	lastBlock LastScanBlock
 }
 
-func newDummyBtcrpcclient(t *testing.T) *dummyBtcrpcclient {
-	db, err := bolt.Open("./test.db", 0600, nil)
+func openDummyBtcDB(t *testing.T) *bolt.DB {
+	// Blocks 235205 through 235212 are stored in this DB
+	db, err := bolt.Open("./btc.db", 0600, nil)
 	require.NoError(t, err)
+	return db
+}
 
+func newDummyBtcrpcclient(db *bolt.DB) *dummyBtcrpcclient {
 	return &dummyBtcrpcclient{db: db}
 }
 
@@ -61,7 +61,7 @@ func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.
 		var b btcjson.GetBlockVerboseResult
 		v := tx.Bucket(dummyBlocksBktName).Get([]byte(hash.String()))
 		if v == nil {
-			return nil
+			return fmt.Errorf("no block found in db with hash %s", hash.String())
 		}
 
 		if err := json.Unmarshal(v, &b); err != nil {
@@ -78,57 +78,119 @@ func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.
 }
 
 func TestScannerRun(t *testing.T) {
+	// Tests that the scanner will scan multiple blocks sequentially, finding
+	// all relevant deposits and adding them to the depositC channel.
+	// All deposits on the depositC channel will be successfully processed
+	// by the channel reader, and the scanner will mark these deposits as
+	// "processed".
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
 	log, _ := testutil.NewLogger(t)
 
-	rpcclient := newDummyBtcrpcclient(t)
-	rpcclient.lastBlock = blockHashHeight{
-		Hash:   "00000000000001749cf1a15c5af397a04a18d09e9bc902b6ce70f64bc19acc98",
-		Height: 235203,
-	}
+	btcDB := openDummyBtcDB(t)
+	defer btcDB.Close()
 
-	rpcclient.bestBlock = blockHashHeight{
+	// Blocks 235205 through 235212 are stored in btc.db
+	// Refer to https://blockchain.info or another explorer to see the block data
+	rpcclient := newDummyBtcrpcclient(btcDB)
+	rpcclient.lastBlock = LastScanBlock{
 		Hash:   "000000000000018d8ece83a004c5a919210d67798d13aa901c4d07f8bf87b719",
 		Height: 235205,
 	}
 
-	scr, err := NewBTCScanner(log, db, rpcclient, Config{
-		ScanPeriod: time.Second * 1,
-	})
+	rpcclient.bestBlock = LastScanBlock{
+		Hash:   "000000000000014e5217c81d6228a9274395a8bee3eb87277dd9e4315ee0f439",
+		Height: 235207,
+	}
 
+	store, err := NewStore(log, db)
 	require.NoError(t, err)
 
-	scr.AddScanAddress("1ATjE4kwZ5R1ww9SEi4eseYTCenVgaxPWu")
-	scr.AddScanAddress("1EYQ7Fnct6qu1f3WpTSib1UhDhxkrww1WH")
-	scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
+	cfg := Config{
+		ScanPeriod:        time.Millisecond * 10,
+		DepositBufferSize: 5,
+	}
+	scr, err := NewBTCScanner(log, store, rpcclient, cfg)
+	require.NoError(t, err)
 
-	time.AfterFunc(time.Second, func() {
+	err = scr.store.(*Store).db.Update(func(tx *bolt.Tx) error {
+		return scr.store.(*Store).setLastScanBlockTx(tx, rpcclient.lastBlock)
+	})
+	require.NoError(t, err)
+
+	nDeposits := 0
+
+	// This address has 1 deposit, in block 235207
+	err = scr.AddScanAddress("1LcEkgX8DCrQczLMVh9LDTRnkdVV2oun3A")
+	require.NoError(t, err)
+	nDeposits = nDeposits + 1
+
+	// This address has 1 deposit, in block 235206
+	err = scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA")
+	require.NoError(t, err)
+	nDeposits = nDeposits + 1
+
+	// This address has 95 deposits, in block 235205
+	err = scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
+	require.NoError(t, err)
+	nDeposits = nDeposits + 95
+
+	// Make sure that the deposit buffer size is less than the number of deposits,
+	// to test what happens when the buffer is full
+	require.True(t, cfg.DepositBufferSize < nDeposits)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
 		var dvs []DepositNote
 		for dv := range scr.GetDeposit() {
 			dvs = append(dvs, dv)
-			time.Sleep(100 * time.Millisecond)
 			dv.ErrC <- nil
 		}
-		require.Equal(t, 127, len(dvs))
 
-		// check all deposit value's
-		db.View(func(tx *bolt.Tx) error {
+		require.Len(t, dvs, nDeposits)
+
+		// check all deposits
+		err := db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
-				require.Nil(t, dbutil.GetBucketObject(tx, depositBkt, dv.TxN(), &d))
+				err := dbutil.GetBucketObject(tx, depositBkt, dv.TxN(), &d)
+				require.NoError(t, err)
 				require.True(t, d.Processed)
+				if err != nil {
+					return err
+				}
 			}
 
 			return nil
 		})
-	})
+		require.NoError(t, err)
+	}()
 
-	time.AfterFunc(15*time.Second, func() {
+	time.AfterFunc(time.Second*3, func() {
 		scr.Shutdown()
 	})
 
 	err = scr.Run()
 	require.NoError(t, err)
+	<-done
+}
+
+func TestLoadUnprocessedDeposits(t *testing.T) {
+	// TODO
+	// Test that pending unprocessed deposits from the db are loaded when
+	// then scanner starts.
+}
+
+func TestScanBlockFailureRetry(t *testing.T) {
+	// TODO
+	// Test that when scanBlock() fails, it logs "Scan block failed"
+	// and retries scan of the same block after ScanPeriod elapses.
+}
+
+func TestProcessDepositError(t *testing.T) {
+	// TODO
+	// Test that when processDeposit() fails, the deposit is NOT marked as
+	// processed, and that a warning message is logged.
 }

@@ -15,19 +15,14 @@
 
 [[projects]]
   name = "github.com/btcsuite/btcd"
-  packages = ["btcec","btcjson","chaincfg","chaincfg/chainhash","wire"]
-  revision = "47885ab8702485be6b6f87a03d4f3be0bc5c982c"
+  packages = ["btcec","btcjson","chaincfg","chaincfg/chainhash","rpcclient","wire"]
+  revision = "c7588cbf7690cd9f047a28efa2dcd8f2435a4e5e"
 
 [[projects]]
   branch = "master"
   name = "github.com/btcsuite/btclog"
   packages = ["."]
   revision = "84c8d2346e9fc8c7b947e243b9c24e6df9fd206a"
-
-[[projects]]
-  name = "github.com/btcsuite/btcrpcclient"
-  packages = ["."]
-  revision = "0d9ec835baeb9a8ce7fbe3eb7d7783284a089ced"
 
 [[projects]]
   name = "github.com/btcsuite/btcutil"
@@ -175,6 +170,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "10944de94e3288634100b7d0d12a913c8ab34c834480cbaac563949915b5f479"
+  inputs-digest = "c4c6e1cb787af85122d4e405650e85e3e5f752a9a656640f0bb0b90b32a152fb"
   solver-name = "gps-cdcl"
   solver-version = 1

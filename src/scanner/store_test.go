@@ -2,11 +2,11 @@ package scanner
 
 import (
 	"errors"
-	"fmt"
 	"sort"
 	"testing"
 
 	"github.com/boltdb/bolt"
+	"github.com/btcsuite/btcd/btcjson"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -26,28 +26,6 @@ func (m *MockStore) GetLastScanBlock() (LastScanBlock, error) {
 	return lsb.(LastScanBlock), args.Error(1)
 }
 
-func (m *MockStore) SetLastScanBlock(lsb LastScanBlock) error {
-	args := m.Called(lsb)
-	return args.Error(1)
-}
-
-func (m *MockStore) SetLastScanBlockTx(tx *bolt.Tx, lsb LastScanBlock) error {
-	args := m.Called(tx, lsb)
-	return args.Error(1)
-}
-
-func (m *MockStore) GetScanAddressesTx(tx *bolt.Tx) ([]string, error) {
-	args := m.Called(tx)
-
-	addrs := args.Get(0)
-
-	if addrs == nil {
-		return nil, args.Error(1)
-	}
-
-	return addrs.([]string), args.Error(1)
-}
-
 func (m *MockStore) GetScanAddresses() ([]string, error) {
 	args := m.Called()
 
@@ -65,22 +43,24 @@ func (m *MockStore) AddScanAddress(addr string) error {
 	return args.Error(1)
 }
 
-func (m *MockStore) RemoveScanAddress(addr string) error {
-	args := m.Called(addr)
-	return args.Error(1)
-}
-
-func (m *MockStore) PushDepositValueTx(tx *bolt.Tx, dv Deposit) error {
-	args := m.Called(tx, dv)
-	return args.Error(1)
-}
-
-func (m *MockStore) SetDepositValueProcessed(dv string) error {
+func (m *MockStore) SetDepositProcessed(dv string) error {
 	args := m.Called(dv)
 	return args.Error(1)
 }
 
-func (m *MockStore) GetUnprocessedDepositValues() ([]Deposit, error) {
+func (m *MockStore) GetUnprocessedDeposits() ([]Deposit, error) {
+	args := m.Called()
+
+	dvs := args.Get(0)
+
+	if dvs == nil {
+		return nil, args.Error(1)
+	}
+
+	return dvs.([]Deposit), args.Error(1)
+}
+
+func (m *MockStore) ScanBlock(*btcjson.GetBlockVerboseResult) ([]Deposit, error) {
 	args := m.Called()
 
 	dvs := args.Get(0)
@@ -105,7 +85,9 @@ func TestNewStore(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := NewStore(db)
+	log, _ := testutil.NewLogger(t)
+
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	s.db.View(func(tx *bolt.Tx) error {
@@ -122,7 +104,9 @@ func TestGetLastScanBlock(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := NewStore(db)
+	log, _ := testutil.NewLogger(t)
+
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	lsb, err := s.GetLastScanBlock()
@@ -135,7 +119,11 @@ func TestGetLastScanBlock(t *testing.T) {
 		Height: 222597,
 	}
 
-	err = s.SetLastScanBlock(scanBlock)
+	err = s.db.Update(func(tx *bolt.Tx) error {
+		err := s.setLastScanBlockTx(tx, scanBlock)
+		require.NoError(t, err)
+		return err
+	})
 	require.NoError(t, err)
 
 	lsb, err = s.GetLastScanBlock()
@@ -143,40 +131,13 @@ func TestGetLastScanBlock(t *testing.T) {
 	require.Equal(t, scanBlock, lsb)
 }
 
-func TestSetLastScanBlock(t *testing.T) {
-	db, shutdown := testutil.PrepareDB(t)
-	defer shutdown()
-
-	s, err := NewStore(db)
-	require.NoError(t, err)
-
-	scanBlocks := []LastScanBlock{
-		LastScanBlock{
-			Hash:   "00000000000004509071260531df744090422d372d706cee907b2b5f2be8b8ff",
-			Height: 222597,
-		},
-		LastScanBlock{
-			Hash:   "000000000000003f499b9736635dd65101c4c70aef4912b5c5b4b86cd36b4d27",
-			Height: 222618,
-		},
-	}
-
-	require.Nil(t, s.SetLastScanBlock(scanBlocks[0]))
-	lsb, err := s.GetLastScanBlock()
-	require.NoError(t, err)
-	require.Equal(t, scanBlocks[0], lsb)
-
-	require.Nil(t, s.SetLastScanBlock(scanBlocks[1]))
-	lsb, err = s.GetLastScanBlock()
-	require.NoError(t, err)
-	require.Equal(t, scanBlocks[1], lsb)
-}
-
 func TestGetDepositAddresses(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	s, err := NewStore(db)
+	log, _ := testutil.NewLogger(t)
+
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	var addrs = []string{
@@ -249,7 +210,9 @@ func TestAddDepositeAddress(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			db, shutdown := testutil.PrepareDB(t)
 			defer shutdown()
-			s, err := NewStore(db)
+			log, _ := testutil.NewLogger(t)
+
+			s, err := NewStore(log, db)
 			require.NoError(t, err)
 
 			err = db.Update(func(tx *bolt.Tx) error {
@@ -268,7 +231,7 @@ func TestAddDepositeAddress(t *testing.T) {
 	}
 }
 
-func TestPushDepositValue(t *testing.T) {
+func TestPushDeposit(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
@@ -291,15 +254,17 @@ func TestPushDepositValue(t *testing.T) {
 
 	keyMap := make(map[string]struct{})
 	for _, dv := range dvs {
-		keyMap[fmt.Sprintf("%v:%v", dv.Tx, dv.N)] = struct{}{}
+		keyMap[dv.TxN()] = struct{}{}
 	}
 
-	s, err := NewStore(db)
+	log, _ := testutil.NewLogger(t)
+
+	s, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	err = db.Update(func(tx *bolt.Tx) error {
 		for _, dv := range dvs {
-			err := s.PushDepositValueTx(tx, dv)
+			err := s.pushDepositTx(tx, dv)
 			require.NoError(t, err)
 		}
 		return nil
@@ -500,4 +465,8 @@ func TestGetBktValue(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+}
+
+func TestScanBlock(t *testing.T) {
+	// TODO
 }

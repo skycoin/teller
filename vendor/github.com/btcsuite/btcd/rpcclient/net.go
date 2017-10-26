@@ -1,8 +1,8 @@
-// Copyright (c) 2014-2015 The btcsuite developers
+// Copyright (c) 2014-2017 The btcsuite developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
-package btcrpcclient
+package rpcclient
 
 import (
 	"encoding/json"
@@ -282,41 +282,4 @@ func (c *Client) GetNetTotalsAsync() FutureGetNetTotalsResult {
 // GetNetTotals returns network traffic statistics.
 func (c *Client) GetNetTotals() (*btcjson.GetNetTotalsResult, error) {
 	return c.GetNetTotalsAsync().Receive()
-}
-
-// FutureGetNetworkInfoResult is a future promise to deliver the result of a
-// GetNetworkInfoAsync RPC invocation (or an applicable error).
-type FutureGetNetworkInfoResult chan *response
-
-// Receive waits for the response promised by the future and returns network
-// information.
-func (r FutureGetNetworkInfoResult) Receive() (*btcjson.GetNetworkInfoResult, error) {
-	res, err := receiveFuture(r)
-	if err != nil {
-		return nil, err
-	}
-
-	// Unmarshal result as a getnetworkinfo result object.
-	var info btcjson.GetNetworkInfoResult
-	err = json.Unmarshal(res, &info)
-	if err != nil {
-		return nil, err
-	}
-
-	return &info, nil
-}
-
-// GetNetworkInfoAsync returns an instance of a type that can be used to get the
-// result of the RPC at some future time by invoking the Receive function on the
-// returned instance.
-//
-// See GetNetworkInfo for the blocking version and more details.
-func (c *Client) GetNetworkInfoAsync() FutureGetNetworkInfoResult {
-	cmd := btcjson.NewGetNetworkInfoCmd()
-	return c.sendCmd(cmd)
-}
-
-// GetNetworkInfo returns network information.
-func (c *Client) GetNetworkInfo() (*btcjson.GetNetworkInfoResult, error) {
-	return c.GetNetworkInfoAsync().Receive()
 }

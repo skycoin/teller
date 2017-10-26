@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/btcsuite/btcrpcclient"
+	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
 	"github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
 
@@ -235,7 +235,13 @@ func run() error {
 		log.Info("Connect to btcd success")
 
 		// create scan service
-		btcScanner, err = scanner.NewBTCScanner(log, db, btcrpc, scanner.Config{
+		scanStore, err := scanner.NewStore(log, db)
+		if err != nil {
+			log.WithError(err).Error("scanner.NewStore failed")
+			return err
+		}
+
+		btcScanner, err = scanner.NewBTCScanner(log, scanStore, btcrpc, scanner.Config{
 			ScanPeriod: cfg.Btcscan.CheckPeriod,
 		})
 		if err != nil {

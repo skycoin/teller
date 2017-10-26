@@ -42,6 +42,7 @@ func NewLogger(logFilename string, debug bool) (*logrus.Logger, error) {
 		FullTimestamp:      true,
 		AlwaysQuoteStrings: true,
 		QuoteEmptyFields:   true,
+		ForceFormatting:    true,
 	}
 	log.Level = logrus.InfoLevel
 

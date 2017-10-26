@@ -28,7 +28,8 @@ type DepositNote struct {
 	ErrC chan error
 }
 
-func makeDepositNote(dv Deposit) DepositNote {
+// NewDepositNote returns a DepositNote
+func NewDepositNote(dv Deposit) DepositNote {
 	return DepositNote{
 		Deposit: dv,
 		ErrC:    make(chan error, 1),
@@ -37,7 +38,8 @@ func makeDepositNote(dv Deposit) DepositNote {
 
 // Config scanner config info
 type Config struct {
-	ScanPeriod time.Duration // scan period in seconds
+	ScanPeriod        time.Duration // scan period in seconds
+	DepositBufferSize int           // size of GetDeposit() channel
 }
 
 // Deposit struct

@@ -1027,12 +1027,6 @@ func TestExchangeProcessWaitSendNoSkyAddrBound(t *testing.T) {
 	require.Equal(t, dn.Deposit, loggedDeposit)
 }
 
-// TODO:
-// Test BindAddress, make sure thread safe
-// Test GetDepositStatuses
-// Test GetDepositStatusDetail
-// Test GetBindNum
-
 func TestExchangeBindAddress(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
