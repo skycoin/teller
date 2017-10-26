@@ -19,7 +19,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcrpcclient"
+	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
 	"github.com/skycoin/skycoin/src/cipher"
 )
 
@@ -57,7 +57,7 @@ func main() {
 	u, _ := user.Current()
 	dbFile := flag.String("db", filepath.Join(u.HomeDir, ".skycoin-teller/data.db"), "db file path")
 	btcAddrFile := flag.String("btcfile", "../teller/btc_addresses.json", "btc addresses json file")
-	useJson := flag.Bool("json", false, "Print newbtcaddress output as json")
+	useJSON := flag.Bool("json", false, "Print newbtcaddress output as json")
 
 	flag.Parse()
 
@@ -221,7 +221,7 @@ func main() {
 			addrs = append(addrs, addr)
 		}
 
-		if *useJson {
+		if *useJSON {
 			s := addressJSON{
 				BtcAddresses: addrs,
 			}

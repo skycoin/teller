@@ -38,7 +38,8 @@ func NewDepositNote(dv Deposit) DepositNote {
 
 // Config scanner config info
 type Config struct {
-	ScanPeriod time.Duration // scan period in seconds
+	ScanPeriod        time.Duration // scan period in seconds
+	DepositBufferSize int           // size of GetDeposit() channel
 }
 
 // Deposit struct

@@ -46,6 +46,10 @@ func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg C
 		cfg.ScanPeriod = blockScanPeriod
 	}
 
+	if cfg.DepositBufferSize == 0 {
+		cfg.DepositBufferSize = 100
+	}
+
 	return &BTCScanner{
 		btcClient:       btc,
 		log:             log.WithField("prefix", "scanner.btc"),
@@ -54,7 +58,7 @@ func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg C
 		depositC:        make(chan DepositNote),
 		quit:            make(chan struct{}),
 		done:            make(chan struct{}),
-		scannedDeposits: make(chan Deposit, 100),
+		scannedDeposits: make(chan Deposit, cfg.DepositBufferSize),
 	}, nil
 }
 
@@ -84,10 +88,10 @@ func (s *BTCScanner) Run() error {
 	height := lsb.Height
 	hash := lsb.Hash
 
-	log = log.WithFields(logrus.Fields{
+	log.WithFields(logrus.Fields{
 		"blockHeight": height,
 		"blockHash":   hash,
-	})
+	}).Info("Last scanned block found")
 
 	// NOTE: This means that it starts scanning from the best block at the time
 	// the scanner database is initialized.
@@ -100,13 +104,17 @@ func (s *BTCScanner) Run() error {
 			return err
 		}
 
-		log = log.WithField("block", block)
 		log = log.WithField("blockHash", block.Hash)
 
 		nextBlock, err := s.scanBlock(block.Hash, block.Height)
 		if err != nil {
 			log.WithError(err).Error("scanBlock failed")
 			return err
+		}
+
+		// nextBlock is nil with no error if the scanner quit
+		if nextBlock == nil {
+			return nil
 		}
 
 		hash = nextBlock.Hash
@@ -182,6 +190,7 @@ func (s *BTCScanner) Run() error {
 // Shutdown shutdown the scanner
 func (s *BTCScanner) Shutdown() {
 	s.log.Info("Closing BTC scanner")
+	close(s.depositC)
 	close(s.quit)
 	s.btcClient.Shutdown()
 	s.log.Info("Waiting for BTC scanner to stop")

@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/btcsuite/btcrpcclient"
+	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
 	"github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
 
