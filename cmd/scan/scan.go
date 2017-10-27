@@ -5,12 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	_ "log"
 	"os"
 	"path/filepath"
-
-	"strconv"
-
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcutil"
 )
@@ -52,10 +48,13 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 	depTx.ParentHash = parentHash
 	for _, tx := range block.RawTx {
 		for i, addr := range tx.Vout {
-			depTx.TxHash = tx.Txid
-			depTx.TxHash = depTx.TxHash + ":" + strconv.Itoa(i)
+			depTx.TxHash = fmt.Sprintf("%s:%d", tx.Txid, i)
+
 			if len(addr.ScriptPubKey.Addresses) > 0 {
-				deposits = append(deposits, Deposit{Addr: addr.ScriptPubKey.Addresses[0], Tx: depTx})
+				deposits = append(deposits, Deposit{
+					Addr: addr.ScriptPubKey.Addresses[0],
+					Tx: depTx,
+				})
 			}
 		}
 
@@ -89,42 +88,33 @@ func ExistTx(addr Address, tx Tx) bool {
 }
 
 func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address {
-	branch := 0
-	for i, addr := range addrs {
-		branch = 0
 
-		if addr.MaxScanBlock == 0 && branch == 0 && blockID > 1 {
+	for i, addr := range addrs {
+
+		switch {
+		case addr.MaxScanBlock == 0 && blockID > 1:
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MaxScanBlock = blockID
 			addrs[i].MidScanBlock = blockID
-			branch = 1
-		}
 
-		if addr.MinScanBlock < addr.MaxScanBlock && addr.MinScanBlock == (blockID-1) && branch == 0 {
+		case addr.MinScanBlock < addr.MaxScanBlock && addr.MinScanBlock == (blockID-1):
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MinScanBlock = blockID
 			if addrs[i].MinScanBlock > addrs[i].MidScanBlock {
 				addrs[i].MidScanBlock = addrs[i].MinScanBlock
 			}
-			branch = 1
-		}
-
-		if addr.MaxScanBlock > addr.MinScanBlock && addr.MaxScanBlock == (blockID-1) && branch == 0 {
+		case addr.MaxScanBlock > addr.MinScanBlock && addr.MaxScanBlock == (blockID-1):
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MaxScanBlock = blockID
-			branch = 1
-		}
-
-		if addr.MinScanBlock == addr.MidScanBlock && addr.MinScanBlock == addr.MaxScanBlock && addr.MaxScanBlock == (blockID-1) && branch == 0 {
+		case addr.MinScanBlock == addr.MidScanBlock && addr.MinScanBlock == addr.MaxScanBlock && addr.MaxScanBlock == (blockID-1):
 			addr = CompareAddress(addr, deps)
 			addrs[i].Txs = addr.Txs
 			addrs[i].MaxScanBlock = blockID
 			addrs[i].MidScanBlock = blockID
 			addrs[i].MinScanBlock = blockID
-			branch = 1
 		}
 
 	}
@@ -138,8 +128,11 @@ func LoadWallet(file string) ([]Address, error) {
 	if err != nil {
 		return nil, err
 	}
-	jsonParser := json.NewDecoder(wallet)
-	jsonParser.Decode(&addrs)
+	jsonParser  := json.NewDecoder(wallet)
+	err = jsonParser.Decode(&addrs)
+	if err != nil {
+		return nil, err
+	}
 	return addrs, nil
 }
 
@@ -149,8 +142,14 @@ func SaveWallet(file string, addrs []Address) error {
 	if err != nil {
 		return err
 	}
-	addrsJson, _ := json.MarshalIndent(addrs, "", "    ")
+	addrsJson, err := json.MarshalIndent(addrs, "", "    ")
+	if err != nil {
+		return err
+	}
 	err = ioutil.WriteFile(file, addrsJson, 0644)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -177,11 +176,10 @@ func NewBTCDClient(username, pass string) (*rpcclient.Client, error) {
 }
 
 func main() {
-	//btcd settings
-	btcdUser := "myuser"
-	btcdPass := "SomeDecentp4ssw0rd"
 
 	//flags
+	user := flag.String("user", "myuser", "btcd username")
+	pass := flag.String("pass", "SomeDecentp4ssw0rd", "btcd password")
 	wallet := flag.String("wallet", "wallet.json", "wallet.json file")
 	blockN := flag.Int64("n", 0, "start blockID")
 	blockM := flag.Int64("m", 0, "finish blockID")
@@ -200,7 +198,7 @@ func main() {
 	}
 
 	//create btcd instance
-	client, err := NewBTCDClient(btcdUser, btcdPass)
+	client, err := NewBTCDClient(*user, *pass)
 	defer client.Shutdown()
 
 	for i := int(*blockN); i <= int(*blockM); i++ {
@@ -216,5 +214,4 @@ func main() {
 	}
 
 	SaveWallet(*wallet, addrs)
-
 }

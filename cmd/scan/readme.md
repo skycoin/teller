@@ -56,6 +56,8 @@ This utility have several flags:
 -n first blockID for scan
 -m last blockID for scan
 -wallet path to wallet.json
+-user btcd username
+-pass btcd password
 ```
 ### Example usage
 
