@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcutil"
 )
@@ -53,7 +54,7 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 			if len(addr.ScriptPubKey.Addresses) > 0 {
 				deposits = append(deposits, Deposit{
 					Addr: addr.ScriptPubKey.Addresses[0],
-					Tx: depTx,
+					Tx:   depTx,
 				})
 			}
 		}
@@ -128,7 +129,7 @@ func LoadWallet(file string) ([]Address, error) {
 	if err != nil {
 		return nil, err
 	}
-	jsonParser  := json.NewDecoder(wallet)
+	jsonParser := json.NewDecoder(wallet)
 	err = jsonParser.Decode(&addrs)
 	if err != nil {
 		return nil, err
