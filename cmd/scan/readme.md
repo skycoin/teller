@@ -58,11 +58,13 @@ This utility have several flags:
 -wallet path to wallet.json
 -user btcd username
 -pass btcd password
+-add get ddresses and put in watching list
 ```
 ### Example usage
 
 ```
 go run scan.go -n=1 -m=5
+o run scan.go -add=17abzUBJr7cnqfnxnmznn8W38s9f9EoXiq,1DMGtVnRrgZaji7C9noZS3a1QtoaAN2uRG
 ```
 
  

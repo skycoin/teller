@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"strings"
+
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcutil"
 )
@@ -91,7 +93,6 @@ func ExistTx(addr Address, tx Tx) bool {
 func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address {
 
 	for i, addr := range addrs {
-
 		switch {
 		case addr.MaxScanBlock == 0 && blockID > 1:
 			addr = CompareAddress(addr, deps)
@@ -154,6 +155,36 @@ func SaveWallet(file string, addrs []Address) error {
 	return nil
 }
 
+func AddBTCAddress(addr string, file string) error {
+	newAddr := Address{
+		Addr:         addr,
+		MinScanBlock: 0,
+		MidScanBlock: 0,
+		MaxScanBlock: 0,
+		Txs:          []Tx{},
+	}
+	tx := Tx{
+		TxHash:      "",
+		BlockHash:   "",
+		ParentHash:  "",
+		BlockHeight: -1,
+	}
+	newAddr.Txs = append(newAddr.Txs, tx)
+
+	addrs, err := LoadWallet(file)
+	if err != nil {
+		return err
+	}
+
+	addrs = append(addrs, newAddr)
+	err = SaveWallet(file, addrs)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func NewBTCDClient(username, pass string) (*rpcclient.Client, error) {
 	//find path to btcd
 	btcdHomeDir := btcutil.AppDataDir("btcd", false)
@@ -179,13 +210,22 @@ func NewBTCDClient(username, pass string) (*rpcclient.Client, error) {
 func main() {
 
 	//flags
+
 	user := flag.String("user", "myuser", "btcd username")
 	pass := flag.String("pass", "SomeDecentp4ssw0rd", "btcd password")
 	wallet := flag.String("wallet", "wallet.json", "wallet.json file")
 	blockN := flag.Int64("n", 0, "start blockID")
 	blockM := flag.Int64("m", 0, "finish blockID")
+	add := flag.String("add", "", "new btc addresses")
 	flag.Parse()
 
+	if len(*add) > 0 {
+		newBTCAddrs := strings.Split(*add, ",")
+		for _, addr := range newBTCAddrs {
+			AddBTCAddress(addr, *wallet)
+		}
+		fmt.Println("Addresses added.")
+	}
 	//flags validation
 	if *blockN < 0 || *blockM < 0 || *blockM < *blockN {
 		fmt.Println("Bad block range")
@@ -214,5 +254,9 @@ func main() {
 
 	}
 
-	SaveWallet(*wallet, addrs)
+	err = SaveWallet(*wallet, addrs)
+	if err != nil {
+		fmt.Println("Saving wallet is failed:", err)
+		return
+	}
 }
