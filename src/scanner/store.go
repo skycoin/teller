@@ -7,7 +7,6 @@ import (
 
 	"github.com/boltdb/bolt"
 	"github.com/btcsuite/btcd/btcjson"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/util/dbutil"
@@ -19,9 +18,6 @@ var (
 
 	// deposit value bucket
 	depositBkt = []byte("deposit_value")
-
-	// last scan block bucket
-	lastScanBlockKey = "last_scan_block"
 
 	// deposit address bucket
 	depositAddressesKey = "deposit_addresses"
@@ -63,7 +59,6 @@ func NewDuplicateDepositAddressErr(addr string) error {
 
 // Storer interface for scanner meta info storage
 type Storer interface {
-	GetLastScanBlock() (LastScanBlock, error)
 	GetScanAddresses() ([]string, error)
 	AddScanAddress(string) error
 	SetDepositProcessed(string) error
@@ -84,7 +79,6 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 	}
 
 	if err := db.Update(func(tx *bolt.Tx) error {
-		// create LastScanBlock bucket if not exist
 		if _, err := tx.CreateBucketIfNotExists(scanMetaBkt); err != nil {
 			return err
 		}
@@ -99,35 +93,6 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 		db:  db,
 		log: log,
 	}, nil
-}
-
-// LastScanBlock stores the last scanned block's hash and height
-type LastScanBlock struct {
-	Hash   string
-	Height int64
-}
-
-// GetLastScanBlock returns the last scanned block hash and height
-func (s *Store) GetLastScanBlock() (LastScanBlock, error) {
-	var lsb LastScanBlock
-
-	if err := s.db.View(func(tx *bolt.Tx) error {
-		return dbutil.GetBucketObject(tx, scanMetaBkt, lastScanBlockKey, &lsb)
-	}); err != nil {
-		switch err.(type) {
-		case dbutil.ObjectNotExistErr:
-			err = nil
-		default:
-			return LastScanBlock{}, err
-		}
-	}
-
-	return lsb, nil
-}
-
-// setLastScanBlockTx sets the last scanned block in a bolt.Tx
-func (s *Store) setLastScanBlockTx(tx *bolt.Tx, lsb LastScanBlock) error {
-	return dbutil.PutBucketValue(tx, scanMetaBkt, lastScanBlockKey, lsb)
 }
 
 // GetScanAddresses returns all scan addresses
@@ -186,6 +151,7 @@ func (s *Store) AddScanAddress(addr string) error {
 }
 
 // pushDepositTx adds an Deposit in a bolt.Tx
+// Returns DepositExistsErr if the deposit already exists
 func (s *Store) pushDepositTx(tx *bolt.Tx, dv Deposit) error {
 	key := dv.TxN()
 
@@ -243,6 +209,7 @@ func (s *Store) GetUnprocessedDeposits() ([]Deposit, error) {
 }
 
 // ScanBlock scans a btc block for deposits and adds them
+// If the deposit already exists, the result is omitted from the returned list
 func (s *Store) ScanBlock(block *btcjson.GetBlockVerboseResult) ([]Deposit, error) {
 	var dvs []Deposit
 
@@ -273,16 +240,7 @@ func (s *Store) ScanBlock(block *btcjson.GetBlockVerboseResult) ([]Deposit, erro
 			}
 		}
 
-		hash, err := chainhash.NewHashFromStr(block.Hash)
-		if err != nil {
-			s.log.WithError(err).Error("chainhash.NewHashFromStr failed")
-			return err
-		}
-
-		return s.setLastScanBlockTx(tx, LastScanBlock{
-			Hash:   hash.String(),
-			Height: block.Height,
-		})
+		return nil
 	}); err != nil {
 		return nil, err
 	}

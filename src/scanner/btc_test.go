@@ -18,10 +18,17 @@ import (
 
 var dummyBlocksBktName = []byte("blocks")
 
+type scannedBlock struct {
+	Hash   string
+	Height int32
+}
+
 type dummyBtcrpcclient struct {
-	db        *bolt.DB
-	bestBlock LastScanBlock
-	lastBlock LastScanBlock
+	db              *bolt.DB
+	bestBlock       scannedBlock
+	blockHashes     map[int64]string
+	blockCount      int64
+	blockCountError error
 }
 
 func openDummyBtcDB(t *testing.T) *bolt.DB {
@@ -32,7 +39,10 @@ func openDummyBtcDB(t *testing.T) *bolt.DB {
 }
 
 func newDummyBtcrpcclient(db *bolt.DB) *dummyBtcrpcclient {
-	return &dummyBtcrpcclient{db: db}
+	return &dummyBtcrpcclient{
+		db:          db,
+		blockHashes: make(map[int64]string),
+	}
 }
 
 func (dbc *dummyBtcrpcclient) Shutdown() {
@@ -45,15 +55,6 @@ func (dbc *dummyBtcrpcclient) GetBestBlock() (*chainhash.Hash, int32, error) {
 	}
 
 	return hash, int32(dbc.bestBlock.Height), nil
-}
-
-func (dbc *dummyBtcrpcclient) GetLastScanBlock() (*chainhash.Hash, int32, error) {
-	hash, err := chainhash.NewHashFromStr(dbc.lastBlock.Hash)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return hash, int32(dbc.lastBlock.Height), nil
 }
 
 func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error) {
@@ -78,6 +79,23 @@ func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.
 	return block, nil
 }
 
+func (dbc *dummyBtcrpcclient) GetBlockCount() (int64, error) {
+	if dbc.blockCountError != nil {
+		return 0, dbc.blockCountError
+	}
+
+	return dbc.blockCount, nil
+}
+
+func (dbc *dummyBtcrpcclient) GetBlockHash(height int64) (*chainhash.Hash, error) {
+	hash := dbc.blockHashes[height]
+	if hash == "" {
+		return nil, fmt.Errorf("No block hash for height %d", height)
+	}
+
+	return chainhash.NewHashFromStr(hash)
+}
+
 func setupScanner(t *testing.T) (*BTCScanner, func()) {
 	db, shutdown := testutil.PrepareDB(t)
 
@@ -88,29 +106,25 @@ func setupScanner(t *testing.T) (*BTCScanner, func()) {
 	// Blocks 235205 through 235212 are stored in btc.db
 	// Refer to https://blockchain.info or another explorer to see the block data
 	rpc := newDummyBtcrpcclient(btcDB)
-	rpc.lastBlock = LastScanBlock{
-		Hash:   "000000000000018d8ece83a004c5a919210d67798d13aa901c4d07f8bf87b719",
-		Height: 235205,
-	}
+	rpc.blockHashes[235205] = "000000000000018d8ece83a004c5a919210d67798d13aa901c4d07f8bf87b719"
 
-	rpc.bestBlock = LastScanBlock{
+	rpc.bestBlock = scannedBlock{
 		Hash:   "000000000000014e5217c81d6228a9274395a8bee3eb87277dd9e4315ee0f439",
 		Height: 235207,
 	}
+
+	rpc.blockCount = 235300
 
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
 
 	cfg := Config{
-		ScanPeriod:        time.Millisecond * 10,
-		DepositBufferSize: 5,
+		ScanPeriod:            time.Millisecond * 10,
+		DepositBufferSize:     5,
+		InitialScanHeight:     235205,
+		ConfirmationsRequired: 0,
 	}
 	scr, err := NewBTCScanner(log, store, rpc, cfg)
-	require.NoError(t, err)
-
-	err = scr.store.(*Store).db.Update(func(tx *bolt.Tx) error {
-		return scr.store.(*Store).setLastScanBlockTx(tx, rpc.lastBlock)
-	})
 	require.NoError(t, err)
 
 	return scr, func() {

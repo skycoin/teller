@@ -24,12 +24,15 @@ var (
 const (
 	checkHeadDepositPeriod = time.Second * 5
 	blockScanPeriod        = time.Second * 5
+	depositBufferSize      = 100
 )
 
 // Config scanner config info
 type Config struct {
-	ScanPeriod        time.Duration // scan period in seconds
-	DepositBufferSize int           // size of GetDeposit() channel
+	ScanPeriod            time.Duration // scan period in seconds
+	DepositBufferSize     int           // size of GetDeposit() channel
+	InitialScanHeight     int64         // what blockchain height to begin scanning from
+	ConfirmationsRequired int64         // how many confirmations to wait for block
 }
 
 // BTCScanner blockchain scanner to check if there're deposit coins
@@ -53,7 +56,7 @@ func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg C
 	}
 
 	if cfg.DepositBufferSize == 0 {
-		cfg.DepositBufferSize = 100
+		cfg.DepositBufferSize = depositBufferSize
 	}
 
 	return &BTCScanner{
@@ -70,7 +73,7 @@ func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg C
 
 // Run starts the scanner
 func (s *BTCScanner) Run() error {
-	log := s.log
+	log := s.log.WithField("config", s.cfg)
 	log.Info("Start bitcoin blockchain scan service")
 	defer func() {
 		log.Info("Bitcoin blockchain scan service closed")
@@ -85,48 +88,16 @@ func (s *BTCScanner) Run() error {
 		return err
 	}
 
-	// Get the last scanned block
-	lsb, err := s.store.GetLastScanBlock()
+	// Load the initial scan block
+	hash, err := s.btcClient.GetBlockHash(s.cfg.InitialScanHeight)
 	if err != nil {
-		log.WithError(err).Error("GetLastScanBlock failed")
+		log.WithError(err).Error("btcClient.GetBlockHash failed")
 		return err
 	}
 
-	height := lsb.Height
-	hash := lsb.Hash
-
-	log.WithFields(logrus.Fields{
-		"blockHeight": height,
-		"blockHash":   hash,
-	}).Info("Last scanned block found")
-
-	// NOTE: This means that it starts scanning from the best block at the time
-	// the scanner database is initialized.
-	// TODO -- the "start" block height should be configurable, we begin
-	// scanning from there.
-	if height == 0 {
-		// The first time the bot starts, get the best block
-		block, err := s.getBestBlock()
-		if err != nil {
-			return err
-		}
-
-		log = log.WithField("blockHash", block.Hash)
-
-		nextBlock, err := s.scanBlock(block.Hash, block.Height)
-		if err != nil {
-			log.WithError(err).Error("scanBlock failed")
-			return err
-		}
-
-		// nextBlock is nil with no error if the scanner quit
-		if nextBlock == nil {
-			return nil
-		}
-
-		hash = nextBlock.Hash
-		height = nextBlock.Height
-	}
+	s.log.WithFields(logrus.Fields{
+		"initialHash": hash.String(),
+	}).Info("Begin scanning blockchain")
 
 	// This loop scans for a new BTC block every ScanPeriod.
 	// When a new block is found, it compares the block against our scanning
@@ -135,11 +106,47 @@ func (s *BTCScanner) Run() error {
 	go func(hash string, height int64) {
 		defer wg.Done()
 
+		// Wait before retrying again
+		// Returns true if the scanner quit
+		wait := func(log logrus.FieldLogger) bool {
+			log.WithField("scanPeriod", s.cfg.ScanPeriod).Debug("Waiting to scan blocks again")
+			select {
+			case <-s.quit:
+				return true
+			case <-time.After(s.cfg.ScanPeriod):
+				return false
+			}
+		}
+
 		for {
 			select {
 			case <-s.quit:
 				return
 			default:
+			}
+
+			log = log.WithFields(logrus.Fields{
+				"height": height,
+				"hash":   hash,
+			})
+
+			// Check for necessary confirmations
+			bestHeight, err := s.btcClient.GetBlockCount()
+			if err != nil {
+				log.WithError(err).Error("btcClient.GetBlockCount failed")
+				if wait(log) {
+					return
+				}
+			}
+
+			log = log.WithField("bestHeight", bestHeight)
+
+			// If not enough confirmations exist for this block, wait
+			if height+s.cfg.ConfirmationsRequired > bestHeight {
+				log.Info("Not enough confirmations, waiting")
+				if wait(log) {
+					return
+				}
 			}
 
 			nextBlock, err := s.scanBlock(hash, height)
@@ -150,13 +157,8 @@ func (s *BTCScanner) Run() error {
 					log.WithError(err).Error("Scan block failed")
 				}
 
-				// Wait before retrying again
-				log.WithField("scanPeriod", s.cfg.ScanPeriod).Debug("Waiting to scan blocks again")
-				select {
-				case <-s.quit:
+				if wait(log) {
 					return
-				case <-time.After(s.cfg.ScanPeriod):
-					continue
 				}
 			}
 
@@ -168,7 +170,7 @@ func (s *BTCScanner) Run() error {
 			hash = nextBlock.Hash
 			height = nextBlock.Height
 		}
-	}(hash, height)
+	}(hash.String(), s.cfg.InitialScanHeight)
 
 	// This loop gets the head deposit value (from an array saved in the db)
 	// It sends each head to depositC, which is processed by Exchange.
@@ -311,11 +313,6 @@ func (s *BTCScanner) scanBlock(hash string, height int64) (*btcjson.GetBlockVerb
 	return nextBlock, nil
 }
 
-// AddScanAddress adds new scan address
-func (s *BTCScanner) AddScanAddress(addr string) error {
-	return s.store.AddScanAddress(addr)
-}
-
 // GetBestBlock returns the hash and height of the block in the longest (best) chain.
 func (s *BTCScanner) getBestBlock() (*btcjson.GetBlockVerboseResult, error) {
 	hash, _, err := s.btcClient.GetBestBlock()
@@ -323,11 +320,6 @@ func (s *BTCScanner) getBestBlock() (*btcjson.GetBlockVerboseResult, error) {
 		return nil, err
 	}
 
-	return s.getBlock(hash)
-}
-
-// getBlock returns block of given hash
-func (s *BTCScanner) getBlock(hash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error) {
 	return s.btcClient.GetBlockVerboseTx(hash)
 }
 
@@ -338,7 +330,7 @@ func (s *BTCScanner) getNextBlock(hash string) (*btcjson.GetBlockVerboseResult, 
 		return nil, err
 	}
 
-	b, err := s.getBlock(h)
+	b, err := s.btcClient.GetBlockVerboseTx(h)
 	if err != nil {
 		return nil, err
 	}
@@ -352,7 +344,12 @@ func (s *BTCScanner) getNextBlock(hash string) (*btcjson.GetBlockVerboseResult, 
 		return nil, err
 	}
 
-	return s.getBlock(nxtHash)
+	return s.btcClient.GetBlockVerboseTx(nxtHash)
+}
+
+// AddScanAddress adds new scan address
+func (s *BTCScanner) AddScanAddress(addr string) error {
+	return s.store.AddScanAddress(addr)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan
