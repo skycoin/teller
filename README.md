@@ -298,9 +298,6 @@ Note: Maps a btcaddr to multiple btc txns
 Bucket: scan_meta
 File: scanner/store.go
 
-Maps: "last_scan_block" -> scanner.lastScanBlock[json]
-Note: Saves scanner.lastScanBlock struct (as JSON) to "last_scan_block" key
-
 Maps: "deposit_addresses" -> [btcaddrs]
 Note: Saves list of btc addresss being scanned
 

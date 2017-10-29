@@ -23,20 +23,13 @@ import (
 	"github.com/skycoin/skycoin/src/cipher"
 )
 
-// lastScanBlock struct in bucket
-type lastScanBlock struct {
-	Hash   string
-	Height int64
-}
-
 // btc address json struct
 type addressJSON struct {
 	BtcAddresses []string `json:"btc_addresses"`
 }
 
 var (
-	scanMetaBkt      = []byte("scan_meta")
-	lastScanBlockKey = []byte("last_scan_block")
+	scanMetaBkt = []byte("scan_meta")
 )
 
 var usage = fmt.Sprintf(`%s is a teller helper tool:
@@ -45,8 +38,6 @@ Usage:
 
 The commands are:
 
-    setlastscanblock    set the last scan block height and hash in teller's data.db
-    getlastscanblock    get the last scan block in teller
     addbtcaddress       add the bitcoin address to the deposit address pool
     getbtcaddress       list all bitcoin deposit address in the pool
     newbtcaddress       generate bitcoin address
@@ -73,7 +64,7 @@ func main() {
 	var db *bolt.DB
 	var err error
 	switch cmd {
-	case "setlastscanblock", "getlastscanblock", "scanblock":
+	case "scanblock":
 		if _, err := os.Stat(*dbFile); os.IsNotExist(err) {
 			fmt.Println(*dbFile, "does not exist")
 			return
@@ -96,10 +87,6 @@ func main() {
 		}
 
 		switch args[1] {
-		case "setlastscanblock":
-			fmt.Println("usage: setlastscanblock block_height block_hash")
-		case "getlastscanblock":
-			fmt.Println("usage: getlastscanblock")
 		case "addbtcaddress":
 			fmt.Println("usage: addbtcaddress btc_address")
 		case "getbtcaddress":
@@ -127,51 +114,6 @@ func main() {
 			return
 		}
 		fmt.Println(string(v))
-	case "setlastscanblock":
-		height, err := strconv.ParseInt(args[1], 10, 64)
-		if err != nil {
-			fmt.Println("Invalid argument for set_lastscan_block command")
-			return
-		}
-
-		hash := args[2]
-		lb := lastScanBlock{
-			Height: height,
-			Hash:   hash,
-		}
-
-		db.Update(func(tx *bolt.Tx) error {
-			bkt := tx.Bucket(scanMetaBkt)
-			if bkt == nil {
-				fmt.Println("scan meta bucket is empty")
-				return nil
-			}
-			v, err := json.Marshal(lb)
-			if err != nil {
-				fmt.Println("Marshal lastscanblock failed:", err)
-				return nil
-			}
-
-			return bkt.Put(lastScanBlockKey, v)
-		})
-	case "getlastscanblock":
-		db.View(func(tx *bolt.Tx) error {
-			v := tx.Bucket(scanMetaBkt).Get(lastScanBlockKey)
-			var lsb lastScanBlock
-			if err := json.Unmarshal(v, &lsb); err != nil {
-				fmt.Println("Unmarshal failed:", err)
-				return nil
-			}
-
-			v, err := json.MarshalIndent(lsb, "", "    ")
-			if err != nil {
-				fmt.Println("MarshalIndent failed:", err)
-				return nil
-			}
-
-			fmt.Println(string(v))
-			return nil
-		})
 	case "addbtcaddress":
 		v, err := ioutil.ReadFile(*btcAddrFile)
 		if err != nil {

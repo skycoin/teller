@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -17,8 +16,9 @@ type Scanner interface {
 
 // BtcRPCClient rpcclient interface
 type BtcRPCClient interface {
-	GetBestBlock() (*chainhash.Hash, int32, error)
-	GetBlockVerboseTx(blockHash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
+	GetBlockVerboseTx(*chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
+	GetBlockHash(int64) (*chainhash.Hash, error)
+	GetBlockCount() (int64, error)
 	Shutdown()
 }
 
@@ -34,12 +34,6 @@ func NewDepositNote(dv Deposit) DepositNote {
 		Deposit: dv,
 		ErrC:    make(chan error, 1),
 	}
-}
-
-// Config scanner config info
-type Config struct {
-	ScanPeriod        time.Duration // scan period in seconds
-	DepositBufferSize int           // size of GetDeposit() channel
 }
 
 // Deposit struct
