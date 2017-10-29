@@ -16,6 +16,12 @@ import (
 	"github.com/skycoin/teller/src/util/testutil"
 )
 
+const (
+	// run tests in parallel
+	parallel        = true
+	minShutdownWait = time.Second // set to time.Second * 5 when using -race
+)
+
 var (
 	dummyBlocksBktName = []byte("blocks")
 
@@ -38,7 +44,7 @@ type dummyBtcrpcclient struct {
 }
 
 func openDummyBtcDB(t *testing.T) *bolt.DB {
-	// Blocks 235205 through 235212 are stored in this DB
+	// Blocks 235205 through 235214 are stored in this DB
 	db, err := bolt.Open("./btc.db", 0600, nil)
 	require.NoError(t, err)
 	return db
@@ -150,7 +156,7 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int) {
 			dv.ErrC <- nil
 		}
 
-		require.Len(t, dvs, nDeposits)
+		require.Equal(t, len(dvs), nDeposits)
 
 		// check all deposits
 		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
@@ -169,7 +175,16 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int) {
 		require.NoError(t, err)
 	}()
 
-	time.AfterFunc(scr.cfg.ScanPeriod*time.Duration(nDeposits*2), func() {
+	// Wait for at least twice as long as the number of deposits to process
+	// If there are few deposits, wait at least 5 seconds
+	// This only needs to wait at least 1 second normally, but if testing
+	// with -race, it needs to wait 5.
+	shutdownWait := scr.cfg.ScanPeriod * time.Duration(nDeposits*2)
+	if shutdownWait < minShutdownWait {
+		shutdownWait = minShutdownWait
+	}
+
+	time.AfterFunc(shutdownWait, func() {
 		scr.Shutdown()
 	})
 
@@ -361,7 +376,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 			dv.ErrC <- errors.New("failed to process deposit")
 		}
 
-		require.Len(t, dvs, nDeposits)
+		require.Equal(t, len(dvs), nDeposits)
 
 		// check all deposits, none should be marked as "Processed"
 		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
@@ -380,7 +395,16 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 		require.NoError(t, err)
 	}()
 
-	time.AfterFunc(scr.cfg.ScanPeriod*time.Duration(nDeposits*2), func() {
+	// Wait for at least twice as long as the number of deposits to process
+	// If there are few deposits, wait at least 5 seconds
+	// This only needs to wait at least 1 second normally, but if testing
+	// with -race, it needs to wait 5.
+	shutdownWait := scr.cfg.ScanPeriod * time.Duration(nDeposits*2)
+	if shutdownWait < minShutdownWait {
+		shutdownWait = minShutdownWait
+	}
+
+	time.AfterFunc(shutdownWait, func() {
 		scr.Shutdown()
 	})
 
@@ -405,40 +429,57 @@ func testScannerInitialGetBlockHashError(t *testing.T, btcDB *bolt.DB) {
 
 func TestScanner(t *testing.T) {
 	btcDB := openDummyBtcDB(t)
-	defer btcDB.Close()
+	if !parallel {
+		defer btcDB.Close()
+	}
 
 	t.Run("RunProcessDeposits", func(t *testing.T) {
-		// t.Parallel()
+		if parallel {
+			t.Parallel()
+		}
 		testScannerRunProcessDeposits(t, btcDB)
 	})
 
 	t.Run("GetBlockCountErrorRetry", func(t *testing.T) {
-		// t.Parallel()
+		if parallel {
+			t.Parallel()
+		}
 		testScannerGetBlockCountErrorRetry(t, btcDB)
 	})
 
 	t.Run("InitialGetBlockHashError", func(t *testing.T) {
-		// t.Parallel()
+		if parallel {
+			t.Parallel()
+		}
 		testScannerInitialGetBlockHashError(t, btcDB)
 	})
 
-	t.Run("LoadUnprocessedDeposits", func(t *testing.T) {
-		// t.Parallel()
-		testScannerLoadUnprocessedDeposits(t, btcDB)
-	})
-
 	t.Run("ProcessDepositError", func(t *testing.T) {
-		// t.Parallel()
+		if parallel {
+			t.Parallel()
+		}
 		testScannerProcessDepositError(t, btcDB)
 	})
 
 	t.Run("ConfirmationsRequired", func(t *testing.T) {
-		// t.Parallel()
+		if parallel {
+			t.Parallel()
+		}
 		testScannerConfirmationsRequired(t, btcDB)
 	})
 
 	t.Run("ScanBlockFailureRetry", func(t *testing.T) {
-		// t.Parallel()
+		if parallel {
+			t.Parallel()
+		}
 		testScannerScanBlockFailureRetry(t, btcDB)
+	})
+
+	// LoadUnprocessedDeposits fails if any other test below it runs
+	t.Run("LoadUnprocessedDeposits", func(t *testing.T) {
+		if parallel {
+			t.Parallel()
+		}
+		testScannerLoadUnprocessedDeposits(t, btcDB)
 	})
 }
