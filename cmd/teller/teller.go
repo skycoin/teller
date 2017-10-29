@@ -111,6 +111,9 @@ func run() error {
 	thrMax := flag.Int64("throttle-max", 5, "max allowd per ip in specific duration")
 	thrDur := flag.Int64("throttle-duration", int64(time.Minute), "throttle duration")
 
+	btcInitialScanHeight := flag.Int64("btc-scan-height", 0, "initial BTC blockchain scan height")
+	btcConfirmationsRequired := flag.Int64("btc-confirmations-required", 0, "number of confirmations to wait for BTC deposits")
+
 	flag.Parse()
 
 	// init logger
@@ -242,7 +245,9 @@ func run() error {
 		}
 
 		btcScanner, err = scanner.NewBTCScanner(log, scanStore, btcrpc, scanner.Config{
-			ScanPeriod: cfg.Btcscan.CheckPeriod,
+			ScanPeriod:            cfg.Btcscan.CheckPeriod,
+			ConfirmationsRequired: *btcConfirmationsRequired,
+			InitialScanHeight:     *btcInitialScanHeight,
 		})
 		if err != nil {
 			log.WithError(err).Error("Open scan service failed")
