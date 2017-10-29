@@ -268,7 +268,7 @@ func (s *BTCScanner) processDeposit(dv Deposit) error {
 		case err, ok := <-dn.ErrC:
 			if err == nil {
 				if ok {
-					if err := s.store.SetDepositProcessed(dv.TxN()); err != nil {
+					if err := s.store.SetDepositProcessed(dv.ID()); err != nil {
 						log.WithError(err).Error("SetDepositProcessed error")
 						return err
 					}

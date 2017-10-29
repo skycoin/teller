@@ -70,7 +70,7 @@ func TestBtcTxN(t *testing.T) {
 		N:  2,
 	}
 
-	require.Equal(t, "foo:2", d.TxN())
+	require.Equal(t, "foo:2", d.ID())
 }
 
 func TestNewStore(t *testing.T) {
@@ -215,7 +215,7 @@ func TestPushDeposit(t *testing.T) {
 
 	keyMap := make(map[string]struct{})
 	for _, dv := range dvs {
-		keyMap[dv.TxN()] = struct{}{}
+		keyMap[dv.ID()] = struct{}{}
 	}
 
 	log, _ := testutil.NewLogger(t)

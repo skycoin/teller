@@ -165,16 +165,17 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int) {
 		require.Equal(t, nDeposits, len(dvs))
 
 		// check all deposits
-		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
+		err := scr.store.(*BTCStore).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
-				err := dbutil.GetBucketObject(tx, depositBkt, dv.TxN(), &d)
+				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
 				require.NoError(t, err)
 				if err != nil {
 					return err
 				}
 
 				require.True(t, d.Processed)
+				require.Equal(t, CoinTypeBTC, d.CoinType)
 				require.NotEmpty(t, d.Address)
 				require.NotEmpty(t, d.Value)
 				require.NotEmpty(t, d.Height)
@@ -338,6 +339,7 @@ func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 	// NOTE: This data is fake, but the addresses and Txid are valid
 	unprocessedDeposits := []Deposit{
 		{
+			CoinType:  CoinTypeBTC,
 			Address:   "1LEkderht5M5yWj82M87bEd4XDBsczLkp9",
 			Value:     1e8,
 			Height:    23505,
@@ -346,6 +348,7 @@ func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 			Processed: false,
 		},
 		{
+			CoinType:  CoinTypeBTC,
 			Address:   "16Lr3Zhjjb7KxeDxGPUrh3DMo29Lstif7j",
 			Value:     10e8,
 			Height:    23505,
@@ -356,6 +359,7 @@ func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 	}
 
 	processedDeposit := Deposit{
+		CoinType:  CoinTypeBTC,
 		Address:   "1GH9ukgyetEJoWQFwUUeLcWQ8UgVgipLKb",
 		Value:     100e8,
 		Height:    23517,
@@ -364,16 +368,16 @@ func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 		Processed: true,
 	}
 
-	err := scr.store.(*Store).db.Update(func(tx *bolt.Tx) error {
+	err := scr.store.(*BTCStore).db.Update(func(tx *bolt.Tx) error {
 		for _, d := range unprocessedDeposits {
-			if err := scr.store.(*Store).pushDepositTx(tx, d); err != nil {
+			if err := scr.store.(*BTCStore).pushDepositTx(tx, d); err != nil {
 				require.NoError(t, err)
 				return err
 			}
 		}
 
 		// Add a processed deposit to make sure that processed deposits are filtered
-		return scr.store.(*Store).pushDepositTx(tx, processedDeposit)
+		return scr.store.(*BTCStore).pushDepositTx(tx, processedDeposit)
 	})
 	require.NoError(t, err)
 
@@ -414,16 +418,17 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 		require.Equal(t, nDeposits, len(dvs))
 
 		// check all deposits, none should be marked as "Processed"
-		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
+		err := scr.store.(*BTCStore).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
-				err := dbutil.GetBucketObject(tx, depositBkt, dv.TxN(), &d)
+				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
 				require.NoError(t, err)
 				if err != nil {
 					return err
 				}
 
 				require.False(t, d.Processed)
+				require.Equal(t, CoinTypeBTC, d.CoinType)
 				require.Equal(t, "1LEkderht5M5yWj82M87bEd4XDBsczLkp9", d.Address)
 				require.NotEmpty(t, d.Value)
 				require.NotEmpty(t, d.Height)

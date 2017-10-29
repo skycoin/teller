@@ -17,12 +17,12 @@ export const checkStatus = skyAddress =>
     .catch((error) => { throw new Error(error.response.data); });
 
 export const getAddress = skyAddress =>
-  axios.post('/api/bind', { skyaddr: skyAddress }, {
+  axios.post('/api/bind', { skyaddr: skyAddress, coin_type: "BTC" }, {
     headers: {
       'Content-Type': 'application/json',
     },
   })
-    .then(response => response.data.btc_address)
+    .then(response => response.data.deposit_address)
     .catch((error) => {
       throw new Error(error.response.data || 'An unknown error occurred.');
     });
