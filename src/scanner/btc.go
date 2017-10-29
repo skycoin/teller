@@ -121,6 +121,7 @@ func (s *BTCScanner) Run() error {
 			}
 		}
 
+		deposits := 0
 		for {
 			select {
 			case <-s.quit:
@@ -157,7 +158,8 @@ func (s *BTCScanner) Run() error {
 			}
 
 			// Scan the block for deposits
-			if err := s.scanBlock(block); err != nil {
+			n, err := s.scanBlock(block)
+			if err != nil {
 				if err == errQuit {
 					return
 				}
@@ -169,6 +171,12 @@ func (s *BTCScanner) Run() error {
 
 				continue
 			}
+
+			deposits += n
+			log.WithFields(logrus.Fields{
+				"scannedDeposits":      n,
+				"totalScannedDeposits": deposits,
+			}).Info("Scanned deposits from block")
 
 			// Wait for the next block
 			block = s.waitForNextBlock(block)
@@ -281,7 +289,7 @@ func (s *BTCScanner) processDeposit(dv Deposit) error {
 // scanBlock scans for a new BTC block every ScanPeriod.
 // When a new block is found, it compares the block against our scanning
 // deposit addresses. If a matching deposit is found, it saves it to the DB.
-func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) error {
+func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) (int, error) {
 	log := s.log.WithField("hash", block.Hash)
 	log = log.WithField("height", block.Height)
 
@@ -290,21 +298,23 @@ func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) error {
 	dvs, err := s.store.ScanBlock(block)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
-		return err
+		return 0, err
 	}
 
 	log = log.WithField("scannedDeposits", len(dvs))
 	log.Info("Counted deposits from block")
 
+	n := 0
 	for _, dv := range dvs {
 		select {
 		case s.scannedDeposits <- dv:
+			n++
 		case <-s.quit:
-			return errQuit
+			return n, errQuit
 		}
 	}
 
-	return nil
+	return n, nil
 }
 
 // getBlockAtHeight returns that block at a specific height

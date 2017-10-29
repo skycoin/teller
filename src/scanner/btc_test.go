@@ -115,9 +115,7 @@ func (dbc *dummyBtcrpcclient) GetBlockHash(height int64) (*chainhash.Hash, error
 	return chainhash.NewHashFromStr(hash)
 }
 
-func setupScanner(t *testing.T, btcDB *bolt.DB) (*BTCScanner, func()) {
-	db, shutdown := testutil.PrepareDB(t)
-
+func setupScannerWithDB(t *testing.T, btcDB *bolt.DB, db *bolt.DB) *BTCScanner {
 	log, _ := testutil.NewLogger(t)
 
 	// Blocks 235205 through 235214 are stored in btc.db
@@ -143,6 +141,14 @@ func setupScanner(t *testing.T, btcDB *bolt.DB) (*BTCScanner, func()) {
 	scr, err := NewBTCScanner(log, store, rpc, cfg)
 	require.NoError(t, err)
 
+	return scr
+}
+
+func setupScanner(t *testing.T, btcDB *bolt.DB) (*BTCScanner, func()) {
+	db, shutdown := testutil.PrepareDB(t)
+
+	scr := setupScannerWithDB(t, btcDB, db)
+
 	return scr, shutdown
 }
 
@@ -156,7 +162,7 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int) {
 			dv.ErrC <- nil
 		}
 
-		require.Equal(t, len(dvs), nDeposits)
+		require.Equal(t, nDeposits, len(dvs))
 
 		// check all deposits
 		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
@@ -164,10 +170,15 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int) {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, depositBkt, dv.TxN(), &d)
 				require.NoError(t, err)
-				require.True(t, d.Processed)
 				if err != nil {
 					return err
 				}
+
+				require.True(t, d.Processed)
+				require.NotEmpty(t, d.Address)
+				require.NotEmpty(t, d.Value)
+				require.NotEmpty(t, d.Height)
+				require.NotEmpty(t, d.Tx)
 			}
 
 			return nil
@@ -196,15 +207,17 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int) {
 func testScannerRun(t *testing.T, scr *BTCScanner) {
 	nDeposits := 0
 
-	// This address has 1 deposit, in block 235207
+	// This address has 0 deposits
 	err := scr.AddScanAddress("1LcEkgX8DCrQczLMVh9LDTRnkdVV2oun3A")
 	require.NoError(t, err)
-	nDeposits = nDeposits + 1
+	nDeposits = nDeposits + 0
 
-	// This address has 1 deposit, in block 235206
+	// This address has:
+	// 1 deposit, in block 235206
+	// 1 deposit, in block 235207
 	err = scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA")
 	require.NoError(t, err)
-	nDeposits = nDeposits + 1
+	nDeposits = nDeposits + 2
 
 	// This address has:
 	// 31 deposits in block 235205
@@ -294,6 +307,28 @@ func testScannerScanBlockFailureRetry(t *testing.T, btcDB *bolt.DB) {
 	testScannerRun(t, scr)
 }
 
+func testScannerDuplicateDepositScans(t *testing.T, btcDB *bolt.DB) {
+	// Test that rescanning the same blocks doesn't send extra deposits
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
+
+	nDeposits := 0
+
+	// This address has:
+	// 1 deposit, in block 235206
+	// 1 deposit, in block 235207
+	scr := setupScannerWithDB(t, btcDB, db)
+	err := scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA")
+	require.NoError(t, err)
+	nDeposits = nDeposits + 2
+
+	testScannerRunProcessedLoop(t, scr, nDeposits)
+
+	// Scanning again will have no new deposits
+	scr = setupScannerWithDB(t, btcDB, db)
+	testScannerRunProcessedLoop(t, scr, 0)
+}
+
 func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 	// Test that pending unprocessed deposits from the db are loaded when
 	// then scanner starts.
@@ -376,7 +411,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 			dv.ErrC <- errors.New("failed to process deposit")
 		}
 
-		require.Equal(t, len(dvs), nDeposits)
+		require.Equal(t, nDeposits, len(dvs))
 
 		// check all deposits, none should be marked as "Processed"
 		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
@@ -384,10 +419,15 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, depositBkt, dv.TxN(), &d)
 				require.NoError(t, err)
-				require.False(t, d.Processed)
 				if err != nil {
 					return err
 				}
+
+				require.False(t, d.Processed)
+				require.Equal(t, "1LEkderht5M5yWj82M87bEd4XDBsczLkp9", d.Address)
+				require.NotEmpty(t, d.Value)
+				require.NotEmpty(t, d.Height)
+				require.NotEmpty(t, d.Tx)
 			}
 
 			return nil
@@ -475,11 +515,17 @@ func TestScanner(t *testing.T) {
 		testScannerScanBlockFailureRetry(t, btcDB)
 	})
 
-	// LoadUnprocessedDeposits fails if any other test below it runs
 	t.Run("LoadUnprocessedDeposits", func(t *testing.T) {
 		if parallel {
 			t.Parallel()
 		}
 		testScannerLoadUnprocessedDeposits(t, btcDB)
+	})
+
+	t.Run("DuplicateDepositScans", func(t *testing.T) {
+		if parallel {
+			t.Parallel()
+		}
+		testScannerDuplicateDepositScans(t, btcDB)
 	})
 }

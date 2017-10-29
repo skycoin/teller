@@ -150,22 +150,6 @@ func (s *Store) AddScanAddress(addr string) error {
 	})
 }
 
-// pushDepositTx adds an Deposit in a bolt.Tx
-// Returns DepositExistsErr if the deposit already exists
-func (s *Store) pushDepositTx(tx *bolt.Tx, dv Deposit) error {
-	key := dv.TxN()
-
-	// Check if the deposit value already exists
-	if hasKey, err := dbutil.BucketHasKey(tx, depositBkt, key); err != nil {
-		return err
-	} else if hasKey {
-		return DepositExistsErr{}
-	}
-
-	// Save deposit value
-	return dbutil.PutBucketValue(tx, depositBkt, key, dv)
-}
-
 // SetDepositProcessed marks a Deposit as processed
 func (s *Store) SetDepositProcessed(dvKey string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
@@ -208,6 +192,22 @@ func (s *Store) GetUnprocessedDeposits() ([]Deposit, error) {
 	return dvs, nil
 }
 
+// pushDepositTx adds an Deposit in a bolt.Tx
+// Returns DepositExistsErr if the deposit already exists
+func (s *Store) pushDepositTx(tx *bolt.Tx, dv Deposit) error {
+	key := dv.TxN()
+
+	// Check if the deposit value already exists
+	if hasKey, err := dbutil.BucketHasKey(tx, depositBkt, key); err != nil {
+		return err
+	} else if hasKey {
+		return DepositExistsErr{}
+	}
+
+	// Save deposit value
+	return dbutil.PutBucketValue(tx, depositBkt, key, dv)
+}
+
 // ScanBlock scans a btc block for deposits and adds them
 // If the deposit already exists, the result is omitted from the returned list
 func (s *Store) ScanBlock(block *btcjson.GetBlockVerboseResult) ([]Deposit, error) {
@@ -220,13 +220,13 @@ func (s *Store) ScanBlock(block *btcjson.GetBlockVerboseResult) ([]Deposit, erro
 			return err
 		}
 
-		dvs, err = ScanBTCBlock(block, addrs)
+		deposits, err := ScanBTCBlock(block, addrs)
 		if err != nil {
 			s.log.WithError(err).Error("ScanBTCBlock failed")
 			return err
 		}
 
-		for _, dv := range dvs {
+		for _, dv := range deposits {
 			if err := s.pushDepositTx(tx, dv); err != nil {
 				log := s.log.WithField("deposit", dv)
 				switch err.(type) {
@@ -238,6 +238,8 @@ func (s *Store) ScanBlock(block *btcjson.GetBlockVerboseResult) ([]Deposit, erro
 					return err
 				}
 			}
+
+			dvs = append(dvs, dv)
 		}
 
 		return nil
