@@ -17,8 +17,7 @@ import (
 )
 
 var (
-	errBlockNotFound = errors.New("Block not found")
-	errNoNewBlock    = errors.New("No new block")
+	errQuit = errors.New("Scanner quit")
 )
 
 const (
@@ -84,37 +83,41 @@ func (s *BTCScanner) Run() error {
 
 	// Load unprocessed deposits
 	if err := s.loadUnprocessedDeposits(); err != nil {
+		if err == errQuit {
+			return nil
+		}
+
 		log.WithError(err).Error("loadUnprocessedDeposits failed")
 		return err
 	}
 
 	// Load the initial scan block
-	hash, err := s.btcClient.GetBlockHash(s.cfg.InitialScanHeight)
+	initialBlock, err := s.getBlockAtHeight(s.cfg.InitialScanHeight)
 	if err != nil {
-		log.WithError(err).Error("btcClient.GetBlockHash failed")
+		log.WithError(err).Error("getBlockAtHeight failed")
 		return err
 	}
 
 	s.log.WithFields(logrus.Fields{
-		"initialHash": hash.String(),
+		"initialHash":   initialBlock.Hash,
+		"initialHeight": initialBlock.Height,
 	}).Info("Begin scanning blockchain")
 
 	// This loop scans for a new BTC block every ScanPeriod.
 	// When a new block is found, it compares the block against our scanning
 	// deposit addresses. If a matching deposit is found, it saves it to the DB.
 	wg.Add(1)
-	go func(hash string, height int64) {
+	go func(block *btcjson.GetBlockVerboseResult) {
 		defer wg.Done()
 
 		// Wait before retrying again
 		// Returns true if the scanner quit
-		wait := func(log logrus.FieldLogger) bool {
-			log.WithField("scanPeriod", s.cfg.ScanPeriod).Debug("Waiting to scan blocks again")
+		wait := func() error {
 			select {
 			case <-s.quit:
-				return true
+				return errQuit
 			case <-time.After(s.cfg.ScanPeriod):
-				return false
+				return nil
 			}
 		}
 
@@ -126,51 +129,51 @@ func (s *BTCScanner) Run() error {
 			}
 
 			log = log.WithFields(logrus.Fields{
-				"height": height,
-				"hash":   hash,
+				"height": block.Height,
+				"hash":   block.Hash,
 			})
 
 			// Check for necessary confirmations
 			bestHeight, err := s.btcClient.GetBlockCount()
 			if err != nil {
 				log.WithError(err).Error("btcClient.GetBlockCount failed")
-				if wait(log) {
+				if wait() != nil {
 					return
 				}
+
+				continue
 			}
 
 			log = log.WithField("bestHeight", bestHeight)
 
 			// If not enough confirmations exist for this block, wait
-			if height+s.cfg.ConfirmationsRequired > bestHeight {
+			if block.Height+s.cfg.ConfirmationsRequired > bestHeight {
 				log.Info("Not enough confirmations, waiting")
-				if wait(log) {
+				if wait() != nil {
 					return
 				}
+
+				continue
 			}
 
-			nextBlock, err := s.scanBlock(hash, height)
-			if err != nil {
-				switch err {
-				case errNoNewBlock:
-				default:
-					log.WithError(err).Error("Scan block failed")
-				}
-
-				if wait(log) {
+			// Scan the block for deposits
+			if err := s.scanBlock(block); err != nil {
+				if err == errQuit {
 					return
 				}
+
+				log.WithError(err).Error("Scan block failed")
+				if wait() != nil {
+					return
+				}
+
+				continue
 			}
 
-			// nextBlock is nil with no error if the scanner quit
-			if nextBlock == nil {
-				return
-			}
-
-			hash = nextBlock.Hash
-			height = nextBlock.Height
+			// Wait for the next block
+			block = s.waitForNextBlock(block)
 		}
-	}(hash.String(), s.cfg.InitialScanHeight)
+	}(initialBlock)
 
 	// This loop gets the head deposit value (from an array saved in the db)
 	// It sends each head to depositC, which is processed by Exchange.
@@ -184,6 +187,10 @@ func (s *BTCScanner) Run() error {
 				return
 			case dv := <-s.scannedDeposits:
 				if err := s.processDeposit(dv); err != nil {
+					if err == errQuit {
+						return
+					}
+
 					msg := "processDeposit failed. This deposit will be reprocessed the next time the scanner is run."
 					s.log.WithField("deposit", dv).WithError(err).Error(msg)
 				}
@@ -223,7 +230,7 @@ func (s *BTCScanner) loadUnprocessedDeposits() error {
 	for _, dv := range dvs {
 		select {
 		case <-s.quit:
-			return nil
+			return errQuit
 		case s.scannedDeposits <- dv:
 		}
 	}
@@ -245,11 +252,11 @@ func (s *BTCScanner) processDeposit(dv Deposit) error {
 
 	select {
 	case <-s.quit:
-		return nil
+		return errQuit
 	case s.depositC <- dn:
 		select {
 		case <-s.quit:
-			return nil
+			return errQuit
 		case err, ok := <-dn.ErrC:
 			if err == nil {
 				if ok {
@@ -274,77 +281,91 @@ func (s *BTCScanner) processDeposit(dv Deposit) error {
 // scanBlock scans for a new BTC block every ScanPeriod.
 // When a new block is found, it compares the block against our scanning
 // deposit addresses. If a matching deposit is found, it saves it to the DB.
-func (s *BTCScanner) scanBlock(hash string, height int64) (*btcjson.GetBlockVerboseResult, error) {
-	log := s.log.WithField("hash", hash)
-	log = log.WithField("height", height)
+func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) error {
+	log := s.log.WithField("hash", block.Hash)
+	log = log.WithField("height", block.Height)
 
-	nextBlock, err := s.getNextBlock(hash)
+	log.Debug("Scanning block")
+
+	dvs, err := s.store.ScanBlock(block)
 	if err != nil {
-		log.WithError(err).Error("getNextBlock failed")
-		return nil, err
+		log.WithError(err).Error("store.ScanBlock failed")
+		return err
 	}
 
-	if nextBlock == nil {
-		log.Debug("No new block to scan...")
-		return nil, errNoNewBlock
-	}
-
-	log = log.WithFields(logrus.Fields{
-		"nextHeight": nextBlock.Height,
-		"nextHash":   nextBlock.Hash,
-	})
-
-	log.Debug("Scanned new block")
-
-	dvs, err := s.store.ScanBlock(nextBlock)
-	if err != nil {
-		s.log.WithError(err).Error("store.ScanBlock failed")
-		return nil, err
-	}
+	log = log.WithField("scannedDeposits", len(dvs))
+	log.Info("Counted deposits from block")
 
 	for _, dv := range dvs {
 		select {
 		case s.scannedDeposits <- dv:
 		case <-s.quit:
-			return nil, nil
+			return errQuit
 		}
 	}
 
-	return nextBlock, nil
+	return nil
 }
 
-// GetBestBlock returns the hash and height of the block in the longest (best) chain.
-func (s *BTCScanner) getBestBlock() (*btcjson.GetBlockVerboseResult, error) {
-	hash, _, err := s.btcClient.GetBestBlock()
+// getBlockAtHeight returns that block at a specific height
+func (s *BTCScanner) getBlockAtHeight(height int64) (*btcjson.GetBlockVerboseResult, error) {
+	log := s.log.WithField("blockHeight", height)
+
+	hash, err := s.btcClient.GetBlockHash(s.cfg.InitialScanHeight)
 	if err != nil {
+		log.WithError(err).Error("btcClient.GetBlockHash failed")
 		return nil, err
 	}
 
-	return s.btcClient.GetBlockVerboseTx(hash)
+	block, err := s.btcClient.GetBlockVerboseTx(hash)
+	if err != nil {
+		log.WithError(err).Error("btcClient.GetBlockVerboseTx failed")
+		return nil, err
+	}
+
+	return block, nil
 }
 
-// getNextBlock returns the next block of given hash, return nil if next block does not exist
-func (s *BTCScanner) getNextBlock(hash string) (*btcjson.GetBlockVerboseResult, error) {
-	h, err := chainhash.NewHashFromStr(hash)
-	if err != nil {
-		return nil, err
-	}
-
-	b, err := s.btcClient.GetBlockVerboseTx(h)
-	if err != nil {
-		return nil, err
-	}
-
-	if b.NextHash == "" {
+// getNextBlock returns the next block from another block, return nil if next block does not exist
+func (s *BTCScanner) getNextBlock(block *btcjson.GetBlockVerboseResult) (*btcjson.GetBlockVerboseResult, error) {
+	if block == nil || block.NextHash == "" {
 		return nil, nil
 	}
 
-	nxtHash, err := chainhash.NewHashFromStr(b.NextHash)
+	nxtHash, err := chainhash.NewHashFromStr(block.NextHash)
 	if err != nil {
+		s.log.WithError(err).Error("chainhash.NewHashFromStr failed")
 		return nil, err
 	}
 
 	return s.btcClient.GetBlockVerboseTx(nxtHash)
+}
+
+// waitForNextBlock scans for the next block until it is available
+func (s *BTCScanner) waitForNextBlock(block *btcjson.GetBlockVerboseResult) *btcjson.GetBlockVerboseResult {
+	log := s.log.WithField("blockHash", block.Hash)
+	log = log.WithField("blockHeight", block.Height)
+	log.Debug("Waiting for the next block")
+
+	for {
+		nextBlock, err := s.getNextBlock(block)
+		if err != nil {
+			log.WithError(err).Error("getNextBlock failed")
+		}
+		if nextBlock == nil {
+			log.Debug("No new block yet")
+		}
+		if err != nil || nextBlock == nil {
+			select {
+			case <-s.quit:
+				return nil
+			case <-time.After(s.cfg.ScanPeriod):
+				continue
+			}
+		}
+
+		return nextBlock
+	}
 }
 
 // AddScanAddress adds new scan address
