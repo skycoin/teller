@@ -1,72 +1,9 @@
 [
     {
         "address": "12c6DSiU4Rq3P4ZxziKxzrL5LmMBrzjrJX",
-        "min_scan_block": 35,
-        "mid_scan_block": 35,
-        "max_scan_block": 35,
-        "txs": [
-            {
-                "tx_hash": "0e3e2357e806b6cdb1f70b54c3a3a17b6714ee1f0e68bebb44a74b1efd512098:0",
-                "block_hash": "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048",
-                "parent_hash": "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
-                "block_height": 1
-            }
-        ]
-    },
-    {
-        "address": "1BTsxjF9rXtFvUZ2UFditbeUpohGgKCxUt",
-        "min_scan_block": 29,
-        "mid_scan_block": 29,
-        "max_scan_block": 35,
-        "txs": [
-            {
-                "tx_hash": "223b0620a8f1c1f23a2ebf8032ed11321b921017d01974e74cddd651319b5474:0",
-                "block_hash": "00000000a73fb23b6c42b18b3253ed29c5d0c80d84624efa12c2cf05c4b4318f",
-                "parent_hash": "00000000a87073ea3d7af299e02a434598b9c92094afa552e0711afcc0857962",
-                "block_height": 34
-            }
-        ]
-    },
-    {
-        "address": "1GkQmKAmHtNfnD3LHhTkewJxKHVSta4m2a",
-        "min_scan_block": 9,
-        "mid_scan_block": 20,
-        "max_scan_block": 29,
-        "txs": [
-            {
-                "tx_hash": "20251a76e64e920e58291a30d4b212939aae976baca40e70818ceaa596fb9d37:0",
-                "block_hash": "000000003031a0e73735690c5a1ff2a4be82553b2a12b776fbd3a215dc8f778d",
-                "parent_hash": "000000009b7262315dbf071787ad3656097b892abffd1f95a1a022f896f533fc",
-                "block_height": 6
-            }
-        ]
-    },
-    {
-        "address": "17abzUBJr7cnqfnxnmznn8W38s9f9EoXiq",
-        "min_scan_block": 0,
-        "mid_scan_block": 0,
-        "max_scan_block": 0,
-        "txs": [
-            {
-                "tx_hash": "",
-                "block_hash": "",
-                "parent_hash": "",
-                "block_height": -1
-            }
-        ]
-    },
-    {
-        "address": "1DMGtVnRrgZaji7C9noZS3a1QtoaAN2uRG",
-        "min_scan_block": 0,
-        "mid_scan_block": 0,
-        "max_scan_block": 0,
-        "txs": [
-            {
-                "tx_hash": "",
-                "block_hash": "",
-                "parent_hash": "",
-                "block_height": -1
-            }
-        ]
+        "min_scan_block": 22,
+        "mid_scan_block": 22,
+        "max_scan_block": 22,
+        "txs": []
     }
 ]

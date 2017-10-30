@@ -27,28 +27,8 @@ $ go install . ./cmd/...
 $ ./btcd
 ```
 
-### Correct format for adding new addresses
-```
-[
-    {
-        "address": "12c6DSiU4Rq3P4ZxziKxzrL5LmMBrzjrJX",
-        "min_scan_block": 0,
-        "mid_scan_block": 0,
-        "max_scan_block": 0,
-        "txs": [
-            {
-                "tx_hash": "",
-                "block_hash": "",
-                "parent_hash": "",
-                "block_height": -1
-            }
-        ]
-    }
-]
-```
 
-
-### Start scanning
+### Start scanning and other options
 
 This utility have several flags:
 
@@ -58,13 +38,38 @@ This utility have several flags:
 -wallet path to wallet.json
 -user btcd username
 -pass btcd password
--add get ddresses and put in watching list
+-add get addresses and put in watching list
+-add_file get addresses from json file
 ```
 ### Example usage
 
 ```
 go run scan.go -n=1 -m=5
-o run scan.go -add=17abzUBJr7cnqfnxnmznn8W38s9f9EoXiq,1DMGtVnRrgZaji7C9noZS3a1QtoaAN2uRG
+go run scan.go -add=17abzUBJr7cnqfnxnmznn8W38s9f9EoXiq,1DMGtVnRrgZaji7C9noZS3a1QtoaAN2uRG
+```
+If you want add addresses from json file shoud be in format:
+
+```
+{
+  "btc_addresses": [
+    "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
+    "1HLoD9E4SDFFPDiYfNYnkBLQ85Y51J3Zb1",
+    "1Mv16pwUZYUrMWLTe2DDZzXHGAyHdKA5oz",
+    "1NvBwUKqUuH3HbPjHq417XhQ551RHhogso",
+    "1Kar4VK9HLkcQ99iWbs4LuCGEyDdTab5PC"
+  ]
+}
+```
+For loading from file use command:
+
+```bash
+$ go run scan.go -add_file=btc_addresses.json
 ```
 
+
+Also you can combine commands
+
+```
+go run scan.go -add=1CYG7y3fukVLdobqgUtbknwWKUZ5p1HVmV -n=10 -m=16
+```
  

@@ -14,6 +14,11 @@ import (
 	"github.com/btcsuite/btcutil"
 )
 
+
+type NewBTCAddress struct {
+	Addresses []string `json:"btc_addresses""`
+}
+
 type Address struct {
 	Addr         string `json:"address"`
 	MinScanBlock int64  `json:"min_scan_block"`
@@ -67,14 +72,8 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 
 func CompareAddress(addr Address, deps []Deposit) Address {
 	for _, dep := range deps {
-		if addr.Addr == dep.Addr {
-			if addr.Txs[0].BlockHeight == -1 {
-				addr.Txs[0] = dep.Tx
-			} else {
-				if !ExistTx(addr, dep.Tx) {
-					addr.Txs = append(addr.Txs, dep.Tx)
-				}
-			}
+		if addr.Addr == dep.Addr && !ExistTx(addr, dep.Tx){
+				addr.Txs = append(addr.Txs, dep.Tx)
 		}
 	}
 
@@ -84,6 +83,15 @@ func CompareAddress(addr Address, deps []Deposit) Address {
 func ExistTx(addr Address, tx Tx) bool {
 	for _, t := range addr.Txs {
 		if t == tx {
+			return true
+		}
+	}
+	return false
+}
+
+func ExistAddress(newAddr Address, walletAddresses []Address) bool {
+	for _, addr  := range walletAddresses {
+		if newAddr.Addr == addr.Addr {
 			return true
 		}
 	}
@@ -155,6 +163,21 @@ func SaveWallet(file string, addrs []Address) error {
 	return nil
 }
 
+func LoadBTCFromFile(file string) (NewBTCAddress, error) {
+	var addrs NewBTCAddress
+	userFile, err := os.Open(file)
+	defer userFile.Close()
+	if err != nil {
+		return addrs, err
+	}
+	jsonParser := json.NewDecoder(userFile)
+	err = jsonParser.Decode(&addrs)
+	if err != nil {
+		return addrs, err
+	}
+	return addrs, nil
+}
+
 func AddBTCAddress(addr string, file string) error {
 	newAddr := Address{
 		Addr:         addr,
@@ -163,20 +186,16 @@ func AddBTCAddress(addr string, file string) error {
 		MaxScanBlock: 0,
 		Txs:          []Tx{},
 	}
-	tx := Tx{
-		TxHash:      "",
-		BlockHash:   "",
-		ParentHash:  "",
-		BlockHeight: -1,
-	}
-	newAddr.Txs = append(newAddr.Txs, tx)
 
 	addrs, err := LoadWallet(file)
 	if err != nil {
 		return err
 	}
 
-	addrs = append(addrs, newAddr)
+	if !ExistAddress(newAddr,addrs) {
+		addrs = append(addrs, newAddr)
+	}
+
 	err = SaveWallet(file, addrs)
 	if err != nil {
 		return err
@@ -217,6 +236,7 @@ func main() {
 	blockN := flag.Int64("n", 0, "start blockID")
 	blockM := flag.Int64("m", 0, "finish blockID")
 	add := flag.String("add", "", "new btc addresses")
+	addFile := flag.String("add_file", "", "new btc addresses from file")
 	flag.Parse()
 
 	if len(*add) > 0 {
@@ -224,7 +244,15 @@ func main() {
 		for _, addr := range newBTCAddrs {
 			AddBTCAddress(addr, *wallet)
 		}
-		fmt.Println("Addresses added.")
+		fmt.Println("Addresses from command line added.")
+	}
+
+	if len(*addFile) > 0 {
+		newBTC,_ := LoadBTCFromFile(*addFile)
+		for _, addr := range newBTC.Addresses {
+			AddBTCAddress(addr, *wallet)
+		}
+		fmt.Println("Addresses from file added.")
 	}
 	//flags validation
 	if *blockN < 0 || *blockM < 0 || *blockM < *blockN {
