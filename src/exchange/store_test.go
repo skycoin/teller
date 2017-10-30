@@ -58,6 +58,11 @@ func (m *MockStore) UpdateDepositInfo(btcTx string, f func(DepositInfo) DepositI
 	return args.Get(0).(DepositInfo), args.Error(1)
 }
 
+func (m *MockStore) UpdateDepositInfoCallback(btcTx string, f func(DepositInfo) DepositInfo, callback func(DepositInfo) error) (DepositInfo, error) {
+	args := m.Called(btcTx, f, callback)
+	return args.Get(0).(DepositInfo), args.Error(1)
+}
+
 func (m *MockStore) GetSkyBindBtcAddresses(skyAddr string) ([]string, error) {
 	args := m.Called(skyAddr)
 

@@ -162,7 +162,7 @@ func (s *BTCStore) SetDepositProcessed(dvKey string) error {
 		}
 
 		if dv.ID() != dvKey {
-			return errors.New("CRITICAL ERROR: dv.Txn() != dvKey")
+			return errors.New("CRITICAL ERROR: dv.ID() != dvKey")
 		}
 
 		dv.Processed = true

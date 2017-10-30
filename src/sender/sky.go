@@ -8,40 +8,34 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/skycoin/src/api/webrpc"
-	"github.com/skycoin/skycoin/src/cipher"
+	"github.com/skycoin/skycoin/src/coin"
 )
 
 const (
-	sendCoinRetryWait  = 3 * time.Second
-	confirmTxRetryWait = 3 * time.Second
+	broadcastTxRetryWait = 3 * time.Second
+	confirmTxRetryWait   = 3 * time.Second
 )
 
-// SendRequest send coin request struct
-type SendRequest struct {
-	Coins   uint64             // coin number (in droplets)
-	Address string             // recv address
-	RspC    chan *SendResponse // response
+// BroadcastTxRequest send coin request struct
+type BroadcastTxRequest struct {
+	Tx   *coin.Transaction
+	RspC chan *BroadcastTxResponse // response
 }
 
 // Verify verifies the request parameters
-func (r SendRequest) Verify() error {
-	_, err := cipher.DecodeBase58Address(r.Address)
-	if err != nil {
-		return err
-	}
-
-	if r.Coins < 1 {
-		return errors.New("send coins must >= 1")
+func (r BroadcastTxRequest) Verify() error {
+	if r.Tx == nil {
+		return errors.New("Tx empty")
 	}
 
 	return nil
 }
 
-// SendResponse send response
-type SendResponse struct {
+// BroadcastTxResponse send response
+type BroadcastTxResponse struct {
 	Txid string
 	Err  error
-	Req  SendRequest
+	Req  BroadcastTxRequest
 }
 
 // ConfirmRequest tx confirmation request struct
@@ -68,12 +62,13 @@ type ConfirmResponse struct {
 
 // SendService is in charge of sending skycoin
 type SendService struct {
-	log         logrus.FieldLogger
-	cfg         Config
-	skycli      skyclient
-	quit        chan struct{}
-	sendChan    chan SendRequest
-	confirmChan chan ConfirmRequest
+	log             logrus.FieldLogger
+	cfg             Config
+	SkyClient       SkyClient
+	quit            chan struct{}
+	done            chan struct{}
+	broadcastTxChan chan BroadcastTxRequest
+	confirmChan     chan ConfirmRequest
 }
 
 // Config sender configuration info
@@ -81,19 +76,22 @@ type Config struct {
 	ReqBufSize uint32 // the buffer size of sending request
 }
 
-type skyclient interface {
-	Send(recvAddr string, coins uint64) (string, error)
-	GetTransaction(txid string) (*webrpc.TxnResult, error)
+// SkyClient defines a Skycoin RPC client interface for sending and confirming
+type SkyClient interface {
+	CreateTransaction(string, uint64) (*coin.Transaction, error)
+	BroadcastTransaction(*coin.Transaction) (string, error)
+	GetTransaction(string) (*webrpc.TxnResult, error)
 }
 
 // NewService creates sender instance
-func NewService(cfg Config, log logrus.FieldLogger, skycli skyclient) *SendService {
+func NewService(cfg Config, log logrus.FieldLogger, skycli SkyClient) *SendService {
 	return &SendService{
-		log:      log.WithField("prefix", "sender.service"),
-		cfg:      cfg,
-		skycli:   skycli,
-		quit:     make(chan struct{}),
-		sendChan: make(chan SendRequest, cfg.ReqBufSize),
+		SkyClient:       skycli,
+		log:             log.WithField("prefix", "sender.service"),
+		cfg:             cfg,
+		quit:            make(chan struct{}),
+		done:            make(chan struct{}),
+		broadcastTxChan: make(chan BroadcastTxRequest, cfg.ReqBufSize),
 	}
 }
 
@@ -102,32 +100,43 @@ func (s *SendService) Run() error {
 	log := s.log
 	log.Info("Start skycoin send service")
 	defer log.Info("Skycoin send service closed")
+	defer close(s.done)
 
 	for {
 		select {
 		case <-s.quit:
 			return nil
-		case req := <-s.sendChan:
-			rsp, err := s.SendRetry(req)
+		case req := <-s.broadcastTxChan:
+			rsp, err := s.BroadcastTxRetry(req)
+
 			if err != nil {
-				log.WithError(err).Error("SendRetry failed")
-				req.RspC <- &SendResponse{
+				log.WithError(err).Error("BroadcastTxRetry failed")
+				rsp = &BroadcastTxResponse{
 					Req: req,
 					Err: err,
 				}
-			} else {
-				req.RspC <- rsp
+			}
+
+			select {
+			case req.RspC <- rsp:
+			case <-s.quit:
+				return nil
 			}
 		case req := <-s.confirmChan:
 			rsp, err := s.ConfirmRetry(req)
+
 			if err != nil {
 				log.WithError(err).Error("ConfirmRetry failed")
-				req.RspC <- &ConfirmResponse{
+				rsp = &ConfirmResponse{
 					Req: req,
 					Err: err,
 				}
-			} else {
-				req.RspC <- rsp
+			}
+
+			select {
+			case req.RspC <- rsp:
+			case <-s.quit:
+				return nil
 			}
 		}
 	}
@@ -142,9 +151,9 @@ func (s *SendService) Confirm(req ConfirmRequest) (*ConfirmResponse, error) {
 		return nil, err
 	}
 
-	tx, err := s.skycli.GetTransaction(req.Txid)
+	tx, err := s.SkyClient.GetTransaction(req.Txid)
 	if err != nil {
-		log.WithError(err).Error("skycli.GetTransaction failed")
+		log.WithError(err).Error("SkyClient.GetTransaction failed")
 		return nil, err
 	}
 
@@ -169,9 +178,9 @@ func (s *SendService) ConfirmRetry(req ConfirmRequest) (*ConfirmResponse, error)
 	// Most likely reason for GetTransaction() to fail is because the skyd node
 	// is unavailable.
 	for {
-		tx, err := s.skycli.GetTransaction(req.Txid)
+		tx, err := s.SkyClient.GetTransaction(req.Txid)
 		if err != nil {
-			log.WithError(err).Error("skycli.GetTransaction failed, trying again...")
+			log.WithError(err).Error("SkyClient.GetTransaction failed, trying again...")
 
 			select {
 			case <-s.quit:
@@ -189,35 +198,35 @@ func (s *SendService) ConfirmRetry(req ConfirmRequest) (*ConfirmResponse, error)
 	}
 }
 
-// Send sends coins
-func (s *SendService) Send(req SendRequest) (*SendResponse, error) {
-	log := s.log.WithField("sendReq", req)
+// BroadcastTx sends coins
+func (s *SendService) BroadcastTx(req BroadcastTxRequest) (*BroadcastTxResponse, error) {
+	log := s.log.WithField("broadcastTxTxid", req.Tx.TxIDHex())
 
 	// Verify the request
 	if err := req.Verify(); err != nil {
-		log.WithError(err).Error("SendRequest.Verify failed")
+		log.WithError(err).Error("BroadcastTxRequest.Verify failed")
 		return nil, err
 	}
 
-	txid, err := s.skycli.Send(req.Address, req.Coins)
+	txid, err := s.SkyClient.BroadcastTransaction(req.Tx)
 	if err != nil {
-		log.WithError(err).Error("skycli.Send failed")
+		log.WithError(err).Error("SkyClient.BroadcastTransaction failed")
 		return nil, err
 	}
 
-	return &SendResponse{
+	return &BroadcastTxResponse{
 		Txid: txid,
 		Req:  req,
 	}, nil
 }
 
-// SendRetry sends coins and will retry indefinitely until it succeeds
-func (s *SendService) SendRetry(req SendRequest) (*SendResponse, error) {
-	log := s.log.WithField("sendReq", req)
+// BroadcastTxRetry sends coins and will retry indefinitely until it succeeds
+func (s *SendService) BroadcastTxRetry(req BroadcastTxRequest) (*BroadcastTxResponse, error) {
+	log := s.log.WithField("broadcastTxTxid", req.Tx.TxIDHex())
 
 	// Verify the request
 	if err := req.Verify(); err != nil {
-		log.WithError(err).Error("SendRequest.Verify failed")
+		log.WithError(err).Error("BroadcastTxRequest.Verify failed")
 		return nil, err
 	}
 
@@ -227,20 +236,20 @@ func (s *SendService) SendRetry(req SendRequest) (*SendResponse, error) {
 	// Most likely reason for send() to fail is because the skyd node
 	// is unavailable.
 	for {
-		txid, err := s.skycli.Send(req.Address, req.Coins)
+		txid, err := s.SkyClient.BroadcastTransaction(req.Tx)
 		if err != nil {
-			log.WithError(err).Error("skycli.Send failed, trying again...")
+			log.WithError(err).Error("SkyClient.BroadcastTransaction failed, trying again...")
 
 			select {
 			case <-s.quit:
 				return nil, nil
-			case <-time.After(sendCoinRetryWait):
+			case <-time.After(broadcastTxRetryWait):
 			}
 
 			continue
 		}
 
-		return &SendResponse{
+		return &BroadcastTxResponse{
 			Txid: txid,
 			Req:  req,
 		}, nil
@@ -250,4 +259,5 @@ func (s *SendService) SendRetry(req SendRequest) (*SendResponse, error) {
 // Shutdown close the sender
 func (s *SendService) Shutdown() {
 	close(s.quit)
+	<-s.done
 }

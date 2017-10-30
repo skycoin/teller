@@ -47,7 +47,7 @@
 
 [[constraint]]
   name = "github.com/skycoin/skycoin"
-  version = "0.20.0-alpha.1"
+  revision = "01ab4cdcee644ea2be40e93d1c76b662b7880f42"
 
 [[constraint]]
   name = "github.com/stretchr/testify"

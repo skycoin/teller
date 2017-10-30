@@ -42,6 +42,7 @@ type Storer interface {
 	GetDepositInfoArray(DepositFilter) ([]DepositInfo, error)
 	GetDepositInfoOfSkyAddress(string) ([]DepositInfo, error)
 	UpdateDepositInfo(string, func(DepositInfo) DepositInfo) (DepositInfo, error)
+	UpdateDepositInfoCallback(string, func(DepositInfo) DepositInfo, func(DepositInfo) error) (DepositInfo, error)
 	GetSkyBindBtcAddresses(string) ([]string, error)
 }
 
@@ -399,6 +400,14 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 // UpdateDepositInfo updates deposit info. The update func takes a DepositInfo
 // and returns a modified copy of it.
 func (s *Store) UpdateDepositInfo(btcTx string, update func(DepositInfo) DepositInfo) (DepositInfo, error) {
+	return s.UpdateDepositInfoCallback(btcTx, update, func(di DepositInfo) error { return nil })
+}
+
+// UpdateDepositInfoCallback updates deposit info. The update func takes a DepositInfo
+// and returns a modified copy of it.  After updating the DepositInfo, it calls callback,
+// inside of the transaction.  If the callback returns an error, the DepositInfo update
+// is rolled back.
+func (s *Store) UpdateDepositInfoCallback(btcTx string, update func(DepositInfo) DepositInfo, callback func(DepositInfo) error) (DepositInfo, error) {
 	log := s.log.WithField("btcTx", btcTx)
 
 	var dpi DepositInfo
@@ -418,7 +427,12 @@ func (s *Store) UpdateDepositInfo(btcTx string, update func(DepositInfo) Deposit
 		dpi = update(dpi)
 		dpi.UpdatedAt = time.Now().UTC().Unix()
 
-		return dbutil.PutBucketValue(tx, depositInfoBkt, btcTx, dpi)
+		if err := dbutil.PutBucketValue(tx, depositInfoBkt, btcTx, dpi); err != nil {
+			return err
+		}
+
+		return callback(dpi)
+
 	}); err != nil {
 		return DepositInfo{}, err
 	}
