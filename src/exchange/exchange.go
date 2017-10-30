@@ -11,6 +11,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
 )
@@ -270,17 +271,15 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 
 	switch di.Status {
 	case StatusWaitSend:
-		// Send
-		rsp, err := s.send(di)
+		// Prepare skycoin transaction
+		skyTx, err := s.createTransaction(di)
+
 		if err != nil {
-			log.WithError(err).Error("Send failed")
+			log.WithError(err).Error("createTransaction failed")
 
 			// If the send amount is empty, skip to StatusDone.
-			switch err {
-			case ErrNoResponse:
-				log.WithError(err).Warn("Sender closed")
-			case ErrEmptySendAmount:
-				di, err = s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
+			if err == ErrEmptySendAmount {
+				di, err = s.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
 					di.Status = StatusDone
 					return di
 				})
@@ -290,21 +289,57 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 				}
 
 				return di, nil
-			default:
 			}
 
 			return di, err
 		}
 
-		// Update the txid
-		di, err := s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
-			di.Txid = rsp.Txid
-			di.SkySent = rsp.Req.Coins
+		// Find the coins from the skyTx
+		// The skyTx contains one output sent to the destination address,
+		// so this check is safe.
+		// It is verified earlier by verifyCreatedTransaction
+		var skySent uint64
+		for _, o := range skyTx.Out {
+			if o.Address.String() == di.SkyAddress {
+				skySent = o.Coins
+				break
+			}
+		}
+		if skySent == 0 {
+			err := errors.New("No output to destination address found in transaction")
+			log.WithError(err).Error()
+			return di, err
+		}
+
+		// Within a bolt.DB transaction, update the db then send the coins
+		// If the send fails, the data is rolled back
+		// If the db save fails, no coins had been sent
+		di, err = s.store.UpdateDepositInfoCallback(di.DepositID, func(di DepositInfo) DepositInfo {
 			di.Status = StatusWaitConfirm
+			di.Txid = skyTx.TxIDHex()
+			di.SkySent = skySent
 			return di
+		}, func(di DepositInfo) error {
+			// NOTE: broadcastTransaction retries indefinitely on error
+			// If the skycoin node is not reachable, this will block,
+			// which will also block the database since it's in a transaction
+			rsp, err := s.broadcastTransaction(skyTx)
+			if err != nil {
+				log.WithError(err).Error("broadcastTransaction failed")
+				return err
+			}
+
+			// Invariant assertion: do not return this as an error, since
+			// coins have been sent. This should never occur.
+			if rsp.Txid != skyTx.TxIDHex() {
+				log.Error("CRITICAL ERROR: BroadcastTxResponse.Txid != skyTx.TxIDHex()")
+			}
+
+			return nil
 		})
+
 		if err != nil {
-			log.WithError(err).Error("Update deposit info set StatusWaitConfirm failed")
+			log.WithError(err).Error("store.UpdateDepositInfoCallback failed")
 			return di, err
 		}
 
@@ -329,7 +364,7 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 			return di, ErrNotConfirmed
 		}
 
-		di, err := s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
+		di, err := s.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
 			di.Status = StatusDone
 			return di
 		})
@@ -358,7 +393,7 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 	}
 }
 
-func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
+func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) {
 	log := s.log.WithField("deposit", di)
 
 	// This should never occur, the DepositInfo is saved with a SkyAddress
@@ -380,7 +415,7 @@ func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
 
 	log = log.WithField("sendAmt", skyAmt)
 
-	log.Info("Trying to send skycoin")
+	log.Info("Creating skycoin transaction")
 
 	if skyAmt == 0 {
 		err := ErrEmptySendAmount
@@ -388,22 +423,63 @@ func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
 		return nil, err
 	}
 
-	// TODO FIXME:
-	// If UpdateDepositInfo fails we will send double coins.
-	// We can't just wrap it all in a bolt.Tx, because we need to send the
-	// skycoins first in order to obtain the Txid.
-	// Can we generate the Txid offline, and specify it in the SendRequest?
-	// We'd need the wallet loaded with teller.
-	// Possibly we could make two API calls to skycoind, one to prepare the tx,
-	// the other to send it.
+	tx, err := s.sender.CreateTransaction(di.SkyAddress, skyAmt)
+	if err != nil {
+		log.WithError(err).Error("sender.CreateTransaction failed")
+		return nil, err
+	}
 
-	rsp := s.sender.Send(di.SkyAddress, skyAmt)
+	log = log.WithField("transactionOutput", tx.Out)
+
+	// Verify the transaction contains exactly output to the destination address
+	if err := verifyCreatedTransaction(tx, di, skyAmt); err != nil {
+		log.WithError(err).Error("verifyCreatedTransaction failed")
+		return nil, err
+	}
+
+	return tx, nil
+}
+
+func verifyCreatedTransaction(tx *coin.Transaction, di DepositInfo, skyAmt uint64) error {
+	// Check invariant assertions:
+	// The transaction should contain one output to the destination address.
+	// It may or may not have a change output.
+	count := 0
+
+	for _, o := range tx.Out {
+		if o.Address.String() != di.SkyAddress {
+			continue
+		}
+
+		count++
+
+		if o.Coins != skyAmt {
+			return errors.New("CreateTransaction transaction coins are different")
+		}
+	}
+
+	if count == 0 {
+		return fmt.Errorf("CreateTransaction transaction has no output to address %s", di.SkyAddress)
+	} else if count > 1 {
+		return fmt.Errorf("CreateTransaction transaction has multiple outputs to address %s", di.SkyAddress)
+	}
+
+	return nil
+}
+
+func (s *Exchange) broadcastTransaction(tx *coin.Transaction) (*sender.BroadcastTxResponse, error) {
+	log := s.log.WithField("txid", tx.TxIDHex())
+
+	log.Info("Broadcasting skycoin transaction")
+
+	rsp := s.sender.BroadcastTransaction(tx)
 
 	log = log.WithField("sendRsp", rsp)
 
 	if rsp == nil {
-		log.WithError(ErrNoResponse).Warn("Sender closed")
-		return nil, ErrNoResponse
+		err := ErrNoResponse
+		log.WithError(err).Warn("Sender closed")
+		return nil, err
 	}
 
 	if rsp.Err != nil {
@@ -421,6 +497,7 @@ func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
 // add the btc address to scan service, when detect deposit coin
 // to the btc address, will send specific skycoin to the binded
 // skycoin address
+// TODO -- support multiple coin types
 func (s *Exchange) BindAddress(skyAddr, btcAddr string) error {
 	if err := s.store.BindAddress(skyAddr, btcAddr); err != nil {
 		return err
@@ -433,18 +510,20 @@ func (s *Exchange) BindAddress(skyAddr, btcAddr string) error {
 // DepositStatus json struct for deposit status
 type DepositStatus struct {
 	Seq       uint64 `json:"seq"`
-	UpdatedAt int64  `json:"update_at"`
+	UpdatedAt int64  `json:"updated_at"`
 	Status    string `json:"status"`
+	CoinType  string `json:"coin_type"`
 }
 
 // DepositStatusDetail deposit status detail info
 type DepositStatusDetail struct {
-	Seq        uint64 `json:"seq"`
-	UpdatedAt  int64  `json:"update_at"`
-	Status     string `json:"status"`
-	SkyAddress string `json:"skycoin_address"`
-	BtcAddress string `json:"bitcoin_address"`
-	Txid       string `json:"txid"`
+	Seq            uint64 `json:"seq"`
+	UpdatedAt      int64  `json:"updated_at"`
+	Status         string `json:"status"`
+	SkyAddress     string `json:"skycoin_address"`
+	DepositAddress string `json:"deposit_address"`
+	CoinType       string `json:"coin_type"`
+	Txid           string `json:"txid"`
 }
 
 // GetDepositStatuses returns deamon.DepositStatus array of given skycoin address
@@ -460,6 +539,7 @@ func (s *Exchange) GetDepositStatuses(skyAddr string) ([]DepositStatus, error) {
 			Seq:       di.Seq,
 			UpdatedAt: di.UpdatedAt,
 			Status:    di.Status.String(),
+			CoinType:  di.CoinType,
 		})
 	}
 	return dss, nil
@@ -475,12 +555,13 @@ func (s *Exchange) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDet
 	dss := make([]DepositStatusDetail, 0, len(dis))
 	for _, di := range dis {
 		dss = append(dss, DepositStatusDetail{
-			Seq:        di.Seq,
-			UpdatedAt:  di.UpdatedAt,
-			Status:     di.Status.String(),
-			SkyAddress: di.SkyAddress,
-			BtcAddress: di.BtcAddress,
-			Txid:       di.Txid,
+			Seq:            di.Seq,
+			UpdatedAt:      di.UpdatedAt,
+			Status:         di.Status.String(),
+			SkyAddress:     di.SkyAddress,
+			DepositAddress: di.DepositAddress,
+			Txid:           di.Txid,
+			CoinType:       di.CoinType,
 		})
 	}
 	return dss, nil

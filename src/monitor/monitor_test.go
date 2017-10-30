@@ -30,12 +30,13 @@ func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositF
 	for _, dpi := range dps.dpis {
 		if flt(dpi) {
 			ds = append(ds, exchange.DepositStatusDetail{
-				Seq:        dpi.Seq,
-				BtcAddress: dpi.BtcAddress,
-				SkyAddress: dpi.SkyAddress,
-				Status:     dpi.Status.String(),
-				UpdatedAt:  dpi.UpdatedAt,
-				Txid:       dpi.Txid,
+				Seq:            dpi.Seq,
+				DepositAddress: dpi.DepositAddress,
+				SkyAddress:     dpi.SkyAddress,
+				Status:         dpi.Status.String(),
+				UpdatedAt:      dpi.UpdatedAt,
+				Txid:           dpi.Txid,
+				CoinType:       dpi.CoinType,
 			})
 		}
 	}
@@ -53,29 +54,29 @@ func (ds dummyScanAddrs) GetScanAddresses() ([]string, error) {
 func TestRunMonitor(t *testing.T) {
 	dpis := []exchange.DepositInfo{
 		{
-			BtcAddress: "b1",
-			SkyAddress: "s1",
-			Status:     exchange.StatusWaitDeposit,
+			DepositAddress: "b1",
+			SkyAddress:     "s1",
+			Status:         exchange.StatusWaitDeposit,
 		},
 		{
-			BtcAddress: "b2",
-			SkyAddress: "s2",
-			Status:     exchange.StatusWaitSend,
+			DepositAddress: "b2",
+			SkyAddress:     "s2",
+			Status:         exchange.StatusWaitSend,
 		},
 		{
-			BtcAddress: "b3",
-			SkyAddress: "s3",
-			Status:     exchange.StatusWaitConfirm,
+			DepositAddress: "b3",
+			SkyAddress:     "s3",
+			Status:         exchange.StatusWaitConfirm,
 		},
 		{
-			BtcAddress: "b4",
-			SkyAddress: "s4",
-			Status:     exchange.StatusDone,
+			DepositAddress: "b4",
+			SkyAddress:     "s4",
+			Status:         exchange.StatusDone,
 		},
 		{
-			BtcAddress: "b5",
-			SkyAddress: "s6",
-			Status:     exchange.StatusDone,
+			DepositAddress: "b5",
+			SkyAddress:     "s6",
+			Status:         exchange.StatusDone,
 		},
 	}
 
@@ -148,12 +149,12 @@ func TestRunMonitor(t *testing.T) {
 					dss := make([]exchange.DepositInfo, 0, len(st))
 					for _, s := range st {
 						dss = append(dss, exchange.DepositInfo{
-							Seq:        s.Seq,
-							UpdatedAt:  s.UpdatedAt,
-							Status:     exchange.NewStatusFromStr(s.Status),
-							BtcAddress: s.BtcAddress,
-							SkyAddress: s.SkyAddress,
-							Txid:       s.Txid,
+							Seq:            s.Seq,
+							UpdatedAt:      s.UpdatedAt,
+							Status:         exchange.NewStatusFromStr(s.Status),
+							DepositAddress: s.DepositAddress,
+							SkyAddress:     s.SkyAddress,
+							Txid:           s.Txid,
 						})
 					}
 					require.Equal(t, tc.expectValue, dss)
