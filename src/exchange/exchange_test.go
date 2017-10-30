@@ -139,7 +139,7 @@ func (scan *dummyScanner) stop() {
 }
 
 const (
-	testSkyBtcRate  int64 = 100
+	testSkyBtcRate  int64 = 100 // 100 SKY per BTC
 	dbScanTimeout         = time.Second * 3
 	dbCheckWaitTime       = time.Millisecond * 300
 )
@@ -263,7 +263,7 @@ func TestExchangeRunSend(t *testing.T) {
 		for {
 			select {
 			case <-time.After(dbCheckWaitTime):
-				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
+				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 				log.Printf("loop getDepositInfo %v %v\n", di, err)
 				require.NoError(t, err)
 
@@ -281,24 +281,23 @@ func TestExchangeRunSend(t *testing.T) {
 	}
 
 	// Check DepositInfo
-	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
-	log.Printf("getDepositInfo %v %v\n", di, err)
+	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 	require.NoError(t, err)
 
 	require.NotEmpty(t, di.UpdatedAt)
 
 	expectedDeposit := DepositInfo{
-		Seq:          1,
-		UpdatedAt:    di.UpdatedAt,
-		Status:       StatusWaitConfirm,
-		SkyAddress:   skyAddr,
-		BtcAddress:   dn.Deposit.Address,
-		BtcTx:        dn.Deposit.TxN(),
-		Txid:         txid,
-		SkySent:      100e6,
-		SkyBtcRate:   testSkyBtcRate,
-		DepositValue: dn.Deposit.Value,
-		Deposit:      dn.Deposit,
+		Seq:            1,
+		UpdatedAt:      di.UpdatedAt,
+		Status:         StatusWaitConfirm,
+		SkyAddress:     skyAddr,
+		DepositAddress: dn.Deposit.Address,
+		DepositID:      dn.Deposit.ID(),
+		Txid:           txid,
+		SkySent:        100e6,
+		ConversionRate: testSkyBtcRate,
+		DepositValue:   dn.Deposit.Value,
+		Deposit:        dn.Deposit,
 	}
 
 	require.Equal(t, expectedDeposit, di)
@@ -313,7 +312,7 @@ func TestExchangeRunSend(t *testing.T) {
 		for {
 			select {
 			case <-time.After(dbCheckWaitTime):
-				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
+				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 				require.NoError(t, err)
 				if di.Status == StatusDone {
 					return
@@ -329,23 +328,23 @@ func TestExchangeRunSend(t *testing.T) {
 	}
 
 	// Check DepositInfo
-	di, err = e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
+	di, err = e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 	require.NoError(t, err)
 
 	require.NotEmpty(t, di.UpdatedAt)
 
 	expectedDeposit = DepositInfo{
-		Seq:          1,
-		UpdatedAt:    di.UpdatedAt,
-		Status:       StatusDone,
-		SkyAddress:   skyAddr,
-		BtcAddress:   dn.Deposit.Address,
-		BtcTx:        dn.Deposit.TxN(),
-		Txid:         txid,
-		SkySent:      100e6,
-		SkyBtcRate:   testSkyBtcRate,
-		DepositValue: dn.Deposit.Value,
-		Deposit:      dn.Deposit,
+		Seq:            1,
+		UpdatedAt:      di.UpdatedAt,
+		Status:         StatusDone,
+		SkyAddress:     skyAddr,
+		DepositAddress: dn.Deposit.Address,
+		DepositID:      dn.Deposit.ID(),
+		Txid:           txid,
+		SkySent:        100e6,
+		ConversionRate: testSkyBtcRate,
+		DepositValue:   dn.Deposit.Value,
+		Deposit:        dn.Deposit,
 	}
 
 	require.Equal(t, expectedDeposit, di)
@@ -385,19 +384,19 @@ func TestExchangeSendFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check the DepositInfo in the database
-	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
+	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 	require.NoError(t, err)
 	require.NotEmpty(t, di.UpdatedAt)
 	require.Equal(t, DepositInfo{
-		Seq:          1,
-		UpdatedAt:    di.UpdatedAt,
-		SkyAddress:   skyAddr,
-		BtcAddress:   btcAddr,
-		BtcTx:        dn.Deposit.TxN(),
-		Status:       StatusWaitSend,
-		SkyBtcRate:   testSkyBtcRate,
-		DepositValue: dn.Deposit.Value,
-		Deposit:      dn.Deposit,
+		Seq:            1,
+		UpdatedAt:      di.UpdatedAt,
+		SkyAddress:     skyAddr,
+		DepositAddress: btcAddr,
+		DepositID:      dn.Deposit.ID(),
+		Status:         StatusWaitSend,
+		ConversionRate: testSkyBtcRate,
+		DepositValue:   dn.Deposit.Value,
+		Deposit:        dn.Deposit,
 	}, di)
 }
 
@@ -442,7 +441,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 			select {
 			case <-time.After(dbCheckWaitTime):
 				// Check the DepositInfo in the database
-				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
+				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 				require.NoError(t, err)
 				if di.Status == StatusWaitConfirm {
 					return
@@ -457,21 +456,21 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 		t.Fatal("Waiting to check for StatusWaitSend deposits timed out")
 	}
 
-	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
+	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 	require.NoError(t, err)
 	require.NotEmpty(t, di.UpdatedAt)
 	require.Equal(t, DepositInfo{
-		Seq:          1,
-		UpdatedAt:    di.UpdatedAt,
-		SkyAddress:   skyAddr,
-		BtcAddress:   btcAddr,
-		BtcTx:        dn.Deposit.TxN(),
-		Txid:         txid,
-		SkySent:      100e6,
-		DepositValue: dn.Deposit.Value,
-		Status:       StatusWaitConfirm,
-		SkyBtcRate:   testSkyBtcRate,
-		Deposit:      dn.Deposit,
+		Seq:            1,
+		UpdatedAt:      di.UpdatedAt,
+		SkyAddress:     skyAddr,
+		DepositAddress: btcAddr,
+		DepositID:      dn.Deposit.ID(),
+		Txid:           txid,
+		SkySent:        100e6,
+		DepositValue:   dn.Deposit.Value,
+		Status:         StatusWaitConfirm,
+		ConversionRate: testSkyBtcRate,
+		Deposit:        dn.Deposit,
 	}, di)
 
 }
@@ -509,16 +508,16 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 	// It sends the coins, then confirms them
 
 	expectedDeposit := DepositInfo{
-		Seq:          1,
-		Status:       StatusWaitConfirm,
-		SkyAddress:   skyAddr,
-		BtcAddress:   dn.Deposit.Address,
-		BtcTx:        dn.Deposit.TxN(),
-		Txid:         txid,
-		SkySent:      100e6,
-		DepositValue: dn.Deposit.Value,
-		SkyBtcRate:   testSkyBtcRate,
-		Deposit:      dn.Deposit,
+		Seq:            1,
+		Status:         StatusWaitConfirm,
+		SkyAddress:     skyAddr,
+		DepositAddress: dn.Deposit.Address,
+		DepositID:      dn.Deposit.ID(),
+		Txid:           txid,
+		SkySent:        100e6,
+		DepositValue:   dn.Deposit.Value,
+		ConversionRate: testSkyBtcRate,
+		Deposit:        dn.Deposit,
 	}
 
 	// Periodically check the database until we observe the sent deposit
@@ -528,7 +527,7 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 		for {
 			select {
 			case <-time.After(dbCheckWaitTime):
-				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
+				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 				require.NoError(t, err)
 				if di.Status != expectedDeposit.Status {
 					continue
@@ -553,7 +552,7 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 
 	e.Shutdown()
 
-	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
+	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 	require.NoError(t, err)
 
 	require.NotEmpty(t, di.UpdatedAt)
@@ -600,16 +599,16 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 	// It sends the coins, then confirms them
 
 	expectedDeposit := DepositInfo{
-		Seq:          1,
-		Status:       StatusDone,
-		SkyAddress:   skyAddr,
-		BtcAddress:   dn.Deposit.Address,
-		BtcTx:        dn.Deposit.TxN(),
-		Txid:         "",
-		SkySent:      0,
-		SkyBtcRate:   testSkyBtcRate,
-		DepositValue: dn.Deposit.Value,
-		Deposit:      dn.Deposit,
+		Seq:            1,
+		Status:         StatusDone,
+		SkyAddress:     skyAddr,
+		DepositAddress: dn.Deposit.Address,
+		DepositID:      dn.Deposit.ID(),
+		Txid:           "",
+		SkySent:        0,
+		ConversionRate: testSkyBtcRate,
+		DepositValue:   dn.Deposit.Value,
+		Deposit:        dn.Deposit,
 	}
 
 	// Periodically check the database until we observe the sent deposit
@@ -619,7 +618,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 		for {
 			select {
 			case <-time.After(dbCheckWaitTime):
-				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
+				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 				require.NoError(t, err)
 				if di.Status != expectedDeposit.Status {
 					continue
@@ -644,7 +643,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 
 	e.Shutdown()
 
-	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.TxN())
+	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 	require.NoError(t, err)
 
 	require.NotEmpty(t, di.UpdatedAt)
@@ -753,15 +752,15 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 	// They should all be confirmed after shutdown
 	dis := []DepositInfo{
 		{
-			Seq:          1,
-			Status:       StatusWaitConfirm,
-			SkyAddress:   "foo-sky-addr-1",
-			BtcAddress:   "foo-btc-addr-1",
-			BtcTx:        "foo-tx-1:1",
-			Txid:         "foo-sky-txid-1",
-			SkySent:      100e8,
-			SkyBtcRate:   testSkyBtcRate,
-			DepositValue: 1e8,
+			Seq:            1,
+			Status:         StatusWaitConfirm,
+			SkyAddress:     "foo-sky-addr-1",
+			DepositAddress: "foo-btc-addr-1",
+			DepositID:      "foo-tx-1:1",
+			Txid:           "foo-sky-txid-1",
+			SkySent:        100e8,
+			ConversionRate: testSkyBtcRate,
+			DepositValue:   1e8,
 			Deposit: scanner.Deposit{
 				Address: "foo-btc-addr-1",
 				Value:   1e8,
@@ -771,15 +770,15 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 			},
 		},
 		{
-			Seq:          2,
-			Status:       StatusWaitConfirm,
-			SkyAddress:   "foo-sky-addr-2",
-			BtcAddress:   "foo-btc-addr-2",
-			BtcTx:        "foo-tx-2:2",
-			Txid:         "foo-sky-txid-2",
-			SkySent:      100e8,
-			SkyBtcRate:   testSkyBtcRate,
-			DepositValue: 1e8,
+			Seq:            2,
+			Status:         StatusWaitConfirm,
+			SkyAddress:     "foo-sky-addr-2",
+			DepositAddress: "foo-btc-addr-2",
+			DepositID:      "foo-tx-2:2",
+			Txid:           "foo-sky-txid-2",
+			SkySent:        100e8,
+			ConversionRate: testSkyBtcRate,
+			DepositValue:   1e8,
 			Deposit: scanner.Deposit{
 				Address: "foo-btc-addr-2",
 				Value:   1e8,
@@ -803,14 +802,14 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 	// They should all be confirmed after shutdown
 	dis := []DepositInfo{
 		{
-			Seq:          1,
-			Status:       StatusWaitSend,
-			SkyAddress:   "foo-sky-addr-1",
-			BtcAddress:   "foo-btc-addr-1",
-			BtcTx:        "foo-tx-1:1",
-			Txid:         "foo-tx-1",
-			SkyBtcRate:   testSkyBtcRate,
-			DepositValue: 1e8,
+			Seq:            1,
+			Status:         StatusWaitSend,
+			SkyAddress:     "foo-sky-addr-1",
+			DepositAddress: "foo-btc-addr-1",
+			DepositID:      "foo-tx-1:1",
+			Txid:           "foo-tx-1",
+			ConversionRate: testSkyBtcRate,
+			DepositValue:   1e8,
 			Deposit: scanner.Deposit{
 				Address: "foo-btc-addr-1",
 				Value:   1e8,
@@ -820,14 +819,14 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 			},
 		},
 		{
-			Seq:          2,
-			Status:       StatusWaitSend,
-			SkyAddress:   "foo-sky-addr-2",
-			BtcAddress:   "foo-btc-addr-2",
-			BtcTx:        "foo-tx-2:2",
-			Txid:         "foo-tx-2",
-			SkyBtcRate:   testSkyBtcRate,
-			DepositValue: 1e8,
+			Seq:            2,
+			Status:         StatusWaitSend,
+			SkyAddress:     "foo-sky-addr-2",
+			DepositAddress: "foo-btc-addr-2",
+			DepositID:      "foo-tx-2:2",
+			Txid:           "foo-tx-2",
+			ConversionRate: testSkyBtcRate,
+			DepositValue:   1e8,
 			Deposit: scanner.Deposit{
 				Address: "foo-btc-addr-2",
 				Value:   1e8,
@@ -839,7 +838,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 	}
 
 	testExchangeRunProcessDepositBacklog(t, dis, func(e *Exchange, di DepositInfo) {
-		err := e.store.BindAddress(di.SkyAddress, di.BtcAddress)
+		err := e.store.BindAddress(di.SkyAddress, di.DepositAddress)
 		require.NoError(t, err)
 		e.sender.(*dummySender).addTxidResponse(di.Txid)
 		e.sender.(*dummySender).setTxConfirmed(di.Txid)
@@ -931,13 +930,13 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 
 	// GetOrCreateDepositInfo returns a valid DepositInfo
 	di := DepositInfo{
-		Seq:        1,
-		Status:     StatusWaitSend,
-		SkyAddress: skyAddr,
-		BtcAddress: btcAddr,
-		BtcTx:      dn.Deposit.TxN(),
-		SkyBtcRate: testSkyBtcRate,
-		Deposit:    dn.Deposit,
+		Seq:            1,
+		Status:         StatusWaitSend,
+		SkyAddress:     skyAddr,
+		DepositAddress: btcAddr,
+		DepositID:      dn.Deposit.ID(),
+		ConversionRate: testSkyBtcRate,
+		Deposit:        dn.Deposit,
 	}
 	e.store.(*MockStore).On("GetOrCreateDepositInfo", dn.Deposit, testSkyBtcRate).Return(di, nil)
 
@@ -946,7 +945,7 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 
 	// UpdateDepositInfo fails
 	updateDepositInfoErr := errors.New("UpdateDepositInfo error")
-	e.store.(*MockStore).On("UpdateDepositInfo", di.BtcTx, mock.MatchedBy(func(f func(DepositInfo) DepositInfo) bool {
+	e.store.(*MockStore).On("UpdateDepositInfo", di.DepositID, mock.MatchedBy(func(f func(DepositInfo) DepositInfo) bool {
 		return true
 	})).Return(DepositInfo{}, updateDepositInfoErr)
 

@@ -86,6 +86,7 @@ type service struct {
 
 // BindAddress binds skycoin address with a deposit btc address
 // return btc address
+// TODO -- support multiple coin types
 func (s *service) BindAddress(skyAddr string) (string, error) {
 	if s.cfg.MaxBind != 0 {
 		num, err := s.exchanger.GetBindNum(skyAddr)

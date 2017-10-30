@@ -38,15 +38,16 @@ func NewDepositNote(dv Deposit) DepositNote {
 
 // Deposit struct
 type Deposit struct {
+	CoinType  string // coin type
 	Address   string // deposit address
 	Value     int64  // deposit amount. For BTC, measured in satoshis.
 	Height    int64  // the block height
 	Tx        string // the transaction id
-	N         uint32 // the index of vout in the tx
+	N         uint32 // the index of vout in the tx [BTC]
 	Processed bool   // whether this was received by the exchange and saved
 }
 
-// TxN returns $tx:$n formatted ID string
-func (d Deposit) TxN() string {
+// ID returns $tx:$n formatted ID string
+func (d Deposit) ID() string {
 	return fmt.Sprintf("%s:%d", d.Tx, d.N)
 }

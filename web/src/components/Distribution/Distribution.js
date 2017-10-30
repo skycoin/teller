@@ -164,7 +164,7 @@ class Distribution extends React.Component {
                     id={`distribution.statuses.${status.status}`}
                     values={{
                       id: String(status.seq),
-                      updated: moment.unix(status.update_at).locale(intl.locale).format('LL LTS'),
+                      updated: moment.unix(status.updated_at).locale(intl.locale).format('LL LTS'),
                     }}
                   />
                 </p>

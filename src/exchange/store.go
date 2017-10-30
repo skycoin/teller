@@ -155,7 +155,7 @@ func (s *Store) BindAddress(skyAddr, btcAddr string) error {
 	})
 }
 
-// GetOrCreateDepositInfo creates a DepositInfo unless one exists with the DepositInfo.BtcTx key,
+// GetOrCreateDepositInfo creates a DepositInfo unless one exists with the DepositInfo.DepositID key,
 // in which case it returns the existing DepositInfo.
 func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositInfo, error) {
 	log := s.log.WithField("deposit", dv)
@@ -163,7 +163,7 @@ func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositI
 
 	var finalDepositInfo DepositInfo
 	if err := s.db.Update(func(tx *bolt.Tx) error {
-		di, err := s.getDepositInfoTx(tx, dv.TxN())
+		di, err := s.getDepositInfoTx(tx, dv.ID())
 
 		switch err.(type) {
 		case nil:
@@ -188,14 +188,15 @@ func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositI
 			log = log.WithField("skyAddr", skyAddr)
 
 			di := DepositInfo{
-				SkyAddress:   skyAddr,
-				BtcAddress:   dv.Address,
-				BtcTx:        dv.TxN(),
-				Status:       StatusWaitSend,
-				DepositValue: dv.Value,
+				CoinType:       dv.CoinType,
+				SkyAddress:     skyAddr,
+				DepositAddress: dv.Address,
+				DepositID:      dv.ID(),
+				Status:         StatusWaitSend,
+				DepositValue:   dv.Value,
 				// Save the rate at the time this deposit was noticed
-				SkyBtcRate: rate,
-				Deposit:    dv,
+				ConversionRate: rate,
+				Deposit:        dv,
 			}
 
 			log = log.WithField("depositInfo", di)
@@ -242,11 +243,11 @@ func (s *Store) addDepositInfo(di DepositInfo) (DepositInfo, error) {
 func (s *Store) addDepositInfoTx(tx *bolt.Tx, di DepositInfo) (DepositInfo, error) {
 	log := s.log.WithField("depositInfo", di)
 
-	// check if the dpi with BtcTx already exist
-	if hasKey, err := dbutil.BucketHasKey(tx, depositInfoBkt, di.BtcTx); err != nil {
+	// check if the dpi with DepositID already exist
+	if hasKey, err := dbutil.BucketHasKey(tx, depositInfoBkt, di.DepositID); err != nil {
 		return di, err
 	} else if hasKey {
-		return di, fmt.Errorf("deposit info of btctx \"%s\" already exists", di.BtcTx)
+		return di, fmt.Errorf("deposit info of btctx \"%s\" already exists", di.DepositID)
 	}
 
 	seq, err := dbutil.NextSequence(tx, depositInfoBkt)
@@ -256,7 +257,6 @@ func (s *Store) addDepositInfoTx(tx *bolt.Tx, di DepositInfo) (DepositInfo, erro
 
 	updatedDi := di
 	updatedDi.Seq = seq
-	log.Println("SEQUENCE", seq)
 	updatedDi.UpdatedAt = time.Now().UTC().Unix()
 
 	if err := updatedDi.ValidateForStatus(); err != nil {
@@ -264,13 +264,13 @@ func (s *Store) addDepositInfoTx(tx *bolt.Tx, di DepositInfo) (DepositInfo, erro
 		return di, err
 	}
 
-	if err := dbutil.PutBucketValue(tx, depositInfoBkt, updatedDi.BtcTx, updatedDi); err != nil {
+	if err := dbutil.PutBucketValue(tx, depositInfoBkt, updatedDi.DepositID, updatedDi); err != nil {
 		return di, err
 	}
 
 	// update btc_txids bucket
 	var txs []string
-	if err := dbutil.GetBucketObject(tx, btcTxsBkt, updatedDi.BtcAddress, &txs); err != nil {
+	if err := dbutil.GetBucketObject(tx, btcTxsBkt, updatedDi.DepositAddress, &txs); err != nil {
 		switch err.(type) {
 		case dbutil.ObjectNotExistErr:
 		default:
@@ -278,8 +278,8 @@ func (s *Store) addDepositInfoTx(tx *bolt.Tx, di DepositInfo) (DepositInfo, erro
 		}
 	}
 
-	txs = append(txs, updatedDi.BtcTx)
-	if err := dbutil.PutBucketValue(tx, btcTxsBkt, updatedDi.BtcAddress, txs); err != nil {
+	txs = append(txs, updatedDi.DepositID)
+	if err := dbutil.PutBucketValue(tx, btcTxsBkt, updatedDi.DepositAddress, txs); err != nil {
 		return di, err
 	}
 
@@ -361,10 +361,10 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 			// StatusWaitDeposit.
 			if len(txns) == 0 {
 				dpis = append(dpis, DepositInfo{
-					Status:     StatusWaitDeposit,
-					BtcAddress: btcAddr,
-					SkyAddress: skyAddr,
-					UpdatedAt:  time.Now().UTC().Unix(),
+					Status:         StatusWaitDeposit,
+					DepositAddress: btcAddr,
+					SkyAddress:     skyAddr,
+					UpdatedAt:      time.Now().UTC().Unix(),
 				})
 			}
 
@@ -409,8 +409,8 @@ func (s *Store) UpdateDepositInfo(btcTx string, update func(DepositInfo) Deposit
 
 		log = log.WithField("depositInfo", dpi)
 
-		if dpi.BtcTx != btcTx {
-			log.Error("DepositInfo.BtcTx does not match btcTx")
+		if dpi.DepositID != btcTx {
+			log.Error("DepositInfo.DepositID does not match btcTx")
 			err := fmt.Errorf("DepositInfo %+v saved under different key %s", dpi, btcTx)
 			return err
 		}

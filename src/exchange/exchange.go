@@ -280,7 +280,7 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 			case ErrNoResponse:
 				log.WithError(err).Warn("Sender closed")
 			case ErrEmptySendAmount:
-				di, err = s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
+				di, err = s.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
 					di.Status = StatusDone
 					return di
 				})
@@ -297,7 +297,7 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 		}
 
 		// Update the txid
-		di, err := s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
+		di, err := s.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
 			di.Txid = rsp.Txid
 			di.SkySent = rsp.Req.Coins
 			di.Status = StatusWaitConfirm
@@ -329,7 +329,7 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 			return di, ErrNotConfirmed
 		}
 
-		di, err := s.store.UpdateDepositInfo(di.BtcTx, func(di DepositInfo) DepositInfo {
+		di, err := s.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
 			di.Status = StatusDone
 			return di
 		})
@@ -421,6 +421,7 @@ func (s *Exchange) send(di DepositInfo) (*sender.SendResponse, error) {
 // add the btc address to scan service, when detect deposit coin
 // to the btc address, will send specific skycoin to the binded
 // skycoin address
+// TODO -- support multiple coin types
 func (s *Exchange) BindAddress(skyAddr, btcAddr string) error {
 	if err := s.store.BindAddress(skyAddr, btcAddr); err != nil {
 		return err
@@ -433,18 +434,20 @@ func (s *Exchange) BindAddress(skyAddr, btcAddr string) error {
 // DepositStatus json struct for deposit status
 type DepositStatus struct {
 	Seq       uint64 `json:"seq"`
-	UpdatedAt int64  `json:"update_at"`
+	UpdatedAt int64  `json:"updated_at"`
 	Status    string `json:"status"`
+	CoinType  string `json:"coin_type"`
 }
 
 // DepositStatusDetail deposit status detail info
 type DepositStatusDetail struct {
-	Seq        uint64 `json:"seq"`
-	UpdatedAt  int64  `json:"update_at"`
-	Status     string `json:"status"`
-	SkyAddress string `json:"skycoin_address"`
-	BtcAddress string `json:"bitcoin_address"`
-	Txid       string `json:"txid"`
+	Seq            uint64 `json:"seq"`
+	UpdatedAt      int64  `json:"updated_at"`
+	Status         string `json:"status"`
+	SkyAddress     string `json:"skycoin_address"`
+	DepositAddress string `json:"deposit_address"`
+	CoinType       string `json:"coin_type"`
+	Txid           string `json:"txid"`
 }
 
 // GetDepositStatuses returns deamon.DepositStatus array of given skycoin address
@@ -460,6 +463,7 @@ func (s *Exchange) GetDepositStatuses(skyAddr string) ([]DepositStatus, error) {
 			Seq:       di.Seq,
 			UpdatedAt: di.UpdatedAt,
 			Status:    di.Status.String(),
+			CoinType:  di.CoinType,
 		})
 	}
 	return dss, nil
@@ -475,12 +479,13 @@ func (s *Exchange) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDet
 	dss := make([]DepositStatusDetail, 0, len(dis))
 	for _, di := range dis {
 		dss = append(dss, DepositStatusDetail{
-			Seq:        di.Seq,
-			UpdatedAt:  di.UpdatedAt,
-			Status:     di.Status.String(),
-			SkyAddress: di.SkyAddress,
-			BtcAddress: di.BtcAddress,
-			Txid:       di.Txid,
+			Seq:            di.Seq,
+			UpdatedAt:      di.UpdatedAt,
+			Status:         di.Status.String(),
+			SkyAddress:     di.SkyAddress,
+			DepositAddress: di.DepositAddress,
+			Txid:           di.Txid,
+			CoinType:       di.CoinType,
 		})
 	}
 	return dss, nil
