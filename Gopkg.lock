@@ -15,19 +15,14 @@
 
 [[projects]]
   name = "github.com/btcsuite/btcd"
-  packages = ["btcec","btcjson","chaincfg","chaincfg/chainhash","wire"]
-  revision = "47885ab8702485be6b6f87a03d4f3be0bc5c982c"
+  packages = ["btcec","btcjson","chaincfg","chaincfg/chainhash","rpcclient","wire"]
+  revision = "c7588cbf7690cd9f047a28efa2dcd8f2435a4e5e"
 
 [[projects]]
   branch = "master"
   name = "github.com/btcsuite/btclog"
   packages = ["."]
   revision = "84c8d2346e9fc8c7b947e243b9c24e6df9fd206a"
-
-[[projects]]
-  name = "github.com/btcsuite/btcrpcclient"
-  packages = ["."]
-  revision = "0d9ec835baeb9a8ce7fbe3eb7d7783284a089ced"
 
 [[projects]]
   name = "github.com/btcsuite/btcutil"
@@ -59,12 +54,6 @@
   revision = "c62d95b8416e0a966a4b1483bce7e61a3dfead01"
 
 [[projects]]
-  name = "github.com/fortytw2/leaktest"
-  packages = ["."]
-  revision = "7dad53304f9614c1c365755c1176a8e876fee3e8"
-  version = "v1.1.0"
-
-[[projects]]
   name = "github.com/google/gops"
   packages = ["agent","internal","signal"]
   revision = "fa6968806ca68b7db113256f300d82b5206a2c3c"
@@ -73,8 +62,8 @@
 [[projects]]
   name = "github.com/gz-c/logrus-prefixed-formatter"
   packages = ["."]
-  revision = "727ac21431fc93ba46b0076711e2e0d62e44aae7"
-  version = "v0.6.5"
+  revision = "3f60c5b6f7ebd01d3bbda8ccc53c7bebd881caee"
+  version = "v0.7.1"
 
 [[projects]]
   name = "github.com/mattn/go-colorable"
@@ -120,19 +109,24 @@
 
 [[projects]]
   name = "github.com/sirupsen/logrus"
-  packages = ["."]
+  packages = [".","hooks/test"]
   revision = "f006c2ac4710855cf0f916dd6b77acf6b048dc6e"
   version = "v1.0.3"
 
 [[projects]]
   name = "github.com/skycoin/skycoin"
-  packages = ["src/api/cli","src/api/webrpc","src/cipher","src/cipher/base58","src/cipher/chacha20","src/cipher/encoder","src/cipher/go-bip39","src/cipher/ripemd160","src/cipher/secp256k1-go","src/cipher/secp256k1-go/secp256k1-go2","src/coin","src/daemon","src/daemon/gnet","src/daemon/pex","src/util/droplet","src/util/file","src/util/http","src/util/logging","src/util/utc","src/visor","src/visor/blockdb","src/visor/bucket","src/visor/historydb","src/wallet"]
-  revision = "f725fbbeacf65c448fc6e639cc64c966cc61c878"
-  version = "v0.20.0-alpha.1"
+  packages = ["src/api/cli","src/api/webrpc","src/cipher","src/cipher/base58","src/cipher/chacha20","src/cipher/encoder","src/cipher/go-bip39","src/cipher/ripemd160","src/cipher/secp256k1-go","src/cipher/secp256k1-go/secp256k1-go2","src/coin","src/daemon","src/daemon/gnet","src/daemon/pex","src/daemon/strand","src/util/droplet","src/util/file","src/util/http","src/util/logging","src/util/utc","src/visor","src/visor/blockdb","src/visor/bucket","src/visor/historydb","src/wallet"]
+  revision = "01ab4cdcee644ea2be40e93d1c76b662b7880f42"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/stretchr/objx"
+  packages = ["."]
+  revision = "1a9d0bb9f541897e62256577b352fdbc1fb4fd94"
 
 [[projects]]
   name = "github.com/stretchr/testify"
-  packages = ["assert","require"]
+  packages = ["assert","mock","require"]
   revision = "69483b4bd14f5845b5a1e55bca19e954e827f1d0"
   version = "v1.1.4"
 
@@ -175,6 +169,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "54dc80b9f546d82ac101e6374587b663469b3150ce456eee9267528e517a1c94"
+  inputs-digest = "7845e3294ab92072d0d0eb1ae4a880232bb64f1d0fb4c481e742ceee9eca3980"
   solver-name = "gps-cdcl"
   solver-version = 1

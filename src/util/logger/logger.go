@@ -42,6 +42,7 @@ func NewLogger(logFilename string, debug bool) (*logrus.Logger, error) {
 		FullTimestamp:      true,
 		AlwaysQuoteStrings: true,
 		QuoteEmptyFields:   true,
+		ForceFormatting:    true,
 	}
 	log.Level = logrus.InfoLevel
 
@@ -145,15 +146,24 @@ func (hook ContextHook) Fire(entry *logrus.Entry) error {
 			continue
 		}
 
+		// The entry.Data map must be copied before writing to, it is not
+		// thread safe.
+		data := make(map[string]interface{}, len(entry.Data)+3)
+		for k, v := range entry.Data {
+			data[k] = v
+		}
+
 		if !hook.ExcludeFile {
-			entry.Data["file"] = path.Base(frame.File)
+			data["file"] = path.Base(frame.File)
 		}
 		if !hook.ExcludeFunc {
-			entry.Data["func"] = path.Base(frame.Function)
+			data["func"] = path.Base(frame.Function)
 		}
 		if !hook.ExcludeLine {
-			entry.Data["line"] = frame.Line
+			data["line"] = frame.Line
 		}
+
+		entry.Data = data
 
 		break
 	}

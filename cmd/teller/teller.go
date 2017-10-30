@@ -16,10 +16,12 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/btcsuite/btcrpcclient"
+	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
 	"github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/skycoin/src/cipher"
+	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
@@ -50,8 +52,8 @@ func (s *dummyBtcScanner) AddScanAddress(addr string) error {
 	return nil
 }
 
-func (s *dummyBtcScanner) GetDepositValue() <-chan scanner.DepositNote {
-	s.log.Info("dummyBtcScanner.GetDepositValue")
+func (s *dummyBtcScanner) GetDeposit() <-chan scanner.DepositNote {
+	s.log.Info("dummyBtcScanner.GetDeposit")
 	c := make(chan scanner.DepositNote)
 	close(c)
 	return c
@@ -65,25 +67,39 @@ type dummySkySender struct {
 	log logrus.FieldLogger
 }
 
-func (s *dummySkySender) SendAsync(destAddr string, coins uint64) <-chan sender.Response {
+func (s *dummySkySender) CreateTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
 	s.log.WithFields(logrus.Fields{
 		"destAddr": destAddr,
 		"coins":    coins,
-	}).Info("dummySkySender.SendAsync")
+	}).Info("dummySkySender.CreateTransaction")
 
-	c := make(chan sender.Response, 1)
-	c <- sender.Response{
-		Err: fmt.Sprintf("dummySender.SendAsync: %s %d", destAddr, coins),
+	addr, err := cipher.DecodeBase58Address(destAddr)
+	if err != nil {
+		return nil, err
 	}
-	return c
+
+	return &coin.Transaction{
+		Out: []coin.TransactionOutput{
+			{
+				Address: addr,
+				Coins:   coins,
+			},
+		},
+	}, nil
 }
 
-func (s *dummySkySender) IsClosed() bool {
-	return true
+func (s *dummySkySender) BroadcastTransaction(tx *coin.Transaction) *sender.BroadcastTxResponse {
+	s.log.WithField("txid", tx.TxIDHex()).Info("dummySkySender.BroadcastTransaction")
+
+	return &sender.BroadcastTxResponse{
+		Err: fmt.Errorf("dummySkySender.BroadcastTransaction: %s %v", tx.TxIDHex(), tx),
+	}
 }
 
-func (s *dummySkySender) IsTxConfirmed(txid string) bool {
-	return true
+func (s *dummySkySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {
+	return &sender.ConfirmResponse{
+		Confirmed: true,
+	}
 }
 
 func main() {
@@ -110,6 +126,9 @@ func run() error {
 	startAt := flag.String("start-time", "", "Don't process API requests until after this timestamp (RFC3339 format)")
 	thrMax := flag.Int64("throttle-max", 5, "max allowd per ip in specific duration")
 	thrDur := flag.Int64("throttle-duration", int64(time.Minute), "throttle duration")
+
+	btcInitialScanHeight := flag.Int64("btc-scan-height", 0, "initial BTC blockchain scan height")
+	btcConfirmationsRequired := flag.Int64("btc-confirmations-required", 0, "number of confirmations to wait for BTC deposits")
 
 	flag.Parse()
 
@@ -203,14 +222,14 @@ func run() error {
 		}()
 	}
 
-	var btcScanner scanner.Scanner
-	var scanRPC exchange.BtcScanner
+	var btcScanner *scanner.BTCScanner
+	var scanRPC scanner.Scanner
 	var sendService *sender.SendService
-	var sendRPC exchange.SkySender
+	var sendRPC sender.Sender
 
 	if *dummyMode {
 		log.Info("btcd and skyd disabled, running in dummy mode")
-		btcScanner = &dummyBtcScanner{log: log}
+		scanRPC = &dummyBtcScanner{log: log}
 		sendRPC = &dummySkySender{log: log}
 	} else {
 		// check skycoin setup
@@ -220,7 +239,12 @@ func run() error {
 		}
 
 		// create btc rpc client
-		btcrpcConnConf := makeBtcrpcConfg(*cfg)
+		btcrpcConnConf, err := makeBtcrpcConfg(*cfg)
+		if err != nil {
+			log.WithError(err).Error("makeBtcrpcConfg failed")
+			return err
+		}
+
 		btcrpc, err := btcrpcclient.New(&btcrpcConnConf, nil)
 		if err != nil {
 			log.WithError(err).Error("Connect btcd failed")
@@ -230,8 +254,16 @@ func run() error {
 		log.Info("Connect to btcd success")
 
 		// create scan service
-		btcScanner, err = scanner.NewBTCScanner(log, db, btcrpc, scanner.Config{
-			ScanPeriod: cfg.Btcscan.CheckPeriod,
+		scanStore, err := scanner.NewStore(log, db)
+		if err != nil {
+			log.WithError(err).Error("scanner.NewStore failed")
+			return err
+		}
+
+		btcScanner, err = scanner.NewBTCScanner(log, scanStore, btcrpc, scanner.Config{
+			ScanPeriod:            cfg.Btcscan.CheckPeriod,
+			ConfirmationsRequired: *btcConfirmationsRequired,
+			InitialScanHeight:     *btcInitialScanHeight,
 		})
 		if err != nil {
 			log.WithError(err).Error("Open scan service failed")
@@ -240,23 +272,36 @@ func run() error {
 
 		background("btcScanner.Run", errC, btcScanner.Run)
 
-		skyRPC := sender.NewRPC(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
+		skyRPC, err := sender.NewRPC(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
+		if err != nil {
+			log.WithError(err).Error("sender.NewRPC failed")
+			return err
+		}
 
 		// create skycoin send service
 		sendService = sender.NewService(makeSendConfig(*cfg), log, skyRPC)
 
 		background("sendService.Run", errC, sendService.Run)
 
-		sendRPC = sender.NewSender(sendService)
+		sendRPC = sender.NewRetrySender(sendService)
 	}
 
 	// create exchange service
-	exchangeService := exchange.NewService(log, db, btcScanner, sendRPC, exchange.Config{
+	exchangeStore, err := exchange.NewStore(log, db)
+	if err != nil {
+		log.WithError(err).Error("exchange.NewStore failed")
+		return err
+	}
+
+	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanRPC, sendRPC, exchange.Config{
 		Rate: cfg.ExchangeRate,
 	})
-	background("exchangeService.Run", errC, exchangeService.Run)
+	if err != nil {
+		log.WithError(err).Error("exchange.NewExchange failed")
+		return err
+	}
 
-	exchangeClient := exchange.NewClient(exchangeService)
+	background("exchangeClient.Run", errC, exchangeClient.Run)
 
 	// create bitcoin address manager
 	f, err := ioutil.ReadFile(*btcAddrs)
@@ -316,8 +361,8 @@ func run() error {
 	}
 
 	// close exchange service
-	log.Info("Shutting down exchangeService")
-	exchangeService.Shutdown()
+	log.Info("Shutting down exchangeClient")
+	exchangeClient.Shutdown()
 
 	// close the teller service
 	log.Info("Shutting down tellerServer")
@@ -338,10 +383,10 @@ func run() error {
 	return finalErr
 }
 
-func makeBtcrpcConfg(cfg config.Config) btcrpcclient.ConnConfig {
+func makeBtcrpcConfg(cfg config.Config) (btcrpcclient.ConnConfig, error) {
 	certs, err := ioutil.ReadFile(cfg.Btcrpc.Cert)
 	if err != nil {
-		panic(fmt.Sprintf("btc rpc cert file does not exist in %s", cfg.Btcrpc.Cert))
+		return btcrpcclient.ConnConfig{}, fmt.Errorf("btc rpc cert file does not exist in %s", cfg.Btcrpc.Cert)
 	}
 
 	return btcrpcclient.ConnConfig{
@@ -350,7 +395,7 @@ func makeBtcrpcConfg(cfg config.Config) btcrpcclient.ConnConfig {
 		User:         cfg.Btcrpc.User,
 		Pass:         cfg.Btcrpc.Pass,
 		Certificates: certs,
-	}
+	}, nil
 }
 
 func makeSendConfig(cfg config.Config) sender.Config {

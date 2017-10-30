@@ -1,34 +1,45 @@
 package scanner
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/boltdb/bolt"
+	"github.com/btcsuite/btcd/btcjson"
+	"github.com/btcsuite/btcutil"
+	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/util/dbutil"
 )
 
+// CoinTypeBTC is BTC coin type
+const CoinTypeBTC = "BTC"
+
 var (
-	scanMetaBkt     = []byte("scan_meta")
-	depositValueBkt = []byte("deposit_value")
+	// scan meta info bucket
+	scanMetaBkt = []byte("scan_meta")
 
-	lastScanBlockKey    = "last_scan_block"
+	// deposit value bucket
+	depositBkt = []byte("deposit_value")
+
+	// deposit address bucket
 	depositAddressesKey = "deposit_addresses"
-	dvIndexListKey      = "dv_index_list" // deposit value index list
 
+	// deposit values index list bucket
+	dvIndexListKey = "dv_index_list"
 )
 
-// DepositValuesEmptyErr is returned if there are no deposit values
-type DepositValuesEmptyErr struct{}
+// DepositsEmptyErr is returned if there are no deposit values
+type DepositsEmptyErr struct{}
 
-func (e DepositValuesEmptyErr) Error() string {
+func (e DepositsEmptyErr) Error() string {
 	return "No deposit values available"
 }
 
-// DepositValueExistsErr is returned when a deposit value already exists
-type DepositValueExistsErr struct{}
+// DepositExistsErr is returned when a deposit value already exists
+type DepositExistsErr struct{}
 
-func (e DepositValueExistsErr) Error() string {
+func (e DepositExistsErr) Error() string {
 	return "Deposit value already exists"
 }
 
@@ -49,68 +60,61 @@ func NewDuplicateDepositAddressErr(addr string) error {
 	}
 }
 
-// store records scanner meta info
-type store struct {
-	db *bolt.DB
+// Storer interface for scanner meta info storage
+type Storer interface {
+	GetScanAddresses() ([]string, error)
+	AddScanAddress(string) error
+	SetDepositProcessed(string) error
+	GetUnprocessedDeposits() ([]Deposit, error)
+	ScanBlock(*btcjson.GetBlockVerboseResult) ([]Deposit, error)
 }
 
-func newStore(db *bolt.DB) (*store, error) {
+// BTCStore records scanner meta info for BTC deposits
+type BTCStore struct {
+	db  *bolt.DB
+	log logrus.FieldLogger
+}
+
+// NewStore creates a scanner BTCStore
+func NewStore(log logrus.FieldLogger, db *bolt.DB) (*BTCStore, error) {
 	if db == nil {
-		return nil, errors.New("new store failed: db is nil")
+		return nil, errors.New("new BTCStore failed: db is nil")
 	}
 
 	if err := db.Update(func(tx *bolt.Tx) error {
-		// create LastScanBlock bucket if not exist
 		if _, err := tx.CreateBucketIfNotExists(scanMetaBkt); err != nil {
 			return err
 		}
 
-		_, err := tx.CreateBucketIfNotExists(depositValueBkt)
+		_, err := tx.CreateBucketIfNotExists(depositBkt)
 		return err
 	}); err != nil {
 		return nil, err
 	}
 
-	return &store{
-		db: db,
+	return &BTCStore{
+		db:  db,
+		log: log,
 	}, nil
 }
 
-// LastScanBlock stores the last scanned block's hash and height
-type LastScanBlock struct {
-	Hash   string
-	Height int64
-}
-
-// getLastScanBlock returns the last scanned block hash and height
-func (s *store) getLastScanBlock() (LastScanBlock, error) {
-	var lsb LastScanBlock
+// GetScanAddresses returns all scan addresses
+func (s *BTCStore) GetScanAddresses() ([]string, error) {
+	var addrs []string
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
-		return dbutil.GetBucketObject(tx, scanMetaBkt, lastScanBlockKey, &lsb)
+		var err error
+		addrs, err = s.getScanAddressesTx(tx)
+		return err
 	}); err != nil {
-		switch err.(type) {
-		case dbutil.ObjectNotExistErr:
-			err = nil
-		default:
-			return LastScanBlock{}, err
-		}
+		return nil, err
 	}
 
-	return lsb, nil
+	return addrs, nil
 }
 
-func (s *store) setLastScanBlock(lsb LastScanBlock) error {
-	return s.db.Update(func(tx *bolt.Tx) error {
-		return dbutil.PutBucketValue(tx, scanMetaBkt, lastScanBlockKey, lsb)
-	})
-}
-
-func (s *store) setLastScanBlockTx(tx *bolt.Tx, lsb LastScanBlock) error {
-	return dbutil.PutBucketValue(tx, scanMetaBkt, lastScanBlockKey, lsb)
-}
-
-func (s *store) getScanAddressesTx(tx *bolt.Tx) ([]string, error) {
+// getScanAddressesTx returns all scan addresses in a bolt.Tx
+func (s *BTCStore) getScanAddressesTx(tx *bolt.Tx) ([]string, error) {
 	var addrs []string
 
 	if err := dbutil.GetBucketObject(tx, scanMetaBkt, depositAddressesKey, &addrs); err != nil {
@@ -129,21 +133,8 @@ func (s *store) getScanAddressesTx(tx *bolt.Tx) ([]string, error) {
 	return addrs, nil
 }
 
-func (s *store) getScanAddresses() ([]string, error) {
-	var addrs []string
-
-	if err := s.db.View(func(tx *bolt.Tx) error {
-		var err error
-		addrs, err = s.getScanAddressesTx(tx)
-		return err
-	}); err != nil {
-		return nil, err
-	}
-
-	return addrs, nil
-}
-
-func (s *store) addScanAddress(addr string) error {
+// AddScanAddress adds an address to the scan list
+func (s *BTCStore) AddScanAddress(addr string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		addrs, err := s.getScanAddressesTx(tx)
 		if err != nil {
@@ -162,150 +153,135 @@ func (s *store) addScanAddress(addr string) error {
 	})
 }
 
-func (s *store) removeScanAddr(addr string) error {
-	// FIXME: This will be very slow with large number of scan addresses.
-	// FIXME: Save scan addresses differently
-
+// SetDepositProcessed marks a Deposit as processed
+func (s *BTCStore) SetDepositProcessed(dvKey string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		addrs, err := s.getScanAddressesTx(tx)
-		if err != nil {
+		var dv Deposit
+		if err := dbutil.GetBucketObject(tx, depositBkt, dvKey, &dv); err != nil {
 			return err
 		}
 
-		idx := -1
-
-		for i, a := range addrs {
-			if a == addr {
-				idx = i
-				break
-			}
+		if dv.ID() != dvKey {
+			return errors.New("CRITICAL ERROR: dv.ID() != dvKey")
 		}
 
-		if idx == -1 {
-			return nil
-		}
+		dv.Processed = true
 
-		addrs = append(addrs[:idx], addrs[idx+1:]...)
-		return dbutil.PutBucketValue(tx, scanMetaBkt, depositAddressesKey, addrs)
+		return dbutil.PutBucketValue(tx, depositBkt, dv.ID(), dv)
 	})
 }
 
-func (s *store) getHeadDepositValue() (DepositValue, error) {
-	var dv DepositValue
+// GetUnprocessedDeposits returns all Deposits not marked as Processed
+func (s *BTCStore) GetUnprocessedDeposits() ([]Deposit, error) {
+	var dvs []Deposit
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
-		index, err := s.getDepositValueIndexTx(tx)
-		if err != nil {
-			return err
-		}
+		return dbutil.ForEach(tx, depositBkt, func(k, v []byte) error {
+			var dv Deposit
+			if err := json.Unmarshal(v, &dv); err != nil {
+				return err
+			}
 
-		if len(index) == 0 {
-			return DepositValuesEmptyErr{}
-		}
+			if !dv.Processed {
+				dvs = append(dvs, dv)
+			}
 
-		head := index[0]
-
-		return dbutil.GetBucketObject(tx, depositValueBkt, head, &dv)
-	}); err != nil {
-		return DepositValue{}, err
-	}
-
-	return dv, nil
-}
-
-func (s *store) pushDepositValueTx(tx *bolt.Tx, dv DepositValue) error {
-	key := dv.TxN()
-
-	// Check if the deposit value already exists
-	if hasKey, err := dbutil.BucketHasKey(tx, depositValueBkt, key); err != nil {
-		return err
-	} else if hasKey {
-		return DepositValueExistsErr{}
-	}
-
-	// Save deposit value
-	if err := dbutil.PutBucketValue(tx, depositValueBkt, key, dv); err != nil {
-		return err
-	}
-
-	// Update deposit value index
-	index, err := s.getDepositValueIndexTx(tx)
-	if err != nil {
-		return err
-	}
-
-	index = append(index, key)
-
-	return dbutil.PutBucketValue(tx, scanMetaBkt, dvIndexListKey, index)
-}
-
-func (s *store) popDepositValue() (DepositValue, error) {
-	var dv DepositValue
-
-	if err := s.db.Update(func(tx *bolt.Tx) error {
-		index, err := s.getDepositValueIndexTx(tx)
-		if err != nil {
-			return err
-		}
-
-		if len(index) == 0 {
-			return DepositValuesEmptyErr{}
-		}
-
-		head := index[0]
-		index = index[1:]
-
-		// write index back to db
-		if err := dbutil.PutBucketValue(tx, scanMetaBkt, dvIndexListKey, index); err != nil {
-			return err
-		}
-
-		// mark deposit value in bucket as used
-		if err := dbutil.GetBucketObject(tx, depositValueBkt, head, &dv); err != nil {
-			return err
-		}
-
-		dv.IsUsed = true
-
-		return dbutil.PutBucketValue(tx, depositValueBkt, head, dv)
-	}); err != nil {
-		return DepositValue{}, err
-	}
-
-	return dv, nil
-}
-
-// Returns the deposit value index from the db.
-// If there is no deposit value index in the db, nil is returned instead of
-// dbutil.ObjectNotExistErr
-func (s *store) getDepositValueIndexTx(tx *bolt.Tx) ([]string, error) {
-	var index []string
-	if err := dbutil.GetBucketObject(tx, scanMetaBkt, dvIndexListKey, &index); err != nil {
-		switch err.(type) {
-		case dbutil.ObjectNotExistErr:
-			err = nil
-		default:
-			return nil, err
-		}
-	}
-
-	if len(index) == 0 {
-		index = nil
-	}
-
-	return index, nil
-}
-
-func (s *store) getDepositValueIndex() ([]string, error) {
-	var index []string
-
-	if err := s.db.View(func(tx *bolt.Tx) error {
-		var err error
-		index, err = s.getDepositValueIndexTx(tx)
-		return err
+			return nil
+		})
 	}); err != nil {
 		return nil, err
 	}
 
-	return index, nil
+	return dvs, nil
+}
+
+// pushDepositTx adds an Deposit in a bolt.Tx
+// Returns DepositExistsErr if the deposit already exists
+func (s *BTCStore) pushDepositTx(tx *bolt.Tx, dv Deposit) error {
+	key := dv.ID()
+
+	// Check if the deposit value already exists
+	if hasKey, err := dbutil.BucketHasKey(tx, depositBkt, key); err != nil {
+		return err
+	} else if hasKey {
+		return DepositExistsErr{}
+	}
+
+	// Save deposit value
+	return dbutil.PutBucketValue(tx, depositBkt, key, dv)
+}
+
+// ScanBlock scans a btc block for deposits and adds them
+// If the deposit already exists, the result is omitted from the returned list
+func (s *BTCStore) ScanBlock(block *btcjson.GetBlockVerboseResult) ([]Deposit, error) {
+	var dvs []Deposit
+
+	if err := s.db.Update(func(tx *bolt.Tx) error {
+		addrs, err := s.getScanAddressesTx(tx)
+		if err != nil {
+			s.log.WithError(err).Error("getScanAddressesTx failed")
+			return err
+		}
+
+		deposits, err := ScanBTCBlock(block, addrs)
+		if err != nil {
+			s.log.WithError(err).Error("ScanBTCBlock failed")
+			return err
+		}
+
+		for _, dv := range deposits {
+			if err := s.pushDepositTx(tx, dv); err != nil {
+				log := s.log.WithField("deposit", dv)
+				switch err.(type) {
+				case DepositExistsErr:
+					log.Warning("Deposit already exists in db")
+					continue
+				default:
+					log.WithError(err).Error("pushDepositTx failed")
+					return err
+				}
+			}
+
+			dvs = append(dvs, dv)
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return dvs, nil
+}
+
+// ScanBTCBlock scan the given block and returns the next block hash or error
+func ScanBTCBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) ([]Deposit, error) {
+	addrMap := map[string]struct{}{}
+	for _, a := range depositAddrs {
+		addrMap[a] = struct{}{}
+	}
+
+	var dv []Deposit
+	for _, tx := range block.RawTx {
+		for _, v := range tx.Vout {
+			amt, err := btcutil.NewAmount(v.Value)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, a := range v.ScriptPubKey.Addresses {
+				if _, ok := addrMap[a]; ok {
+					dv = append(dv, Deposit{
+						CoinType: CoinTypeBTC,
+						Address:  a,
+						Value:    int64(amt),
+						Height:   block.Height,
+						Tx:       tx.Txid,
+						N:        v.N,
+					})
+				}
+			}
+		}
+	}
+
+	return dv, nil
 }

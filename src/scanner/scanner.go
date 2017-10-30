@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -12,47 +11,43 @@ import (
 type Scanner interface {
 	AddScanAddress(string) error
 	GetScanAddresses() ([]string, error)
-	GetDepositValue() <-chan DepositNote
-	Run() error
-	Shutdown()
+	GetDeposit() <-chan DepositNote
 }
 
 // BtcRPCClient rpcclient interface
 type BtcRPCClient interface {
-	GetBestBlock() (*chainhash.Hash, int32, error)
-	GetBlockVerboseTx(blockHash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
+	GetBlockVerboseTx(*chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
+	GetBlockHash(int64) (*chainhash.Hash, error)
+	GetBlockCount() (int64, error)
 	Shutdown()
 }
 
-// DepositNote wraps a DepositValue with an ack channel
+// DepositNote wraps a Deposit with an ack channel
 type DepositNote struct {
-	DepositValue
-	AckC chan struct{}
+	Deposit
+	ErrC chan error
 }
 
-func makeDepositNote(dv DepositValue) DepositNote {
+// NewDepositNote returns a DepositNote
+func NewDepositNote(dv Deposit) DepositNote {
 	return DepositNote{
-		DepositValue: dv,
-		AckC:         make(chan struct{}, 1),
+		Deposit: dv,
+		ErrC:    make(chan error, 1),
 	}
 }
 
-// Config scanner config info
-type Config struct {
-	ScanPeriod time.Duration // scan period in seconds
+// Deposit struct
+type Deposit struct {
+	CoinType  string // coin type
+	Address   string // deposit address
+	Value     int64  // deposit amount. For BTC, measured in satoshis.
+	Height    int64  // the block height
+	Tx        string // the transaction id
+	N         uint32 // the index of vout in the tx [BTC]
+	Processed bool   // whether this was received by the exchange and saved
 }
 
-// DepositValue struct
-type DepositValue struct {
-	Address string // deposit address
-	Value   int64  // deposit amount. For BTC, measured in satoshis.
-	Height  int64  // the block height
-	Tx      string // the transaction id
-	N       uint32 // the index of vout in the tx
-	IsUsed  bool   // whether this dv is used
-}
-
-// TxN returns $tx:$n formatted ID string
-func (d DepositValue) TxN() string {
+// ID returns $tx:$n formatted ID string
+func (d Deposit) ID() string {
 	return fmt.Sprintf("%s:%d", d.Tx, d.N)
 }

@@ -1,5 +1,7 @@
 .DEFAULT_GOAL := help
-.PHONY: proxy teller install-skycoin-cli test lint check help
+.PHONY: proxy teller install-skycoin-cli test lint check format cover help
+
+PACKAGES = $(shell find ./src -type d -not -path '\./src')
 
 proxy:  ## Run the teller proxy. To add arguments, do 'make ARGS="--foo" proxy'.
 	go run cmd/proxy/proxy.go ${ARGS}
@@ -12,14 +14,21 @@ install-skycoin-cli: ## Install skycoin-cli
 	@mv $$GOPATH/bin/cli $$GOPATH/bin/skycoin-cli
 
 test: ## Run tests
-	go test ./cmd/...
-	go test ./src/...
+	go test ./cmd/... -timeout=1m -cover
+	go test ./src/... -timeout=1m -cover
 
 lint: ## Run linters
 	gometalinter --disable-all -E goimports --tests --vendor ./...
 	vendorcheck ./...
 
 check: lint test ## Run tests and linters
+
+cover: ## Runs tests on ./src/ with HTML code coverage
+	@echo "mode: count" > coverage-all.out
+	$(foreach pkg,$(PACKAGES),\
+		go test -coverprofile=coverage.out $(pkg);\
+		tail -n +2 coverage.out >> coverage-all.out;)
+	go tool cover -html=coverage-all.out
 
 install-linters: ## Install linters
 	go get -u -f github.com/golang/lint/golint

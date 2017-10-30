@@ -9,7 +9,7 @@ type dummyExchanger struct {
 	skyAddrs map[string][]string
 }
 
-func (de dummyExchanger) BindAddress(btcAddr, skyAddr string) error {
+func (de dummyExchanger) BindAddress(skyAddr, btcAddr string) error {
 	if de.err != nil {
 		return de.err
 	}
@@ -30,6 +30,10 @@ func (de dummyExchanger) BindAddress(btcAddr, skyAddr string) error {
 }
 
 func (de dummyExchanger) GetDepositStatuses(skyAddr string) ([]exchange.DepositStatus, error) {
+	return nil, nil
+}
+
+func (de dummyExchanger) GetDepositStatusDetail(flt exchange.DepositFilter) ([]exchange.DepositStatusDetail, error) {
 	return nil, nil
 }
 

@@ -30,12 +30,8 @@
   version = "1.3.1"
 
 [[constraint]]
-  revision = "47885ab8702485be6b6f87a03d4f3be0bc5c982c"
+  revision = "c7588cbf7690cd9f047a28efa2dcd8f2435a4e5e"
   name = "github.com/btcsuite/btcd"
-
-[[constraint]]
-  revision = "0d9ec835baeb9a8ce7fbe3eb7d7783284a089ced"
-  name = "github.com/btcsuite/btcrpcclient"
 
 [[override]]
   revision = "5ffa719c3882fd2ec1e8b9f4978066701c31a343"
@@ -51,7 +47,7 @@
 
 [[constraint]]
   name = "github.com/skycoin/skycoin"
-  version = "0.20.0-alpha.1"
+  revision = "01ab4cdcee644ea2be40e93d1c76b662b7880f42"
 
 [[constraint]]
   name = "github.com/stretchr/testify"
@@ -63,4 +59,4 @@
 
 [[constraint]]
   name = "github.com/gz-c/logrus-prefixed-formatter"
-  version = "v0.6.5"
+  version = "v0.7.1"

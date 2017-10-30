@@ -158,24 +158,29 @@ Accept: application/json
 Content-Type: application/json
 URI: /api/bind
 Request Body: {
-    "skyaddr": "..."
+    "skyaddr": "...",
+    "coin_type":"BTC"
 }
 ```
 
 Binds a skycoin address to a BTC address. A skycoin address can be bound to
 multiple BTC addresses.  The default maximum number of bound addresses is 5.
 
+Coin type specifies which coin deposit address type to generate.
+Options are: BTC [TODO: support more coin types].
+
 Example:
 
 ```bash
-curl -H  -X POST "Content-Type: application/json" -d '{"skyaddr":"..."}' http://localhost:7071/api/bind
+curl -H  -X POST "Content-Type: application/json" -d '{"skyaddr":"...","coin_type":"BTC"}' http://localhost:7071/api/bind
 ```
 
 response:
 
 ```bash
 {
-    "btc_address": "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp"
+    "deposit_address": "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp"
+    "coin_type": "BTC",
 }
 ```
 
@@ -215,17 +220,17 @@ response:
     "statuses": [
         {
             "seq": 1,
-            "update_at": 1501137828,
+            "updated_at": 1501137828,
             "status": "done"
         },
         {
             "seq": 2,
-            "update_at": 1501128062,
+            "updated_at": 1501128062,
             "status": "waiting_deposit"
         },
         {
             "seq": 3,
-            "update_at": 1501128063,
+            "updated_at": 1501128063,
             "status": "waiting_deposit"
         },
     ]
@@ -298,9 +303,6 @@ Note: Maps a btcaddr to multiple btc txns
 Bucket: scan_meta
 File: scanner/store.go
 
-Maps: "last_scan_block" -> scanner.lastScanBlock[json]
-Note: Saves scanner.lastScanBlock struct (as JSON) to "last_scan_block" key
-
 Maps: "deposit_addresses" -> [btcaddrs]
 Note: Saves list of btc addresss being scanned
 
@@ -312,6 +314,6 @@ Note: Saves list of btc txid:seq (as JSON)
 Bucket: deposit_value
 File: scanner/store.go
 
-Maps: btcTx[%tx:%n] -> scanner.DepositValue
-Note: Maps a btc txid:seq to scanner.DepositValue struct
+Maps: btcTx[%tx:%n] -> scanner.Deposit
+Note: Maps a btc txid:seq to scanner.Deposit struct
 ```

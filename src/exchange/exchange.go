@@ -5,348 +5,500 @@ package exchange
 
 import (
 	"errors"
+	"fmt"
+	"sync"
 	"time"
 
-	"github.com/boltdb/bolt"
-	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/skycoin/src/daemon"
-	"github.com/skycoin/skycoin/src/util/droplet"
-
+	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
-	"github.com/skycoin/teller/src/util/dbutil"
 )
 
-const satoshiPerBTC int64 = 1e8
+const (
+	satoshiPerBTC           int64 = 1e8
+	txConfirmationCheckWait       = time.Second * 3
+)
 
-// SkySender provids apis for sending skycoin
-type SkySender interface {
-	SendAsync(destAddr string, coins uint64) <-chan sender.Response
-	IsTxConfirmed(txid string) bool
-	IsClosed() bool
+var (
+	// ErrEmptySendAmount is returned if the calculated skycoin amount to send is 0
+	ErrEmptySendAmount = errors.New("Skycoin send amount is 0")
+	// ErrNoResponse is returned when the send service returns a nil response. This happens if the send service has closed.
+	ErrNoResponse = errors.New("No response from the send service")
+	// ErrNotConfirmed is returned if the tx is not confirmed yet
+	ErrNotConfirmed = errors.New("Transaction is not confirmed yet")
+	// ErrDepositStatusInvalid is returned when handling a deposit with a status that cannot be processed
+	// This includes StatusWaitDeposit and StatusUnknown
+	ErrDepositStatusInvalid = errors.New("Deposit status cannot be handled")
+	// ErrNoBoundAddress is returned if no skycoin address is bound to a deposit's address
+	ErrNoBoundAddress = errors.New("Deposit has no bound skycoin address")
+)
+
+// DepositFilter filters deposits
+type DepositFilter func(di DepositInfo) bool
+
+// Exchanger provides APIs to interact with the exchange service
+type Exchanger interface {
+	BindAddress(skyAddr, btcAddr string) error
+	GetDepositStatuses(skyAddr string) ([]DepositStatus, error)
+	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
+	GetBindNum(skyAddr string) (int, error)
 }
 
-// BtcScanner provids apis for interact with scan service
-type BtcScanner interface {
-	AddScanAddress(addr string) error
-	GetScanAddresses() ([]string, error)
-	GetDepositValue() <-chan scanner.DepositNote
-}
-
-// calculateSkyValue returns the amount of SKY (in droplets) to give for an
-// amount of BTC (in satoshis).
-// Rate is measured in SKY per BTC.
-func calculateSkyValue(satoshis, skyPerBTC int64) (uint64, error) {
-	if satoshis < 0 || skyPerBTC < 0 {
-		return 0, errors.New("negative satoshis or negative skyPerBTC")
-	}
-
-	btc := decimal.New(satoshis, 0)
-	btcToSatoshi := decimal.New(satoshiPerBTC, 0)
-	btc = btc.DivRound(btcToSatoshi, 8)
-
-	rate := decimal.New(skyPerBTC, 0)
-
-	sky := btc.Mul(rate)
-	sky = sky.Truncate(daemon.MaxDropletPrecision)
-
-	skyToDroplets := decimal.New(droplet.Multiplier, 0)
-	droplets := sky.Mul(skyToDroplets)
-
-	amt := droplets.IntPart()
-	if amt < 0 {
-		// This should never occur, but double check before we convert to uint64,
-		// otherwise we would send all the coins due to integer wrapping.
-		return 0, errors.New("calculated sky amount is negative")
-	}
-
-	return uint64(amt), nil
-}
-
-// Service manages coin exchange between deposits and skycoin
-type Service struct {
-	log     logrus.FieldLogger
-	cfg     Config
-	scanner BtcScanner // scanner provides apis for interacting with scan service
-	sender  SkySender  // sender provides apis for sending skycoin
-	store   *store     // deposit info storage
-	quit    chan struct{}
+// Exchange manages coin exchange between deposits and skycoin
+type Exchange struct {
+	log         logrus.FieldLogger
+	cfg         Config
+	scanner     scanner.Scanner // scanner provides APIs for interacting with the scan service
+	sender      sender.Sender   // sender provides APIs for sending skycoin
+	store       Storer          // deposit info storage
+	quit        chan struct{}
+	done        chan struct{}
+	depositChan chan DepositInfo
 }
 
 // Config exchange config struct
 type Config struct {
-	Rate int64 // sky_btc rate
+	Rate                    int64 // sky_btc rate
+	TxConfirmationCheckWait time.Duration
 }
 
-// NewService creates exchange service
-func NewService(log logrus.FieldLogger, db *bolt.DB, scanner BtcScanner, sender SkySender, cfg Config) *Service {
-	s, err := newStore(db, log)
-	if err != nil {
-		panic(err)
+// NewExchange creates exchange service
+func NewExchange(log logrus.FieldLogger, store Storer, scanner scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
+	if cfg.Rate == 0 {
+		return nil, errors.New("SKY/BTC Rate must not be 0")
 	}
 
-	return &Service{
-		cfg:     cfg,
-		log:     log.WithField("prefix", "teller.exchange"),
-		scanner: scanner,
-		sender:  sender,
-		store:   s,
-		quit:    make(chan struct{}),
+	if cfg.TxConfirmationCheckWait == 0 {
+		cfg.TxConfirmationCheckWait = txConfirmationCheckWait
 	}
+
+	return &Exchange{
+		cfg:         cfg,
+		log:         log.WithField("prefix", "teller.exchange"),
+		scanner:     scanner,
+		sender:      sender,
+		store:       store,
+		quit:        make(chan struct{}),
+		done:        make(chan struct{}, 1),
+		depositChan: make(chan DepositInfo, 100),
+	}, nil
 }
 
 // Run starts the exchange process
-func (s *Service) Run() error {
+func (s *Exchange) Run() error {
 	log := s.log
 	log.Info("Start exchange service...")
-	defer log.Info("Closed exchange service")
+	defer func() {
+		log.Info("Closed exchange service")
+		s.done <- struct{}{}
+	}()
 
-	s.processUnconfirmedTx()
+	// Load StatusWaitSend deposits for processing later
+	waitSendDeposits, err := s.store.GetDepositInfoArray(func(di DepositInfo) bool {
+		return di.Status == StatusWaitSend
+	})
+
+	if err != nil {
+		err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
+		log.WithError(err).Error()
+		return err
+	}
+
+	// Load StatusWaitConfirm deposits for processing later
+	waitConfirmDeposits, err := s.store.GetDepositInfoArray(func(di DepositInfo) bool {
+		return di.Status == StatusWaitConfirm
+	})
+
+	if err != nil {
+		err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
+		log.WithError(err).Error()
+		return err
+	}
+
+	var wg sync.WaitGroup
+
+	// This loop processes StatusWaitSend deposits.
+	// Only one deposit is processed at a time; it will not send more coins
+	// until it receives confirmation of the previous send.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		log := log.WithField("goroutine", "sendSky")
+		for {
+			select {
+			case <-s.quit:
+				log.Info("exchange.Exchange send loop quit")
+				return
+			case d := <-s.depositChan:
+				log := log.WithField("depositInfo", d)
+				if err := s.processWaitSendDeposit(d); err != nil {
+					log.WithError(err).Error("processWaitSendDeposit failed. This deposit will not be reprocessed until teller is restarted.")
+				}
+			}
+		}
+	}()
+
+	// Queue the saved StatusWaitConfirm deposits
+	for _, di := range waitConfirmDeposits {
+		s.depositChan <- di
+	}
+
+	// Queue the saved StatusWaitSend deposits
+	for _, di := range waitSendDeposits {
+		s.depositChan <- di
+	}
+
+	// This loop processes incoming deposits from the scanner and saves a
+	// new DepositInfo with a status of StatusWaitSend
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		log := log.WithField("goroutine", "watchDeposits")
+		for {
+			select {
+			case <-s.quit:
+				log.Info("exchange.Exchange watch deposits loop quit")
+				return
+			case dv, ok := <-s.scanner.GetDeposit():
+				if !ok {
+					log.Warn("Scan service closed, watch deposits loop quit")
+					return
+				}
+
+				log := log.WithField("deposit", dv.Deposit)
+
+				// Save a new DepositInfo based upon the scanner.Deposit.
+				// If the save fails, report it to the scanner.
+				// The scanner will mark the deposit as "processed" if no error
+				// occurred.  Any unprocessed deposits held by the scanner
+				// will be resent to the exchange when teller is started.
+				if d, err := s.saveIncomingDeposit(dv.Deposit); err != nil {
+					log.WithError(err).Error("saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted.")
+					dv.ErrC <- err
+				} else {
+					dv.ErrC <- nil
+					s.depositChan <- d
+				}
+			}
+		}
+	}()
+
+	wg.Wait()
+
+	return nil
+}
+
+// Shutdown close the exchange service
+func (s *Exchange) Shutdown() {
+	close(s.quit)
+	s.log.Info("Waiting for Run() to finish")
+	<-s.done
+	s.log.Info("Shutdown complete")
+}
+
+// saveIncomingDeposit is called when receiving a deposit from the scanner
+func (s *Exchange) saveIncomingDeposit(dv scanner.Deposit) (DepositInfo, error) {
+	log := s.log.WithField("deposit", dv)
+
+	log.Info("Received bitcoin deposit")
+
+	di, err := s.store.GetOrCreateDepositInfo(dv, s.cfg.Rate)
+	if err != nil {
+		log.WithError(err).Error("GetOrCreateDepositInfo failed")
+		return DepositInfo{}, err
+	}
+
+	log = log.WithField("depositInfo", di)
+	log.Info("Saved DepositInfo")
+
+	return di, err
+}
+
+// processDeposit advances a single deposit through three states:
+// StatusWaitSend -> StatusWaitConfirm
+// StatusWaitConfirm -> StatusDone
+// StatusWaitDeposit is never saved to the database, so it does not transition
+func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
+	log := s.log.WithField("depositInfo", di)
+	log.Info("Processing StatusWaitSend deposit")
 
 	for {
 		select {
 		case <-s.quit:
-			log.Info("exchange.Service quit")
 			return nil
-		case dv, ok := <-s.scanner.GetDepositValue():
-			log = log.WithField("depositValue", dv)
+		default:
+		}
 
-			if !ok {
-				log.Warn("Scan service closed")
+		log.Info("handleDepositInfoState")
+
+		var err error
+		di, err = s.handleDepositInfoState(di)
+		log = log.WithField("depositInfo", di)
+
+		switch err {
+		case nil:
+			break
+		case ErrNotConfirmed:
+			select {
+			case <-time.After(s.cfg.TxConfirmationCheckWait):
+			case <-s.quit:
 				return nil
 			}
+		default:
+			log.WithError(err).Error("handleDepositInfoState failed")
+			return err
+		}
 
-			log.Info("Receive bitcoin deposit")
-			btcTxIndex := dv.TxN()
-			// get deposit info of given btc address
-			di, err := s.store.GetDepositInfo(btcTxIndex)
+		if di.Status == StatusDone {
+			return nil
+		}
+	}
 
-			// TODO, can rewrite this method a little better
-			switch err.(type) {
-			case nil:
-				log = log.WithField("depositInfo", di)
-			case dbutil.ObjectNotExistErr:
-				log.Info("DepositInfo not found in DB, attempting to backfill")
+	return nil
+}
 
-				skyAddr, err := s.store.GetBindAddress(dv.Address)
+func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
+	log := s.log.WithField("depositInfo", di)
+
+	if err := di.ValidateForStatus(); err != nil {
+		log.WithError(err).Error("handleDepositInfoState's DepositInfo is invalid")
+		return di, err
+	}
+
+	switch di.Status {
+	case StatusWaitSend:
+		// Prepare skycoin transaction
+		skyTx, err := s.createTransaction(di)
+
+		if err != nil {
+			log.WithError(err).Error("createTransaction failed")
+
+			// If the send amount is empty, skip to StatusDone.
+			if err == ErrEmptySendAmount {
+				di, err = s.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
+					di.Status = StatusDone
+					return di
+				})
 				if err != nil {
-					log.WithError(err).Error("GetBindAddress failed")
-					continue
+					log.WithError(err).Error("Update DepositInfo set StatusDone failed")
+					return di, err
 				}
 
-				if skyAddr == "" {
-					log.Warn("Deposit has no bound skycoin address")
-					dv.AckC <- struct{}{}
-					continue
-				}
-
-				log = log.WithField("skyAddr", skyAddr)
-
-				di = DepositInfo{
-					SkyAddress: skyAddr,
-					BtcAddress: dv.Address,
-					BtcTx:      btcTxIndex,
-					Status:     StatusWaitSend,
-				}
-
-				log = log.WithField("depositInfo", di)
-
-				if err := s.store.AddDepositInfo(di); err != nil {
-					log.WithError(err).Error("Add DepositInfo failed")
-					continue
-				}
-			default:
-				log.WithError(err).Error("GetDepositInfo failed")
-				continue
+				return di, nil
 			}
 
-			if di.Status >= StatusWaitConfirm {
-				dv.AckC <- struct{}{}
-				log.Warn("DepositInfo already processed")
-				continue
-			}
-
-			if di.Status == StatusWaitDeposit {
-				// update status to waiting_sky_send
-				if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
-					dpi.Status = StatusWaitSend
-					return dpi
-				}); err != nil {
-					log.WithError(err).Error("Update DepositStatus failed")
-					continue
-				}
-			}
-
-			// send skycoins
-			// get bound skycoin address
-			skyAddr, err := s.store.GetBindAddress(dv.Address)
-			if err != nil {
-				log.WithError(err).Error("GetBindAddress failed")
-				continue
-			}
-
-			if skyAddr == "" {
-				log.Error("Deposit has no bound skycoin address")
-				continue
-			}
-
-			log = log.WithField("skyAddr", skyAddr)
-
-			// checks if the send service is closed
-			if s.sender.IsClosed() {
-				log.Warn("Send service closed")
-				return nil
-			}
-
-			log = log.WithField("skyRate", s.cfg.Rate)
-
-			// try to send skycoin
-			skyAmt, err := calculateSkyValue(dv.Value, s.cfg.Rate)
-			if err != nil {
-				log.WithError(err).Error("calculateSkyValue failed")
-				continue
-			}
-
-			log = log.WithField("sendSkyDroplets", skyAmt)
-
-			log.Info("Trying to send skycoin")
-
-			if skyAmt == 0 {
-				log.Warn("skycoin amount is 0, not sending")
-				continue
-			}
-
-			rspC := s.sender.SendAsync(skyAddr, skyAmt)
-			var rsp sender.Response
-			select {
-			case rsp = <-rspC:
-			case <-s.quit:
-				log.Warn("exhange.Service quit")
-				return nil
-			}
-
-			log = log.WithField("response", rsp)
-
-			if rsp.Err != "" {
-				log.Error("Send skycoin failed")
-				dv.AckC <- struct{}{}
-				continue
-			}
-
-			log.Info("Sent skycoin")
-
-			// update the txid
-			if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
-				dpi.Txid = rsp.Txid
-				dpi.SkySent = skyAmt
-				dpi.SkyBtcRate = s.cfg.Rate
-				return dpi
-			}); err != nil {
-				log.WithError(err).Error("Update deposit info failed")
-			}
-
-		loop:
-			for {
-				select {
-				case <-s.quit:
-					log.Warn("exhange.Service quit")
-					return nil
-				case st := <-rsp.StatusC:
-					log = log.WithField("responseStatus", st)
-					switch st {
-					case sender.Sent:
-						log = log.WithField("exchangeStatus", StatusWaitConfirm)
-						log.Info("Handling response status channel result")
-
-						if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
-							dpi.Status = StatusWaitConfirm
-							return dpi
-						}); err != nil {
-							log.WithError(err).Error("Update DepositInfo failed")
-						}
-					case sender.TxConfirmed:
-						log = log.WithField("exchangeStatus", StatusDone)
-						log.Info("Handling response status channel result")
-
-						if err := s.store.UpdateDepositInfo(btcTxIndex, func(dpi DepositInfo) DepositInfo {
-							dpi.Status = StatusDone
-							return dpi
-						}); err != nil {
-							log.WithError(err).Error("Update DepositInfo failed")
-						}
-
-						dv.AckC <- struct{}{}
-
-						break loop
-					default:
-						log.Panic("Unknown responseStatus value")
-						return nil
-					}
-				}
-
-			}
-
+			return di, err
 		}
+
+		// Find the coins from the skyTx
+		// The skyTx contains one output sent to the destination address,
+		// so this check is safe.
+		// It is verified earlier by verifyCreatedTransaction
+		var skySent uint64
+		for _, o := range skyTx.Out {
+			if o.Address.String() == di.SkyAddress {
+				skySent = o.Coins
+				break
+			}
+		}
+		if skySent == 0 {
+			err := errors.New("No output to destination address found in transaction")
+			log.WithError(err).Error()
+			return di, err
+		}
+
+		// Within a bolt.DB transaction, update the db then send the coins
+		// If the send fails, the data is rolled back
+		// If the db save fails, no coins had been sent
+		di, err = s.store.UpdateDepositInfoCallback(di.DepositID, func(di DepositInfo) DepositInfo {
+			di.Status = StatusWaitConfirm
+			di.Txid = skyTx.TxIDHex()
+			di.SkySent = skySent
+			return di
+		}, func(di DepositInfo) error {
+			// NOTE: broadcastTransaction retries indefinitely on error
+			// If the skycoin node is not reachable, this will block,
+			// which will also block the database since it's in a transaction
+			rsp, err := s.broadcastTransaction(skyTx)
+			if err != nil {
+				log.WithError(err).Error("broadcastTransaction failed")
+				return err
+			}
+
+			// Invariant assertion: do not return this as an error, since
+			// coins have been sent. This should never occur.
+			if rsp.Txid != skyTx.TxIDHex() {
+				log.Error("CRITICAL ERROR: BroadcastTxResponse.Txid != skyTx.TxIDHex()")
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			log.WithError(err).Error("store.UpdateDepositInfoCallback failed")
+			return di, err
+		}
+
+		return di, nil
+
+	case StatusWaitConfirm:
+		// Wait for confirmation
+		rsp := s.sender.IsTxConfirmed(di.Txid)
+
+		if rsp == nil {
+			log.WithError(ErrNoResponse).Warn("Sender closed")
+			return di, ErrNoResponse
+		}
+
+		if rsp.Err != nil {
+			log.WithError(rsp.Err).Error("IsTxConfirmed failed")
+			return di, rsp.Err
+		}
+
+		if !rsp.Confirmed {
+			log.Info("Transaction is not confirmed yet")
+			return di, ErrNotConfirmed
+		}
+
+		di, err := s.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
+			di.Status = StatusDone
+			return di
+		})
+		if err != nil {
+			log.WithError(err).Error("UpdateDepositInfo set StatusDone failed")
+			return di, err
+		}
+
+		return di, nil
+
+	case StatusDone:
+		log.Warn("DepositInfo already processed")
+		return di, nil
+
+	case StatusWaitDeposit:
+		// We don't save any deposits with StatusWaitDeposit.
+		// We can't transition to StatusWaitSend without a scanner.Deposit
+		log.Error("StatusWaitDeposit cannot be processed and should never be handled by this method")
+		fallthrough
+	case StatusUnknown:
+		fallthrough
+	default:
+		err := ErrDepositStatusInvalid
+		log.WithError(err).Error()
+		return di, err
 	}
 }
 
-// Shutdown close the exchange service
-func (s *Service) Shutdown() {
-	close(s.quit)
-}
+func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) {
+	log := s.log.WithField("deposit", di)
 
-// ProcessUnconfirmedTx wait until all unconfirmed tx to be confirmed and update
-// it's status in db
-func (s *Service) processUnconfirmedTx() {
-	log := s.log
-	log.Info("Checking the unconfirmed tx...")
-	defer log.Info("Checking confirmed tx finished")
+	// This should never occur, the DepositInfo is saved with a SkyAddress
+	// during GetOrCreateDepositInfo().
+	if di.SkyAddress == "" {
+		err := ErrNoBoundAddress
+		log.WithError(err).Error()
+		return nil, err
+	}
 
-	dpis, err := s.store.GetDepositInfoArray(func(dpi DepositInfo) bool {
-		return dpi.Status == StatusWaitConfirm
-	})
+	log = log.WithField("skyAddr", di.SkyAddress)
+	log = log.WithField("skyRate", s.cfg.Rate)
 
+	skyAmt, err := calculateSkyValue(di.DepositValue, s.cfg.Rate)
 	if err != nil {
-		log.WithError(err).Println("GetDepositInfoArray failed")
-		return
+		log.WithError(err).Error("calculateSkyValue failed")
+		return nil, err
 	}
 
-	log = log.WithField("depositInfosLen", len(dpis))
+	log = log.WithField("sendAmt", skyAmt)
 
-	if len(dpis) == 0 {
-		return
+	log.Info("Creating skycoin transaction")
+
+	if skyAmt == 0 {
+		err := ErrEmptySendAmount
+		log.WithError(err).Error()
+		return nil, err
 	}
 
-	for _, dpi := range dpis {
-		dpiLog := log.WithField("depositInfo", dpi)
-		// check if the tx is confirmed
-	loop:
-		for {
-			if s.sender.IsTxConfirmed(dpi.Txid) {
-				// update the dpi status
-				if err := s.store.UpdateDepositInfo(dpi.BtcTx, func(dpi DepositInfo) DepositInfo {
-					dpi.Status = StatusDone
-					return dpi
-				}); err != nil {
-					dpiLog.WithError(err).Error("Update DepositInfo.Status")
-				}
-				break loop
-			}
-
-			dpiLog.Debug("Txid is not confirmed")
-			select {
-			case <-time.After(3 * time.Second):
-				continue
-			case <-s.quit:
-				return
-			}
-		}
+	tx, err := s.sender.CreateTransaction(di.SkyAddress, skyAmt)
+	if err != nil {
+		log.WithError(err).Error("sender.CreateTransaction failed")
+		return nil, err
 	}
+
+	log = log.WithField("transactionOutput", tx.Out)
+
+	// Verify the transaction contains exactly output to the destination address
+	if err := verifyCreatedTransaction(tx, di, skyAmt); err != nil {
+		log.WithError(err).Error("verifyCreatedTransaction failed")
+		return nil, err
+	}
+
+	return tx, nil
 }
 
-func (s *Service) bindAddress(btcAddr, skyAddr string) error {
+func verifyCreatedTransaction(tx *coin.Transaction, di DepositInfo, skyAmt uint64) error {
+	// Check invariant assertions:
+	// The transaction should contain one output to the destination address.
+	// It may or may not have a change output.
+	count := 0
+
+	for _, o := range tx.Out {
+		if o.Address.String() != di.SkyAddress {
+			continue
+		}
+
+		count++
+
+		if o.Coins != skyAmt {
+			return errors.New("CreateTransaction transaction coins are different")
+		}
+	}
+
+	if count == 0 {
+		return fmt.Errorf("CreateTransaction transaction has no output to address %s", di.SkyAddress)
+	} else if count > 1 {
+		return fmt.Errorf("CreateTransaction transaction has multiple outputs to address %s", di.SkyAddress)
+	}
+
+	return nil
+}
+
+func (s *Exchange) broadcastTransaction(tx *coin.Transaction) (*sender.BroadcastTxResponse, error) {
+	log := s.log.WithField("txid", tx.TxIDHex())
+
+	log.Info("Broadcasting skycoin transaction")
+
+	rsp := s.sender.BroadcastTransaction(tx)
+
+	log = log.WithField("sendRsp", rsp)
+
+	if rsp == nil {
+		err := ErrNoResponse
+		log.WithError(err).Warn("Sender closed")
+		return nil, err
+	}
+
+	if rsp.Err != nil {
+		err := fmt.Errorf("Send skycoin failed: %v", rsp.Err)
+		log.WithError(err).Error()
+		return nil, err
+	}
+
+	log.Info("Sent skycoin")
+
+	return rsp, nil
+}
+
+// BindAddress binds deposit btc address with skycoin address, and
+// add the btc address to scan service, when detect deposit coin
+// to the btc address, will send specific skycoin to the binded
+// skycoin address
+// TODO -- support multiple coin types
+func (s *Exchange) BindAddress(skyAddr, btcAddr string) error {
 	if err := s.store.BindAddress(skyAddr, btcAddr); err != nil {
 		return err
 	}
@@ -357,62 +509,66 @@ func (s *Service) bindAddress(btcAddr, skyAddr string) error {
 
 // DepositStatus json struct for deposit status
 type DepositStatus struct {
-	Seq      uint64 `json:"seq"`
-	UpdateAt int64  `json:"update_at"`
-	Status   string `json:"status"`
+	Seq       uint64 `json:"seq"`
+	UpdatedAt int64  `json:"updated_at"`
+	Status    string `json:"status"`
+	CoinType  string `json:"coin_type"`
 }
 
 // DepositStatusDetail deposit status detail info
 type DepositStatusDetail struct {
-	Seq        uint64 `json:"seq"`
-	UpdateAt   int64  `json:"update_at"`
-	Status     string `json:"status"`
-	SkyAddress string `json:"skycoin_address"`
-	BtcAddress string `json:"bitcoin_address"`
-	Txid       string `json:"txid"`
+	Seq            uint64 `json:"seq"`
+	UpdatedAt      int64  `json:"updated_at"`
+	Status         string `json:"status"`
+	SkyAddress     string `json:"skycoin_address"`
+	DepositAddress string `json:"deposit_address"`
+	CoinType       string `json:"coin_type"`
+	Txid           string `json:"txid"`
 }
 
-func (s *Service) getDepositStatuses(skyAddr string) ([]DepositStatus, error) {
-	dpis, err := s.store.GetDepositInfoOfSkyAddress(skyAddr)
+// GetDepositStatuses returns deamon.DepositStatus array of given skycoin address
+func (s *Exchange) GetDepositStatuses(skyAddr string) ([]DepositStatus, error) {
+	dis, err := s.store.GetDepositInfoOfSkyAddress(skyAddr)
 	if err != nil {
 		return []DepositStatus{}, err
 	}
 
-	dss := make([]DepositStatus, 0, len(dpis))
-	for _, dpi := range dpis {
+	dss := make([]DepositStatus, 0, len(dis))
+	for _, di := range dis {
 		dss = append(dss, DepositStatus{
-			Seq:      dpi.Seq,
-			UpdateAt: dpi.UpdatedAt,
-			Status:   dpi.Status.String(),
+			Seq:       di.Seq,
+			UpdatedAt: di.UpdatedAt,
+			Status:    di.Status.String(),
+			CoinType:  di.CoinType,
 		})
 	}
 	return dss, nil
 }
 
-// DepositFilter deposit status filter
-type DepositFilter func(dpi DepositInfo) bool
-
-func (s *Service) getDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error) {
-	dpis, err := s.store.GetDepositInfoArray(flt)
+// GetDepositStatusDetail returns deposit status details
+func (s *Exchange) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error) {
+	dis, err := s.store.GetDepositInfoArray(flt)
 	if err != nil {
 		return nil, err
 	}
 
-	dss := make([]DepositStatusDetail, 0, len(dpis))
-	for _, dpi := range dpis {
+	dss := make([]DepositStatusDetail, 0, len(dis))
+	for _, di := range dis {
 		dss = append(dss, DepositStatusDetail{
-			Seq:        dpi.Seq,
-			UpdateAt:   dpi.UpdatedAt,
-			Status:     dpi.Status.String(),
-			SkyAddress: dpi.SkyAddress,
-			BtcAddress: dpi.BtcAddress,
-			Txid:       dpi.Txid,
+			Seq:            di.Seq,
+			UpdatedAt:      di.UpdatedAt,
+			Status:         di.Status.String(),
+			SkyAddress:     di.SkyAddress,
+			DepositAddress: di.DepositAddress,
+			Txid:           di.Txid,
+			CoinType:       di.CoinType,
 		})
 	}
 	return dss, nil
 }
 
-func (s *Service) getBindNum(skyAddr string) (int, error) {
+// GetBindNum returns the number of btc address the given sky address binded
+func (s *Exchange) GetBindNum(skyAddr string) (int, error) {
 	addrs, err := s.store.GetSkyBindBtcAddresses(skyAddr)
 	return len(addrs), err
 }
