@@ -20,6 +20,8 @@ import (
 	"github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/skycoin/src/cipher"
+	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
@@ -65,19 +67,33 @@ type dummySkySender struct {
 	log logrus.FieldLogger
 }
 
-func (s *dummySkySender) Send(destAddr string, coins uint64) *sender.SendResponse {
+func (s *dummySkySender) CreateTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
 	s.log.WithFields(logrus.Fields{
 		"destAddr": destAddr,
 		"coins":    coins,
-	}).Info("dummySkySender.Send")
+	}).Info("dummySkySender.CreateTransaction")
 
-	return &sender.SendResponse{
-		Err: fmt.Errorf("dummySender.Send: %s %d", destAddr, coins),
+	addr, err := cipher.DecodeBase58Address(destAddr)
+	if err != nil {
+		return nil, err
 	}
+
+	return &coin.Transaction{
+		Out: []coin.TransactionOutput{
+			{
+				Address: addr,
+				Coins:   coins,
+			},
+		},
+	}, nil
 }
 
-func (s *dummySkySender) IsClosed() bool {
-	return true
+func (s *dummySkySender) BroadcastTransaction(tx *coin.Transaction) *sender.BroadcastTxResponse {
+	s.log.WithField("txid", tx.TxIDHex()).Info("dummySkySender.BroadcastTransaction")
+
+	return &sender.BroadcastTxResponse{
+		Err: fmt.Errorf("dummySkySender.BroadcastTransaction: %s %v", tx.TxIDHex(), tx),
+	}
 }
 
 func (s *dummySkySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {

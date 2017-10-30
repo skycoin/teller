@@ -15,6 +15,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/skycoin/src/cipher"
+	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/testutil"
@@ -22,10 +24,10 @@ import (
 
 type dummySender struct {
 	sync.RWMutex
-	txids          []string
-	sendErr        error
-	confirmErr     error
-	txidConfirmMap map[string]bool
+	createTransactionErr    error
+	broadcastTransactionErr error
+	confirmErr              error
+	txidConfirmMap          map[string]bool
 }
 
 func newDummySender() *dummySender {
@@ -34,24 +36,38 @@ func newDummySender() *dummySender {
 	}
 }
 
-func (send *dummySender) Send(destAddr string, coins uint64) *sender.SendResponse {
-	req := sender.SendRequest{
-		Coins:   coins,
-		Address: destAddr,
-		RspC:    make(chan *sender.SendResponse, 1),
+func (send *dummySender) CreateTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
+	if send.createTransactionErr != nil {
+		return nil, send.createTransactionErr
 	}
 
-	if send.sendErr != nil {
-		return &sender.SendResponse{
-			Err: send.sendErr,
+	addr := cipher.MustDecodeBase58Address(destAddr)
+
+	return &coin.Transaction{
+		Out: []coin.TransactionOutput{
+			{
+				Address: addr,
+				Coins:   coins,
+			},
+		},
+	}, nil
+}
+
+func (send *dummySender) BroadcastTransaction(tx *coin.Transaction) *sender.BroadcastTxResponse {
+	req := sender.BroadcastTxRequest{
+		Tx:   tx,
+		RspC: make(chan *sender.BroadcastTxResponse, 1),
+	}
+
+	if send.broadcastTransactionErr != nil {
+		return &sender.BroadcastTxResponse{
+			Err: send.broadcastTransactionErr,
 			Req: req,
 		}
 	}
 
-	txid := send.nextTxid()
-
-	return &sender.SendResponse{
-		Txid: txid,
+	return &sender.BroadcastTxResponse{
+		Txid: tx.TxIDHex(),
 		Req:  req,
 	}
 }
@@ -78,25 +94,10 @@ func (send *dummySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {
 	}
 }
 
-func (send *dummySender) nextTxid() string {
-	send.Lock()
-	defer send.Unlock()
-
-	if len(send.txids) == 0 {
-		panic("need more txids added to dummySender")
-	}
-
-	txid := send.txids[0]
-	send.txids = send.txids[1:]
-
-	return txid
-}
-
-func (send *dummySender) addTxidResponse(txid string) {
-	send.Lock()
-	defer send.Unlock()
-
-	send.txids = append(send.txids, txid)
+func (send *dummySender) predictTxid(t *testing.T, destAddr string, coins uint64) string {
+	tx, err := send.CreateTransaction(destAddr, coins)
+	require.NoError(t, err)
+	return tx.TxIDHex()
 }
 
 func (send *dummySender) setTxConfirmed(txid string) {
@@ -140,6 +141,8 @@ func (scan *dummyScanner) stop() {
 
 const (
 	testSkyBtcRate  int64 = 100 // 100 SKY per BTC
+	testSkyAddr           = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
+	testSkyAddr2          = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
 	dbScanTimeout         = time.Second * 3
 	dbCheckWaitTime       = time.Millisecond * 300
 )
@@ -228,18 +231,20 @@ func TestExchangeRunSend(t *testing.T) {
 	defer shutdown()
 	defer e.Shutdown()
 
-	skyAddr := "foo-sky-addr"
+	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
 	err := e.store.BindAddress(skyAddr, btcAddr)
 	require.NoError(t, err)
 
-	txid := "foo-sky-txid"
-	e.sender.(*dummySender).addTxidResponse(txid)
+	var value int64 = 1e8
+	skySent, err := calculateSkyValue(value, testSkyBtcRate)
+	require.NoError(t, err)
+	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
 			Address: btcAddr,
-			Value:   1e8,
+			Value:   value,
 			Height:  20,
 			Tx:      "foo-tx",
 			N:       2,
@@ -350,7 +355,9 @@ func TestExchangeRunSend(t *testing.T) {
 	require.Equal(t, expectedDeposit, di)
 }
 
-func TestExchangeSendFailure(t *testing.T) {
+func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
+	// Test that a BroadcastTransaction error is handled properly
+	// The DepositInfo should not be updated if BroadcastTransaction fails.
 	// Test that we save the rate when first creating, not on send
 	// To do this, force the sender to return errors to block the transition to
 	// StatusWaitConfirm
@@ -358,13 +365,65 @@ func TestExchangeSendFailure(t *testing.T) {
 	defer shutdown()
 	defer e.Shutdown()
 
-	skyAddr := "foo-sky-addr"
+	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
 	err := e.store.BindAddress(skyAddr, btcAddr)
 	require.NoError(t, err)
 
-	// Force sender to return a send error so that the deposit stays at StatusWaitSend
-	e.sender.(*dummySender).sendErr = errors.New("fake send error")
+	// Force sender to return a broadcast tx error so that the deposit stays at StatusWaitSend
+	e.sender.(*dummySender).broadcastTransactionErr = errors.New("fake broadcast transaction error")
+
+	dn := scanner.DepositNote{
+		Deposit: scanner.Deposit{
+			Address: btcAddr,
+			Value:   1e8,
+			Height:  20,
+			Tx:      "foo-tx",
+			N:       2,
+		},
+		ErrC: make(chan error, 1),
+	}
+	e.scanner.(*dummyScanner).addDeposit(dn)
+
+	// First loop calls saveIncomingDeposit
+	// nil is written to ErrC after this method finishes
+	err = <-dn.ErrC
+	require.NoError(t, err)
+
+	// Check the DepositInfo in the database
+	// Sky should not be sent
+	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
+	require.NoError(t, err)
+	require.NotEmpty(t, di.UpdatedAt)
+	require.Equal(t, DepositInfo{
+		Seq:            1,
+		UpdatedAt:      di.UpdatedAt,
+		SkyAddress:     skyAddr,
+		DepositAddress: btcAddr,
+		DepositID:      dn.Deposit.ID(),
+		Status:         StatusWaitSend,
+		ConversionRate: testSkyBtcRate,
+		DepositValue:   dn.Deposit.Value,
+		Deposit:        dn.Deposit,
+	}, di)
+}
+
+func TestExchangeCreateTxFailure(t *testing.T) {
+	// Test that a CreateTransaction error is handled properly
+	// Test that we save the rate when first creating, not on send
+	// To do this, force the sender to return errors to block the transition to
+	// StatusWaitConfirm
+	e, shutdown, _ := runExchange(t)
+	defer shutdown()
+	defer e.Shutdown()
+
+	skyAddr := testSkyAddr
+	btcAddr := "foo-btc-addr"
+	err := e.store.BindAddress(skyAddr, btcAddr)
+	require.NoError(t, err)
+
+	// Force sender to return a create tx error so that the deposit stays at StatusWaitSend
+	e.sender.(*dummySender).createTransactionErr = errors.New("fake create transaction error")
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
@@ -405,13 +464,15 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 	defer shutdown()
 	defer e.Shutdown()
 
-	skyAddr := "foo-sky-addr"
+	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
 	err := e.store.BindAddress(skyAddr, btcAddr)
 	require.NoError(t, err)
 
-	txid := "foo-sky-txid"
-	e.sender.(*dummySender).addTxidResponse(txid)
+	var value int64 = 1e8
+	skySent, err := calculateSkyValue(value, testSkyBtcRate)
+	require.NoError(t, err)
+	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
 	// Force sender to return a confirm error so that the deposit stays at StatusWaitConfirm
 	e.sender.(*dummySender).confirmErr = errors.New("fake confirm error")
@@ -419,7 +480,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
 			Address: btcAddr,
-			Value:   1e8,
+			Value:   value,
 			Height:  20,
 			Tx:      "foo-tx",
 			N:       2,
@@ -479,18 +540,20 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 	e, shutdown, _ := runExchange(t)
 	defer shutdown()
 
-	skyAddr := "foo-sky-addr"
+	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
 	err := e.store.BindAddress(skyAddr, btcAddr)
 	require.NoError(t, err)
 
-	txid := "foo-sky-txid"
-	e.sender.(*dummySender).addTxidResponse(txid)
+	var value int64 = 1e8
+	skySent, err := calculateSkyValue(value, testSkyBtcRate)
+	require.NoError(t, err)
+	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
 			Address: btcAddr,
-			Value:   1e8,
+			Value:   value,
 			Height:  20,
 			Tx:      "foo-tx",
 			N:       2,
@@ -570,13 +633,10 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 	e, shutdown, hook := runExchange(t)
 	defer shutdown()
 
-	skyAddr := "foo-sky-addr"
+	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
 	err := e.store.BindAddress(skyAddr, btcAddr)
 	require.NoError(t, err)
-
-	txid := "foo-sky-txid"
-	e.sender.(*dummySender).addTxidResponse(txid)
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
@@ -748,22 +808,29 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 	// Tests that StatusWaitConfirm deposits found in the db are processed
 	// on exchange startup.
 
+	var depositValue int64 = 1e8
+	s := newDummySender()
+	skySent, err := calculateSkyValue(depositValue, testSkyBtcRate)
+	require.NoError(t, err)
+	txid1 := s.predictTxid(t, testSkyAddr, skySent)
+	txid2 := s.predictTxid(t, testSkyAddr2, skySent)
+
 	// Add StatusWaitConfirm deposits
 	// They should all be confirmed after shutdown
 	dis := []DepositInfo{
 		{
 			Seq:            1,
 			Status:         StatusWaitConfirm,
-			SkyAddress:     "foo-sky-addr-1",
+			SkyAddress:     testSkyAddr,
 			DepositAddress: "foo-btc-addr-1",
 			DepositID:      "foo-tx-1:1",
-			Txid:           "foo-sky-txid-1",
-			SkySent:        100e8,
+			Txid:           txid1,
+			SkySent:        skySent,
 			ConversionRate: testSkyBtcRate,
-			DepositValue:   1e8,
+			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
 				Address: "foo-btc-addr-1",
-				Value:   1e8,
+				Value:   depositValue,
 				Height:  20,
 				Tx:      "foo-tx-1",
 				N:       1,
@@ -772,16 +839,16 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 		{
 			Seq:            2,
 			Status:         StatusWaitConfirm,
-			SkyAddress:     "foo-sky-addr-2",
+			SkyAddress:     testSkyAddr2,
 			DepositAddress: "foo-btc-addr-2",
 			DepositID:      "foo-tx-2:2",
-			Txid:           "foo-sky-txid-2",
-			SkySent:        100e8,
+			Txid:           txid2,
+			SkySent:        skySent,
 			ConversionRate: testSkyBtcRate,
-			DepositValue:   1e8,
+			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
 				Address: "foo-btc-addr-2",
-				Value:   1e8,
+				Value:   depositValue,
 				Height:  20,
 				Tx:      "foo-tx-2",
 				N:       2,
@@ -798,21 +865,28 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 	// Tests that StatusWaitSend deposits found in the db are processed
 	// on exchange startup
 
+	var depositValue int64 = 1e8
+	s := newDummySender()
+	skySent, err := calculateSkyValue(depositValue, testSkyBtcRate)
+	require.NoError(t, err)
+	txid1 := s.predictTxid(t, testSkyAddr, skySent)
+	txid2 := s.predictTxid(t, testSkyAddr2, skySent)
+
 	// Add StatusWaitSend deposits
 	// They should all be confirmed after shutdown
 	dis := []DepositInfo{
 		{
 			Seq:            1,
 			Status:         StatusWaitSend,
-			SkyAddress:     "foo-sky-addr-1",
+			SkyAddress:     testSkyAddr,
 			DepositAddress: "foo-btc-addr-1",
 			DepositID:      "foo-tx-1:1",
-			Txid:           "foo-tx-1",
+			Txid:           txid1,
 			ConversionRate: testSkyBtcRate,
-			DepositValue:   1e8,
+			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
 				Address: "foo-btc-addr-1",
-				Value:   1e8,
+				Value:   depositValue,
 				Height:  20,
 				Tx:      "foo-tx-1",
 				N:       1,
@@ -821,15 +895,15 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 		{
 			Seq:            2,
 			Status:         StatusWaitSend,
-			SkyAddress:     "foo-sky-addr-2",
+			SkyAddress:     testSkyAddr2,
 			DepositAddress: "foo-btc-addr-2",
 			DepositID:      "foo-tx-2:2",
-			Txid:           "foo-tx-2",
+			Txid:           txid2,
 			ConversionRate: testSkyBtcRate,
-			DepositValue:   1e8,
+			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
 				Address: "foo-btc-addr-2",
-				Value:   1e8,
+				Value:   depositValue,
 				Height:  20,
 				Tx:      "foo-tx-2",
 				N:       2,
@@ -840,8 +914,12 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 	testExchangeRunProcessDepositBacklog(t, dis, func(e *Exchange, di DepositInfo) {
 		err := e.store.BindAddress(di.SkyAddress, di.DepositAddress)
 		require.NoError(t, err)
-		e.sender.(*dummySender).addTxidResponse(di.Txid)
-		e.sender.(*dummySender).setTxConfirmed(di.Txid)
+
+		skySent, err := calculateSkyValue(di.DepositValue, di.ConversionRate)
+		require.NoError(t, err)
+
+		txid := e.sender.(*dummySender).predictTxid(t, di.SkyAddress, skySent)
+		e.sender.(*dummySender).setTxConfirmed(txid)
 	})
 }
 
@@ -852,8 +930,6 @@ func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 	defer e.Shutdown()
 
 	btcAddr := "foo-btc-addr"
-	txid := "foo-sky-txid"
-	e.sender.(*dummySender).addTxidResponse(txid)
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
@@ -902,9 +978,8 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 		}
 	}()
 
-	skyAddr := "foo-sky-addr"
+	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	txid := "foo-sky-txid"
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
@@ -939,9 +1014,6 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 		Deposit:        dn.Deposit,
 	}
 	e.store.(*MockStore).On("GetOrCreateDepositInfo", dn.Deposit, testSkyBtcRate).Return(di, nil)
-
-	// sender.Send() succeeds
-	e.sender.(*dummySender).addTxidResponse(txid)
 
 	// UpdateDepositInfo fails
 	updateDepositInfoErr := errors.New("UpdateDepositInfo error")
