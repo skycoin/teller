@@ -14,7 +14,6 @@ import (
 	"github.com/btcsuite/btcutil"
 )
 
-
 type NewBTCAddress struct {
 	Addresses []string `json:"btc_addresses""`
 }
@@ -72,8 +71,8 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 
 func CompareAddress(addr Address, deps []Deposit) Address {
 	for _, dep := range deps {
-		if addr.Addr == dep.Addr && !ExistTx(addr, dep.Tx){
-				addr.Txs = append(addr.Txs, dep.Tx)
+		if addr.Addr == dep.Addr && !ExistTx(addr, dep.Tx) {
+			addr.Txs = append(addr.Txs, dep.Tx)
 		}
 	}
 
@@ -90,7 +89,7 @@ func ExistTx(addr Address, tx Tx) bool {
 }
 
 func ExistAddress(newAddr Address, walletAddresses []Address) bool {
-	for _, addr  := range walletAddresses {
+	for _, addr := range walletAddresses {
 		if newAddr.Addr == addr.Addr {
 			return true
 		}
@@ -192,7 +191,7 @@ func AddBTCAddress(addr string, file string) error {
 		return err
 	}
 
-	if !ExistAddress(newAddr,addrs) {
+	if !ExistAddress(newAddr, addrs) {
 		addrs = append(addrs, newAddr)
 	}
 
@@ -248,7 +247,7 @@ func main() {
 	}
 
 	if len(*addFile) > 0 {
-		newBTC,_ := LoadBTCFromFile(*addFile)
+		newBTC, _ := LoadBTCFromFile(*addFile)
 		for _, addr := range newBTC.Addresses {
 			AddBTCAddress(addr, *wallet)
 		}
