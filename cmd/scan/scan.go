@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"errors"
 	"strings"
 
 	"github.com/btcsuite/btcd/rpcclient"
@@ -57,7 +58,7 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 		for i, addr := range tx.Vout {
 			depTx.TxHash = fmt.Sprintf("%s:%d", tx.Txid, i)
 
-			if len(addr.ScriptPubKey.Addresses) > 0 {
+			if addr.ScriptPubKey.Addresses != nil {
 				deposits = append(deposits, Deposit{
 					Addr: addr.ScriptPubKey.Addresses[0],
 					Tx:   depTx,
@@ -69,14 +70,15 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 	return deposits, nil
 }
 
-func CompareAddress(addr Address, deps []Deposit) Address {
+func FindTxs(addr Address, deps []Deposit) []Tx {
+	var txs []Tx
 	for _, dep := range deps {
 		if addr.Addr == dep.Addr && !ExistTx(addr, dep.Tx) {
-			addr.Txs = append(addr.Txs, dep.Tx)
+			txs = append(txs, dep.Tx)
 		}
 	}
 
-	return addr
+	return txs
 }
 
 func ExistTx(addr Address, tx Tx) bool {
@@ -102,25 +104,25 @@ func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address
 	for i, addr := range addrs {
 		switch {
 		case addr.MaxScanBlock == 0 && blockID > 1:
-			addr = CompareAddress(addr, deps)
-			addrs[i].Txs = addr.Txs
+			txs := FindTxs(addr, deps)
+			addrs[i].Txs = append(addr.Txs, txs...)
 			addrs[i].MaxScanBlock = blockID
 			addrs[i].MidScanBlock = blockID
 
 		case addr.MinScanBlock < addr.MaxScanBlock && addr.MinScanBlock == (blockID-1):
-			addr = CompareAddress(addr, deps)
-			addrs[i].Txs = addr.Txs
+			txs := FindTxs(addr, deps)
+			addrs[i].Txs = append(addr.Txs, txs...)
 			addrs[i].MinScanBlock = blockID
 			if addrs[i].MinScanBlock > addrs[i].MidScanBlock {
 				addrs[i].MidScanBlock = addrs[i].MinScanBlock
 			}
 		case addr.MaxScanBlock > addr.MinScanBlock && addr.MaxScanBlock == (blockID-1):
-			addr = CompareAddress(addr, deps)
-			addrs[i].Txs = addr.Txs
+			txs := FindTxs(addr, deps)
+			addrs[i].Txs = append(addr.Txs, txs...)
 			addrs[i].MaxScanBlock = blockID
 		case addr.MinScanBlock == addr.MidScanBlock && addr.MinScanBlock == addr.MaxScanBlock && addr.MaxScanBlock == (blockID-1):
-			addr = CompareAddress(addr, deps)
-			addrs[i].Txs = addr.Txs
+			txs := FindTxs(addr, deps)
+			addrs[i].Txs = append(addr.Txs, txs...)
 			addrs[i].MaxScanBlock = blockID
 			addrs[i].MidScanBlock = blockID
 			addrs[i].MinScanBlock = blockID
@@ -133,7 +135,6 @@ func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address
 func LoadWallet(file string) ([]Address, error) {
 	var addrs []Address
 	wallet, err := os.Open(file)
-	defer wallet.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -142,12 +143,11 @@ func LoadWallet(file string) ([]Address, error) {
 	if err != nil {
 		return nil, err
 	}
-	return addrs, nil
+	return addrs, wallet.Close()
 }
 
 func SaveWallet(file string, addrs []Address) error {
 	wallet, err := os.Open(file)
-	defer wallet.Close()
 	if err != nil {
 		return err
 	}
@@ -159,13 +159,12 @@ func SaveWallet(file string, addrs []Address) error {
 	if err != nil {
 		return err
 	}
-	return nil
+	return wallet.Close()
 }
 
 func LoadBTCFromFile(file string) (NewBTCAddress, error) {
 	var addrs NewBTCAddress
 	userFile, err := os.Open(file)
-	defer userFile.Close()
 	if err != nil {
 		return addrs, err
 	}
@@ -174,7 +173,7 @@ func LoadBTCFromFile(file string) (NewBTCAddress, error) {
 	if err != nil {
 		return addrs, err
 	}
-	return addrs, nil
+	return addrs, userFile.Close()
 }
 
 func AddBTCAddress(addr string, file string) error {
@@ -225,8 +224,7 @@ func NewBTCDClient(username, pass string) (*rpcclient.Client, error) {
 	return client, nil
 }
 
-func main() {
-
+func run() error {
 	//flags
 
 	user := flag.String("user", "myuser", "btcd username")
@@ -238,7 +236,7 @@ func main() {
 	addFile := flag.String("add_file", "", "new btc addresses from file")
 	flag.Parse()
 
-	if len(*add) > 0 {
+	if *add != "" {
 		newBTCAddrs := strings.Split(*add, ",")
 		for _, addr := range newBTCAddrs {
 			AddBTCAddress(addr, *wallet)
@@ -246,7 +244,7 @@ func main() {
 		fmt.Println("Addresses from command line added.")
 	}
 
-	if len(*addFile) > 0 {
+	if *addFile != "" {
 		newBTC, _ := LoadBTCFromFile(*addFile)
 		for _, addr := range newBTC.Addresses {
 			AddBTCAddress(addr, *wallet)
@@ -255,14 +253,13 @@ func main() {
 	}
 	//flags validation
 	if *blockN < 0 || *blockM < 0 || *blockM < *blockN {
-		fmt.Println("Bad block range")
-		return
+		return errors.New("Bad block range")
 	}
 
 	addrs, err := LoadWallet(*wallet)
 	if err != nil {
 		fmt.Println("Wallet loading is failed:", err)
-		return
+		return err
 	}
 
 	//create btcd instance
@@ -274,7 +271,7 @@ func main() {
 		deposits, err := ScanBlock(client, int64(i))
 		if err != nil {
 			fmt.Println("Block scanning is failed:", err)
-			return
+			return err
 		}
 
 		addrs = UpdateAddressInfo(addrs, deposits, int64(i))
@@ -284,6 +281,16 @@ func main() {
 	err = SaveWallet(*wallet, addrs)
 	if err != nil {
 		fmt.Println("Saving wallet is failed:", err)
-		return
+		return err
 	}
+	return nil
+}
+
+func main() {
+
+	if err := run(); err != nil {
+		fmt.Printf("Error: %v\n", err)
+		os.Exit(1)
+	}
+
 }
