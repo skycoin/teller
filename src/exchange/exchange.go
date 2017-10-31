@@ -60,14 +60,14 @@ type Exchange struct {
 
 // Config exchange config struct
 type Config struct {
-	Rate                    int64 // sky_btc rate
+	Rate                    string // SKY/BTC rate, decimal string
 	TxConfirmationCheckWait time.Duration
 }
 
 // NewExchange creates exchange service
 func NewExchange(log logrus.FieldLogger, store Storer, scanner scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
-	if cfg.Rate == 0 {
-		return nil, errors.New("SKY/BTC Rate must not be 0")
+	if _, err := ParseRate(cfg.Rate); err != nil {
+		return nil, err
 	}
 
 	if cfg.TxConfirmationCheckWait == 0 {
