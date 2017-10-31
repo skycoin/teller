@@ -38,7 +38,7 @@ var (
 type Storer interface {
 	GetBindAddress(btcAddr string) (string, error)
 	BindAddress(skyAddr, btcAddr string) error
-	GetOrCreateDepositInfo(scanner.Deposit, int64) (DepositInfo, error)
+	GetOrCreateDepositInfo(scanner.Deposit, string) (DepositInfo, error)
 	GetDepositInfoArray(DepositFilter) ([]DepositInfo, error)
 	GetDepositInfoOfSkyAddress(string) ([]DepositInfo, error)
 	UpdateDepositInfo(string, func(DepositInfo) DepositInfo) (DepositInfo, error)
@@ -158,7 +158,7 @@ func (s *Store) BindAddress(skyAddr, btcAddr string) error {
 
 // GetOrCreateDepositInfo creates a DepositInfo unless one exists with the DepositInfo.DepositID key,
 // in which case it returns the existing DepositInfo.
-func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositInfo, error) {
+func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate string) (DepositInfo, error) {
 	log := s.log.WithField("deposit", dv)
 	log = log.WithField("rate", rate)
 
