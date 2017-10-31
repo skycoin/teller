@@ -140,11 +140,11 @@ func (scan *dummyScanner) stop() {
 }
 
 const (
-	testSkyBtcRate  int64 = 100 // 100 SKY per BTC
-	testSkyAddr           = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
-	testSkyAddr2          = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
-	dbScanTimeout         = time.Second * 3
-	dbCheckWaitTime       = time.Millisecond * 300
+	testSkyBtcRate  string = "100" // 100 SKY per BTC
+	testSkyAddr            = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
+	testSkyAddr2           = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
+	dbScanTimeout          = time.Second * 3
+	dbCheckWaitTime        = time.Millisecond * 300
 )
 
 func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
