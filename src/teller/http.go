@@ -19,6 +19,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/skycoin/skycoin/src/cipher"
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/util/httputil"
@@ -39,60 +40,18 @@ const (
 	tlsAutoCertCache = "cert-cache"
 )
 
-// Throttle is used for ratelimiting requests to the http server
-type Throttle struct {
-	Max      int64
-	Duration time.Duration
-}
-
-// HTTPConfig configures the HTTP service
-type HTTPConfig struct {
-	HTTPAddr    string
-	HTTPSAddr   string
-	StaticDir   string
-	StartAt     time.Time
-	AutoTLSHost string
-	TLSCert     string
-	TLSKey      string
-	Throttle    Throttle
-}
-
-// Validate checks the HTTP config
-func (c HTTPConfig) Validate() error {
-	if c.HTTPAddr == "" && c.HTTPSAddr == "" {
-		return errors.New("at least one of -http-service-addr, -https-service-addr must be set")
-	}
-
-	if c.HTTPSAddr != "" && c.AutoTLSHost == "" && (c.TLSCert == "" || c.TLSKey == "") {
-		return errors.New("when using -tls, either -auto-tls-host or both -tls-cert and -tls-key must be set")
-	}
-
-	if (c.TLSCert == "" && c.TLSKey != "") || (c.TLSCert != "" && c.TLSKey == "") {
-		return errors.New("-tls-cert and -tls-key must be set or unset together")
-	}
-
-	if c.AutoTLSHost != "" && (c.TLSKey != "" || c.TLSCert != "") {
-		return errors.New("either use -auto-tls-host or both -tls-key and -tls-cert")
-	}
-
-	if c.HTTPSAddr == "" && (c.AutoTLSHost != "" || c.TLSKey != "" || c.TLSCert != "") {
-		return errors.New("-auto-tls-host or -tls-key or -tls-cert is set but -tls is not enabled")
-	}
-
-	return nil
-}
-
 type httpServer struct {
-	Config HTTPConfig
+	Config config.Web
 
 	log           logrus.FieldLogger
-	service       *service
+	service       *Service
 	httpListener  *http.Server
 	httpsListener *http.Server
 	quit          chan struct{}
+	done          chan struct{}
 }
 
-func newHTTPServer(log logrus.FieldLogger, cfg HTTPConfig, service *service) *httpServer {
+func newHTTPServer(log logrus.FieldLogger, cfg config.Web, service *Service) *httpServer {
 	return &httpServer{
 		Config: cfg,
 		log: log.WithFields(logrus.Fields{
@@ -100,33 +59,33 @@ func newHTTPServer(log logrus.FieldLogger, cfg HTTPConfig, service *service) *ht
 			"config": cfg,
 		}),
 		service: service,
+		quit:    make(chan struct{}),
+		done:    make(chan struct{}),
 	}
 }
 
-func (hs *httpServer) Run() error {
-	log := hs.log
-
+func (s *httpServer) Run() error {
+	log := s.log
 	log.Info("HTTP service start")
 	defer log.Info("HTTP service closed")
+	defer close(s.done)
 
-	hs.quit = make(chan struct{})
-
-	var mux http.Handler = hs.setupMux()
+	var mux http.Handler = s.setupMux()
 
 	allowedHosts := []string{} // empty array means all hosts allowed
 	sslHost := ""
-	if hs.Config.AutoTLSHost == "" {
+	if s.Config.AutoTLSHost == "" {
 		// Note: if AutoTLSHost is not set, but HTTPSAddr is set, then
 		// http will redirect to the HTTPSAddr listening IP, which would be
 		// either 127.0.0.1 or 0.0.0.0
 		// When running behind a DNS name, make sure to set AutoTLSHost
-		sslHost = hs.Config.HTTPSAddr
+		sslHost = s.Config.HTTPSAddr
 	} else {
-		sslHost = hs.Config.AutoTLSHost
+		sslHost = s.Config.AutoTLSHost
 		// When using -auto-tls-host,
 		// which implies automatic Let's Encrypt SSL cert generation in production,
 		// restrict allowed hosts to that host.
-		allowedHosts = []string{hs.Config.AutoTLSHost}
+		allowedHosts = []string{s.Config.AutoTLSHost}
 	}
 
 	if len(allowedHosts) == 0 {
@@ -142,14 +101,14 @@ func (hs *httpServer) Run() error {
 	secureMiddleware := configureSecureMiddleware(sslHost, allowedHosts)
 	mux = secureMiddleware.Handler(mux)
 
-	if hs.Config.HTTPAddr != "" {
-		hs.httpListener = setupHTTPListener(hs.Config.HTTPAddr, mux)
+	if s.Config.HTTPAddr != "" {
+		s.httpListener = setupHTTPListener(s.Config.HTTPAddr, mux)
 	}
 
 	handleListenErr := func(f func() error) error {
 		if err := f(); err != nil {
 			select {
-			case <-hs.quit:
+			case <-s.quit:
 				return nil
 			default:
 				log.WithError(err).Error("ListenAndServe or ListenAndServeTLS error")
@@ -159,25 +118,25 @@ func (hs *httpServer) Run() error {
 		return nil
 	}
 
-	if hs.Config.HTTPSAddr != "" {
+	if s.Config.HTTPSAddr != "" {
 		log.Info("Using TLS")
 
-		hs.httpsListener = setupHTTPListener(hs.Config.HTTPSAddr, mux)
+		s.httpsListener = setupHTTPListener(s.Config.HTTPSAddr, mux)
 
-		tlsCert := hs.Config.TLSCert
-		tlsKey := hs.Config.TLSKey
+		tlsCert := s.Config.TLSCert
+		tlsKey := s.Config.TLSKey
 
-		if hs.Config.AutoTLSHost != "" {
+		if s.Config.AutoTLSHost != "" {
 			log.Info("Using Let's Encrypt autocert")
 			// https://godoc.org/golang.org/x/crypto/acme/autocert
 			// https://stackoverflow.com/a/40494806
 			certManager := autocert.Manager{
 				Prompt:     autocert.AcceptTOS,
-				HostPolicy: autocert.HostWhitelist(hs.Config.AutoTLSHost),
+				HostPolicy: autocert.HostWhitelist(s.Config.AutoTLSHost),
 				Cache:      autocert.DirCache(tlsAutoCertCache),
 			}
 
-			hs.httpsListener.TLSConfig = &tls.Config{
+			s.httpsListener.TLSConfig = &tls.Config{
 				GetCertificate: certManager.GetCertificate,
 			}
 
@@ -188,9 +147,9 @@ func (hs *httpServer) Run() error {
 
 		errC := make(chan error)
 
-		if hs.Config.HTTPAddr == "" {
+		if s.Config.HTTPAddr == "" {
 			return handleListenErr(func() error {
-				return hs.httpsListener.ListenAndServeTLS(tlsCert, tlsKey)
+				return s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey)
 			})
 		}
 		return handleListenErr(func() error {
@@ -199,7 +158,7 @@ func (hs *httpServer) Run() error {
 
 			go func() {
 				defer wg.Done()
-				if err := hs.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
+				if err := s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
 					log.WithError(err).Error("ListenAndServeTLS error")
 					errC <- err
 				}
@@ -207,7 +166,7 @@ func (hs *httpServer) Run() error {
 
 			go func() {
 				defer wg.Done()
-				if err := hs.httpListener.ListenAndServe(); err != nil {
+				if err := s.httpListener.ListenAndServe(); err != nil {
 					log.WithError(err).Println("ListenAndServe error")
 					errC <- err
 				}
@@ -223,7 +182,7 @@ func (hs *httpServer) Run() error {
 			select {
 			case err := <-errC:
 				return err
-			case <-hs.quit:
+			case <-s.quit:
 				return nil
 			case <-done:
 				return nil
@@ -232,9 +191,8 @@ func (hs *httpServer) Run() error {
 	}
 
 	return handleListenErr(func() error {
-		return hs.httpListener.ListenAndServe()
+		return s.httpListener.ListenAndServe()
 	})
-
 }
 
 func configureSecureMiddleware(sslHost string, allowedHosts []string) *secure.Secure {
@@ -285,38 +243,39 @@ func setupHTTPListener(addr string, handler http.Handler) *http.Server {
 	}
 }
 
-func (hs *httpServer) setupMux() *http.ServeMux {
+func (s *httpServer) setupMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
 	handleAPI := func(path string, f http.HandlerFunc) {
-		rateLimited := rateLimiter(hs.Config.Throttle, httputil.LogHandler(hs.log, f))
-		mux.Handle(path, gziphandler.GzipHandler(rateLimited))
+		logged := httputil.LogHandler(s.log, f)
+		limiter := tollbooth.NewLimiter(s.Config.ThrottleMax, s.Config.ThrottleDuration)
+		rateLimited := tollbooth.LimitFuncHandler(limiter, logged)
+		gzipped := gziphandler.GzipHandler(rateLimited)
+		mux.Handle(path, gzipped)
 	}
 
 	// API Methods
-	handleAPI("/api/bind", httputil.LogHandler(hs.log, BindHandler(hs)))
-	handleAPI("/api/status", httputil.LogHandler(hs.log, StatusHandler(hs)))
+	handleAPI("/api/bind", httputil.LogHandler(s.log, BindHandler(s)))
+	handleAPI("/api/status", httputil.LogHandler(s.log, StatusHandler(s)))
 
 	// Static files
-	mux.Handle("/", gziphandler.GzipHandler(http.FileServer(http.Dir(hs.Config.StaticDir))))
+	mux.Handle("/", gziphandler.GzipHandler(http.FileServer(http.Dir(s.Config.StaticDir))))
 
 	return mux
 }
 
-func rateLimiter(thr Throttle, hd http.HandlerFunc) http.Handler {
-	return tollbooth.LimitFuncHandler(tollbooth.NewLimiter(thr.Max, thr.Duration), hd)
-}
+func (s *httpServer) Shutdown() {
+	close(s.quit)
 
-func (hs *httpServer) Shutdown() {
-	if hs.quit != nil {
-		close(hs.quit)
-	}
+	var wg sync.WaitGroup
+	wg.Add(2)
 
 	shutdown := func(proto string, ln *http.Server) {
+		defer wg.Done()
 		if ln == nil {
 			return
 		}
-		log := hs.log.WithFields(logrus.Fields{
+		log := s.log.WithFields(logrus.Fields{
 			"proto":   proto,
 			"timeout": shutdownTimeout,
 		})
@@ -330,10 +289,12 @@ func (hs *httpServer) Shutdown() {
 		}
 	}
 
-	shutdown("HTTP", hs.httpListener)
-	shutdown("HTTPS", hs.httpsListener)
+	shutdown("HTTP", s.httpListener)
+	shutdown("HTTPS", s.httpsListener)
 
-	hs.quit = nil
+	wg.Wait()
+
+	<-s.done
 }
 
 // BindResponse http response for /api/bind
@@ -353,7 +314,7 @@ type bindRequest struct {
 // URI: /api/bind
 // Args:
 //    {"skyaddr": "...", "coin_type": "BTC"}
-func BindHandler(hs *httpServer) http.HandlerFunc {
+func BindHandler(s *httpServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := logger.FromContext(ctx)
@@ -401,13 +362,9 @@ func BindHandler(hs *httpServer) http.HandlerFunc {
 			return
 		}
 
-		if !readyToStart(ctx, w, hs.Config.StartAt) {
-			return
-		}
-
 		log.Info("Calling service.BindAddress")
 
-		btcAddr, err := hs.service.BindAddress(bindReq.SkyAddr)
+		btcAddr, err := s.service.BindAddress(bindReq.SkyAddr)
 		if err != nil {
 			// TODO -- these could be internal server error, gateway error
 			log.WithError(err).Error("service.BindAddress failed")
@@ -440,7 +397,7 @@ type StatusResponse struct {
 // URI: /api/status
 // Args:
 //     skyaddr
-func StatusHandler(hs *httpServer) http.HandlerFunc {
+func StatusHandler(s *httpServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := logger.FromContext(ctx)
@@ -465,13 +422,9 @@ func StatusHandler(hs *httpServer) http.HandlerFunc {
 			return
 		}
 
-		if !readyToStart(ctx, w, hs.Config.StartAt) {
-			return
-		}
-
 		log.Info("Sending StatusRequest to teller")
 
-		depositStatuses, err := hs.service.GetDepositStatuses(skyAddr)
+		depositStatuses, err := s.service.GetDepositStatuses(skyAddr)
 		if err != nil {
 			// TODO -- these could be internal server error, gateway error
 			log.WithError(err).Error("service.GetDepositStatuses failed")
@@ -494,20 +447,6 @@ func StatusHandler(hs *httpServer) http.HandlerFunc {
 			log.WithError(err).Error()
 		}
 	}
-}
-
-func readyToStart(ctx context.Context, w http.ResponseWriter, startAt time.Time) bool {
-	if time.Now().UTC().After(startAt.UTC()) {
-		return true
-	}
-
-	msg := fmt.Sprintf("Event starts at %v", startAt)
-	httputil.ErrResponse(w, http.StatusForbidden, msg)
-
-	log := logger.FromContext(ctx)
-	log.WithField("status", http.StatusForbidden).Info(msg)
-
-	return false
 }
 
 func validMethod(ctx context.Context, w http.ResponseWriter, r *http.Request, allowed []string) bool {

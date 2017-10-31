@@ -4,10 +4,8 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"os"
 	"os/signal"
 	"os/user"
@@ -33,8 +31,8 @@ import (
 )
 
 const (
-	appDir = ".skycoin-teller"
-	dbName = "data.db"
+	defaultAppDir = ".teller-skycoin"
+	dbName        = "teller.db"
 )
 
 type dummyBtcScanner struct {
@@ -104,36 +102,19 @@ func (s *dummySkySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {
 
 func main() {
 	if err := run(); err != nil {
+		fmt.Println(err)
 		os.Exit(1)
 	}
 }
 
 func run() error {
-	configFile := flag.String("cfg", "config.json", "config.json file")
-	btcAddrs := flag.String("btc-addrs", "btc_addresses.json", "btc_addresses.json file")
-	debug := flag.Bool("debug", false, "debug mode will show more detail logs")
-	dummyMode := flag.Bool("dummy", false, "run without real btcd or skyd service")
-	profile := flag.Bool("prof", false, "start gops profiling tool")
-	logFilename := flag.String("log-file", "teller.log", "teller log filename")
-
-	// TODO -- merge flags with config.json loading -- should use a library for this
-	httpAddr := flag.String("http-service-addr", "127.0.0.1:7071", "http api service address")
-	httpsAddr := flag.String("https-service-addr", "", "https api service address")
-	autoTLSHost := flag.String("auto-tls-host", "", "generate certificate with Let's Encrypt for this hostname and use it")
-	tlsKey := flag.String("tls-key", "", "tls key file (if not using -auto-tls-host)")
-	tlsCert := flag.String("tls-cert", "", "tls cert file (if not using -auto-tls-host)")
-	staticDir := flag.String("static-dir", "./web/build", "static directory to serve html interface from")
-	startAt := flag.String("start-time", "", "Don't process API requests until after this timestamp (RFC3339 format)")
-	thrMax := flag.Int64("throttle-max", 5, "max allowd per ip in specific duration")
-	thrDur := flag.Int64("throttle-duration", int64(time.Minute), "throttle duration")
-
-	btcInitialScanHeight := flag.Int64("btc-scan-height", 0, "initial BTC blockchain scan height")
-	btcConfirmationsRequired := flag.Int64("btc-confirmations-required", 0, "number of confirmations to wait for BTC deposits")
-
-	flag.Parse()
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("Config error:\n%v", err)
+	}
 
 	// init logger
-	rusloggger, err := logger.NewLogger(*logFilename, *debug)
+	rusloggger, err := logger.NewLogger(cfg.LogFilename, cfg.Debug)
 	if err != nil {
 		fmt.Println("Failed to create Logrus logger:", err)
 		return err
@@ -141,7 +122,9 @@ func run() error {
 
 	log := rusloggger.WithField("prefix", "teller")
 
-	if *profile {
+	log.WithField("config", cfg).Info("Loaded teller config")
+
+	if cfg.Profile {
 		// start gops agent, for profilling
 		if err := agent.Listen(&agent.Options{
 			NoShutdownCleanup: true,
@@ -155,43 +138,8 @@ func run() error {
 	go catchInterrupt(quit)
 
 	// load config
-	cfg, err := config.New(*configFile)
-	if err != nil {
-		log.WithError(err).Error("Load config failed")
-		return err
-	}
 
-	startAtStamp := time.Time{}
-	if *startAt != "" {
-		var err error
-		startAtStamp, err = time.Parse(time.RFC3339, *startAt)
-		if err != nil {
-			log.WithField("format", time.RFC3339).Error("Invalid -start-time, must be in RCF3339 format")
-			return err
-		}
-		startAtStamp = startAtStamp.UTC()
-	}
-
-	httpConfig := teller.HTTPConfig{
-		HTTPAddr:    *httpAddr,
-		HTTPSAddr:   *httpsAddr,
-		StaticDir:   *staticDir,
-		StartAt:     startAtStamp,
-		AutoTLSHost: *autoTLSHost,
-		TLSCert:     *tlsCert,
-		TLSKey:      *tlsKey,
-		Throttle: teller.Throttle{
-			Max:      *thrMax,
-			Duration: time.Duration(*thrDur),
-		},
-	}
-
-	if err := httpConfig.Validate(); err != nil {
-		log.WithError(err).Error("Invalid HTTP config")
-		return err
-	}
-
-	appDir, err := createAppDirIfNotExist(appDir)
+	appDir, err := createAppDirIfNotExist(defaultAppDir)
 	if err != nil {
 		log.WithError(err).Error("Create AppDir failed")
 		return err
@@ -227,25 +175,24 @@ func run() error {
 	var sendService *sender.SendService
 	var sendRPC sender.Sender
 
-	if *dummyMode {
+	if cfg.DummyMode {
 		log.Info("btcd and skyd disabled, running in dummy mode")
 		scanRPC = &dummyBtcScanner{log: log}
 		sendRPC = &dummySkySender{log: log}
 	} else {
-		// check skycoin setup
-		if err := checkSkycoinSetup(*cfg); err != nil {
-			log.WithError(err).Error("checkSkycoinSetup failed")
-			return err
-		}
-
 		// create btc rpc client
-		btcrpcConnConf, err := makeBtcrpcConfg(*cfg)
+		certs, err := ioutil.ReadFile(cfg.BtcRPC.Cert)
 		if err != nil {
-			log.WithError(err).Error("makeBtcrpcConfg failed")
-			return err
+			return fmt.Errorf("Failed to read cfg.BtcRPC.Cert %s: %v", cfg.BtcRPC.Cert, err)
 		}
 
-		btcrpc, err := btcrpcclient.New(&btcrpcConnConf, nil)
+		btcrpc, err := btcrpcclient.New(&btcrpcclient.ConnConfig{
+			Endpoint:     "ws",
+			Host:         cfg.BtcRPC.Server,
+			User:         cfg.BtcRPC.User,
+			Pass:         cfg.BtcRPC.Pass,
+			Certificates: certs,
+		}, nil)
 		if err != nil {
 			log.WithError(err).Error("Connect btcd failed")
 			return err
@@ -261,9 +208,9 @@ func run() error {
 		}
 
 		btcScanner, err = scanner.NewBTCScanner(log, scanStore, btcrpc, scanner.Config{
-			ScanPeriod:            cfg.Btcscan.CheckPeriod,
-			ConfirmationsRequired: *btcConfirmationsRequired,
-			InitialScanHeight:     *btcInitialScanHeight,
+			ScanPeriod:            cfg.BtcScanner.ScanPeriod,
+			ConfirmationsRequired: cfg.BtcScanner.ConfirmationsRequired,
+			InitialScanHeight:     cfg.BtcScanner.InitialScanHeight,
 		})
 		if err != nil {
 			log.WithError(err).Error("Open scan service failed")
@@ -272,14 +219,14 @@ func run() error {
 
 		background("btcScanner.Run", errC, btcScanner.Run)
 
-		skyRPC, err := sender.NewRPC(cfg.Skynode.WalletPath, cfg.Skynode.RPCAddress)
+		skyRPC, err := sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
 		if err != nil {
 			log.WithError(err).Error("sender.NewRPC failed")
 			return err
 		}
 
 		// create skycoin send service
-		sendService = sender.NewService(makeSendConfig(*cfg), log, skyRPC)
+		sendService = sender.NewService(log, skyRPC)
 
 		background("sendService.Run", errC, sendService.Run)
 
@@ -294,7 +241,8 @@ func run() error {
 	}
 
 	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanRPC, sendRPC, exchange.Config{
-		Rate: cfg.ExchangeRate,
+		Rate: cfg.SkyExchanger.SkyBtcExchangeRate,
+		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
 	})
 	if err != nil {
 		log.WithError(err).Error("exchange.NewExchange failed")
@@ -304,7 +252,7 @@ func run() error {
 	background("exchangeClient.Run", errC, exchangeClient.Run)
 
 	// create bitcoin address manager
-	f, err := ioutil.ReadFile(*btcAddrs)
+	f, err := ioutil.ReadFile(cfg.BtcAddresses)
 	if err != nil {
 		log.WithError(err).Error("Load deposit bitcoin address list failed")
 		return err
@@ -316,23 +264,17 @@ func run() error {
 		return err
 	}
 
-	tellerServer, err := teller.New(log, exchangeClient, btcAddrMgr, teller.Config{
-		Service: teller.ServiceConfig{
-			MaxBind: cfg.MaxBind,
-		},
-		HTTP: httpConfig,
+	tellerServer := teller.New(log, exchangeClient, btcAddrMgr, teller.Config{
+		Teller: cfg.Teller,
+		HTTP:   cfg.Web,
 	})
-	if err != nil {
-		log.WithError(err).Error("teller.New failed")
-		return err
-	}
 
 	// Run the service
 	background("tellerServer.Run", errC, tellerServer.Run)
 
 	// start monitor service
 	monitorCfg := monitor.Config{
-		Addr: cfg.MonitorAddr,
+		Addr: cfg.AdminPanel.Host,
 	}
 	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, exchangeClient, scanRPC)
 
@@ -383,27 +325,6 @@ func run() error {
 	return finalErr
 }
 
-func makeBtcrpcConfg(cfg config.Config) (btcrpcclient.ConnConfig, error) {
-	certs, err := ioutil.ReadFile(cfg.Btcrpc.Cert)
-	if err != nil {
-		return btcrpcclient.ConnConfig{}, fmt.Errorf("btc rpc cert file does not exist in %s", cfg.Btcrpc.Cert)
-	}
-
-	return btcrpcclient.ConnConfig{
-		Endpoint:     "ws",
-		Host:         cfg.Btcrpc.Server,
-		User:         cfg.Btcrpc.User,
-		Pass:         cfg.Btcrpc.Pass,
-		Certificates: certs,
-	}, nil
-}
-
-func makeSendConfig(cfg config.Config) sender.Config {
-	return sender.Config{
-		ReqBufSize: cfg.SkySender.ReqBuffSize,
-	}
-}
-
 func createAppDirIfNotExist(app string) (string, error) {
 	cur, err := user.Current()
 	if err != nil {
@@ -425,22 +346,4 @@ func catchInterrupt(quit chan<- struct{}) {
 	<-sigchan
 	signal.Stop(sigchan)
 	close(quit)
-}
-
-// checks skycoin setups
-func checkSkycoinSetup(cfg config.Config) error {
-	// check whether the skycoin wallet file does exist
-	if _, err := os.Stat(cfg.Skynode.WalletPath); os.IsNotExist(err) {
-		return fmt.Errorf("skycoin wallet file: %s does not exist", cfg.Skynode.WalletPath)
-	}
-
-	// test if skycoin node rpc service is reachable
-	conn, err := net.Dial("tcp", cfg.Skynode.RPCAddress)
-	if err != nil {
-		return fmt.Errorf("connect to skycoin node %s failed: %v", cfg.Skynode.RPCAddress, err)
-	}
-
-	conn.Close()
-
-	return nil
 }
