@@ -205,11 +205,13 @@ func (c Config) Validate() error {
 
 func setDefaults() {
 	// Top-level args
-	viper.SetDefault("max_bound_btc_addrs", 5)
 	viper.SetDefault("dummy_mode", false)
 	viper.SetDefault("profile", false)
 	viper.SetDefault("debug", true)
 	viper.SetDefault("logfile", "teller.log")
+
+	// Teller
+	viper.SetDefault("teller.max_bound_btc_addrs", 5)
 
 	// SkyRPC
 	viper.SetDefault("sky_rpc.address", "127.0.0.1:6430")
