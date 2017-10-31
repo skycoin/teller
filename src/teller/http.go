@@ -20,6 +20,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/teller/src/exchange"
+	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/util/httputil"
 	"github.com/skycoin/teller/src/util/logger"
 )
@@ -337,11 +338,13 @@ func (hs *httpServer) Shutdown() {
 
 // BindResponse http response for /api/bind
 type BindResponse struct {
-	BtcAddress string `json:"btc_address,omitempty"`
+	DepositAddress string `json:"deposit_address,omitempty"`
+	CoinType       string `json:"coin_type,omitempty"`
 }
 
 type bindRequest struct {
-	SkyAddr string `json:"skyaddr"`
+	SkyAddr  string `json:"skyaddr"`
+	CoinType string `json:"coin_type"`
 }
 
 // BindHandler binds skycoin address with a bitcoin address
@@ -349,7 +352,7 @@ type bindRequest struct {
 // Accept: application/json
 // URI: /api/bind
 // Args:
-//    {"skyaddr": "..."}
+//    {"skyaddr": "...", "coin_type": "BTC"}
 func BindHandler(hs *httpServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -384,6 +387,14 @@ func BindHandler(hs *httpServer) http.HandlerFunc {
 			return
 		}
 
+		switch bindReq.CoinType {
+		case scanner.CoinTypeBTC:
+		case "":
+			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing coin_type"))
+		default:
+			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Invalid coin_type"))
+		}
+
 		log.Info()
 
 		if !verifySkycoinAddress(ctx, w, bindReq.SkyAddr) {
@@ -411,7 +422,8 @@ func BindHandler(hs *httpServer) http.HandlerFunc {
 		log.Info("Bound sky and btc addresses")
 
 		if err := httputil.JSONResponse(w, BindResponse{
-			BtcAddress: btcAddr,
+			DepositAddress: btcAddr,
+			CoinType:       scanner.CoinTypeBTC,
 		}); err != nil {
 			log.WithError(err).Error()
 		}

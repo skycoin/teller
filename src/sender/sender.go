@@ -2,22 +2,25 @@ package sender
 
 import (
 	"errors"
+
+	"github.com/skycoin/skycoin/src/coin"
 )
 
 var (
-	// ErrSendBufferFull the send service's request channel is full
-	ErrSendBufferFull = errors.New("send service's request queue is full")
+	// ErrSendBufferFull the Send service's request channel is full
+	ErrSendBufferFull = errors.New("Send service's request queue is full")
 	// ErrClosed the sender has closed
-	ErrClosed = errors.New("send service closed")
+	ErrClosed = errors.New("Send service closed")
 )
 
 // Sender provids apis for sending skycoin
 type Sender interface {
-	Send(destAddr string, coins uint64) *SendResponse
-	IsTxConfirmed(txid string) *ConfirmResponse
+	CreateTransaction(string, uint64) (*coin.Transaction, error)
+	BroadcastTransaction(*coin.Transaction) *BroadcastTxResponse
+	IsTxConfirmed(string) *ConfirmResponse
 }
 
-// RetrySender provids helper function to send coins with send service
+// RetrySender provids helper function to send coins with Send service
 // All requests will retry until succeeding.
 type RetrySender struct {
 	s *SendService
@@ -30,15 +33,19 @@ func NewRetrySender(s *SendService) *RetrySender {
 	}
 }
 
-// Send send coins to dest address in a goroutine
-func (s *RetrySender) Send(destAddr string, coins uint64) *SendResponse {
-	rspC := make(chan *SendResponse, 1)
+// CreateTransaction creates a transaction offline
+func (s *RetrySender) CreateTransaction(recvAddr string, coins uint64) (*coin.Transaction, error) {
+	return s.s.SkyClient.CreateTransaction(recvAddr, coins)
+}
+
+// BroadcastTransaction sends a transaction in a goroutine
+func (s *RetrySender) BroadcastTransaction(tx *coin.Transaction) *BroadcastTxResponse {
+	rspC := make(chan *BroadcastTxResponse, 1)
 
 	go func() {
-		s.s.sendChan <- SendRequest{
-			Address: destAddr,
-			Coins:   coins,
-			RspC:    rspC,
+		s.s.broadcastTxChan <- BroadcastTxRequest{
+			Tx:   tx,
+			RspC: rspC,
 		}
 	}()
 

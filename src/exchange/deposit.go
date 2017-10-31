@@ -55,19 +55,20 @@ func NewStatusFromStr(st string) Status {
 
 // DepositInfo records the deposit info
 type DepositInfo struct {
-	Seq          uint64
-	UpdatedAt    int64
-	Status       Status
-	SkyAddress   string
-	BtcAddress   string
-	BtcTx        string
-	Txid         string
-	SkyBtcRate   int64  // SKY per BTC rate
-	DepositValue int64  // Deposit amount
-	SkySent      uint64 // SKY sent, measured in droplets
+	Seq            uint64
+	UpdatedAt      int64
+	Status         Status
+	CoinType       string
+	SkyAddress     string
+	DepositAddress string
+	DepositID      string
+	Txid           string
+	ConversionRate string // SKY per other coin, as a decimal string (allows integers, floats, fractions)
+	DepositValue   int64  // Deposit amount. Should be measured in the smallest unit possible (e.g. satoshis for BTC)
+	SkySent        uint64 // SKY sent, measured in droplets
 	// The original Deposit is saved for the records, in case there is a mistake.
 	// Do not use this data directly.  All necessary data is copied to the top level
-	// of DepositInfo (e.g. BtcTx, BtcAddress, DepositValue).
+	// of DepositInfo (e.g. DepositID, DepositAddress, DepositValue, CoinType).
 	Deposit scanner.Deposit
 }
 
@@ -75,30 +76,28 @@ type DepositInfo struct {
 func (di DepositInfo) ValidateForStatus() error {
 
 	checkWaitSend := func() error {
-		// if di.Seq == 0 {
-		// 	return errors.New("Seq missing")
-		// }
-		// if di.UpdatedAt == 0 {
-		// 	return errors.New("UpdatedAt missing")
-		// }
+		if di.Seq == 0 {
+			return errors.New("Seq missing")
+		}
 		if di.SkyAddress == "" {
 			return errors.New("SkyAddress missing")
 		}
-		if di.BtcAddress == "" {
-			return errors.New("BtcAddress missing")
+		if di.DepositAddress == "" {
+			return errors.New("DepositAddress missing")
 		}
-		if di.BtcTx == "" {
-			return errors.New("BtcTx missing")
+		if di.DepositID == "" {
+			return errors.New("DepositID missing")
 		}
-		if !isValidBtcTx(di.BtcTx) {
-			return fmt.Errorf("Invalid BtcTx value \"%s\"", di.BtcTx)
+		if di.CoinType == scanner.CoinTypeBTC && !isValidBtcTx(di.DepositID) {
+			return fmt.Errorf("Invalid DepositID value \"%s\"", di.DepositID)
 		}
 		if di.DepositValue == 0 {
 			return errors.New("DepositValue is zero")
 		}
-		if di.SkyBtcRate == 0 {
-			return errors.New("SkyBtcRate is zero")
+		if _, err := ParseRate(di.ConversionRate); err != nil {
+			return err
 		}
+
 		return nil
 	}
 

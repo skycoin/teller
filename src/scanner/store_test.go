@@ -18,14 +18,6 @@ type MockStore struct {
 	mock.Mock
 }
 
-func (m *MockStore) GetLastScanBlock() (LastScanBlock, error) {
-	args := m.Called()
-
-	lsb := args.Get(0)
-
-	return lsb.(LastScanBlock), args.Error(1)
-}
-
 func (m *MockStore) GetScanAddresses() ([]string, error) {
 	args := m.Called()
 
@@ -78,7 +70,7 @@ func TestBtcTxN(t *testing.T) {
 		N:  2,
 	}
 
-	require.Equal(t, "foo:2", d.TxN())
+	require.Equal(t, "foo:2", d.ID())
 }
 
 func TestNewStore(t *testing.T) {
@@ -98,37 +90,6 @@ func TestNewStore(t *testing.T) {
 
 		return nil
 	})
-}
-
-func TestGetLastScanBlock(t *testing.T) {
-	db, shutdown := testutil.PrepareDB(t)
-	defer shutdown()
-
-	log, _ := testutil.NewLogger(t)
-
-	s, err := NewStore(log, db)
-	require.NoError(t, err)
-
-	lsb, err := s.GetLastScanBlock()
-	require.NoError(t, err)
-	require.Equal(t, "", lsb.Hash)
-	require.Equal(t, int64(0), lsb.Height)
-
-	scanBlock := LastScanBlock{
-		Hash:   "00000000000004509071260531df744090422d372d706cee907b2b5f2be8b8ff",
-		Height: 222597,
-	}
-
-	err = s.db.Update(func(tx *bolt.Tx) error {
-		err := s.setLastScanBlockTx(tx, scanBlock)
-		require.NoError(t, err)
-		return err
-	})
-	require.NoError(t, err)
-
-	lsb, err = s.GetLastScanBlock()
-	require.NoError(t, err)
-	require.Equal(t, scanBlock, lsb)
 }
 
 func TestGetDepositAddresses(t *testing.T) {
@@ -175,7 +136,7 @@ func TestGetDepositAddresses(t *testing.T) {
 	})
 }
 
-func TestAddDepositeAddress(t *testing.T) {
+func TestAddDepositAddress(t *testing.T) {
 	addrs := []string{
 		"a1",
 		"a2",
@@ -254,7 +215,7 @@ func TestPushDeposit(t *testing.T) {
 
 	keyMap := make(map[string]struct{})
 	for _, dv := range dvs {
-		keyMap[dv.TxN()] = struct{}{}
+		keyMap[dv.ID()] = struct{}{}
 	}
 
 	log, _ := testutil.NewLogger(t)

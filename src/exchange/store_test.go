@@ -26,7 +26,7 @@ func (m *MockStore) BindAddress(skyAddr, btcAddr string) error {
 	return args.Error(0)
 }
 
-func (m *MockStore) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositInfo, error) {
+func (m *MockStore) GetOrCreateDepositInfo(dv scanner.Deposit, rate string) (DepositInfo, error) {
 	args := m.Called(dv, rate)
 	return args.Get(0).(DepositInfo), args.Error(1)
 }
@@ -55,6 +55,11 @@ func (m *MockStore) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, e
 
 func (m *MockStore) UpdateDepositInfo(btcTx string, f func(DepositInfo) DepositInfo) (DepositInfo, error) {
 	args := m.Called(btcTx, f)
+	return args.Get(0).(DepositInfo), args.Error(1)
+}
+
+func (m *MockStore) UpdateDepositInfoCallback(btcTx string, f func(DepositInfo) DepositInfo, callback func(DepositInfo) error) (DepositInfo, error) {
+	args := m.Called(btcTx, f, callback)
 	return args.Get(0).(DepositInfo), args.Error(1)
 }
 
@@ -100,12 +105,12 @@ func TestStoreAddDepositInfo(t *testing.T) {
 	defer shutdown()
 
 	di, err := s.addDepositInfo(DepositInfo{
-		BtcTx:        "btx1:2",
-		SkyAddress:   "skyaddr1",
-		BtcAddress:   "btcaddr1",
-		DepositValue: 1e6,
-		SkyBtcRate:   testSkyBtcRate,
-		Status:       StatusWaitSend,
+		DepositID:      "btx1:2",
+		SkyAddress:     "skyaddr1",
+		DepositAddress: "btcaddr1",
+		DepositValue:   1e6,
+		ConversionRate: testSkyBtcRate,
+		Status:         StatusWaitSend,
 	})
 	require.NoError(t, err)
 	require.Equal(t, di.Seq, uint64(1))
@@ -136,12 +141,12 @@ func TestStoreAddDepositInfo(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = s.addDepositInfo(DepositInfo{
-		BtcTx:        "btx2:2",
-		SkyAddress:   "skyaddr1",
-		BtcAddress:   "btcaddr2",
-		DepositValue: 1e6,
-		SkyBtcRate:   testSkyBtcRate,
-		Status:       StatusWaitSend,
+		DepositID:      "btx2:2",
+		SkyAddress:     "skyaddr1",
+		DepositAddress: "btcaddr2",
+		DepositValue:   1e6,
+		ConversionRate: testSkyBtcRate,
+		Status:         StatusWaitSend,
 	})
 	require.NoError(t, err)
 
@@ -274,20 +279,20 @@ func TestStoreGetDepositInfo(t *testing.T) {
 	defer shutdown()
 
 	_, err := s.addDepositInfo(DepositInfo{
-		BtcTx:        "btx1:1",
-		BtcAddress:   "btcaddr1",
-		SkyAddress:   "skyaddr1",
-		DepositValue: 1e6,
-		Txid:         "txid-1",
-		SkyBtcRate:   testSkyBtcRate,
-		SkySent:      100e8,
-		Status:       StatusDone,
+		DepositID:      "btx1:1",
+		DepositAddress: "btcaddr1",
+		SkyAddress:     "skyaddr1",
+		DepositValue:   1e6,
+		Txid:           "txid-1",
+		ConversionRate: testSkyBtcRate,
+		SkySent:        100e8,
+		Status:         StatusDone,
 	})
 	require.NoError(t, err)
 
 	dpi, err := s.getDepositInfo("btx1:1")
 	require.NoError(t, err)
-	require.Equal(t, "btcaddr1", dpi.BtcAddress)
+	require.Equal(t, "btcaddr1", dpi.DepositAddress)
 	require.Equal(t, "skyaddr1", dpi.SkyAddress)
 	require.Equal(t, StatusDone, dpi.Status)
 	require.NotEmpty(t, dpi.UpdatedAt)
@@ -298,22 +303,22 @@ func TestStoreUpdateDepositInfo(t *testing.T) {
 	defer shutdown()
 
 	_, err := s.addDepositInfo(DepositInfo{
-		BtcTx:        "btx1:1",
-		SkyAddress:   "skyaddr1",
-		BtcAddress:   "btcaddr1",
-		DepositValue: 1e6,
-		SkyBtcRate:   testSkyBtcRate,
-		Status:       StatusWaitSend,
+		DepositID:      "btx1:1",
+		SkyAddress:     "skyaddr1",
+		DepositAddress: "btcaddr1",
+		DepositValue:   1e6,
+		ConversionRate: testSkyBtcRate,
+		Status:         StatusWaitSend,
 	})
 	require.NoError(t, err)
 
 	_, err = s.addDepositInfo(DepositInfo{
-		BtcTx:        "btx2:1",
-		SkyAddress:   "skyaddr1",
-		BtcAddress:   "btcaddr2",
-		DepositValue: 1e6,
-		SkyBtcRate:   testSkyBtcRate,
-		Status:       StatusWaitSend,
+		DepositID:      "btx2:1",
+		SkyAddress:     "skyaddr1",
+		DepositAddress: "btcaddr2",
+		DepositValue:   1e6,
+		ConversionRate: testSkyBtcRate,
+		Status:         StatusWaitSend,
 	})
 	require.NoError(t, err)
 
@@ -381,7 +386,7 @@ func TestStoreGetDepositInfoOfSkyAddress(t *testing.T) {
 	dpis, err := s.GetDepositInfoOfSkyAddress("skyaddr1")
 	require.NoError(t, err)
 	require.Len(t, dpis, 1)
-	require.Equal(t, dpis[0].BtcAddress, "btcaddr1")
+	require.Equal(t, dpis[0].DepositAddress, "btcaddr1")
 
 	err = s.BindAddress("skyaddr1", "btcaddr2")
 	require.NoError(t, err)
@@ -389,17 +394,17 @@ func TestStoreGetDepositInfoOfSkyAddress(t *testing.T) {
 	dpis, err = s.GetDepositInfoOfSkyAddress("skyaddr1")
 	require.NoError(t, err)
 	require.Len(t, dpis, 2)
-	require.Equal(t, dpis[0].BtcAddress, "btcaddr1")
-	require.Equal(t, dpis[1].BtcAddress, "btcaddr2")
+	require.Equal(t, dpis[0].DepositAddress, "btcaddr1")
+	require.Equal(t, dpis[1].DepositAddress, "btcaddr2")
 
 	// Multiple txns saved
 	di3 := DepositInfo{
-		SkyAddress:   "skyaddr3",
-		BtcAddress:   "btcaddr3",
-		BtcTx:        "btctx:3",
-		DepositValue: 100e8,
-		SkyBtcRate:   testSkyBtcRate,
-		Status:       StatusWaitSend,
+		SkyAddress:     "skyaddr3",
+		DepositAddress: "btcaddr3",
+		DepositID:      "btctx:3",
+		DepositValue:   100e8,
+		ConversionRate: testSkyBtcRate,
+		Status:         StatusWaitSend,
 	}
 	di3, err = s.addDepositInfo(di3)
 	require.Equal(t, di3.Seq, uint64(1))
@@ -411,12 +416,12 @@ func TestStoreGetDepositInfoOfSkyAddress(t *testing.T) {
 	require.NoError(t, err)
 
 	di4 := DepositInfo{
-		SkyAddress:   "skyaddr3",
-		BtcAddress:   "btcaddr4",
-		BtcTx:        "btctx:4",
-		DepositValue: 1000e8,
-		SkyBtcRate:   testSkyBtcRate,
-		Status:       StatusWaitSend,
+		SkyAddress:     "skyaddr3",
+		DepositAddress: "btcaddr4",
+		DepositID:      "btctx:4",
+		DepositValue:   1000e8,
+		ConversionRate: testSkyBtcRate,
+		Status:         StatusWaitSend,
 	}
 	di4, err = s.addDepositInfo(di4)
 	require.NoError(t, err)
@@ -440,22 +445,22 @@ func TestStoreGetDepositInfoArray(t *testing.T) {
 
 	dpis := []DepositInfo{
 		{
-			BtcTx:        "t1:1",
-			BtcAddress:   "b1",
-			SkyAddress:   "s1",
-			DepositValue: 1e6,
-			SkyBtcRate:   testSkyBtcRate,
-			Status:       StatusWaitSend,
+			DepositID:      "t1:1",
+			DepositAddress: "b1",
+			SkyAddress:     "s1",
+			DepositValue:   1e6,
+			ConversionRate: testSkyBtcRate,
+			Status:         StatusWaitSend,
 		},
 		{
-			BtcTx:        "t2:1",
-			BtcAddress:   "b2",
-			SkyAddress:   "s2",
-			DepositValue: 1e6,
-			Txid:         "txid-2",
-			SkyBtcRate:   testSkyBtcRate,
-			SkySent:      100e8,
-			Status:       StatusWaitConfirm,
+			DepositID:      "t2:1",
+			DepositAddress: "b2",
+			SkyAddress:     "s2",
+			DepositValue:   1e6,
+			Txid:           "txid-2",
+			ConversionRate: testSkyBtcRate,
+			SkySent:        100e8,
+			Status:         StatusWaitConfirm,
 		},
 	}
 
@@ -472,7 +477,7 @@ func TestStoreGetDepositInfoArray(t *testing.T) {
 
 	require.Len(t, ds, 1)
 	require.Equal(t, dpis[0].Status, ds[0].Status)
-	require.Equal(t, dpis[0].BtcAddress, ds[0].BtcAddress)
+	require.Equal(t, dpis[0].DepositAddress, ds[0].DepositAddress)
 	require.Equal(t, dpis[0].SkyAddress, ds[0].SkyAddress)
 
 	ds1, err := s.GetDepositInfoArray(func(dpi DepositInfo) bool {
@@ -483,7 +488,7 @@ func TestStoreGetDepositInfoArray(t *testing.T) {
 
 	require.Len(t, ds1, 1)
 	require.Equal(t, dpis[1].Status, ds1[0].Status)
-	require.Equal(t, dpis[1].BtcAddress, ds1[0].BtcAddress)
+	require.Equal(t, dpis[1].DepositAddress, ds1[0].DepositAddress)
 	require.Equal(t, dpis[1].SkyAddress, ds1[0].SkyAddress)
 }
 
@@ -537,12 +542,12 @@ func TestStoreGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 	defer shutdown()
 
 	di := DepositInfo{
-		Status:       StatusWaitSend,
-		BtcAddress:   "foo-btc-addr",
-		BtcTx:        "foo-tx:1",
-		SkyAddress:   "foo-sky-addr",
-		DepositValue: 1e6,
-		SkyBtcRate:   testSkyBtcRate,
+		Status:         StatusWaitSend,
+		DepositAddress: "foo-btc-addr",
+		DepositID:      "foo-tx:1",
+		SkyAddress:     "foo-sky-addr",
+		DepositValue:   1e6,
+		ConversionRate: testSkyBtcRate,
 		Deposit: scanner.Deposit{
 			Address: "foo-btc-addr",
 			Value:   1e6,
@@ -556,7 +561,7 @@ func TestStoreGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check the saved deposit info
-	foundDi, err := s.getDepositInfo(di.BtcTx)
+	foundDi, err := s.getDepositInfo(di.DepositID)
 	require.NoError(t, err)
 	// Seq and UpdatedAt should be set by addDepositInfo
 	require.Equal(t, uint64(1), foundDi.Seq)
@@ -575,8 +580,11 @@ func TestStoreGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 		Tx:      di.Deposit.Tx,
 		N:       di.Deposit.N,
 	}
-	require.Equal(t, di.Deposit.TxN(), dv.TxN())
-	existsDi, err := s.GetOrCreateDepositInfo(dv, di.SkyBtcRate*2)
+	require.Equal(t, di.Deposit.ID(), dv.ID())
+
+	differentRate := "112233"
+	require.NotEqual(t, differentRate, di.ConversionRate)
+	existsDi, err := s.GetOrCreateDepositInfo(dv, differentRate)
 
 	// di.Deposit won't be changed
 	require.Equal(t, di, existsDi)
@@ -586,11 +594,11 @@ func TestStoreGetOrCreateDepositInfoNoBoundSkyAddr(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	var rate int64 = 100
 	dv := scanner.Deposit{
 		Address: "foo-btc-addr",
 	}
 
+	rate := "100"
 	_, err := s.GetOrCreateDepositInfo(dv, rate)
 	require.Error(t, err)
 	require.Equal(t, err, ErrNoBoundAddress)
