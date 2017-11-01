@@ -91,6 +91,7 @@ type Web struct {
 	TLSKey           string        `mapstructure:"tls_key"`
 	ThrottleMax      int64         `mapstructure:"throttle_max"` // Maximum number of requests per duration
 	ThrottleDuration time.Duration `mapstructure:"throttle_duration"`
+	BehindProxy      bool          `mapstructure:"behind_proxy"`
 }
 
 // Validate validates Web config
