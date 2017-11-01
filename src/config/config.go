@@ -234,6 +234,7 @@ func setDefaults() {
 	viper.SetDefault("web.static_dir", "./web/build")
 	viper.SetDefault("web.throttle_max", int64(5))
 	viper.SetDefault("web.throttle_duration", time.Minute)
+	viper.SetDefault("web.api_enabled", true)
 
 	// AdminPanel
 	viper.SetDefault("admin_panel.host", "127.0.0.1:7711")

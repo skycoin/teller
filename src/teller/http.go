@@ -249,15 +249,15 @@ func setupHTTPListener(addr string, handler http.Handler) *http.Server {
 func (s *HTTPServer) setupMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	handleAPI := func(path string, f http.Handler) {
+	ratelimit := func(h http.Handler) http.Handler {
 		limiter := tollbooth.NewLimiter(s.cfg.ThrottleMax, s.cfg.ThrottleDuration, nil)
 		if s.cfg.BehindProxy {
 			limiter.SetIPLookups([]string{"X-Forwarded-For", "RemoteAddr", "X-Real-IP"})
 		}
-		h := tollbooth.LimitHandler(limiter, f)
+		return tollbooth.LimitHandler(limiter, h)
+	}
 
-		h = httputil.LogHandler(s.log, h)
-
+	handleAPI := func(path string, h http.Handler) {
 		// Allow requests from a local skycoin wallet
 		h = cors.New(cors.Options{
 			AllowedOrigins: []string{"http://127.0.0.1:6420"},
@@ -269,8 +269,9 @@ func (s *HTTPServer) setupMux() *http.ServeMux {
 	}
 
 	// API Methods
-	handleAPI("/api/bind", httputil.LogHandler(s.log, BindHandler(s)))
-	handleAPI("/api/status", httputil.LogHandler(s.log, StatusHandler(s)))
+	handleAPI("/api/bind", ratelimit(httputil.LogHandler(s.log, BindHandler(s))))
+	handleAPI("/api/status", ratelimit(httputil.LogHandler(s.log, StatusHandler(s))))
+	handleAPI("/api/config", ConfigHandler(s))
 
 	// Static files
 	mux.Handle("/", gziphandler.GzipHandler(http.FileServer(http.Dir(s.cfg.StaticDir))))
@@ -470,6 +471,31 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 
 		if err := httputil.JSONResponse(w, StatusResponse{
 			Statuses: depositStatuses,
+		}); err != nil {
+			log.WithError(err).Error()
+		}
+	}
+}
+
+// ConfigResponse http response for /api/config
+type ConfigResponse struct {
+	Enabled bool `json:"enabled"`
+}
+
+// ConfigHandler returns the teller configuration
+// Method: GET
+// URI: /api/config
+func ConfigHandler(s *HTTPServer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
+		if !validMethod(ctx, w, r, []string{http.MethodGet}) {
+			return
+		}
+
+		if err := httputil.JSONResponse(w, ConfigResponse{
+			Enabled: s.cfg.APIEnabled,
 		}); err != nil {
 			log.WithError(err).Error()
 		}
