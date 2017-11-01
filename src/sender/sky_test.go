@@ -101,7 +101,7 @@ func TestSenderBroadcastTransaction(t *testing.T) {
 	dsc := newDummySkycli()
 
 	dsc.changeBroadcastTxTxid("1111")
-	s := NewService(Config{}, log, dsc)
+	s := NewService(log, dsc)
 	go func() {
 		s.Run()
 	}()
