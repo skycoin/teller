@@ -482,10 +482,10 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 
 // ConfigResponse http response for /api/config
 type ConfigResponse struct {
-	Enabled               bool   `json:"enabled"`
-	ConfirmationsRequired int64  `json:"confirmations_required"`
-	MaxBoundBtcAddresses  int    `json:"max_bound_btc_addrs"`
-	SkyBtcExchangeRate    string `json:"sky_btc_exchange_rate"`
+	Enabled                  bool   `json:"enabled"`
+	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
+	MaxBoundBtcAddresses     int    `json:"max_bound_btc_addrs"`
+	SkyBtcExchangeRate       string `json:"sky_btc_exchange_rate"`
 }
 
 // ConfigHandler returns the teller configuration
@@ -517,10 +517,10 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 		}
 
 		if err := httputil.JSONResponse(w, ConfigResponse{
-			Enabled:               s.cfg.Web.APIEnabled,
-			ConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
-			SkyBtcExchangeRate:    skyPerBTC,
-			MaxBoundBtcAddresses:  s.cfg.Teller.MaxBoundBtcAddresses,
+			Enabled:                  s.cfg.Web.APIEnabled,
+			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
+			SkyBtcExchangeRate:       skyPerBTC,
+			MaxBoundBtcAddresses:     s.cfg.Teller.MaxBoundBtcAddresses,
 		}); err != nil {
 			log.WithError(err).Error()
 		}

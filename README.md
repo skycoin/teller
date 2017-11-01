@@ -178,7 +178,7 @@ Content-Type: application/json
 URI: /api/bind
 Request Body: {
     "skyaddr": "...",
-    "coin_type":"BTC"
+    "coin_type": "BTC"
 }
 ```
 
@@ -196,9 +196,9 @@ curl -H  -X POST "Content-Type: application/json" -d '{"skyaddr":"...","coin_typ
 
 Response:
 
-```sh
+```json
 {
-    "deposit_address": "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp"
+    "deposit_address": "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp",
     "coin_type": "BTC",
 }
 ```
@@ -234,7 +234,7 @@ curl http://localhost:7071/api/status?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
 
 Response:
 
-```sh
+```json
 {
     "statuses": [
         {
@@ -274,10 +274,10 @@ curl http://localhost:7071/api/config
 
 Response:
 
-```sh
+```json
 {
     "enabled": true,
-    "confirmations_required": 1,
+    "btc_confirmations_required": 1,
     "max_bound_btc_addrs": 5,
     "sky_btc_exchange_rate": "123.000000"
 }
