@@ -92,6 +92,7 @@ type Web struct {
 	ThrottleMax      int64         `mapstructure:"throttle_max"` // Maximum number of requests per duration
 	ThrottleDuration time.Duration `mapstructure:"throttle_duration"`
 	BehindProxy      bool          `mapstructure:"behind_proxy"`
+	APIEnabled       bool          `mapstructure:"api_enabled"`
 }
 
 // Validate validates Web config

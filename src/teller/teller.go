@@ -26,7 +26,7 @@ type Teller struct {
 	log logrus.FieldLogger
 	cfg Config // Teller configuration info
 
-	httpServ *httpServer // HTTP API
+	httpServ *HTTPServer // HTTP API
 
 	quit chan struct{}
 	done chan struct{}
@@ -39,7 +39,7 @@ func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen addrs.Add
 		log:  log.WithField("prefix", "teller"),
 		quit: make(chan struct{}),
 		done: make(chan struct{}),
-		httpServ: newHTTPServer(log, cfg.HTTP, &Service{
+		httpServ: NewHTTPServer(log, cfg.HTTP, &Service{
 			cfg:       cfg.Teller,
 			exchanger: exchanger,
 			addrGen:   addrGen,
