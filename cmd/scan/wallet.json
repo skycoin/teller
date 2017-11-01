@@ -1,8 +1,8 @@
 [
     {
         "address": "12c6DSiU4Rq3P4ZxziKxzrL5LmMBrzjrJX",
-        "min_scan_block": 12,
-        "mid_scan_block": 288889,
+        "min_scan_block": 2,
+        "mid_scan_block": 288888,
         "max_scan_block": 288890,
         "txs": [
             {
@@ -15,8 +15,8 @@
     },
     {
         "address": "1EXoDusjGwvnjZUyKkxZ4UHEf77z6A5S4P",
-        "min_scan_block": 12,
-        "mid_scan_block": 288889,
+        "min_scan_block": 2,
+        "mid_scan_block": 288888,
         "max_scan_block": 288890,
         "txs": [
             {

@@ -16,7 +16,7 @@ import (
 )
 
 type NewBTCAddress struct {
-	Addresses []string `json:"btc_addresses""`
+	Addresses []string `json:"btc_addresses"`
 }
 
 type Address struct {
@@ -58,9 +58,9 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 		for i, addr := range tx.Vout {
 			depTx.TxHash = fmt.Sprintf("%s:%d", tx.Txid, i)
 
-			if addr.ScriptPubKey.Addresses != nil {
+			for _, newAddr := range addr.ScriptPubKey.Addresses {
 				deposits = append(deposits, Deposit{
-					Addr: addr.ScriptPubKey.Addresses[0],
+					Addr: newAddr,
 					Tx:   depTx,
 				})
 			}
