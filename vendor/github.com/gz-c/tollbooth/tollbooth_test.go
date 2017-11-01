@@ -7,32 +7,32 @@ import (
 	"testing"
 	"time"
 
-	"github.com/didip/tollbooth/config"
+	"github.com/gz-c/tollbooth/limiter"
 )
 
 func TestLimitByKeys(t *testing.T) {
-	limiter := NewLimiter(1, time.Second) // Only 1 request per second is allowed.
+	lmt := NewLimiter(1, time.Second, nil) // Only 1 request per second is allowed.
 
-	httperror := LimitByKeys(limiter, []string{"127.0.0.1", "/"})
+	httperror := LimitByKeys(lmt, []string{"127.0.0.1", "/"})
 	if httperror != nil {
 		t.Errorf("First time count should not return error. Error: %v", httperror.Error())
 	}
 
-	httperror = LimitByKeys(limiter, []string{"127.0.0.1", "/"})
+	httperror = LimitByKeys(lmt, []string{"127.0.0.1", "/"})
 	if httperror == nil {
 		t.Errorf("Second time count should return error because it exceeds 1 request per second.")
 	}
 
 	<-time.After(1 * time.Second)
-	httperror = LimitByKeys(limiter, []string{"127.0.0.1", "/"})
+	httperror = LimitByKeys(lmt, []string{"127.0.0.1", "/"})
 	if httperror != nil {
 		t.Errorf("Third time count should not return error because the 1 second window has passed.")
 	}
 }
 
 func TestDefaultBuildKeys(t *testing.T) {
-	limiter := NewLimiter(1, time.Second)
-	limiter.IPLookups = []string{"X-Forwarded-For", "X-Real-IP", "RemoteAddr"}
+	lmt := NewLimiter(1, time.Second, nil)
+	lmt.SetIPLookups([]string{"X-Forwarded-For", "X-Real-IP", "RemoteAddr"})
 
 	request, err := http.NewRequest("GET", "/", strings.NewReader("Hello, world!"))
 	if err != nil {
@@ -41,9 +41,9 @@ func TestDefaultBuildKeys(t *testing.T) {
 
 	request.Header.Set("X-Real-IP", "2601:7:1c82:4097:59a0:a80b:2841:b8c8")
 
-	sliceKeys := BuildKeys(limiter, request)
+	sliceKeys := BuildKeys(lmt, request)
 	if len(sliceKeys) == 0 {
-		t.Error("Length of sliceKeys should never be empty.")
+		t.Fatal("Length of sliceKeys should never be empty.")
 	}
 
 	for _, keys := range sliceKeys {
@@ -59,8 +59,8 @@ func TestDefaultBuildKeys(t *testing.T) {
 }
 
 func TestBasicAuthBuildKeys(t *testing.T) {
-	limiter := NewLimiter(1, time.Second)
-	limiter.BasicAuthUsers = []string{"bro"}
+	lmt := NewLimiter(1, time.Second, nil)
+	lmt.SetBasicAuthUsers([]string{"bro"})
 
 	request, err := http.NewRequest("GET", "/", strings.NewReader("Hello, world!"))
 	if err != nil {
@@ -71,7 +71,7 @@ func TestBasicAuthBuildKeys(t *testing.T) {
 
 	request.SetBasicAuth("bro", "tato")
 
-	for _, keys := range BuildKeys(limiter, request) {
+	for _, keys := range BuildKeys(lmt, request) {
 		if len(keys) != 3 {
 			t.Error("Keys should be made of 3 parts.")
 		}
@@ -90,9 +90,8 @@ func TestBasicAuthBuildKeys(t *testing.T) {
 }
 
 func TestCustomHeadersBuildKeys(t *testing.T) {
-	limiter := NewLimiter(1, time.Second)
-	limiter.Headers = make(map[string][]string)
-	limiter.Headers["X-Auth-Token"] = []string{"totally-top-secret", "another-secret"}
+	lmt := NewLimiter(1, time.Second, nil)
+	lmt.SetHeader("X-Auth-Token", []string{"totally-top-secret", "another-secret"})
 
 	request, err := http.NewRequest("GET", "/", strings.NewReader("Hello, world!"))
 	if err != nil {
@@ -102,7 +101,7 @@ func TestCustomHeadersBuildKeys(t *testing.T) {
 	request.Header.Set("X-Real-IP", "2601:7:1c82:4097:59a0:a80b:2841:b8c8")
 	request.Header.Set("X-Auth-Token", "totally-top-secret")
 
-	for _, keys := range BuildKeys(limiter, request) {
+	for _, keys := range BuildKeys(lmt, request) {
 		if len(keys) != 4 {
 			t.Errorf("Keys should be made of 4 parts. Keys: %v", keys)
 		}
@@ -124,8 +123,8 @@ func TestCustomHeadersBuildKeys(t *testing.T) {
 }
 
 func TestRequestMethodBuildKeys(t *testing.T) {
-	limiter := NewLimiter(1, time.Second)
-	limiter.Methods = []string{"GET"}
+	lmt := NewLimiter(1, time.Second, nil)
+	lmt.SetMethods([]string{"GET"})
 
 	request, err := http.NewRequest("GET", "/", strings.NewReader("Hello, world!"))
 	if err != nil {
@@ -134,7 +133,7 @@ func TestRequestMethodBuildKeys(t *testing.T) {
 
 	request.Header.Set("X-Real-IP", "2601:7:1c82:4097:59a0:a80b:2841:b8c8")
 
-	for _, keys := range BuildKeys(limiter, request) {
+	for _, keys := range BuildKeys(lmt, request) {
 		if len(keys) != 3 {
 			t.Errorf("Keys should be made of 3 parts. Keys: %v", keys)
 		}
@@ -153,10 +152,9 @@ func TestRequestMethodBuildKeys(t *testing.T) {
 }
 
 func TestRequestMethodAndCustomHeadersBuildKeys(t *testing.T) {
-	limiter := NewLimiter(1, time.Second)
-	limiter.Methods = []string{"GET"}
-	limiter.Headers = make(map[string][]string)
-	limiter.Headers["X-Auth-Token"] = []string{"totally-top-secret", "another-secret"}
+	lmt := NewLimiter(1, time.Second, nil)
+	lmt.SetMethods([]string{"GET"})
+	lmt.SetHeader("X-Auth-Token", []string{"totally-top-secret", "another-secret"})
 
 	request, err := http.NewRequest("GET", "/", strings.NewReader("Hello, world!"))
 	if err != nil {
@@ -166,7 +164,7 @@ func TestRequestMethodAndCustomHeadersBuildKeys(t *testing.T) {
 	request.Header.Set("X-Real-IP", "2601:7:1c82:4097:59a0:a80b:2841:b8c8")
 	request.Header.Set("X-Auth-Token", "totally-top-secret")
 
-	for _, keys := range BuildKeys(limiter, request) {
+	for _, keys := range BuildKeys(lmt, request) {
 		if len(keys) != 5 {
 			t.Errorf("Keys should be made of 4 parts. Keys: %v", keys)
 		}
@@ -191,9 +189,9 @@ func TestRequestMethodAndCustomHeadersBuildKeys(t *testing.T) {
 }
 
 func TestRequestMethodAndBasicAuthUsersBuildKeys(t *testing.T) {
-	limiter := NewLimiter(1, time.Second)
-	limiter.Methods = []string{"GET"}
-	limiter.BasicAuthUsers = []string{"bro"}
+	lmt := NewLimiter(1, time.Second, nil)
+	lmt.SetMethods([]string{"GET"})
+	lmt.SetBasicAuthUsers([]string{"bro"})
 
 	request, err := http.NewRequest("GET", "/", strings.NewReader("Hello, world!"))
 	if err != nil {
@@ -203,7 +201,7 @@ func TestRequestMethodAndBasicAuthUsersBuildKeys(t *testing.T) {
 	request.Header.Set("X-Real-IP", "2601:7:1c82:4097:59a0:a80b:2841:b8c8")
 	request.SetBasicAuth("bro", "tato")
 
-	for _, keys := range BuildKeys(limiter, request) {
+	for _, keys := range BuildKeys(lmt, request) {
 		if len(keys) != 4 {
 			t.Errorf("Keys should be made of 4 parts. Keys: %v", keys)
 		}
@@ -225,11 +223,10 @@ func TestRequestMethodAndBasicAuthUsersBuildKeys(t *testing.T) {
 }
 
 func TestRequestMethodCustomHeadersAndBasicAuthUsersBuildKeys(t *testing.T) {
-	limiter := NewLimiter(1, time.Second)
-	limiter.Methods = []string{"GET"}
-	limiter.Headers = make(map[string][]string)
-	limiter.Headers["X-Auth-Token"] = []string{"totally-top-secret", "another-secret"}
-	limiter.BasicAuthUsers = []string{"bro"}
+	lmt := NewLimiter(1, time.Second, nil)
+	lmt.SetMethods([]string{"GET"})
+	lmt.SetHeader("X-Auth-Token", []string{"totally-top-secret", "another-secret"})
+	lmt.SetBasicAuthUsers([]string{"bro"})
 
 	request, err := http.NewRequest("GET", "/", strings.NewReader("Hello, world!"))
 	if err != nil {
@@ -240,7 +237,7 @@ func TestRequestMethodCustomHeadersAndBasicAuthUsersBuildKeys(t *testing.T) {
 	request.Header.Set("X-Auth-Token", "totally-top-secret")
 	request.SetBasicAuth("bro", "tato")
 
-	for _, keys := range BuildKeys(limiter, request) {
+	for _, keys := range BuildKeys(lmt, request) {
 		if len(keys) != 6 {
 			t.Errorf("Keys should be made of 4 parts. Keys: %v", keys)
 		}
@@ -269,11 +266,14 @@ func TestRequestMethodCustomHeadersAndBasicAuthUsersBuildKeys(t *testing.T) {
 }
 
 func TestLimitHandler(t *testing.T) {
-	limiter := config.NewLimiter(1, time.Second)
-	limiter.IPLookups = []string{"X-Real-IP", "RemoteAddr", "X-Forwarded-For"}
-	limiter.Methods = []string{"POST"}
+	lmt := limiter.New(nil).SetMax(1).SetTTL(time.Second)
+	lmt.SetIPLookups([]string{"X-Real-IP", "RemoteAddr", "X-Forwarded-For"})
+	lmt.SetMethods([]string{"POST"})
 
-	handler := LimitHandler(limiter, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	counter := 0
+	lmt.SetOnLimitReached(func(w http.ResponseWriter, r *http.Request) { counter++ })
+
+	handler := LimitHandler(lmt, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`hello world`))
 	}))
 
@@ -285,18 +285,25 @@ func TestLimitHandler(t *testing.T) {
 	req.Header.Set("X-Real-IP", "2601:7:1c82:4097:59a0:a80b:2841:b8c8")
 
 	rr := httptest.NewRecorder()
-
 	handler.ServeHTTP(rr, req)
 	//Should not be limited
 	if status := rr.Code; status != http.StatusOK {
 		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
+	ch := make(chan int)
 	go func() {
+		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
 		// Should be limited
 		if status := rr.Code; status != http.StatusTooManyRequests {
 			t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusTooManyRequests)
 		}
+		// OnLimitReached should be called
+		if counter != 1 {
+			t.Errorf("onLimitReached was not called")
+		}
+		close(ch)
 	}()
+	<-ch // Block until go func is done.
 }

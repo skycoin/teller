@@ -48,12 +48,6 @@
   version = "v1.1.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/didip/tollbooth"
-  packages = [".","config","errors","libstring"]
-  revision = "c62d95b8416e0a966a4b1483bce7e61a3dfead01"
-
-[[projects]]
   name = "github.com/fsnotify/fsnotify"
   packages = ["."]
   revision = "629574ca2a5df945712d3079857300b5e4da0236"
@@ -70,6 +64,12 @@
   packages = ["."]
   revision = "3f60c5b6f7ebd01d3bbda8ccc53c7bebd881caee"
   version = "v0.7.1"
+
+[[projects]]
+  name = "github.com/gz-c/tollbooth"
+  packages = [".","errors","libstring","limiter"]
+  revision = "69bd8b0ddb26f5b4756f211cff6b4013477d62fc"
+  version = "v2.3.0"
 
 [[projects]]
   branch = "master"
@@ -130,6 +130,12 @@
   packages = ["difflib"]
   revision = "792786c7400a136282c1664665ae0a8db921c6c2"
   version = "v1.0.0"
+
+[[projects]]
+  name = "github.com/rs/cors"
+  packages = ["."]
+  revision = "7af7a1e09ba336d2ea14b1ce73bf693c6837dbf6"
+  version = "v1.2"
 
 [[projects]]
   branch = "master"
@@ -241,6 +247,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8222a8118c84b2933859febbb0c53da5e2e6bbb69f2588142c48610b0eed9293"
+  inputs-digest = "55e7e3ee6c34b0ff4a85023d5bc5df5ce40c46b9cd423f8937303f6c61db32fa"
   solver-name = "gps-cdcl"
   solver-version = 1

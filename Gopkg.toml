@@ -60,3 +60,7 @@
 [[constraint]]
   name = "github.com/gz-c/logrus-prefixed-formatter"
   version = "v0.7.1"
+
+[[constraint]]
+    name = "github.com/gz-c/tollbooth"
+    version = "v2.3.0"

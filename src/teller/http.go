@@ -13,7 +13,8 @@ import (
 	"time"
 
 	"github.com/NYTimes/gziphandler"
-	"github.com/didip/tollbooth"
+	"github.com/gz-c/tollbooth"
+	"github.com/rs/cors"
 	"github.com/sirupsen/logrus"
 	"github.com/unrolled/secure"
 	"golang.org/x/crypto/acme/autocert"
@@ -246,12 +247,23 @@ func setupHTTPListener(addr string, handler http.Handler) *http.Server {
 func (s *httpServer) setupMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	handleAPI := func(path string, f http.HandlerFunc) {
-		logged := httputil.LogHandler(s.log, f)
-		limiter := tollbooth.NewLimiter(s.Config.ThrottleMax, s.Config.ThrottleDuration)
-		rateLimited := tollbooth.LimitFuncHandler(limiter, logged)
-		gzipped := gziphandler.GzipHandler(rateLimited)
-		mux.Handle(path, gzipped)
+	handleAPI := func(path string, f http.Handler) {
+		limiter := tollbooth.NewLimiter(s.Config.ThrottleMax, s.Config.ThrottleDuration, nil)
+		if s.Config.BehindProxy {
+			limiter.SetIPLookups([]string{"X-Forwarded-For", "RemoteAddr", "X-Real-IP"})
+		}
+		h := tollbooth.LimitHandler(limiter, f)
+
+		h = httputil.LogHandler(s.log, h)
+
+		// Allow requests from a local skycoin wallet
+		h = cors.New(cors.Options{
+			AllowedOrigins: []string{"http://127.0.0.1:6420"},
+		}).Handler(h)
+
+		h = gziphandler.GzipHandler(h)
+
+		mux.Handle(path, h)
 	}
 
 	// API Methods
