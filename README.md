@@ -276,7 +276,10 @@ Response:
 
 ```sh
 {
-    "enabled": true
+    "enabled": true,
+    "confirmations_required": 1,
+    "max_bound_btc_addrs": 5,
+    "sky_btc_exchange_rate": "123.000000"
 }
 ```
 
