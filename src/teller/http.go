@@ -20,6 +20,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 
 	"github.com/skycoin/skycoin/src/cipher"
+	"github.com/skycoin/skycoin/src/util/droplet"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
 	"github.com/skycoin/teller/src/scanner"
@@ -41,9 +42,13 @@ const (
 	tlsAutoCertCache = "cert-cache"
 )
 
-type httpServer struct {
-	Config config.Web
+var (
+	errInternalServerError = errors.New("Internal Server Error")
+)
 
+// HTTPServer exposes the API endpoints and static website
+type HTTPServer struct {
+	cfg           config.Config
 	log           logrus.FieldLogger
 	service       *Service
 	httpListener  *http.Server
@@ -52,9 +57,10 @@ type httpServer struct {
 	done          chan struct{}
 }
 
-func newHTTPServer(log logrus.FieldLogger, cfg config.Web, service *Service) *httpServer {
-	return &httpServer{
-		Config: cfg,
+// NewHTTPServer creates an HTTPServer
+func NewHTTPServer(log logrus.FieldLogger, cfg config.Config, service *Service) *HTTPServer {
+	return &HTTPServer{
+		cfg: cfg,
 		log: log.WithFields(logrus.Fields{
 			"prefix": "teller.http",
 			"config": cfg,
@@ -65,7 +71,8 @@ func newHTTPServer(log logrus.FieldLogger, cfg config.Web, service *Service) *ht
 	}
 }
 
-func (s *httpServer) Run() error {
+// Run runs the HTTPServer
+func (s *HTTPServer) Run() error {
 	log := s.log
 	log.Info("HTTP service start")
 	defer log.Info("HTTP service closed")
@@ -75,18 +82,18 @@ func (s *httpServer) Run() error {
 
 	allowedHosts := []string{} // empty array means all hosts allowed
 	sslHost := ""
-	if s.Config.AutoTLSHost == "" {
+	if s.cfg.Web.AutoTLSHost == "" {
 		// Note: if AutoTLSHost is not set, but HTTPSAddr is set, then
 		// http will redirect to the HTTPSAddr listening IP, which would be
 		// either 127.0.0.1 or 0.0.0.0
 		// When running behind a DNS name, make sure to set AutoTLSHost
-		sslHost = s.Config.HTTPSAddr
+		sslHost = s.cfg.Web.HTTPSAddr
 	} else {
-		sslHost = s.Config.AutoTLSHost
+		sslHost = s.cfg.Web.AutoTLSHost
 		// When using -auto-tls-host,
 		// which implies automatic Let's Encrypt SSL cert generation in production,
 		// restrict allowed hosts to that host.
-		allowedHosts = []string{s.Config.AutoTLSHost}
+		allowedHosts = []string{s.cfg.Web.AutoTLSHost}
 	}
 
 	if len(allowedHosts) == 0 {
@@ -102,8 +109,8 @@ func (s *httpServer) Run() error {
 	secureMiddleware := configureSecureMiddleware(sslHost, allowedHosts)
 	mux = secureMiddleware.Handler(mux)
 
-	if s.Config.HTTPAddr != "" {
-		s.httpListener = setupHTTPListener(s.Config.HTTPAddr, mux)
+	if s.cfg.Web.HTTPAddr != "" {
+		s.httpListener = setupHTTPListener(s.cfg.Web.HTTPAddr, mux)
 	}
 
 	handleListenErr := func(f func() error) error {
@@ -119,21 +126,21 @@ func (s *httpServer) Run() error {
 		return nil
 	}
 
-	if s.Config.HTTPSAddr != "" {
+	if s.cfg.Web.HTTPSAddr != "" {
 		log.Info("Using TLS")
 
-		s.httpsListener = setupHTTPListener(s.Config.HTTPSAddr, mux)
+		s.httpsListener = setupHTTPListener(s.cfg.Web.HTTPSAddr, mux)
 
-		tlsCert := s.Config.TLSCert
-		tlsKey := s.Config.TLSKey
+		tlsCert := s.cfg.Web.TLSCert
+		tlsKey := s.cfg.Web.TLSKey
 
-		if s.Config.AutoTLSHost != "" {
+		if s.cfg.Web.AutoTLSHost != "" {
 			log.Info("Using Let's Encrypt autocert")
 			// https://godoc.org/golang.org/x/crypto/acme/autocert
 			// https://stackoverflow.com/a/40494806
 			certManager := autocert.Manager{
 				Prompt:     autocert.AcceptTOS,
-				HostPolicy: autocert.HostWhitelist(s.Config.AutoTLSHost),
+				HostPolicy: autocert.HostWhitelist(s.cfg.Web.AutoTLSHost),
 				Cache:      autocert.DirCache(tlsAutoCertCache),
 			}
 
@@ -148,7 +155,7 @@ func (s *httpServer) Run() error {
 
 		errC := make(chan error)
 
-		if s.Config.HTTPAddr == "" {
+		if s.cfg.Web.HTTPAddr == "" {
 			return handleListenErr(func() error {
 				return s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey)
 			})
@@ -244,18 +251,18 @@ func setupHTTPListener(addr string, handler http.Handler) *http.Server {
 	}
 }
 
-func (s *httpServer) setupMux() *http.ServeMux {
+func (s *HTTPServer) setupMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	handleAPI := func(path string, f http.Handler) {
-		limiter := tollbooth.NewLimiter(s.Config.ThrottleMax, s.Config.ThrottleDuration, nil)
-		if s.Config.BehindProxy {
+	ratelimit := func(h http.Handler) http.Handler {
+		limiter := tollbooth.NewLimiter(s.cfg.Web.ThrottleMax, s.cfg.Web.ThrottleDuration, nil)
+		if s.cfg.Web.BehindProxy {
 			limiter.SetIPLookups([]string{"X-Forwarded-For", "RemoteAddr", "X-Real-IP"})
 		}
-		h := tollbooth.LimitHandler(limiter, f)
+		return tollbooth.LimitHandler(limiter, h)
+	}
 
-		h = httputil.LogHandler(s.log, h)
-
+	handleAPI := func(path string, h http.Handler) {
 		// Allow requests from a local skycoin wallet
 		h = cors.New(cors.Options{
 			AllowedOrigins: []string{"http://127.0.0.1:6420"},
@@ -267,16 +274,18 @@ func (s *httpServer) setupMux() *http.ServeMux {
 	}
 
 	// API Methods
-	handleAPI("/api/bind", httputil.LogHandler(s.log, BindHandler(s)))
-	handleAPI("/api/status", httputil.LogHandler(s.log, StatusHandler(s)))
+	handleAPI("/api/bind", ratelimit(httputil.LogHandler(s.log, BindHandler(s))))
+	handleAPI("/api/status", ratelimit(httputil.LogHandler(s.log, StatusHandler(s))))
+	handleAPI("/api/config", ConfigHandler(s))
 
 	// Static files
-	mux.Handle("/", gziphandler.GzipHandler(http.FileServer(http.Dir(s.Config.StaticDir))))
+	mux.Handle("/", gziphandler.GzipHandler(http.FileServer(http.Dir(s.cfg.Web.StaticDir))))
 
 	return mux
 }
 
-func (s *httpServer) Shutdown() {
+// Shutdown stops the HTTPServer
+func (s *HTTPServer) Shutdown() {
 	close(s.quit)
 
 	var wg sync.WaitGroup
@@ -326,7 +335,7 @@ type bindRequest struct {
 // URI: /api/bind
 // Args:
 //    {"skyaddr": "...", "coin_type": "BTC"}
-func BindHandler(s *httpServer) http.HandlerFunc {
+func BindHandler(s *HTTPServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := logger.FromContext(ctx)
@@ -364,8 +373,10 @@ func BindHandler(s *httpServer) http.HandlerFunc {
 		case scanner.CoinTypeBTC:
 		case "":
 			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing coin_type"))
+			return
 		default:
 			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Invalid coin_type"))
+			return
 		}
 
 		log.Info()
@@ -374,13 +385,17 @@ func BindHandler(s *httpServer) http.HandlerFunc {
 			return
 		}
 
+		if !s.cfg.Web.APIEnabled {
+			errorResponse(ctx, w, http.StatusForbidden, errors.New("API disabled"))
+			return
+		}
+
 		log.Info("Calling service.BindAddress")
 
 		btcAddr, err := s.service.BindAddress(bindReq.SkyAddr)
 		if err != nil {
-			// TODO -- these could be internal server error, gateway error
 			log.WithError(err).Error("service.BindAddress failed")
-			httputil.ErrResponse(w, http.StatusBadRequest, err.Error())
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
 
@@ -409,7 +424,7 @@ type StatusResponse struct {
 // URI: /api/status
 // Args:
 //     skyaddr
-func StatusHandler(s *httpServer) http.HandlerFunc {
+func StatusHandler(s *HTTPServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := logger.FromContext(ctx)
@@ -434,13 +449,17 @@ func StatusHandler(s *httpServer) http.HandlerFunc {
 			return
 		}
 
+		if !s.cfg.Web.APIEnabled {
+			errorResponse(ctx, w, http.StatusForbidden, errors.New("API disabled"))
+			return
+		}
+
 		log.Info("Sending StatusRequest to teller")
 
 		depositStatuses, err := s.service.GetDepositStatuses(skyAddr)
 		if err != nil {
-			// TODO -- these could be internal server error, gateway error
 			log.WithError(err).Error("service.GetDepositStatuses failed")
-			httputil.ErrResponse(w, http.StatusBadRequest, err.Error())
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
 
@@ -455,6 +474,53 @@ func StatusHandler(s *httpServer) http.HandlerFunc {
 
 		if err := httputil.JSONResponse(w, StatusResponse{
 			Statuses: depositStatuses,
+		}); err != nil {
+			log.WithError(err).Error()
+		}
+	}
+}
+
+// ConfigResponse http response for /api/config
+type ConfigResponse struct {
+	Enabled                  bool   `json:"enabled"`
+	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
+	MaxBoundBtcAddresses     int    `json:"max_bound_btc_addrs"`
+	SkyBtcExchangeRate       string `json:"sky_btc_exchange_rate"`
+}
+
+// ConfigHandler returns the teller configuration
+// Method: GET
+// URI: /api/config
+func ConfigHandler(s *HTTPServer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
+		if !validMethod(ctx, w, r, []string{http.MethodGet}) {
+			return
+		}
+
+		// Convert the exchange rate to a skycoin balance string
+		rate := s.cfg.SkyExchanger.SkyBtcExchangeRate
+		dropletsPerBTC, err := exchange.CalculateBtcSkyValue(exchange.SatoshisPerBTC, rate)
+		if err != nil {
+			log.WithError(err).Error("exchange.CalculateBtcSkyValue failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
+
+		skyPerBTC, err := droplet.ToString(dropletsPerBTC)
+		if err != nil {
+			log.WithError(err).Error("droplet.ToString failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
+
+		if err := httputil.JSONResponse(w, ConfigResponse{
+			Enabled:                  s.cfg.Web.APIEnabled,
+			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
+			SkyBtcExchangeRate:       skyPerBTC,
+			MaxBoundBtcAddresses:     s.cfg.Teller.MaxBoundBtcAddresses,
 		}); err != nil {
 			log.WithError(err).Error()
 		}

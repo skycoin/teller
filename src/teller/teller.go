@@ -15,31 +15,23 @@ var (
 	ErrMaxBoundAddresses = errors.New("max bind reached")
 )
 
-// Config configures Teller
-type Config struct {
-	Teller config.Teller
-	HTTP   config.Web
-}
-
 // Teller provides the HTTP and teller service
 type Teller struct {
-	log logrus.FieldLogger
-	cfg Config // Teller configuration info
-
-	httpServ *httpServer // HTTP API
-
-	quit chan struct{}
-	done chan struct{}
+	cfg      config.Teller
+	log      logrus.FieldLogger
+	httpServ *HTTPServer // HTTP API
+	quit     chan struct{}
+	done     chan struct{}
 }
 
 // New creates a Teller
-func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen addrs.AddrGenerator, cfg Config) *Teller {
+func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen addrs.AddrGenerator, cfg config.Config) *Teller {
 	return &Teller{
-		cfg:  cfg,
+		cfg:  cfg.Teller,
 		log:  log.WithField("prefix", "teller"),
 		quit: make(chan struct{}),
 		done: make(chan struct{}),
-		httpServ: newHTTPServer(log, cfg.HTTP, &Service{
+		httpServ: NewHTTPServer(log, cfg, &Service{
 			cfg:       cfg.Teller,
 			exchanger: exchanger,
 			addrGen:   addrGen,

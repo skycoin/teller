@@ -32,6 +32,7 @@ wallet = "example.wlt" # REQUIRED: path to local hot wallet file
 
 [web]
 # behind_proxy = false  # This must be set to true when behind a proxy for ratelimiting to work
+# api_enabled = true
 # http_addr = "127.0.0.1:7071"
 # static_dir = "./web/build"
 # throttle_max = 5

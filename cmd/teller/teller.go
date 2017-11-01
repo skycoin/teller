@@ -264,10 +264,7 @@ func run() error {
 		return err
 	}
 
-	tellerServer := teller.New(log, exchangeClient, btcAddrMgr, teller.Config{
-		Teller: cfg.Teller,
-		HTTP:   cfg.Web,
-	})
+	tellerServer := teller.New(log, exchangeClient, btcAddrMgr, cfg)
 
 	// Run the service
 	background("tellerServer.Run", errC, tellerServer.Run)
