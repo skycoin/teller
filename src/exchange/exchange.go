@@ -17,7 +17,8 @@ import (
 )
 
 const (
-	satoshiPerBTC           int64 = 1e8
+	// SatoshisPerBTC is the number of satoshis per 1 BTC
+	SatoshisPerBTC          int64 = 1e8
 	txConfirmationCheckWait       = time.Second * 3
 )
 
@@ -407,9 +408,9 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 	log = log.WithField("skyAddr", di.SkyAddress)
 	log = log.WithField("skyRate", s.cfg.Rate)
 
-	skyAmt, err := calculateSkyValue(di.DepositValue, s.cfg.Rate)
+	skyAmt, err := CalculateBtcSkyValue(di.DepositValue, s.cfg.Rate)
 	if err != nil {
-		log.WithError(err).Error("calculateSkyValue failed")
+		log.WithError(err).Error("CalculateBtcSkyValue failed")
 		return nil, err
 	}
 

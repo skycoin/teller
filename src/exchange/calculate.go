@@ -10,10 +10,10 @@ import (
 	"github.com/skycoin/teller/src/util/mathutil"
 )
 
-// calculateSkyValue returns the amount of SKY (in droplets) to give for an
+// CalculateBtcSkyValue returns the amount of SKY (in droplets) to give for an
 // amount of BTC (in satoshis).
 // Rate is measured in SKY per BTC. It should be a decimal string
-func calculateSkyValue(satoshis int64, skyPerBTC string) (uint64, error) {
+func CalculateBtcSkyValue(satoshis int64, skyPerBTC string) (uint64, error) {
 	if satoshis < 0 {
 		return 0, errors.New("satoshis must be greater than or equal to 0")
 	}
@@ -24,7 +24,7 @@ func calculateSkyValue(satoshis int64, skyPerBTC string) (uint64, error) {
 	}
 
 	btc := decimal.New(satoshis, 0)
-	btcToSatoshi := decimal.New(satoshiPerBTC, 0)
+	btcToSatoshi := decimal.New(SatoshisPerBTC, 0)
 	btc = btc.DivRound(btcToSatoshi, 8)
 
 	sky := btc.Mul(rate)

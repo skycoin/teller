@@ -2,6 +2,25 @@
 
 [![Build Status](https://travis-ci.org/skycoin/teller.svg?branch=master)](https://travis-ci.org/skycoin/teller)
 
+<!-- MarkdownTOC autolink="true" bracket="round" depth="2" -->
+
+- [Releases & Branches](#releases--branches)
+- [Setup project](#setup-project)
+    - [Prerequisites](#prerequisites)
+    - [Summary of setup for development without btcd or skycoind](#summary-of-setup-for-development-without-btcd-or-skycoind)
+    - [Start teller-proxy](#start-teller-proxy)
+    - [Start teller](#start-teller)
+- [Service apis](#service-apis)
+    - [Bind](#bind)
+    - [Status](#status)
+    - [Config](#config)
+- [Code linting](#code-linting)
+- [Run tests](#run-tests)
+- [Database structure](#database-structure)
+
+<!-- /MarkdownTOC -->
+
+
 ## Releases & Branches
 
 Last stable release is in `master` branch, which will match the latest tagged release.
@@ -23,7 +42,7 @@ When a new release is published, `develop` will be merged to `master` then tagge
 
 ### Summary of setup for development without btcd or skycoind
 
-```bash
+```sh
 # Generate btc_addresses.json file. 'foobar' is an arbitrary seed, and 10 is an arbitrary number of addresses to generate
 go run cmd/tool/tool.go -json newbtcaddress foobar 10 > /tmp/btc_addresses.json
 
@@ -37,7 +56,7 @@ go run teller.go -proxy-pubkey=<proxy pubkey> -dummy -btc-addrs=/tmp/btc_address
 
 Proxy API is available on `localhost:7071`. API has two methods, `/api/bind` and `/api/status`, with one query arg `skyaddr`, e.g.:
 
-```bash
+```sh
 wget http://localhost:7071/api/bind?skyaddr=<skycoin addr>
 ```
 
@@ -45,14 +64,14 @@ wget http://localhost:7071/api/bind?skyaddr=<skycoin addr>
 
 *Note: the proxy must be run from the repo root, in order to serve static content from `./web/dist`*
 
-```bash
+```sh
 make proxy
 ```
 
 Once the proxy starts, it will show a `pubkey` value in the log.
 Use this for the `-proxy-pubkey` argument in `teller`.
 
-```bash
+```sh
 18:28:49 proxy.go:33: Pubkey: 03583bf0a6cbe7048023be5475aca693e192b4b5570bcc883c50f7d96f0a996eda
 ```
 
@@ -60,13 +79,13 @@ Use this for the `-proxy-pubkey` argument in `teller`.
 
 Install `skycoin-cli`
 
-```bash
+```sh
 make install-skycoin-cli
 ```
 
 add pregenerated bitcoin deposit address list in `btc_addresses.json`.
 
-```bash
+```sh
 {
     "btc_addresses": [
         "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
@@ -79,14 +98,14 @@ add pregenerated bitcoin deposit address list in `btc_addresses.json`.
 
 use `tool` to pregenerate bitcoin address list:
 
-```bash
+```sh
 cd cmd/tool
 go run tool.go -json newbtcaddress $seed $num
 ```
 
 Example:
 
-```bash
+```sh
 go run tool.go -json newbtcaddress 12323 3
 
 2Q5sR1EgTWesxX9853AnNpbBS1grEY1JXn3
@@ -96,7 +115,7 @@ go run tool.go -json newbtcaddress 12323 3
 
 generate json file Example:
 
-```bash
+```sh
 go run tool.go -json newbtcaddress 12323 3 > new_btc_addresses.json
 ```
 
@@ -138,7 +157,7 @@ config.json:
 
 run teller service
 
-```bash
+```sh
 go run teller.go -proxy-pubkey=$the_pubkey_of_proxy
 ```
 
@@ -152,14 +171,14 @@ If the API returns a non-200 response, the response body is the error message, i
 
 ### Bind
 
-```bash
+```sh
 Method: POST
 Accept: application/json
 Content-Type: application/json
 URI: /api/bind
 Request Body: {
     "skyaddr": "...",
-    "coin_type":"BTC"
+    "coin_type": "BTC"
 }
 ```
 
@@ -171,22 +190,22 @@ Options are: BTC [TODO: support more coin types].
 
 Example:
 
-```bash
+```sh
 curl -H  -X POST "Content-Type: application/json" -d '{"skyaddr":"...","coin_type":"BTC"}' http://localhost:7071/api/bind
 ```
 
-response:
+Response:
 
-```bash
+```json
 {
-    "deposit_address": "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp"
+    "deposit_address": "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp",
     "coin_type": "BTC",
 }
 ```
 
 ### Status
 
-```bash
+```sh
 Method: GET
 Content-Type: application/json
 URI: /api/status
@@ -209,13 +228,13 @@ Possible statuses are:
 
 Example:
 
-```bash
+```sh
 curl http://localhost:7071/api/status?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
 ```
 
-response:
+Response:
 
-```bash
+```json
 {
     "statuses": [
         {
@@ -237,20 +256,47 @@ response:
 }
 ```
 
-### Code linting
+### Config
 
-```bash
+```sh
+Method: GET
+Content-Type: application/json
+URI: /api/config
+```
+
+Returns teller configuration.
+
+Example:
+
+```sh
+curl http://localhost:7071/api/config
+```
+
+Response:
+
+```json
+{
+    "enabled": true,
+    "btc_confirmations_required": 1,
+    "max_bound_btc_addrs": 5,
+    "sky_btc_exchange_rate": "123.000000"
+}
+```
+
+## Code linting
+
+```sh
 make install-linters
 make lint
 ```
 
-### Run tests
+## Run tests
 
-```bash
+```sh
 make test
 ```
 
-### Database structure
+## Database structure
 
 ```
 Bucket: used_btc_address
