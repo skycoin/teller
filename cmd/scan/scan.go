@@ -7,10 +7,8 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-
 	"errors"
 	"strings"
-
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcutil"
 )
@@ -100,7 +98,6 @@ func ExistAddress(newAddr Address, walletAddresses []Address) bool {
 }
 
 func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address {
-
 	for i, addr := range addrs {
 		switch {
 		case addr.MaxScanBlock == 0 && blockID > 1:
@@ -108,7 +105,6 @@ func UpdateAddressInfo(addrs []Address, deps []Deposit, blockID int64) []Address
 			addrs[i].Txs = append(addr.Txs, txs...)
 			addrs[i].MaxScanBlock = blockID
 			addrs[i].MidScanBlock = blockID
-
 		case addr.MinScanBlock < addr.MaxScanBlock && addr.MinScanBlock == (blockID-1):
 			txs := FindTxs(addr, deps)
 			addrs[i].Txs = append(addr.Txs, txs...)
@@ -221,12 +217,12 @@ func NewBTCDClient(username, pass string) (*rpcclient.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return client, nil
 }
 
 func run() error {
 	//flags
-
 	user := flag.String("user", "myuser", "btcd username")
 	pass := flag.String("pass", "SomeDecentp4ssw0rd", "btcd password")
 	wallet := flag.String("wallet", "wallet.json", "wallet.json file")
