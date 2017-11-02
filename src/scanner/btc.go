@@ -214,8 +214,8 @@ func (s *BTCScanner) Run() error {
 // Shutdown shutdown the scanner
 func (s *BTCScanner) Shutdown() {
 	s.log.Info("Closing BTC scanner")
-	close(s.depositC)
 	close(s.quit)
+	close(s.depositC)
 	s.btcClient.Shutdown()
 	s.log.Info("Waiting for BTC scanner to stop")
 	<-s.done
