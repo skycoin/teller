@@ -232,7 +232,7 @@ func setDefaults() {
 	// Web
 	viper.SetDefault("web.http_addr", "127.0.0.1:7071")
 	viper.SetDefault("web.static_dir", "./web/build")
-	viper.SetDefault("web.throttle_max", int64(5))
+	viper.SetDefault("web.throttle_max", int64(60))
 	viper.SetDefault("web.throttle_duration", time.Minute)
 	viper.SetDefault("web.api_enabled", true)
 
@@ -240,10 +240,15 @@ func setDefaults() {
 	viper.SetDefault("admin_panel.host", "127.0.0.1:7711")
 }
 
-// Load loads the configuration from "./teller.*" where "*" is a
+// Load loads the configuration from "./$configName.*" where "*" is a
 // JSON, toml or yaml file (toml preferred).
-func Load() (Config, error) {
-	viper.SetConfigName("config")
+func Load(configName string) (Config, error) {
+	if strings.HasSuffix(configName, ".toml") {
+		configName = configName[:len(configName)-len(".toml")]
+	}
+
+	viper.SetConfigName(configName)
+	viper.SetConfigType("toml")
 	viper.AddConfigPath("$HOME/.teller-skycoin")
 	viper.AddConfigPath(".")
 

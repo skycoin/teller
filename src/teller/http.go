@@ -126,6 +126,13 @@ func (s *HTTPServer) Run() error {
 		return nil
 	}
 
+	if s.cfg.Web.HTTPAddr != "" {
+		log.Info(fmt.Sprintf("HTTP server listening on http://%s", s.cfg.Web.HTTPAddr))
+	}
+	if s.cfg.Web.HTTPSAddr != "" {
+		log.Info(fmt.Sprintf("HTTPS server listening on https://%s", s.cfg.Web.HTTPSAddr))
+	}
+
 	if s.cfg.Web.HTTPSAddr != "" {
 		log.Info("Using TLS")
 
@@ -160,6 +167,7 @@ func (s *HTTPServer) Run() error {
 				return s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey)
 			})
 		}
+
 		return handleListenErr(func() error {
 			var wg sync.WaitGroup
 			wg.Add(2)

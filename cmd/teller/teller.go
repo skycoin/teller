@@ -17,6 +17,7 @@ import (
 	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
 	"github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/pflag"
 
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/coin"
@@ -108,7 +109,10 @@ func main() {
 }
 
 func run() error {
-	cfg, err := config.Load()
+	configName := pflag.StringP("config", "c", "config", "name of configuration file")
+	pflag.Parse()
+
+	cfg, err := config.Load(*configName)
 	if err != nil {
 		return fmt.Errorf("Config error:\n%v", err)
 	}
