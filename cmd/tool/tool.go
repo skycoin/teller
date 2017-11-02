@@ -46,7 +46,7 @@ The commands are:
 
 func main() {
 	u, _ := user.Current()
-	dbFile := flag.String("db", filepath.Join(u.HomeDir, ".skycoin-teller/data.db"), "db file path")
+	dbFile := flag.String("db", filepath.Join(u.HomeDir, ".teller-skycoin/teller.db"), "db file path")
 	btcAddrFile := flag.String("btcfile", "../teller/btc_addresses.json", "btc addresses json file")
 	useJSON := flag.Bool("json", false, "Print newbtcaddress output as json")
 

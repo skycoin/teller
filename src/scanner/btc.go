@@ -66,7 +66,7 @@ func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg C
 		depositC:        make(chan DepositNote),
 		quit:            make(chan struct{}),
 		done:            make(chan struct{}),
-		scannedDeposits: make(chan Deposit, cfg.DepositBufferSize),
+		scannedDeposits: make(chan Deposit, depositBufferSize),
 	}, nil
 }
 

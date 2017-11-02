@@ -79,7 +79,7 @@ func TestCalculateSkyValue(t *testing.T) {
 	for _, tc := range cases {
 		name := fmt.Sprintf("satoshis=%d rate=%s", tc.satoshis, tc.rate)
 		t.Run(name, func(t *testing.T) {
-			result, err := calculateSkyValue(tc.satoshis, tc.rate)
+			result, err := CalculateBtcSkyValue(tc.satoshis, tc.rate)
 			if tc.err == nil {
 				require.NoError(t, err)
 				require.Equal(t, tc.result, result, "%d != %d", tc.result, result)
