@@ -30,6 +30,7 @@ type Address struct {
 
 type Tx struct {
 	TxHash        string `json:"tx_hash"`
+	Address       string `json:"btc_address"`
 	BlockHash     string `json:"block_hash"`
 	ParentHash    string `json:"parent_hash"`
 	BlockHeight   int64  `json:"block_height"`
@@ -60,10 +61,10 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 	for _, tx := range block.RawTx {
 		for i, addr := range tx.Vout {
 			depTx.TxHash = fmt.Sprintf("%s:%d", tx.Txid, i)
-
 			depTx.BitcoinAmount = strconv.FormatFloat(addr.Value, 'f', 8, 64)
 			depTx.SatoshiAmount = uint64(addr.Value * 100000000)
 			for _, newAddr := range addr.ScriptPubKey.Addresses {
+				depTx.Address = newAddr
 				deposits = append(deposits, Deposit{
 					Addr: newAddr,
 					Tx:   depTx,
