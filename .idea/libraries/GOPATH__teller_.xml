@@ -1,0 +1,69 @@
+<component name="libraryTable">
+  <library name="GOPATH &lt;teller&gt;">
+    <CLASSES>
+      <root url="file://$PROJECT_DIR$/../../../manifest" />
+      <root url="file://$PROJECT_DIR$/../../../tray-app" />
+      <root url="file://$PROJECT_DIR$/../../../.idea" />
+      <root url="file://$PROJECT_DIR$/../../../cx test" />
+      <root url="file://$PROJECT_DIR$/../../../viscript" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in" />
+      <root url="file://$PROJECT_DIR$/../../../go-ethereum" />
+      <root url="file://$PROJECT_DIR$/../../../vs2" />
+      <root url="file://$PROJECT_DIR$/../../../skywire" />
+      <root url="file://$PROJECT_DIR$/../../../lora-gateway" />
+      <root url="file://$PROJECT_DIR$/../../../old" />
+      <root url="file://$PROJECT_DIR$/../.." />
+      <root url="file://$PROJECT_DIR$/../../../teller" />
+      <root url="file://$PROJECT_DIR$/../../../golang.org" />
+      <root url="file://$PROJECT_DIR$/../../../cx" />
+      <root url="file://$PROJECT_DIR$/../../../gobot.io" />
+      <root url="file://$PROJECT_DIR$/../../../launchpad.net" />
+      <root url="file://$PROJECT_DIR$/../../../node_modules" />
+      <root url="file://$PROJECT_DIR$/../../../manifest cli app" />
+      <root url="file://$PROJECT_DIR$/../../../bbs" />
+      <root url="file://$PROJECT_DIR$/../../../google.golang.org" />
+      <root url="file://$PROJECT_DIR$/../../../gitlab.com" />
+      <root url="file://$PROJECT_DIR$/../../../cxweb" />
+      <root url="file://$PROJECT_DIR$/../../../server" />
+      <root url="file://$PROJECT_DIR$/../../../lora-app-server" />
+      <root url="file://$PROJECT_DIR$/../../../tellertest" />
+      <root url="file://$PROJECT_DIR$/../../../futbot" />
+      <root url="file://$PROJECT_DIR$/../../../gocsv" />
+      <root url="file://$PROJECT_DIR$/../../../manifestold" />
+    </CLASSES>
+    <SOURCES>
+      <root url="file://$PROJECT_DIR$/../../../manifest" />
+      <root url="file://$PROJECT_DIR$/../../../tray-app" />
+      <root url="file://$PROJECT_DIR$/../../../.idea" />
+      <root url="file://$PROJECT_DIR$/../../../cx test" />
+      <root url="file://$PROJECT_DIR$/../../../viscript" />
+      <root url="file://$PROJECT_DIR$/../../../gopkg.in" />
+      <root url="file://$PROJECT_DIR$/../../../go-ethereum" />
+      <root url="file://$PROJECT_DIR$/../../../vs2" />
+      <root url="file://$PROJECT_DIR$/../../../skywire" />
+      <root url="file://$PROJECT_DIR$/../../../lora-gateway" />
+      <root url="file://$PROJECT_DIR$/../../../old" />
+      <root url="file://$PROJECT_DIR$/../.." />
+      <root url="file://$PROJECT_DIR$/../../../teller" />
+      <root url="file://$PROJECT_DIR$/../../../golang.org" />
+      <root url="file://$PROJECT_DIR$/../../../cx" />
+      <root url="file://$PROJECT_DIR$/../../../gobot.io" />
+      <root url="file://$PROJECT_DIR$/../../../launchpad.net" />
+      <root url="file://$PROJECT_DIR$/../../../node_modules" />
+      <root url="file://$PROJECT_DIR$/../../../manifest cli app" />
+      <root url="file://$PROJECT_DIR$/../../../bbs" />
+      <root url="file://$PROJECT_DIR$/../../../google.golang.org" />
+      <root url="file://$PROJECT_DIR$/../../../gitlab.com" />
+      <root url="file://$PROJECT_DIR$/../../../cxweb" />
+      <root url="file://$PROJECT_DIR$/../../../server" />
+      <root url="file://$PROJECT_DIR$/../../../lora-app-server" />
+      <root url="file://$PROJECT_DIR$/../../../tellertest" />
+      <root url="file://$PROJECT_DIR$/../../../futbot" />
+      <root url="file://$PROJECT_DIR$/../../../gocsv" />
+      <root url="file://$PROJECT_DIR$/../../../manifestold" />
+    </SOURCES>
+    <excluded>
+      <root url="file://$PROJECT_DIR$" />
+    </excluded>
+  </library>
+</component>

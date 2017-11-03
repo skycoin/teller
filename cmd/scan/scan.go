@@ -10,8 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"strconv"
-
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcutil"
 )
@@ -61,7 +59,12 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 	for _, tx := range block.RawTx {
 		for i, addr := range tx.Vout {
 			depTx.TxHash = fmt.Sprintf("%s:%d", tx.Txid, i)
-			depTx.BitcoinAmount = strconv.FormatFloat(addr.Value, 'f', 8, 64)
+			amount, err := btcutil.NewAmount(addr.Value)
+			if err != nil {
+				return nil, err
+			}
+
+			depTx.BitcoinAmount = amount.String()
 			depTx.SatoshiAmount = uint64(addr.Value * 100000000)
 			for _, newAddr := range addr.ScriptPubKey.Addresses {
 				depTx.Address = newAddr
@@ -83,7 +86,6 @@ func FindTxs(addr Address, deps []Deposit) []Tx {
 			txs = append(txs, dep.Tx)
 		}
 	}
-
 	return txs
 }
 
