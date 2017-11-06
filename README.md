@@ -1,3 +1,5 @@
+![teller logo](https://user-images.githubusercontent.com/26845312/32426949-3682cd18-c283-11e7-9067-55084310064d.png)
+
 # Teller
 
 [![Build Status](https://travis-ci.org/skycoin/teller.svg?branch=master)](https://travis-ci.org/skycoin/teller)
