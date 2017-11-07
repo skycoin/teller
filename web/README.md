@@ -4,39 +4,41 @@ https://event.skycoin.net
 
 ## Setup
 
-1. Install [nvm](https://github.com/creationix/nvm).
+1. Install npm
 
-2. Install and use the node version specified in `.nvmrc`:
+2. Install Yarn:
 
-  ```shell
-  $ nvm install && nvm use
-  ```
+```sh
+npm install -g yarn
+```
 
-3. Install Yarn:
+3. Install dependencies:
 
-  ```shell
-  $ npm install -g yarn
-  ```
-
-4. Install dependencies:
-
-  ```shell
-  $ yarn
-  ```
+```sh
+yarn
+```
 
 ## Development
 
 Start the development server:
 
-```shell
-$ yarn start
+```sh
+yarn start
 ```
 
 Run tests:
 
-```shell
-$ yarn test
+```sh
+yarn test
 
 # Generate coverage report
-$ yarn test -- --coverage
+yarn test -- --coverage
+```
+
+## Build release
+
+Changes should be compiled and committed to the repo.
+
+```sh
+yarn build
 ```
