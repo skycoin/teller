@@ -57,10 +57,11 @@ type SkyRPC struct {
 
 // BtcRPC config for btcrpc
 type BtcRPC struct {
-	Server string `mapstructure:"server"`
-	User   string `mapstructure:"user"`
-	Pass   string `mapstructure:"pass"`
-	Cert   string `mapstructure:"cert"`
+	Server     string `mapstructure:"server"`
+	User       string `mapstructure:"user"`
+	Pass       string `mapstructure:"pass"`
+	Cert       string `mapstructure:"cert"`
+	Websockets bool   `mapstructure:"websockets"`
 }
 
 // BtcScanner config for BTC scanner
@@ -151,8 +152,9 @@ func (c Config) Validate() error {
 		conn, err := net.Dial("tcp", c.SkyRPC.Address)
 		if err != nil {
 			oops(fmt.Sprintf("sky_rpc.address connect failed: %v", err))
+		} else {
+			conn.Close()
 		}
-		conn.Close()
 
 		if c.BtcRPC.Server == "" {
 			oops("btc_rpc.server missing")
