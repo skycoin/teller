@@ -1,10 +1,7 @@
 .DEFAULT_GOAL := help
-.PHONY: proxy teller install-skycoin-cli test lint check format cover help
+.PHONY: teller install-skycoin-cli test lint check format cover help
 
 PACKAGES = $(shell find ./src -type d -not -path '\./src')
-
-proxy:  ## Run the teller proxy. To add arguments, do 'make ARGS="--foo" proxy'.
-	go run cmd/proxy/proxy.go ${ARGS}
 
 teller: SKYCOIN-CLI-exists ## Run teller. To add arguments, do 'make ARGS="--foo" teller'.
 	go run cmd/teller/teller.go ${ARGS}

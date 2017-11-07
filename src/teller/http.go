@@ -60,10 +60,9 @@ type HTTPServer struct {
 // NewHTTPServer creates an HTTPServer
 func NewHTTPServer(log logrus.FieldLogger, cfg config.Config, service *Service) *HTTPServer {
 	return &HTTPServer{
-		cfg: cfg,
+		cfg: cfg.Redacted(),
 		log: log.WithFields(logrus.Fields{
 			"prefix": "teller.http",
-			"config": cfg,
 		}),
 		service: service,
 		quit:    make(chan struct{}),
@@ -74,7 +73,7 @@ func NewHTTPServer(log logrus.FieldLogger, cfg config.Config, service *Service) 
 // Run runs the HTTPServer
 func (s *HTTPServer) Run() error {
 	log := s.log
-	log.Info("HTTP service start")
+	log.WithField("config", s.cfg).Info("HTTP service start")
 	defer log.Info("HTTP service closed")
 	defer close(s.done)
 
@@ -164,7 +163,11 @@ func (s *HTTPServer) Run() error {
 
 		if s.cfg.Web.HTTPAddr == "" {
 			return handleListenErr(func() error {
-				return s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey)
+				if err := s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil && err != http.ErrServerClosed {
+					log.WithError(err).Error("ListenAndServe error")
+					return err
+				}
+				return nil
 			})
 		}
 
@@ -174,7 +177,7 @@ func (s *HTTPServer) Run() error {
 
 			go func() {
 				defer wg.Done()
-				if err := s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil {
+				if err := s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil && err != http.ErrServerClosed {
 					log.WithError(err).Error("ListenAndServeTLS error")
 					errC <- err
 				}
@@ -182,7 +185,7 @@ func (s *HTTPServer) Run() error {
 
 			go func() {
 				defer wg.Done()
-				if err := s.httpListener.ListenAndServe(); err != nil {
+				if err := s.httpListener.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 					log.WithError(err).Println("ListenAndServe error")
 					errC <- err
 				}
