@@ -13,6 +13,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/sirupsen/logrus"
 )
 
@@ -82,6 +83,7 @@ func (s *BTCScanner) Run() error {
 	var wg sync.WaitGroup
 
 	// Load unprocessed deposits
+	log.Info("Loading unprocessed deposits")
 	if err := s.loadUnprocessedDeposits(); err != nil {
 		if err == errQuit {
 			return nil
@@ -92,9 +94,17 @@ func (s *BTCScanner) Run() error {
 	}
 
 	// Load the initial scan block
+	log.Info("Loading the initial scan block")
 	initialBlock, err := s.getBlockAtHeight(s.cfg.InitialScanHeight)
 	if err != nil {
 		log.WithError(err).Error("getBlockAtHeight failed")
+
+		// If teller is shutdown while this call is in progress, the rpcclient
+		// returns ErrClientShutdown. This is an expected condition and not
+		// an error, so return nil
+		if err == rpcclient.ErrClientShutdown {
+			return nil
+		}
 		return err
 	}
 
@@ -106,6 +116,7 @@ func (s *BTCScanner) Run() error {
 	// This loop scans for a new BTC block every ScanPeriod.
 	// When a new block is found, it compares the block against our scanning
 	// deposit addresses. If a matching deposit is found, it saves it to the DB.
+	log.Info("Launching scan goroutine")
 	wg.Add(1)
 	go func(block *btcjson.GetBlockVerboseResult) {
 		defer wg.Done()
@@ -186,6 +197,7 @@ func (s *BTCScanner) Run() error {
 	// This loop gets the head deposit value (from an array saved in the db)
 	// It sends each head to depositC, which is processed by Exchange.
 	// The loop blocks until the Exchange writes to the ErrC channel
+	log.Info("Launching deposit pipe goroutine")
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

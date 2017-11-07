@@ -19,6 +19,7 @@ btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses f
 user = "" # REQUIRED
 pass = "" # REQUIRED
 cert = "" # REQUIRED
+# websockets = false
 
 [btc_scanner]
 # scan_period = 20s

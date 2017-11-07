@@ -73,6 +73,7 @@ Description of the config file:
 * `btc_rpc.user` [string]: btcd RPC username.
 * `btc_rpc.pass` [string]: btcd RPC password.
 * `btc_rpc.cert` [string]: btcd RPC certificate file. See [setup btcd](#setup-btcd)
+* `btc_rpc.cert` [bool]: Use a websocket connection instead of HTTP POST requests.
 * `btc_scanner.scan_period` [duration]: How often to scan for blocks.
 * `btc_scanner.initial_scan_height` [int]: Begin scanning from this BTC blockchain height.
 * `btc_scanner.confirmations_required` [int]: Number of confirmations required before sending skycoins for a BTC deposit.
