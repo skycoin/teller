@@ -1,1 +1,1 @@
-export { checkStatus, getAddress } from './distributionAPI';
+export { checkStatus, getAddress, getConfig } from './distributionAPI';
