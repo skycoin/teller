@@ -126,6 +126,19 @@ type AdminPanel struct {
 	Host string `mapstructure:"host"`
 }
 
+// Redacted returns a copy of the config with sensitive information redacted
+func (c Config) Redacted() Config {
+	if c.BtcRPC.User != "" {
+		c.BtcRPC.User = "<redacted>"
+	}
+
+	if c.BtcRPC.Pass != "" {
+		c.BtcRPC.Pass = "<redacted>"
+	}
+
+	return c
+}
+
 // Validate validates the config
 func (c Config) Validate() error {
 	var errs []string

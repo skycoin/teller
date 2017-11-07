@@ -31,7 +31,7 @@ func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen addrs.Add
 		log:  log.WithField("prefix", "teller"),
 		quit: make(chan struct{}),
 		done: make(chan struct{}),
-		httpServ: NewHTTPServer(log, cfg, &Service{
+		httpServ: NewHTTPServer(log, cfg.Redacted(), &Service{
 			cfg:       cfg.Teller,
 			exchanger: exchanger,
 			addrGen:   addrGen,
