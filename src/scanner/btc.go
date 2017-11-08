@@ -120,6 +120,7 @@ func (s *BTCScanner) Run() error {
 	wg.Add(1)
 	go func(block *btcjson.GetBlockVerboseResult) {
 		defer wg.Done()
+		defer log.Info("Scan goroutine exited")
 
 		// Wait before retrying again
 		// Returns true if the scanner quit
@@ -190,7 +191,18 @@ func (s *BTCScanner) Run() error {
 			}).Info("Scanned deposits from block")
 
 			// Wait for the next block
-			block = s.waitForNextBlock(block)
+			block, err = s.waitForNextBlock(block)
+			if err != nil {
+				if err == errQuit {
+					return
+				}
+
+				log.WithError(err).Error("s.waitForNextBlock failed")
+				if wait() != nil {
+					return
+				}
+				continue
+			}
 		}
 	}(initialBlock)
 
@@ -201,6 +213,7 @@ func (s *BTCScanner) Run() error {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer log.Info("Deposit pipe goroutine exited")
 		for {
 			select {
 			case <-s.quit:
@@ -350,8 +363,8 @@ func (s *BTCScanner) getBlockAtHeight(height int64) (*btcjson.GetBlockVerboseRes
 
 // getNextBlock returns the next block from another block, return nil if next block does not exist
 func (s *BTCScanner) getNextBlock(block *btcjson.GetBlockVerboseResult) (*btcjson.GetBlockVerboseResult, error) {
-	if block == nil || block.NextHash == "" {
-		return nil, nil
+	if block.NextHash == "" {
+		return nil, errors.New("Block.NextHash is empty")
 	}
 
 	nxtHash, err := chainhash.NewHashFromStr(block.NextHash)
@@ -360,14 +373,44 @@ func (s *BTCScanner) getNextBlock(block *btcjson.GetBlockVerboseResult) (*btcjso
 		return nil, err
 	}
 
+	s.log.WithField("nextHash", nxtHash.String()).Debug("Calling s.btcClient.GetBlockVerboseTx")
 	return s.btcClient.GetBlockVerboseTx(nxtHash)
 }
 
 // waitForNextBlock scans for the next block until it is available
-func (s *BTCScanner) waitForNextBlock(block *btcjson.GetBlockVerboseResult) *btcjson.GetBlockVerboseResult {
+func (s *BTCScanner) waitForNextBlock(block *btcjson.GetBlockVerboseResult) (*btcjson.GetBlockVerboseResult, error) {
 	log := s.log.WithField("blockHash", block.Hash)
 	log = log.WithField("blockHeight", block.Height)
 	log.Debug("Waiting for the next block")
+
+	if block.NextHash == "" {
+		log.Info("Block.NextHash is missing, rescanning this block until NextHash is set")
+
+		hash, err := chainhash.NewHashFromStr(block.Hash)
+		if err != nil {
+			log.WithError(err).Error("chainhash.NewHashFromStr failed")
+			return nil, err
+		}
+
+		for {
+			var err error
+			block, err = s.btcClient.GetBlockVerboseTx(hash)
+			if err != nil {
+				log.WithError(err).Error("btcClient.GetBlockVerboseTx failed, retrying")
+			}
+
+			if err != nil || block.NextHash == "" {
+				select {
+				case <-s.quit:
+					return nil, errQuit
+				case <-time.After(s.cfg.ScanPeriod):
+					continue
+				}
+			}
+
+			break
+		}
+	}
 
 	for {
 		nextBlock, err := s.getNextBlock(block)
@@ -380,13 +423,18 @@ func (s *BTCScanner) waitForNextBlock(block *btcjson.GetBlockVerboseResult) *btc
 		if err != nil || nextBlock == nil {
 			select {
 			case <-s.quit:
-				return nil
+				return nil, errQuit
 			case <-time.After(s.cfg.ScanPeriod):
 				continue
 			}
 		}
 
-		return nextBlock
+		log.WithFields(logrus.Fields{
+			"hash":   nextBlock.Hash,
+			"height": nextBlock.Height,
+		}).Debug("Found nextBlock")
+
+		return nextBlock, nil
 	}
 }
 

@@ -41,6 +41,10 @@ type dummyBtcrpcclient struct {
 	blockVerboseTxError          error
 	blockVerboseTxErrorCallCount int
 	blockVerboseTxCallCount      int
+
+	// used for testScannerBlockNextHashAppears
+	blockNextHashMissingOnceAt int64
+	hasSetMissingHash          bool
 }
 
 func openDummyBtcDB(t *testing.T) *bolt.DB {
@@ -85,6 +89,9 @@ func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.
 	}
 
 	if block.Height == dbc.blockCount {
+		block.NextHash = ""
+	} else if block.Height == dbc.blockNextHashMissingOnceAt && !dbc.hasSetMissingHash {
+		dbc.hasSetMissingHash = true
 		block.NextHash = ""
 	}
 
@@ -304,6 +311,19 @@ func testScannerScanBlockFailureRetry(t *testing.T, btcDB *bolt.DB) {
 	// Return an error on the 2nd call to GetBlockVerboseTx
 	scr.btcClient.(*dummyBtcrpcclient).blockVerboseTxError = errors.New("get block verbose tx error")
 	scr.btcClient.(*dummyBtcrpcclient).blockVerboseTxErrorCallCount = 2
+
+	testScannerRun(t, scr)
+}
+
+func testScannerBlockNextHashAppears(t *testing.T, btcDB *bolt.DB) {
+	// Test that when a block has no NextHash, the scanner waits until it has
+	// one, then resumes normally
+	scr, shutdown := setupScanner(t, btcDB)
+	defer shutdown()
+
+	// The block at height 235208 will lack a NextHash one time
+	// The scanner will continue and process everything normally
+	scr.btcClient.(*dummyBtcrpcclient).blockNextHashMissingOnceAt = 235208
 
 	testScannerRun(t, scr)
 }
@@ -532,5 +552,12 @@ func TestScanner(t *testing.T) {
 			t.Parallel()
 		}
 		testScannerDuplicateDepositScans(t, btcDB)
+	})
+
+	t.Run("BlockNextHashAppears", func(t *testing.T) {
+		if parallel {
+			t.Parallel()
+		}
+		testScannerBlockNextHashAppears(t, btcDB)
 	})
 }
