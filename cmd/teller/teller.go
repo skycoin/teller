@@ -126,7 +126,7 @@ func run() error {
 
 	log := rusloggger.WithField("prefix", "teller")
 
-	log.WithField("config", cfg).Info("Loaded teller config")
+	log.WithField("config", cfg.Redacted()).Info("Loaded teller config")
 
 	if cfg.Profile {
 		// Start gops agent, for profiling

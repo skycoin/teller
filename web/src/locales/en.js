@@ -1,13 +1,10 @@
 export default {
   header: {
     navigation: {
-      distribution: 'Distribution',
-      distributionEvent: 'Distribution event',
       whitepapers: 'Whitepapers',
       downloads: 'Downloads',
       explorer: 'Explorer',
       blog: 'Blog',
-      buy: 'Buy Skycoin',
       roadmap: 'Roadmap',
     },
   },
@@ -16,11 +13,9 @@ export default {
     explore: 'Explore',
     community: 'Community',
     wallet: 'Get Wallet',
-    buy: 'Buy Skycoin',
     infographics: 'Infographics',
     whitepapers: 'Whitepapers',
     blockchain: 'Blockchain Explorer',
-    distribution: 'Distribution',
     blog: 'Blog',
     twitter: 'Twitter',
     reddit: 'Reddit',
@@ -39,21 +34,20 @@ export default {
     discord: 'Discord',
   },
   distribution: {
-    title: 'Skycoin distribution event',
-    heading: 'Skycoin distribution event',
-    headingEnded: 'The previous distribution event finished on',
-    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>, 
-      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the 
-      <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a> 
-      to learn when the next event begins.`,
+    title: 'Skycoin OTC',
+    heading: 'Skycoin OTC',
+    headingEnded: 'Skycoin OTC is currently closed',
+    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>,
+      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the
+      <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a>.`,
     instructions: `
-<p>To participate in the distribution event:</p>
+<p>To use the Skycoin OTC:</p>
 
 <ul>
   <li>Enter your Skycoin address below</li>
   <li>You&apos;ll receive a unique Bitcoin address to purchase SKY</li>
-  <li>Send BTC to the address—you&apos;ll receive 1 SKY per 0.002 BTC</li>
-  <li><strong>Only send a multiple of 0.002BTC. You must send at least 0.002BTC. SKY is sent in whole numbers; fractional SKY is not sent.</strong></li>
+  <li>Send BTC to the address</li>
+  <li><strong>Only send a multiple of the SKY/BTC rate. SKY is sent in whole numbers; fractional SKY is not sent.</strong></li>
 </ul>
 
 <p>You can check the status of your order by entering your address and selecting <strong>Check status</strong>.</p>
