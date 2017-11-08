@@ -117,7 +117,7 @@ func run() error {
 		return fmt.Errorf("Config error:\n%v", err)
 	}
 
-	// init logger
+	// Init logger
 	rusloggger, err := logger.NewLogger(cfg.LogFilename, cfg.Debug)
 	if err != nil {
 		fmt.Println("Failed to create Logrus logger:", err)
@@ -126,10 +126,10 @@ func run() error {
 
 	log := rusloggger.WithField("prefix", "teller")
 
-	log.WithField("config", cfg).Info("Loaded teller config")
+	log.WithField("config", cfg.Redacted()).Info("Loaded teller config")
 
 	if cfg.Profile {
-		// start gops agent, for profilling
+		// Start gops agent, for profiling
 		if err := agent.Listen(&agent.Options{
 			NoShutdownCleanup: true,
 		}); err != nil {
@@ -141,15 +141,14 @@ func run() error {
 	quit := make(chan struct{})
 	go catchInterrupt(quit)
 
-	// load config
-
+	// Load config
 	appDir, err := createAppDirIfNotExist(defaultAppDir)
 	if err != nil {
 		log.WithError(err).Error("Create AppDir failed")
 		return err
 	}
 
-	// open db
+	// Open db
 	dbPath := filepath.Join(appDir, dbName)
 	db, err := bolt.Open(dbPath, 0700, &bolt.Options{
 		Timeout: 1 * time.Second,
@@ -159,29 +158,33 @@ func run() error {
 		return err
 	}
 
-	errC := make(chan error)
+	errC := make(chan error, 20)
 	wg := sync.WaitGroup{}
 
 	background := func(name string, errC chan<- error, f func() error) {
+		log.Infof("Backgrounding task %s", name)
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			err := f()
 			if err != nil {
-				log.WithError(err).Errorf("%s failed", name)
+				log.WithError(err).Errorf("Backgrounded task %s failed", name)
 				errC <- err
+
+			} else {
+				log.Infof("Backgrounded task %s shutdown", name)
 			}
 		}()
 	}
 
 	var btcScanner *scanner.BTCScanner
-	var scanRPC scanner.Scanner
+	var scanService scanner.Scanner
 	var sendService *sender.SendService
 	var sendRPC sender.Sender
 
 	if cfg.DummyMode {
 		log.Info("btcd and skyd disabled, running in dummy mode")
-		scanRPC = &dummyBtcScanner{log: log}
+		scanService = &dummyBtcScanner{log: log}
 		sendRPC = &dummySkySender{log: log}
 	} else {
 		// create btc rpc client
@@ -196,6 +199,7 @@ func run() error {
 			User:         cfg.BtcRPC.User,
 			Pass:         cfg.BtcRPC.Pass,
 			Certificates: certs,
+			HTTPPostMode: !cfg.BtcRPC.Websockets,
 		}, nil)
 		if err != nil {
 			log.WithError(err).Error("Connect btcd failed")
@@ -223,6 +227,8 @@ func run() error {
 
 		background("btcScanner.Run", errC, btcScanner.Run)
 
+		scanService = btcScanner
+
 		skyRPC, err := sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
 		if err != nil {
 			log.WithError(err).Error("sender.NewRPC failed")
@@ -244,7 +250,7 @@ func run() error {
 		return err
 	}
 
-	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanRPC, sendRPC, exchange.Config{
+	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanService, sendRPC, exchange.Config{
 		Rate: cfg.SkyExchanger.SkyBtcExchangeRate,
 		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
 	})
@@ -277,7 +283,7 @@ func run() error {
 	monitorCfg := monitor.Config{
 		Addr: cfg.AdminPanel.Host,
 	}
-	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, exchangeClient, scanRPC)
+	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, exchangeClient, btcScanner)
 
 	background("monitorService.Run", errC, monitorService.Run)
 
@@ -297,16 +303,6 @@ func run() error {
 		monitorService.Shutdown()
 	}
 
-	// close the skycoin send service
-	if sendService != nil {
-		log.Info("Shutting down sendService")
-		sendService.Shutdown()
-	}
-
-	// close exchange service
-	log.Info("Shutting down exchangeClient")
-	exchangeClient.Shutdown()
-
 	// close the teller service
 	log.Info("Shutting down tellerServer")
 	tellerServer.Shutdown()
@@ -315,6 +311,16 @@ func run() error {
 	if btcScanner != nil {
 		log.Info("Shutting down btcScanner")
 		btcScanner.Shutdown()
+	}
+
+	// close exchange service
+	log.Info("Shutting down exchangeClient")
+	exchangeClient.Shutdown()
+
+	// close the skycoin send service
+	if sendService != nil {
+		log.Info("Shutting down sendService")
+		sendService.Shutdown()
 	}
 
 	log.Info("Waiting for goroutines to exit")

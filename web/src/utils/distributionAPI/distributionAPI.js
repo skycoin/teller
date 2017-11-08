@@ -10,6 +10,11 @@ import axios from 'axios';
 //     .catch(() => {
 //       throw new Error(`Unable to check status for ${skyAddress}`)
 //     });
+//
+
+export const getConfig = () =>
+  axios.get('/api/config')
+    .then(response => response.data);
 
 export const checkStatus = skyAddress =>
   axios.get(`/api/status?skyaddr=${skyAddress}`)
@@ -17,7 +22,7 @@ export const checkStatus = skyAddress =>
     .catch((error) => { throw new Error(error.response.data); });
 
 export const getAddress = skyAddress =>
-  axios.post('/api/bind', { skyaddr: skyAddress, coin_type: "BTC" }, {
+  axios.post('/api/bind', { skyaddr: skyAddress, coin_type: 'BTC' }, {
     headers: {
       'Content-Type': 'application/json',
     },

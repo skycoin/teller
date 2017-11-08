@@ -1,22 +1,32 @@
+![teller logo](https://user-images.githubusercontent.com/26845312/32426949-3682cd18-c283-11e7-9067-55084310064d.png)
+
 # Teller
 
 [![Build Status](https://travis-ci.org/skycoin/teller.svg?branch=master)](https://travis-ci.org/skycoin/teller)
 
-<!-- MarkdownTOC autolink="true" bracket="round" depth="2" -->
+<!-- MarkdownTOC autolink="true" bracket="round" depth="3" -->
 
 - [Releases & Branches](#releases--branches)
 - [Setup project](#setup-project)
     - [Prerequisites](#prerequisites)
-    - [Summary of setup for development without btcd or skycoind](#summary-of-setup-for-development-without-btcd-or-skycoind)
-    - [Start teller-proxy](#start-teller-proxy)
-    - [Start teller](#start-teller)
-- [Service apis](#service-apis)
+    - [Configure teller](#configure-teller)
+    - [Running teller without btcd or skyd](#running-teller-without-btcd-or-skyd)
+    - [Generate BTC addresses](#generate-btc-addresses)
+    - [Setup skycoin hot wallet](#setup-skycoin-hot-wallet)
+    - [Run teller](#run-teller)
+    - [Setup skycoin node](#setup-skycoin-node)
+    - [Setup btcd](#setup-btcd)
+        - [Configure btcd](#configure-btcd)
+        - [Obtain btcd RPC certificate](#obtain-btcd-rpc-certificate)
+    - [Using a reverse proxy to expose teller](#using-a-reverse-proxy-to-expose-teller)
+- [API](#api)
     - [Bind](#bind)
     - [Status](#status)
     - [Config](#config)
 - [Code linting](#code-linting)
 - [Run tests](#run-tests)
 - [Database structure](#database-structure)
+- [Frontend development](#frontend-development)
 
 <!-- /MarkdownTOC -->
 
@@ -37,10 +47,55 @@ When a new release is published, `develop` will be merged to `master` then tagge
 
 * Have go1.8+ installed
 * Have `GOPATH` env set
-* Have btcd started
-* Have skycoin node started
+* [Setup skycoin node](#setup-skycoin-node)
+* [Setup btcd](#setup-btcd)
 
-### Summary of setup for development without btcd or skycoind
+### Configure teller
+
+The config file can be specified with `-c` or `--config` from the command line.
+
+The config file uses the [toml](https://github.com/toml-lang/toml) format.
+
+Teller's default config is `config.toml`. However, you should not edit this
+file. It is an example. Copy this config file and edit it for your needs,
+then use the `-c` or `--config` flag to load your custom config.
+
+Description of the config file:
+
+* `debug` [bool]: Enable debug logging.
+* `dummy_mode` [bool]: Run in ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind).
+* `profile` [bool]: Enable gops profiler.
+* `log_filename` [string]: Log file.
+* `btc_addresses` [string]: Filepath of the btc_addresses.json file. See [generate BTC addresses](#generate-btc-addresses).
+* `teller.max_bound_btc_addrs` [int]: Maximum number of BTC addresses allowed to bind per skycoin address.
+* `sky_rpc.address` [string]: Host address of the skycoin node. See [setup skycoin node](#setup-skycoin-node).
+* `btc_rpc.server` [string]: Host address of the btcd node.
+* `btc_rpc.user` [string]: btcd RPC username.
+* `btc_rpc.pass` [string]: btcd RPC password.
+* `btc_rpc.cert` [string]: btcd RPC certificate file. See [setup btcd](#setup-btcd)
+* `btc_rpc.cert` [bool]: Use a websocket connection instead of HTTP POST requests.
+* `btc_scanner.scan_period` [duration]: How often to scan for blocks.
+* `btc_scanner.initial_scan_height` [int]: Begin scanning from this BTC blockchain height.
+* `btc_scanner.confirmations_required` [int]: Number of confirmations required before sending skycoins for a BTC deposit.
+* `sky_exchanger.sky_btc_exchange_rate` [string]: How much SKY to send per BTC. This can be written as an integer, float, or a rational fraction.
+* `sky_exchanger.wallet` [string]: Filepath of the skycoin hot wallet. See [setup skycoin hot wallet](#setup-skycoin-hot-wallet).
+* `sky_exchanger.tx_confirmation_check_wait` [duration]: How often to check for a sent skycoin transaction's confirmation.
+* `web.behind_proxy` [bool]: Set true if running behind a proxy.
+* `web.api_enabled` [bool]: Set true to enable the teller API. Disable it if you want to expose the frontend homepage, but not allow people to access the teller service.
+* `web.static_dir` [string]: Location of static web assets.
+* `web.throttle_max` [int]: Maximum number of API requests allowed per `web.throttle_duration`.
+* `web.throttle_duration` [int]: Duration of throttling, pairs with `web.throttle_max`.
+* `web.http_addr` [string]: Host address to expose the HTTP listener on.
+* `web.https_addr` [string] Host address to expose the HTTPS listener on.
+* `web.auto_tls_host` [string]: Hostname/domain to install an automatic HTTPS certificate for, using Let's Encrypt.
+* `web.tls_cert` [string]: Filepath to TLS certificate. Cannot be used with `web.auto_tls_host`.
+* `web.tls_key` [string]: Filepath to TLS key. Cannot be used with `web.auto_tls_host`.
+
+### Running teller without btcd or skyd
+
+Teller can be run in "dummy mode". It will ignore btcd and skycoind.
+It can still provide addresses via `/api/bind` and report status with `/api/status`,
+but it will not process any deposits or send skycoins.
 
 ```sh
 # Generate btc_addresses.json file. 'foobar' is an arbitrary seed, and 10 is an arbitrary number of addresses to generate
@@ -60,108 +115,116 @@ Proxy API is available on `localhost:7071`. API has two methods, `/api/bind` and
 wget http://localhost:7071/api/bind?skyaddr=<skycoin addr>
 ```
 
-### Start teller-proxy
+### Generate BTC addresses
 
-*Note: the proxy must be run from the repo root, in order to serve static content from `./web/dist`*
-
-```sh
-make proxy
-```
-
-Once the proxy starts, it will show a `pubkey` value in the log.
-Use this for the `-proxy-pubkey` argument in `teller`.
+Use `tool` to pregenerate a list of bitcoin addresses in a JSON format parseable by teller:
 
 ```sh
-18:28:49 proxy.go:33: Pubkey: 03583bf0a6cbe7048023be5475aca693e192b4b5570bcc883c50f7d96f0a996eda
+go run cmd/tool/tool.go -json newbtcaddress $seed $num > addresses.json
 ```
 
-### Start teller
+Name the `addresses.json` file whatever you want.  Use this file as the
+value of `btc_addresses` in the config file.
 
-Install `skycoin-cli`
+### Setup skycoin hot wallet
+
+Use the skycoin client or CLI to create a wallet. Copy this wallet file to
+the machine that teller is running on, and specify its path in the config file
+under `sky_exchanger` section, `wallet` parameter.
+
+Load this wallet with a sufficient balance for your OTC.
+
+If the balance is insufficient, the skycoin sender will repeatedly try to send
+coins for a deposit until the balance becomes sufficient.
+
+### Run teller
+
+*Note: teller must be run from the repo root, in order to serve static content from `./web/dist`*
 
 ```sh
-make install-skycoin-cli
+make teller
 ```
 
-add pregenerated bitcoin deposit address list in `btc_addresses.json`.
+### Setup skycoin node
+
+See https://github.com/skycoin/skycoin#installation
+
+Use the skycoin daemon's RPC interface address as the value of `sky_rpc.address`
+in the config.  The default is already configured to `127.0.0.1:6430` so there
+is no need to set this value if the skycoin daemon is run with defaults.
+
+*Note: skycoin daemon RPC does not use encryption so only run it on the same machine
+as teller or on a secure LAN*
+
+### Setup btcd
+
+Follow the instructions from the btcd README to install btcd:
+https://github.com/btcsuite/btcd#linuxbsdmacosxposix---build-from-source
+
+Update your `PATH` environment to include `$GOPATH/bin`. The default `$GOPATH` is `~/go`.
+
+Then, run `btcd`:
 
 ```sh
-{
-    "btc_addresses": [
-        "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
-        "14FG8vQnmK6B7YbLSr6uC5wfGY78JFNCYg",
-        "17mMWfVWq3pSwz7BixNmfce5nxaD73gRjh",
-        "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp"
-    ]
-}
+btcd
 ```
 
-use `tool` to pregenerate bitcoin address list:
+This creates a folder `~/.btcd`.
+
+#### Configure btcd
+
+btcd includes a reference conf file: https://github.com/btcsuite/btcd/blob/master/sample-btcd.conf
+
+In `~/.btcd/btcd.conf`, edit the following values:
+
+* `rpcuser` - use a long, random, secure string for this value. Set this as the value of `btc_rpc.user` in the teller conf.
+* `rpcpass` - use a long, random, secure string for this value. Set this as the value of `btc_rpc.pass` in the teller conf.
+
+If you are not running btcd on the same machine as teller, you need to change
+the `rpclisten` value too.  It will need to listen on a public interface.
+Refer to the sample config link above for instructions on how to configure this value.
+
+Now, run `btcd` again:
 
 ```sh
-cd cmd/tool
-go run tool.go -json newbtcaddress $seed $num
+btcd
 ```
 
-Example:
+Once the RPC interface is enabled (by setting `rpcuser` and `rpcpass`),
+`btcd` will generate `~/.btcd/rpc.cert` and `~/.btcd/rpc.key`.
+
+#### Obtain btcd RPC certificate
+
+Use the path of the `~/.btcd/rpc.cert` file as the value of `btc_rpc.cert` in teller's config.
+If teller is running on a different machine, you will need to move it there first.
+Do not copy `~/.btcd/rpc.key`, this is a secret key and is not needed by teller.
+
+### Using a reverse proxy to expose teller
+
+SSH reverse proxy method:
 
 ```sh
-go run tool.go -json newbtcaddress 12323 3
-
-2Q5sR1EgTWesxX9853AnNpbBS1grEY1JXn3
-2Q8y3vVAqY8Q3paxS7Fz4biy1RUTY5XQuzb
-216WfF5EcvpVk6ypSRP3Lg9BxqpUrgBJBco
+# open reverse proxy. -f runs it in the background as daemon, if you don't want this, remove it
+ssh -fnNT -R '*:7071:localhost:7071' user@server
+# forward port 80 traffic to localhost:7071, since can't bind reverse proxy to port 80 directly
+# Change enp2s0 to your interface name. Use ifconfig to see your interfaces.
+sudo iptables -t nat -A PREROUTING -i enp2s0 -p tcp --dport 80 -j REDIRECT --to-port 7071
 ```
 
-generate json file Example:
+The iptables rule needs to be set permanently. One method for doing this:
+
 
 ```sh
-go run tool.go -json newbtcaddress 12323 3 > new_btc_addresses.json
+sudo apt-get install iptables-persistent
+# it will ask if you want to save the current rules, don't save if you have ufw running, it will conflict
+# edit /etc/iptables/rules.v4 and /etc/iptables/rules.v6, add the port redirect line
+sudo echo "iptables -t nat -A PREROUTING -i enp2s0 -p tcp --dport 80 -j REDIRECT --to-port 7071" >> /etc/iptables/rules.v4
+sudo echo "iptables -t nat -A PREROUTING -i enp2s0 -p tcp --dport 80 -j REDIRECT --to-port 7071" >> /etc/iptables/rules.v6
 ```
 
+These rules need to be duplicated for another port (e.g. 7072) for the HTTPS listener, when exposing HTTPS.
 
-teller's config is managed in `config.json`, need to set the `wallet_path`
-in `skynode` field to an absolute path of skycoin wallet file, and set up the `btcd`
-config in `btc_rpc` field, including server address, username, password and
-absolute path to the cert file.
-
-config.json:
-
-```json
-{
-    "http_address": "127.0.0.1:7070",
-    "reconnect_time": 5,
-    "dial_timeout": 5,
-    "ping_timeout": 5,
-    "pong_timeout": 10,
-    "exchange_rate": 500,
-    "skynode": {
-        "rpc_address": "127.0.0.1:6430",
-        "wallet_path": "absolute path to the wallet file"
-    },
-    "btc_scan": {
-        "check_period": 20,
-        "deposit_buffer_size": 1024
-    },
-    "btc_rpc": {
-        "server": "127.0.0.1:8334",
-        "user": "",
-        "pass": "",
-        "cert": "absolute path to rpc cert file"
-    },
-    "sky_sender": {
-        "request_buffer_size": 1024
-    }
-}
-```
-
-run teller service
-
-```sh
-go run teller.go -proxy-pubkey=$the_pubkey_of_proxy
-```
-
-## Service apis
+## API
 
 The HTTP API service is provided by the proxy and serve on port 7071 by default.
 
@@ -183,7 +246,7 @@ Request Body: {
 ```
 
 Binds a skycoin address to a BTC address. A skycoin address can be bound to
-multiple BTC addresses.  The default maximum number of bound addresses is 5.
+multiple BTC addresses. The default maximum number of bound addresses is 5.
 
 Coin type specifies which coin deposit address type to generate.
 Options are: BTC [TODO: support more coin types].
@@ -363,3 +426,7 @@ File: scanner/store.go
 Maps: btcTx[%tx:%n] -> scanner.Deposit
 Note: Maps a btc txid:seq to scanner.Deposit struct
 ```
+
+## Frontend development
+
+See [frontend development README](./web/README.md)
