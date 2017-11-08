@@ -2,22 +2,19 @@ export default [{
   heading: 'footer.getStarted',
   links: [{
     label: 'footer.wallet',
-    to: 'downloads',
-  }, {
-    label: 'footer.buy',
-    buy: true,
+    href: 'https://www.skycoin.net/downloads',
   }, {
     label: 'footer.infographics',
-    to: 'infographics',
+    href: 'https://www.skycoin.net/infographics',
   }, {
     label: 'footer.team',
     href: 'https://blog.skycoin.net/statement/skycoin-team/',
   }, {
     label: 'footer.subscribe',
-    to: 'mailing-list',
+    href: 'https://www.skycoin.net/mailing-list',
   }, {
     label: 'footer.market',
-    to: 'markets',
+    href: 'https://www.skycoin.net/markets',
   }, {
     label: 'footer.bitcoinTalks',
     href: 'https://bitcointalk.org/index.php?topic=380441',
@@ -26,19 +23,16 @@ export default [{
   heading: 'footer.explore',
   links: [{
     label: 'footer.blog',
-    href: 'http://blog.skycoin.net',
+    href: 'https://blog.skycoin.net',
   }, {
     label: 'footer.whitepapers',
-    to: '/whitepapers',
+    href: 'https://www.skycoin.net/whitepapers',
   }, {
     label: 'footer.blockchain',
-    href: 'http://explorer.skycoin.net/blocks',
-  }, {
-    label: 'footer.distribution',
-    to: 'distribution',
+    href: 'https://explorer.skycoin.net/blocks',
   }, {
     label: 'footer.roadmap',
-    to: '/roadmap',
+    href: 'https://www.skycoin.net/roadmap',
   }, {
     label: 'footer.skyMessenger',
     href: 'http://messenger.skycoin.net/',
