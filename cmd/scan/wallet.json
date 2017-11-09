@@ -12,24 +12,24 @@
                 "parent_hash": "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
                 "block_height": 1,
                 "satoshi_amount": 5000000000,
-                "bitcoin_amount": "50 BTC"
+                "bitcoin_amount": "50"
             }
         ]
     },
     {
-        "address": "17ZnrTkDnLD4CJwfqnae6vmjwL3V9dzt71",
+        "address": "1L5sCUfn36yfRByzY4qJLNuJJfRaJg3Vwj",
         "min_scan_block": 0,
-        "mid_scan_block": 266588,
-        "max_scan_block": 266588,
+        "mid_scan_block": 120120,
+        "max_scan_block": 120120,
         "txs": [
             {
-                "tx_hash": "8332ad57d0018518f52d64f74299c2079792dc7d15b3af5624f3895408923169:1",
-                "btc_address": "17ZnrTkDnLD4CJwfqnae6vmjwL3V9dzt71",
-                "block_hash": "000000000000000aa39aeae6a76d173bed773dc0b85a53ecbb39aefb2ada150b",
-                "parent_hash": "0000000000000008611db6252e1677c7d974ea9e3d91b4e1db49c2bf02f11da8",
-                "block_height": 266588,
-                "satoshi_amount": 525452464,
-                "bitcoin_amount": "5.25452465 BTC"
+                "tx_hash": "ca29ebc25bc288d6f18dc730e553d6425d6524d56bb2d94baf6acbac0c619d59:0",
+                "btc_address": "1L5sCUfn36yfRByzY4qJLNuJJfRaJg3Vwj",
+                "block_hash": "000000000000a0ec8ed82994c0682c4e4b8e99f5dc9595180eef3da5e358d0da",
+                "parent_hash": "00000000000022ee82271955109bcb6f11d03c58990530429a4ba3ce7edbdfba",
+                "block_height": 120120,
+                "satoshi_amount": 2370000000,
+                "bitcoin_amount": "23.7"
             }
         ]
     }

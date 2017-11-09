@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/btcsuite/btcd/rpcclient"
@@ -32,7 +33,7 @@ type Tx struct {
 	BlockHash     string `json:"block_hash"`
 	ParentHash    string `json:"parent_hash"`
 	BlockHeight   int64  `json:"block_height"`
-	SatoshiAmount uint64 `json:"satoshi_amount"`
+	SatoshiAmount int64  `json:"satoshi_amount"`
 	BitcoinAmount string `json:"bitcoin_amount"`
 }
 
@@ -59,13 +60,17 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 	for _, tx := range block.RawTx {
 		for i, addr := range tx.Vout {
 			depTx.TxHash = fmt.Sprintf("%s:%d", tx.Txid, i)
-			amount, err := btcutil.NewAmount(addr.Value)
+			//amount, err := btcutil.NewAmount(addr.Value)
+			//if err != nil {
+			//	return nil, err
+			//}
+
+			depTx.BitcoinAmount = strconv.FormatFloat(addr.Value, 'f', -int(8), 64)
+			satoshis, err := btcutil.NewAmount(addr.Value)
 			if err != nil {
 				return nil, err
 			}
-
-			depTx.BitcoinAmount = amount.String()
-			depTx.SatoshiAmount = uint64(addr.Value * 100000000)
+			depTx.SatoshiAmount = int64(satoshis)
 			for _, newAddr := range addr.ScriptPubKey.Addresses {
 				depTx.Address = newAddr
 				deposits = append(deposits, Deposit{
