@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: teller install-skycoin-cli test lint check format cover help
+.PHONY: teller install-skycoin-cli test lint lint-fast check format cover help
 
 PACKAGES = $(shell find ./src -type d -not -path '\./src')
 
@@ -16,7 +16,11 @@ test: ## Run tests
 
 lint: ## Run linters. Use make install-linters first.
 	vendorcheck ./...
-	gometalinter --disable-all -E goimports -E unparam --tests --vendor ./...
+	gometalinter --deadline=2m --disable-all -E goimports -E unparam --tests --vendor ./...
+
+lint-fast: ## Run linters. Use make install-linters first. Skips slow linters.
+	vendorcheck ./...
+	gometalinter --disable-all -E goimports --tests --vendor ./...
 
 check: lint test ## Run tests and linters
 
