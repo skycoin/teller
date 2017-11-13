@@ -34,6 +34,7 @@ export default {
     discord: 'Discord',
   },
   distribution: {
+    rate: 'Current OTC rate: {rate} SKY/BTC',
     title: 'Skycoin OTC',
     heading: 'Skycoin OTC',
     headingEnded: 'The previous distribution event finished on',

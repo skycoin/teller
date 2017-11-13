@@ -58,11 +58,11 @@ class Distribution extends React.Component {
   }
 
   componentDidMount() {
-    this.setEventStatus();
+    this.getConfig();
   }
 
-  setEventStatus() {
-    getConfig().then(config => this.setState({ eventInProgress: config.enabled }));
+  getConfig() {
+    getConfig().then(config => this.setState({ ...config }));
   }
 
   getAddress() {
@@ -178,7 +178,7 @@ class Distribution extends React.Component {
           </Modal>
 
           <Container>
-            {!this.state.eventInProgress ? <Flex column>
+            {!this.state.enabled ? <Flex column>
               <Heading heavy as="h2" fontSize={[5, 6]} color="black" mb={[4, 6]}>
                 <FormattedMessage id="distribution.headingEnded" />
               </Heading>
@@ -190,6 +190,14 @@ class Distribution extends React.Component {
                 <Heading heavy as="h2" fontSize={[5, 6]} color="black" mb={[4, 6]}>
                   <FormattedMessage id="distribution.heading" />
                 </Heading>
+                <Text heavy color="black" fontSize={[2, 3]} mb={[4, 6]} as="div">
+                  <FormattedMessage
+                    id="distribution.rate"
+                    values={{
+                      rate: +this.state.sky_btc_exchange_rate,
+                    }}
+                  />
+                </Text>
 
                 <Text heavy color="black" fontSize={[2, 3]} as="div">
                   <FormattedHTMLMessage id="distribution.instructions" />

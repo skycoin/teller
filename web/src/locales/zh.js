@@ -34,6 +34,7 @@ export default {
     discord: 'Discord',
   },
   distribution: {
+    rate: 'Current OTC rate: {rate} SKY/BTC',
     title: '天空币OTC',
     heading: '天空币OTC',
     headingEnded: '天空币暂时关门',
