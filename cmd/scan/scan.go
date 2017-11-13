@@ -60,7 +60,7 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 	for _, tx := range block.RawTx {
 		for i, addr := range tx.Vout {
 			depTx.TxHash = fmt.Sprintf("%s:%d", tx.Txid, i)
-
+			// Because btcutil.Amount.String() adds " BTC" to the string amount, format it ourselves
 			depTx.BitcoinAmount = strconv.FormatFloat(addr.Value, 'f', -int(8), 64)
 			satoshis, err := btcutil.NewAmount(addr.Value)
 			if err != nil {
