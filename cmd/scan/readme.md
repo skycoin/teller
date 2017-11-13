@@ -47,7 +47,7 @@ This utility have several flags:
 go run scan.go -n=1 -m=5
 go run scan.go -add=17abzUBJr7cnqfnxnmznn8W38s9f9EoXiq,1DMGtVnRrgZaji7C9noZS3a1QtoaAN2uRG
 ```
-If you want add addresses from json file shoud be in format:
+If you want to add addresses from json file shoud be in format:
 
 ```
 {
@@ -95,49 +95,35 @@ After you will add some addresses and make scans, it looks something like:
 [
     {
         "address": "12c6DSiU4Rq3P4ZxziKxzrL5LmMBrzjrJX",
-        "min_scan_block": 5,
-        "mid_scan_block": 288888,
-        "max_scan_block": 288890,
+        "min_scan_block": 12,
+        "mid_scan_block": 12,
+        "max_scan_block": 12,
         "txs": [
             {
                 "tx_hash": "0e3e2357e806b6cdb1f70b54c3a3a17b6714ee1f0e68bebb44a74b1efd512098:0",
+                "btc_address": "12c6DSiU4Rq3P4ZxziKxzrL5LmMBrzjrJX",
                 "block_hash": "00000000839a8e6886ab5951d76f411475428afc90947ee320161bbf18eb6048",
                 "parent_hash": "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f",
-                "block_height": 1
+                "block_height": 1,
+                "satoshi_amount": 5000000000,
+                "bitcoin_amount": "50.00000000"
             }
         ]
     },
     {
-        "address": "1EXoDusjGwvnjZUyKkxZ4UHEf77z6A5S4P",
-        "min_scan_block": 5,
-        "mid_scan_block": 288888,
-        "max_scan_block": 288890,
+        "address": "1FvQiPvsqbh9UyZrAGrHUBhkaLcz34x4Y2",
+        "min_scan_block": 0,
+        "mid_scan_block": 266588,
+        "max_scan_block": 266588,
         "txs": [
             {
-                "tx_hash": "500f2be2ebd5193578de1e521fbd7a3d9849a8983a70a8bef89e3d0a89a9a18b:1",
-                "block_hash": "0000000000000000542170ae05be423a9d4a5ad6b8a933d34dc12856f05391cd",
-                "parent_hash": "0000000000000000a456b9cd160ccfaf4d6b7341dc9aae04f98e5120fa5a73a3",
-                "block_height": 288889
-            },
-            {
-                "tx_hash": "beb620dfe9900f0961739c6eb60581d2882f6cbc91039ee6f1b5690fcb3bcded:1",
-                "block_hash": "0000000000000000542170ae05be423a9d4a5ad6b8a933d34dc12856f05391cd",
-                "parent_hash": "0000000000000000a456b9cd160ccfaf4d6b7341dc9aae04f98e5120fa5a73a3",
-                "block_height": 288889
-            }
-        ]
-    },
-    {
-        "address": "1FtuEk12fmeGJKJ1BEJ2CYMkHPUEgpkLgi",
-        "min_scan_block": 5,
-        "mid_scan_block": 455454,
-        "max_scan_block": 455455,
-        "txs": [
-            {
-                "tx_hash": "ac6061708c704a665ab005f0fedb9ad5d297c6afa4a42cf49abba4ddc1b88354:1",
-                "block_hash": "000000000000000000addd7303c43756a7e66ebe30d5a32a75bc87ad67027390",
-                "parent_hash": "000000000000000002655615168e2f0e2c1d7c2798a128f757928efd0954a333",
-                "block_height": 455454
+                "tx_hash": "6e04644bf3d889d0c638a5f6e9a502c8ba62175560c1cedf03d014aa12365e38:1",
+                "btc_address": "1FvQiPvsqbh9UyZrAGrHUBhkaLcz34x4Y2",
+                "block_hash": "000000000000000aa39aeae6a76d173bed773dc0b85a53ecbb39aefb2ada150b",
+                "parent_hash": "0000000000000008611db6252e1677c7d974ea9e3d91b4e1db49c2bf02f11da8",
+                "block_height": 266588,
+                "satoshi_amount": 9500000000,
+                "bitcoin_amount": "95.00000000"
             }
         ]
     }
