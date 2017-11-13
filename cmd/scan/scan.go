@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/btcsuite/btcd/rpcclient"
@@ -27,10 +28,13 @@ type Address struct {
 }
 
 type Tx struct {
-	TxHash      string `json:"tx_hash"`
-	BlockHash   string `json:"block_hash"`
-	ParentHash  string `json:"parent_hash"`
-	BlockHeight int64  `json:"block_height"`
+	TxHash        string `json:"tx_hash"`
+	Address       string `json:"btc_address"`
+	BlockHash     string `json:"block_hash"`
+	ParentHash    string `json:"parent_hash"`
+	BlockHeight   int64  `json:"block_height"`
+	SatoshiAmount int64  `json:"satoshi_amount"`
+	BitcoinAmount string `json:"bitcoin_amount"`
 }
 
 type Deposit struct {
@@ -56,8 +60,15 @@ func ScanBlock(client *rpcclient.Client, blockID int64) ([]Deposit, error) {
 	for _, tx := range block.RawTx {
 		for i, addr := range tx.Vout {
 			depTx.TxHash = fmt.Sprintf("%s:%d", tx.Txid, i)
-
+			// Because btcutil.Amount.String() adds " BTC" to the string amount, format it ourselves
+			depTx.BitcoinAmount = strconv.FormatFloat(addr.Value, 'f', -int(8), 64)
+			satoshis, err := btcutil.NewAmount(addr.Value)
+			if err != nil {
+				return nil, err
+			}
+			depTx.SatoshiAmount = int64(satoshis)
 			for _, newAddr := range addr.ScriptPubKey.Addresses {
+				depTx.Address = newAddr
 				deposits = append(deposits, Deposit{
 					Addr: newAddr,
 					Tx:   depTx,
@@ -76,7 +87,6 @@ func FindTxs(addr Address, deps []Deposit) []Tx {
 			txs = append(txs, dep.Tx)
 		}
 	}
-
 	return txs
 }
 
