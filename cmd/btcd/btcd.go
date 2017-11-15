@@ -2,7 +2,6 @@
 package main
 
 import (
-	"container/list"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -19,18 +18,21 @@ import (
 	"sync/atomic"
 	"time"
 
+	"flag"
+
+	"errors"
+
+	"container/list"
 	"github.com/btcsuite/btcd/btcjson"
+	"github.com/btcsuite/btcd/chaincfg"
+	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/websocket"
 )
 
 const (
-	RPCKey               = "rpc.key"
-	RPCCert              = "rpc.cert"
-	RPCADDR              = "127.0.0.1:8334"
-	RPCMaxConcurrentReqs = 10
-
 	// websocketSendBufferSize is the number of elements the send channel
 	// can queue before blocking.  Note that this only applies to requests
 	// handled directly in the websocket client input handler or the async
@@ -38,52 +40,28 @@ const (
 	// independent of the send channel buffer.
 	websocketSendBufferSize = 50
 
-	RPCQuirks = true
+	rpcQuirks = true
 
 	defaultBestBlockHeight = 383769
+	defaultBestBlockHash   = "00000000000000000c4ac9ec73ff6a465532c22fd9b2a7c0015a5e13128cb9ed"
+
+	// http API
+	shutdownTimeout = time.Second * 5
+
+	// https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
+	// The timeout configuration is necessary for public servers, or else
+	// connections will be used up
+	serverReadTimeout  = time.Second * 10
+	serverWriteTimeout = time.Second * 60
+	serverIdleTimeout  = time.Second * 120
 )
 
-var blocks []btcjson.GetBlockVerboseResult = []btcjson.GetBlockVerboseResult{
-	btcjson.GetBlockVerboseResult{
-		Hash:   "00000000000000000c4ac9ec73ff6a465532c22fd9b2a7c0015a5e13128cb9ed",
-		Height: 383769,
-		RawTx: []btcjson.TxRawResult{
-			{
-				Txid: "2da8fea89798ede30ea2bf815b449387f6afaa287fafb20c7acb7c70bb251929",
-				Vout: []btcjson.Vout{
-					{
-						Value: 25.2188957,
-						N:     0,
-						ScriptPubKey: btcjson.ScriptPubKeyResult{
-							Addresses: []string{
-								"1FeDtFhARLxjKUPPkQqEBL78tisenc9znS",
-							},
-						},
-					},
-				},
-			},
-		},
-	},
-	btcjson.GetBlockVerboseResult{
-		Hash:   "00000000000000000055c0b4c9d8efb7ccc25a7425bab77c75bf91bca2a8477e",
-		Height: 383770,
-		RawTx: []btcjson.TxRawResult{
-			{
-				Txid: "93105b55bc7df25fd4203028e302c1d557e1346d3f280344064d8f54089b7d5a",
-				Vout: []btcjson.Vout{
-					{
-						Value: 0.00091409,
-						N:     0,
-						ScriptPubKey: btcjson.ScriptPubKeyResult{
-							Addresses: []string{
-								"1BHskF9VJjKga8tLztYCZmbNPm97NKDWwj",
-							},
-						},
-					},
-				},
-			},
-		},
-	},
+type Deposit struct {
+	Address string // deposit address
+	Value   int64  // deposit amount. For BTC, measured in satoshis.
+	Height  int64  // the block height
+	Tx      string // the transaction id
+	N       uint32 // the index of vout in the tx [BTC]
 }
 
 type BlockStore struct {
@@ -93,15 +71,23 @@ type BlockStore struct {
 	HashBlocks      map[string]btcjson.GetBlockVerboseResult
 }
 
+var blocks []btcjson.GetBlockVerboseResult = []btcjson.GetBlockVerboseResult{
+	{
+		Hash:   defaultBestBlockHash,
+		Height: defaultBestBlockHeight,
+	},
+}
+
 var defaultBlockStore *BlockStore
 
 type commandHandler func(*rpcServer, interface{}, <-chan struct{}) (interface{}, error)
 
 var rpcHandlers = map[string]commandHandler{
-	"getblock":     handleGetBlock,
-	"getbestblock": handleGetBestBlock,
-	"getblockhash": handleGetBlockHash,
-	"nextdeposit":  handleNextDeposit, // for triggering a fake deposit
+	"getblock":      handleGetBlock,
+	"getbestblock":  handleGetBestBlock,
+	"getblockhash":  handleGetBlockHash,
+	"getblockcount": handleGetBlockCount,
+	"nextdeposit":   handleNextDeposit, // for triggering a fake deposit
 }
 
 type rpcServer struct {
@@ -109,9 +95,11 @@ type rpcServer struct {
 	shutdown               int32
 	listeners              []net.Listener
 	wg                     sync.WaitGroup
-	statusLines            map[int]string
-	statusLock             sync.RWMutex
 	requestProcessShutdown chan struct{}
+	key                    string
+	cert                   string
+	address                string
+	maxConcurrentReqs      int
 }
 
 // filesExists reports whether the named file or directory exists.
@@ -146,6 +134,89 @@ func genCertPair(certFile, keyFile string) error {
 
 	fmt.Printf("Done generating TLS certificates\n")
 	return nil
+}
+
+func createNewBlock(previousHash string, previousHeight int64, deposits []Deposit) (*btcutil.Block, error) {
+	newHash, err := chainhash.NewHashFromStr(previousHash)
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		return nil, err
+	}
+
+	txn := wire.NewMsgTx(1)
+
+	var n uint32 = 0
+	for _, deposit := range deposits {
+		for i := n; i < deposit.N; i++ {
+			txn.AddTxOut(wire.NewTxOut(int64(0), nil))
+		}
+
+		satoshi := deposit.Value
+
+		// Decode the provided address.
+		addr, err := btcutil.DecodeAddress(deposit.Address, &chaincfg.MainNetParams)
+		if err != nil {
+			fmt.Printf("Invalid address or key: %v, %v\n", deposit.Address, err)
+			return nil, err
+		}
+
+		// Create a new script which pays to the provided address.
+		pkScript, err := txscript.PayToAddrScript(addr)
+		if err != nil {
+			fmt.Printf("Failed to generate pay-to-address script\n")
+			return nil, err
+		}
+
+		txn.AddTxOut(wire.NewTxOut(int64(satoshi), pkScript))
+
+		n = deposit.N + 1
+	}
+
+	txns := []*wire.MsgTx{
+		txn,
+	}
+
+	msgBlock := &wire.MsgBlock{
+		Header: wire.BlockHeader{
+			PrevBlock: *newHash,
+			Timestamp: time.Now(),
+		},
+		Transactions: txns,
+	}
+
+	newBlock := btcutil.NewBlock(msgBlock)
+	height := previousHeight + 1
+	newBlock.SetHeight(int32(height))
+
+	return newBlock, nil
+}
+
+func createNewEmptyBlock(previousHash string, previousHeight int64) (*btcutil.Block, error) {
+	newHash, err := chainhash.NewHashFromStr(previousHash)
+	if err != nil {
+		fmt.Printf("%v\n", err)
+		return nil, err
+	}
+	msgBlock := &wire.MsgBlock{
+		Header: wire.BlockHeader{
+			PrevBlock: *newHash,
+			Timestamp: time.Now(),
+		},
+	}
+
+	newBlock := btcutil.NewBlock(msgBlock)
+	height := previousHeight + 1
+	newBlock.SetHeight(int32(height))
+
+	return newBlock, nil
+}
+
+func createNewBlockWithTx(previousHash string, previousHeight int64, deposits []Deposit) (*btcutil.Block, error) {
+	if deposits == nil || len(deposits) == 0 {
+		return createNewEmptyBlock(previousHash, previousHeight)
+	}
+
+	return createNewBlock(previousHash, previousHeight, deposits)
 }
 
 func handleGetBestBlock(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
@@ -194,28 +265,103 @@ func handleGetBlockHash(s *rpcServer, cmd interface{}, closeChan <-chan struct{}
 	}
 }
 
-func handleNextDeposit(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
-	if hash, ok := defaultBlockStore.BlockHashes[int64(defaultBlockStore.BestBlockHeight+1)]; ok {
-		defaultBlockStore.Lock()
-		defer defaultBlockStore.Unlock()
+func convertBlockToGetBlockVerboseResult(block *btcutil.Block) *btcjson.GetBlockVerboseResult {
+	result := btcjson.GetBlockVerboseResult{
+		Hash:   block.Hash().String(),
+		Height: int64(block.Height()),
+	}
 
-		defaultBlockStore.BestBlockHeight++
+	var txRawResults []btcjson.TxRawResult
 
-		result := btcjson.GetBestBlockResult{
-			Hash:   hash,
-			Height: defaultBlockStore.BestBlockHeight,
+	for _, tx := range block.Transactions() {
+		txRawResult := btcjson.TxRawResult{
+			Txid: tx.Hash().String(),
 		}
-		return result, nil
+
+		var vouts []btcjson.Vout
+		for i, txOut := range tx.MsgTx().TxOut {
+
+			pks := txOut.PkScript
+
+			_, addrs, _, err := txscript.ExtractPkScriptAddrs(pks, &chaincfg.MainNetParams)
+
+			if err != nil {
+				return nil
+			}
+
+			addresses := make([]string, len(addrs))
+			for j := 0; j < len(addrs); j++ {
+				addresses[j] = addrs[j].String()
+			}
+
+			vout := btcjson.Vout{
+				Value: btcutil.Amount(txOut.Value).ToBTC(),
+				N:     uint32(i),
+				ScriptPubKey: btcjson.ScriptPubKeyResult{
+					Addresses: addresses,
+				},
+			}
+
+			vouts = append(vouts, vout)
+		}
+
+		txRawResult.Vout = vouts
+
+		txRawResults = append(txRawResults, txRawResult)
 	}
 
-	return nil, &btcjson.RPCError{
-		Code:    btcjson.ErrRPCBlockNotFound,
-		Message: "Block not found",
-	}
+	result.RawTx = txRawResults
+
+	return &result
 }
 
-func (s *rpcServer) WebsocketHandler(conn *websocket.Conn, remoteAddr string,
-	authenticated bool, isAdmin bool) {
+func handleGetBlockCount(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
+	return int64(defaultBlockStore.BestBlockHeight), nil
+}
+
+func processDeposits(deposits []Deposit) (int64, error) {
+	bestHeight := int64(defaultBlockStore.BestBlockHeight)
+	bestHash, ok := defaultBlockStore.BlockHashes[bestHeight]
+	if ok {
+		block, err := createNewBlockWithTx(bestHash, bestHeight, deposits)
+		if err == nil {
+			defaultBlockStore.Lock()
+			defer defaultBlockStore.Unlock()
+
+			defaultBlockStore.BestBlockHeight++
+			defaultBlockStore.BlockHashes[int64(defaultBlockStore.BestBlockHeight)] = block.Hash().String()
+
+			gbvr := convertBlockToGetBlockVerboseResult(block)
+			defaultBlockStore.HashBlocks[block.Hash().String()] = *gbvr
+
+			return int64(defaultBlockStore.BestBlockHeight), nil
+		}
+	}
+
+	return -1, errors.New("Block not found")
+}
+
+func handleNextDeposit(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
+	var deposits []Deposit
+	if cmd != nil {
+		deposits = cmd.([]Deposit)
+		fmt.Printf("Got %v\n", deposits)
+	}
+
+	newHeight, err := processDeposits(deposits)
+
+	if err != nil {
+		fmt.Printf("processDeposits %v\n", err)
+		return nil, &btcjson.RPCError{
+			Code:    btcjson.ErrRPCBlockNotFound,
+			Message: "Block not found",
+		}
+	}
+
+	return newHeight, nil
+}
+
+func (s *rpcServer) WebsocketHandler(conn *websocket.Conn, remoteAddr string) {
 	// Clear the read deadline that was set before the websocket hijacked
 	// the connection.
 	conn.SetReadDeadline(timeZeroVal)
@@ -223,7 +369,7 @@ func (s *rpcServer) WebsocketHandler(conn *websocket.Conn, remoteAddr string,
 	// Create a new websocket client to handle the new websocket connection
 	// and wait for it to shutdown.  Once it has shutdown (and hence
 	// disconnected), remove it and any notifications it registered for.
-	client, err := newWebsocketClient(s, conn, remoteAddr, authenticated, isAdmin)
+	client, err := newWebsocketClient(s, conn, remoteAddr)
 	if err != nil {
 		fmt.Errorf("Failed to serve client %s: %v\n", remoteAddr, err)
 		conn.Close()
@@ -234,9 +380,9 @@ func (s *rpcServer) WebsocketHandler(conn *websocket.Conn, remoteAddr string,
 	fmt.Printf("Disconnected websocket client %s\n", remoteAddr)
 }
 
-func (s *rpcServer) checkAuth(r *http.Request, require bool) (bool, bool, error) {
-	return true, false, nil
-}
+//func (s *rpcServer) checkAuth(r *http.Request, require bool) (bool, bool, error) {
+//	return true, false, nil
+//}
 
 // parseListeners determines whether each listen address is IPv4 and IPv6 and
 // returns a slice of appropriate net.Addrs to listen on with TCP. It also
@@ -282,35 +428,31 @@ func parseListeners(addrs []string) ([]net.Addr, error) {
 	return netAddrs, nil
 }
 
-func setupRPCListeners() ([]net.Listener, error) {
-	// Setup TLS if not disabled.
-	listenFunc := net.Listen
-	if true {
-		// Generate the TLS cert and key file if both don't already
-		// exist.
-		if !fileExists(RPCKey) && !fileExists(RPCCert) {
-			err := genCertPair(RPCCert, RPCKey)
-			if err != nil {
-				return nil, err
-			}
-		}
-		keypair, err := tls.LoadX509KeyPair(RPCCert, RPCKey)
+func setupRPCListeners(key string, cert string, address string) ([]net.Listener, error) {
+	// Generate the TLS cert and key file if both don't already
+	// exist.
+	if !fileExists(key) && !fileExists(cert) {
+		err := genCertPair(cert, key)
 		if err != nil {
 			return nil, err
 		}
-
-		tlsConfig := tls.Config{
-			Certificates: []tls.Certificate{keypair},
-			MinVersion:   tls.VersionTLS12,
-		}
-
-		// Change the standard net.Listen function to the tls one.
-		listenFunc = func(net string, laddr string) (net.Listener, error) {
-			return tls.Listen(net, laddr, &tlsConfig)
-		}
+	}
+	keypair, err := tls.LoadX509KeyPair(cert, key)
+	if err != nil {
+		return nil, err
 	}
 
-	netAddrs, err := parseListeners([]string{RPCADDR})
+	tlsConfig := tls.Config{
+		Certificates: []tls.Certificate{keypair},
+		MinVersion:   tls.VersionTLS12,
+	}
+
+	// Change the standard net.Listen function to the tls one.
+	listenFunc := func(net string, laddr string) (net.Listener, error) {
+		return tls.Listen(net, laddr, &tlsConfig)
+	}
+
+	netAddrs, err := parseListeners([]string{address})
 	if err != nil {
 		return nil, err
 	}
@@ -326,12 +468,6 @@ func setupRPCListeners() ([]net.Listener, error) {
 	}
 
 	return listeners, nil
-}
-
-// jsonAuthFail sends a message back to the client if the http auth is rejected.
-func jsonAuthFail(w http.ResponseWriter) {
-	w.Header().Add("WWW-Authenticate", `Basic realm="btcd RPC"`)
-	http.Error(w, "401 Unauthorized.", http.StatusUnauthorized)
 }
 
 // parsedRPCCmd represents a JSON-RPC request object that has been parsed into
@@ -357,7 +493,16 @@ func parseCmd(request *btcjson.Request) *parsedRPCCmd {
 
 	// Handle new commands except btcd cmds
 	if request.Method == "nextdeposit" {
-		parsedCmd.cmd = cmd
+		if len(request.Params) == 1 {
+			var deposit []Deposit
+			err := json.Unmarshal(request.Params[0], &deposit)
+			if err != nil {
+				parsedCmd.err = btcjson.ErrRPCMethodNotFound
+				return &parsedCmd
+			}
+			fmt.Printf("%v\n", deposit)
+			parsedCmd.cmd = deposit
+		}
 		return &parsedCmd
 	}
 
@@ -397,20 +542,6 @@ handled:
 	return handler(s, cmd.cmd, closeChan)
 }
 
-// internalRPCError is a convenience function to convert an internal error to
-// an RPC error with the appropriate code set.  It also logs the error to the
-// RPC server subsystem since internal errors really should not occur.  The
-// context parameter is only used in the log message and may be empty if it's
-// not needed.
-func internalRPCError(errStr, context string) *btcjson.RPCError {
-	logStr := errStr
-	if context != "" {
-		logStr = context + ": " + errStr
-	}
-	fmt.Errorf("%v\n", logStr)
-	return btcjson.NewRPCError(btcjson.ErrRPCInternal.Code, errStr)
-}
-
 // createMarshalledReply returns a new marshalled JSON-RPC response given the
 // passed parameters.  It will automatically convert errors that are not of
 // the type *btcjson.RPCError to the appropriate type as needed.
@@ -420,7 +551,7 @@ func createMarshalledReply(id, result interface{}, replyErr error) ([]byte, erro
 		if jErr, ok := replyErr.(*btcjson.RPCError); ok {
 			jsonErr = jErr
 		} else {
-			jsonErr = internalRPCError(replyErr.Error(), "")
+			jsonErr = btcjson.NewRPCError(btcjson.ErrRPCInternal.Code, replyErr.Error())
 		}
 	}
 
@@ -430,21 +561,10 @@ func createMarshalledReply(id, result interface{}, replyErr error) ([]byte, erro
 // httpStatusLine returns a response Status-Line (RFC 2616 Section 6.1)
 // for the given request and response status code.  This function was lifted and
 // adapted from the standard library HTTP server code since it's not exported.
-func (s *rpcServer) httpStatusLine(req *http.Request, code int) string {
-	// Fast path:
-	key := code
+func (s *rpcServer) httpStatusLine(req *http.Request) string {
+	code := http.StatusOK
 	proto11 := req.ProtoAtLeast(1, 1)
-	if !proto11 {
-		key = -key
-	}
-	s.statusLock.RLock()
-	line, ok := s.statusLines[key]
-	s.statusLock.RUnlock()
-	if ok {
-		return line
-	}
 
-	// Slow path:
 	proto := "HTTP/1.0"
 	if proto11 {
 		proto = "HTTP/1.1"
@@ -452,23 +572,18 @@ func (s *rpcServer) httpStatusLine(req *http.Request, code int) string {
 	codeStr := strconv.Itoa(code)
 	text := http.StatusText(code)
 	if text != "" {
-		line = proto + " " + codeStr + " " + text + "\r\n"
-		s.statusLock.Lock()
-		s.statusLines[key] = line
-		s.statusLock.Unlock()
+		return proto + " " + codeStr + " " + text + "\r\n"
 	} else {
 		text = "status code " + codeStr
-		line = proto + " " + codeStr + " " + text + "\r\n"
+		return proto + " " + codeStr + " " + text + "\r\n"
 	}
-
-	return line
 }
 
 // writeHTTPResponseHeaders writes the necessary response headers prior to
 // writing an HTTP body given a request to use for protocol negotiation, headers
-// to write, a status code, and a writer.
-func (s *rpcServer) writeHTTPResponseHeaders(req *http.Request, headers http.Header, code int, w io.Writer) error {
-	_, err := io.WriteString(w, s.httpStatusLine(req, code))
+// to write, and a writer.
+func (s *rpcServer) writeHTTPResponseHeaders(req *http.Request, headers http.Header, w io.Writer) error {
+	_, err := io.WriteString(w, s.httpStatusLine(req))
 	if err != nil {
 		return err
 	}
@@ -483,7 +598,7 @@ func (s *rpcServer) writeHTTPResponseHeaders(req *http.Request, headers http.Hea
 }
 
 // jsonRPCRead handles reading and responding to RPC messages.
-func (s *rpcServer) jsonRPCRead(w http.ResponseWriter, r *http.Request, isAdmin bool) {
+func (s *rpcServer) jsonRPCRead(w http.ResponseWriter, r *http.Request) {
 	if atomic.LoadInt32(&s.shutdown) != 0 {
 		return
 	}
@@ -553,7 +668,7 @@ func (s *rpcServer) jsonRPCRead(w http.ResponseWriter, r *http.Request, isAdmin 
 		//
 		// RPC quirks can be enabled by the user to avoid compatibility issues
 		// with software relying on Core's behavior.
-		if request.ID == nil && !(RPCQuirks && request.Jsonrpc == "") {
+		if request.ID == nil && !(rpcQuirks && request.Jsonrpc == "") {
 			return
 		}
 
@@ -575,6 +690,7 @@ func (s *rpcServer) jsonRPCRead(w http.ResponseWriter, r *http.Request, isAdmin 
 			// Attempt to parse the JSON-RPC request into a known concrete
 			// command.
 			parsedCmd := parseCmd(&request)
+
 			if parsedCmd.err != nil {
 				jsonErr = parsedCmd.err
 			} else {
@@ -591,7 +707,7 @@ func (s *rpcServer) jsonRPCRead(w http.ResponseWriter, r *http.Request, isAdmin 
 	}
 
 	// Write the response.
-	err = s.writeHTTPResponseHeaders(r, w.Header(), http.StatusOK, buf)
+	err = s.writeHTTPResponseHeaders(r, w.Header(), buf)
 	if err != nil {
 		fmt.Errorf("%v\n", err)
 		return
@@ -602,7 +718,7 @@ func (s *rpcServer) jsonRPCRead(w http.ResponseWriter, r *http.Request, isAdmin 
 
 	// Terminate with newline to maintain compatibility with Bitcoin Core.
 	if err := buf.WriteByte('\n'); err != nil {
-		fmt.Errorf("Failed to append terminating newline to reply: %v", err)
+		fmt.Errorf("Failed to append terminating newline to reply: %v\n", err)
 	}
 }
 
@@ -621,39 +737,28 @@ func (s *rpcServer) Start() {
 		w.Header().Set("Content-Type", "application/json")
 		r.Close = true
 
-		_, isAdmin, err := s.checkAuth(r, true)
-
-		if err != nil {
-			jsonAuthFail(w)
-			return
-		}
-
 		// Read and respond to the request.
-		s.jsonRPCRead(w, r, isAdmin)
+		s.jsonRPCRead(w, r)
 	})
 
 	rpcServeMux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		authenticated, isAdmin, err := s.checkAuth(r, false)
-
 		// Attempt to upgrade the connection to a websocket connection
 		// using the default size for read/write buffers.
 		ws, err := websocket.Upgrade(w, r, nil, 0, 0)
 		if err != nil {
 			if _, ok := err.(websocket.HandshakeError); !ok {
-				fmt.Errorf("Unexpected websocket error: %v",
+				fmt.Errorf("Unexpected websocket error: %v\n",
 					err)
 			}
 			http.Error(w, "400 Bad Request.", http.StatusBadRequest)
 			return
 		}
-		s.WebsocketHandler(ws, r.RemoteAddr, authenticated, isAdmin)
+		s.WebsocketHandler(ws, r.RemoteAddr)
 	})
 
-	// http.ListenAndServe(":3000", rpcServeMux)
-
-	listeners, err := setupRPCListeners()
+	listeners, err := setupRPCListeners(s.key, s.cert, s.address)
 	if err != nil {
-		fmt.Errorf("Unexpected setupRPCListeners error: %v",
+		fmt.Errorf("Unexpected setupRPCListeners error: %v\n",
 			err)
 		return
 	}
@@ -784,21 +889,7 @@ func makeSemaphore(n int) semaphore {
 func (s semaphore) acquire() { s <- struct{}{} }
 func (s semaphore) release() { <-s }
 
-// wsClient provides an abstraction for handling a websocket client.  The
-// overall data flow is split into 3 main goroutines, a possible 4th goroutine
-// for long-running operations (only started if request is made), and a
-// websocket manager which is used to allow things such as broadcasting
-// requested notifications to all connected websocket clients.   Inbound
-// messages are read via the inHandler goroutine and generally dispatched to
-// their own handler.  However, certain potentially long-running operations such
-// as rescans, are sent to the asyncHander goroutine and are limited to one at a
-// time.  There are two outbound message types - one for responding to client
-// requests and another for async notifications.  Responses to client requests
-// use SendMessage which employs a buffered channel thereby limiting the number
-// of outstanding requests that can be made.  Notifications are sent via
-// QueueNotification which implements a queue via notificationQueueHandler to
-// ensure sending notifications from other subsystems can't block.  Ultimately,
-// all messages are sent via the outHandler.
+// wsClient provides an abstraction for handling a websocket client.
 type wsClient struct {
 	sync.Mutex
 
@@ -814,14 +905,6 @@ type wsClient struct {
 
 	// addr is the remote address of the client.
 	addr string
-
-	// authenticated specifies whether a client has been authenticated
-	// and therefore is allowed to communicated over the websocket.
-	authenticated bool
-
-	// isAdmin specifies whether a client may change the state of the server;
-	// false means its access is only to the limited set of RPC calls.
-	isAdmin bool
 
 	// sessionID is a random ID generated for each client when connected.
 	// These IDs may be queried by a client using the session RPC.  A change
@@ -842,11 +925,6 @@ type wsClient struct {
 	// Owned by the notification manager.
 	spentRequests map[wire.OutPoint]struct{}
 
-	// filterData is the new generation transaction filter backported from
-	// github.com/decred/dcrd for the new backported `loadtxfilter` and
-	// `rescanblocks` methods.
-	// filterData *wsClientFilter
-
 	// Networking infrastructure.
 	serviceRequestSem semaphore
 	ntfnChan          chan []byte
@@ -862,7 +940,7 @@ type wsClient struct {
 // incoming and outgoing messages in separate goroutines complete with queuing
 // and asynchrous handling for long-running operations.
 func newWebsocketClient(server *rpcServer, conn *websocket.Conn,
-	remoteAddr string, authenticated bool, isAdmin bool) (*wsClient, error) {
+	remoteAddr string) (*wsClient, error) {
 
 	sessionID, err := wire.RandomUint64()
 	if err != nil {
@@ -872,13 +950,11 @@ func newWebsocketClient(server *rpcServer, conn *websocket.Conn,
 	client := &wsClient{
 		conn:              conn,
 		addr:              remoteAddr,
-		authenticated:     authenticated,
-		isAdmin:           isAdmin,
 		sessionID:         sessionID,
 		server:            server,
 		addrRequests:      make(map[string]struct{}),
 		spentRequests:     make(map[wire.OutPoint]struct{}),
-		serviceRequestSem: makeSemaphore(RPCMaxConcurrentReqs),
+		serviceRequestSem: makeSemaphore(server.maxConcurrentReqs),
 		sendChan:          make(chan wsResponse, websocketSendBufferSize),
 		quit:              make(chan struct{}),
 	}
@@ -890,9 +966,8 @@ func (c *wsClient) Start() {
 	fmt.Printf("Starting websocket client %s\n", c.addr)
 
 	// Start processing input and output.
-	c.wg.Add(3)
+	c.wg.Add(2)
 	go c.inHandler()
-	go c.notificationQueueHandler()
 	go c.outHandler()
 }
 
@@ -921,10 +996,6 @@ out:
 		var request btcjson.Request
 		err = json.Unmarshal(msg, &request)
 		if err != nil {
-			if !c.authenticated {
-				break out
-			}
-
 			jsonErr := &btcjson.RPCError{
 				Code:    btcjson.ErrRPCParse.Code,
 				Message: "Failed to parse request: " + err.Error(),
@@ -938,37 +1009,8 @@ out:
 			continue
 		}
 
-		// The JSON-RPC 1.0 spec defines that notifications must have their "id"
-		// set to null and states that notifications do not have a response.
-		//
-		// A JSON-RPC 2.0 notification is a request with "json-rpc":"2.0", and
-		// without an "id" member. The specification states that notifications
-		// must not be responded to. JSON-RPC 2.0 permits the null value as a
-		// valid request id, therefore such requests are not notifications.
-		//
-		// Bitcoin Core serves requests with "id":null or even an absent "id",
-		// and responds to such requests with "id":null in the response.
-		//
-		// Btcd does not respond to any request without and "id" or "id":null,
-		// regardless the indicated JSON-RPC protocol version unless RPC quirks
-		// are enabled. With RPC quirks enabled, such requests will be responded
-		// to if the reqeust does not indicate JSON-RPC version.
-		//
-		// RPC quirks can be enabled by the user to avoid compatibility issues
-		// with software relying on Core's behavior.
-		if request.ID == nil && !(RPCQuirks && request.Jsonrpc == "") {
-			if !c.authenticated {
-				break out
-			}
-			continue
-		}
-
 		cmd := parseCmd(&request)
 		if cmd.err != nil {
-			if !c.authenticated {
-				break out
-			}
-
 			reply, err := createMarshalledReply(cmd.id, nil, cmd.err)
 			if err != nil {
 				fmt.Errorf("Failed to marshal parse failure reply: %v\n", err)
@@ -978,63 +1020,6 @@ out:
 			continue
 		}
 		fmt.Printf("Received command <%s> from %s\n", cmd.method, c.addr)
-
-		// Check auth.  The client is immediately disconnected if the
-		// first request of an unauthentiated websocket client is not
-		// the authenticate request, an authenticate request is received
-		// when the client is already authenticated, or incorrect
-		// authentication credentials are provided in the request.
-		switch _, ok := cmd.cmd.(*btcjson.AuthenticateCmd); {
-		case c.authenticated && ok:
-			fmt.Printf("Websocket client %s is already authenticated\n",
-				c.addr)
-			break out
-		case !c.authenticated && !ok:
-			fmt.Printf("Unauthenticated websocket message received\n")
-			break out
-		case !c.authenticated:
-			// Check credentials.
-			// login := authCmd.Username + ":" + authCmd.Passphrase
-			// auth := "Basic " + base64.StdEncoding.EncodeToString([]byte(login))
-			// authSha := sha256.Sum256([]byte(auth))
-			// cmp := subtle.ConstantTimeCompare(authSha[:], c.server.authsha[:])
-			// limitcmp := subtle.ConstantTimeCompare(authSha[:], c.server.limitauthsha[:])
-			// if cmp != 1 && limitcmp != 1 {
-			//	fmt.Errorf("Auth failure.")
-			//	break out
-			//}
-			c.authenticated = true
-			c.isAdmin = false
-
-			// Marshal and send response.
-			reply, err := createMarshalledReply(cmd.id, nil, nil)
-			if err != nil {
-				fmt.Errorf("Failed to marshal authenticate reply: %v\n", err.Error())
-				continue
-			}
-			c.SendMessage(reply, nil)
-			continue
-		}
-
-		// Check if the client is using limited RPC credentials and
-		// error when not authorized to call this RPC.
-		//if !c.isAdmin {
-		//	if _, ok := rpcLimited[request.Method]; !ok {
-		//		jsonErr := &btcjson.RPCError{
-		//			Code:    btcjson.ErrRPCInvalidParams.Code,
-		//			Message: "limited user not authorized for this method",
-		//		}
-		//		// Marshal and send response.
-		//		reply, err := createMarshalledReply(request.ID, nil, jsonErr)
-		//		if err != nil {
-		//			rpcsLog.Errorf("Failed to marshal parse failure "+
-		//				"reply: %v", err)
-		//			continue
-		//		}
-		//		c.SendMessage(reply, nil)
-		//		continue
-		//	}
-		//}
 
 		// Asynchronously handle the request.  A semaphore is used to
 		// limit the number of concurrent requests currently being
@@ -1111,79 +1096,6 @@ cleanup:
 	fmt.Printf("Websocket client output handler done for %s\n", c.addr)
 }
 
-// notificationQueueHandler handles the queuing of outgoing notifications for
-// the websocket client.  This runs as a muxer for various sources of input to
-// ensure that queuing up notifications to be sent will not block.  Otherwise,
-// slow clients could bog down the other systems (such as the mempool or block
-// manager) which are queuing the data.  The data is passed on to outHandler to
-// actually be written.  It must be run as a goroutine.
-func (c *wsClient) notificationQueueHandler() {
-	ntfnSentChan := make(chan bool, 1) // nonblocking sync
-
-	// pendingNtfns is used as a queue for notifications that are ready to
-	// be sent once there are no outstanding notifications currently being
-	// sent.  The waiting flag is used over simply checking for items in the
-	// pending list to ensure cleanup knows what has and hasn't been sent
-	// to the outHandler.  Currently no special cleanup is needed, however
-	// if something like a done channel is added to notifications in the
-	// future, not knowing what has and hasn't been sent to the outHandler
-	// (and thus who should respond to the done channel) would be
-	// problematic without using this approach.
-	pendingNtfns := list.New()
-	waiting := false
-out:
-	for {
-		select {
-		// This channel is notified when a message is being queued to
-		// be sent across the network socket.  It will either send the
-		// message immediately if a send is not already in progress, or
-		// queue the message to be sent once the other pending messages
-		// are sent.
-		case msg := <-c.ntfnChan:
-			if !waiting {
-				c.SendMessage(msg, ntfnSentChan)
-			} else {
-				pendingNtfns.PushBack(msg)
-			}
-			waiting = true
-
-			// This channel is notified when a notification has been sent
-			// across the network socket.
-		case <-ntfnSentChan:
-			// No longer waiting if there are no more messages in
-			// the pending messages queue.
-			next := pendingNtfns.Front()
-			if next == nil {
-				waiting = false
-				continue
-			}
-
-			// Notify the outHandler about the next item to
-			// asynchronously send.
-			msg := pendingNtfns.Remove(next).([]byte)
-			c.SendMessage(msg, ntfnSentChan)
-
-		case <-c.quit:
-			break out
-		}
-	}
-
-	// Drain any wait channels before exiting so nothing is left waiting
-	// around to send.
-cleanup:
-	for {
-		select {
-		case <-c.ntfnChan:
-		case <-ntfnSentChan:
-		default:
-			break cleanup
-		}
-	}
-	c.wg.Done()
-	fmt.Printf("Websocket client notification queue handler done "+
-		"for %s\n", c.addr)
-}
-
 // wsCommandHandler describes a callback function used to handle a specific
 // command.
 type wsCommandHandler func(*wsClient, interface{}) (interface{}, error)
@@ -1192,7 +1104,8 @@ type wsCommandHandler func(*wsClient, interface{}) (interface{}, error)
 // functions.  This is set by init because help references wsHandlers and thus
 // causes a dependency loop.
 var wsHandlers map[string]wsCommandHandler
-var wsHandlersBeforeInit = map[string]wsCommandHandler{}
+
+// var wsHandlersBeforeInit = map[string]wsCommandHandler{}
 
 // serviceRequest services a parsed RPC request by looking up and executing the
 // appropriate RPC handler.  The response is marshalled and sent to the
@@ -1269,29 +1182,140 @@ func (c *wsClient) WaitForShutdown() {
 	c.wg.Wait()
 }
 
+type httpApiServer struct {
+	address string
+	listen  *http.Server
+	quit    chan struct{}
+}
+
+func newHttpApiServer(address string) *httpApiServer {
+	return &httpApiServer{
+		address: address,
+		quit:    make(chan struct{}),
+	}
+}
+
+// JSONResponse marshal data into json and write response
+func JSONResponse(w http.ResponseWriter, data interface{}) error {
+	w.Header().Set("Content-Type", "application/json")
+	d, err := json.MarshalIndent(data, "", "    ")
+	if err != nil {
+		return err
+	}
+
+	_, err = w.Write(d)
+	return err
+}
+
+func httpHandleNextDeposit(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Connection", "close")
+	r.Close = true
+
+	// Read and respond to the request.
+	decoder := json.NewDecoder(r.Body)
+	var deposits []Deposit
+	err := decoder.Decode(&deposits)
+	r.Body.Close()
+	if err != nil {
+		errCode := http.StatusBadRequest
+		http.Error(w, fmt.Sprintf("%d error reading JSON message: %v",
+			errCode, err), errCode)
+		return
+	}
+
+	height, err := processDeposits(deposits)
+	if err != nil {
+		errCode := http.StatusBadRequest
+		http.Error(w, fmt.Sprintf("%d error reading JSON message: %v",
+			errCode, err), errCode)
+		return
+	}
+
+	if err := JSONResponse(w, height); err != nil {
+		errCode := http.StatusBadRequest
+		http.Error(w, fmt.Sprintf("%d error reading JSON message: %v",
+			errCode, err), errCode)
+		return
+	}
+}
+
+func (server *httpApiServer) start() error {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/nextdeposit", httpHandleNextDeposit)
+
+	server.listen = &http.Server{
+		Addr:         server.address,
+		Handler:      mux,
+		ReadTimeout:  serverReadTimeout,
+		WriteTimeout: serverWriteTimeout,
+		IdleTimeout:  serverIdleTimeout,
+	}
+
+	if err := server.listen.ListenAndServe(); err != nil {
+		select {
+		case <-server.quit:
+			return nil
+		default:
+			return err
+		}
+	}
+	return nil
+}
+
+func (server *httpApiServer) stop() {
+	close(server.quit)
+	if server.listen != nil {
+		if err := server.listen.Close(); err != nil {
+			fmt.Println("http api server shutdown failed")
+		}
+	}
+}
+
 func run() error {
+	//flags
+	keyFile := flag.String("key", "rpc.key", "btcd rpc key")
+	certFile := flag.String("cert", "rpc.cert", "btcd rpc cert")
+	address := flag.String("address", "127.0.0.1:8334", "btcd listening address")
+	httpApiAddress := flag.String("api", "127.0.0.1:8834", "http api listening address")
+
+	flag.Parse()
+
 	// Get a channel that will be closed when a shutdown signal has been
 	// triggered either from an OS signal such as SIGINT (Ctrl+C) or from
 	// another subsystem such as the RPC server.
 	interruptedChan := interruptListener()
 
-	s := rpcServer{
-		statusLines:            make(map[int]string),
+	server := rpcServer{
 		requestProcessShutdown: make(chan struct{}),
+		key:               *keyFile,
+		cert:              *certFile,
+		address:           *address,
+		maxConcurrentReqs: 10,
 	}
 
+	apiServer := newHttpApiServer(*httpApiAddress)
+
 	defer func() {
-		s.Stop()
+		apiServer.stop()
+		server.Stop()
 		fmt.Printf("Shutdown complete")
 	}()
 
 	// Signal process shutdown when the RPC server requests it.
 	go func() {
-		<-s.RequestedProcessShutdown()
+		<-server.RequestedProcessShutdown()
 		shutdownRequestChannel <- struct{}{}
 	}()
 
-	s.Start()
+	server.Start()
+
+	go func() {
+		fmt.Printf("HTTP API server listening on %s\n", *httpApiAddress)
+		err := apiServer.start()
+		if err != nil {
+			fmt.Printf("HTTP API server failed to start")
+		}
+	}()
 
 	// Wait until the interrupt signal is received from an OS signal or
 	// shutdown is requested through one of the subsystems such as the RPC
