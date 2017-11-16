@@ -22,11 +22,8 @@ import (
 
 	"errors"
 
-	"container/list"
 	"github.com/btcsuite/btcd/btcjson"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcutil"
 	"github.com/btcsuite/websocket"
@@ -153,19 +150,15 @@ func createNewBlock(previousHash string, previousHeight int64, deposits []Deposi
 
 		satoshi := deposit.Value
 
-		// Decode the provided address.
-		addr, err := btcutil.DecodeAddress(deposit.Address, &chaincfg.MainNetParams)
-		if err != nil {
-			fmt.Printf("Invalid address or key: %v, %v\n", deposit.Address, err)
-			return nil, err
-		}
+		//// Decode the provided address.
+		//addr, err := btcutil.DecodeAddress(deposit.Address, &chaincfg.MainNetParams)
+		//if err != nil {
+		//	fmt.Printf("Invalid address or key: %v, %v\n", deposit.Address, err)
+		//	return nil, err
+		//}
 
 		// Create a new script which pays to the provided address.
-		pkScript, err := txscript.PayToAddrScript(addr)
-		if err != nil {
-			fmt.Printf("Failed to generate pay-to-address script\n")
-			return nil, err
-		}
+		pkScript := []byte(deposit.Address)
 
 		txn.AddTxOut(wire.NewTxOut(int64(satoshi), pkScript))
 
@@ -283,22 +276,25 @@ func convertBlockToGetBlockVerboseResult(block *btcutil.Block) *btcjson.GetBlock
 
 			pks := txOut.PkScript
 
-			_, addrs, _, err := txscript.ExtractPkScriptAddrs(pks, &chaincfg.MainNetParams)
-
-			if err != nil {
-				return nil
-			}
-
-			addresses := make([]string, len(addrs))
-			for j := 0; j < len(addrs); j++ {
-				addresses[j] = addrs[j].String()
-			}
+			//_, addrs, _, err := txscript.ExtractPkScriptAddrs(pks, &chaincfg.MainNetParams)
+			//
+			//if err != nil {
+			//	return nil
+			//}
+			//
+			//addresses := make([]string, len(addrs))
+			//for j := 0; j < len(addrs); j++ {
+			//	addresses[j] = addrs[j].String()
+			//}
+			address := string(pks)
 
 			vout := btcjson.Vout{
 				Value: btcutil.Amount(txOut.Value).ToBTC(),
 				N:     uint32(i),
 				ScriptPubKey: btcjson.ScriptPubKeyResult{
-					Addresses: addresses,
+					Addresses: []string{
+						address,
+					},
 				},
 			}
 
@@ -1207,35 +1203,49 @@ func JSONResponse(w http.ResponseWriter, data interface{}) error {
 	return err
 }
 
+// httpHandleNextDeposit accept deposits and create a new block, returns the block height.
+// Method: POST
+// URI: /api/nextdeposit
+// The request body is an array of deposits, for example:
+//  [{
+//     "Address": "1FeDtFhARLxjKUPPkQqEBL78tisenc9znS",
+//     "Value":   10000,
+//     "N":       4
+//  }]
 func httpHandleNextDeposit(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "close")
 	r.Close = true
 
-	// Read and respond to the request.
-	decoder := json.NewDecoder(r.Body)
-	var deposits []Deposit
-	err := decoder.Decode(&deposits)
-	r.Body.Close()
-	if err != nil {
-		errCode := http.StatusBadRequest
-		http.Error(w, fmt.Sprintf("%d error reading JSON message: %v",
-			errCode, err), errCode)
-		return
-	}
+	if r.Method == http.MethodPost {
+		// Read and respond to the request.
+		decoder := json.NewDecoder(r.Body)
+		var deposits []Deposit
+		err := decoder.Decode(&deposits)
+		r.Body.Close()
+		if err != nil {
+			errCode := http.StatusBadRequest
+			http.Error(w, fmt.Sprintf("%d error reading JSON message: %v",
+				errCode, err), errCode)
+			return
+		}
 
-	height, err := processDeposits(deposits)
-	if err != nil {
-		errCode := http.StatusBadRequest
-		http.Error(w, fmt.Sprintf("%d error reading JSON message: %v",
-			errCode, err), errCode)
-		return
-	}
+		height, err := processDeposits(deposits)
+		if err != nil {
+			errCode := http.StatusBadRequest
+			http.Error(w, fmt.Sprintf("%d error processing data: %v",
+				errCode, err), errCode)
+			return
+		}
 
-	if err := JSONResponse(w, height); err != nil {
-		errCode := http.StatusBadRequest
-		http.Error(w, fmt.Sprintf("%d error reading JSON message: %v",
-			errCode, err), errCode)
-		return
+		if err := JSONResponse(w, height); err != nil {
+			errCode := http.StatusBadRequest
+			http.Error(w, fmt.Sprintf("%d error responding: %v",
+				errCode, err), errCode)
+			return
+		}
+	} else {
+		errCode := http.StatusMethodNotAllowed
+		http.Error(w, fmt.Sprintf("Accept POST requests only"), errCode)
 	}
 }
 
