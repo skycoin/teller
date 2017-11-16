@@ -14,15 +14,20 @@ func TestDummySender(t *testing.T) {
 	s := NewDummySender(log, "")
 
 	addr := "2VZu3rZozQ6nN37YSdj3EZJV7wSFVuLSm2X"
-	var amt uint64 = 100
+	var coins uint64 = 100
 
-	txn, err := s.CreateTransaction(addr, amt)
+	txn, err := s.CreateTransaction(addr, coins)
 	require.NoError(t, err)
 	require.NotNil(t, txn)
 	require.Len(t, txn.Out, 1)
 
 	require.Equal(t, addr, txn.Out[0].Address.String())
-	require.Equal(t, amt, txn.Out[0].Coins)
+	require.Equal(t, coins, txn.Out[0].Coins)
+
+	// Another txn with the same dest addr and coins should have a different txid
+	txn2, err := s.CreateTransaction(addr, coins)
+	require.NoError(t, err)
+	require.NotEqual(t, txn.TxIDHex(), txn2.TxIDHex())
 
 	bRsp := s.BroadcastTransaction(txn)
 	require.NotNil(t, bRsp)
