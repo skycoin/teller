@@ -42,6 +42,8 @@ type Config struct {
 	Web Web `mapstructure:"web"`
 
 	AdminPanel AdminPanel `mapstructure:"admin_panel"`
+
+	DummySender DummySender `mapstructure:"dummy_sender"`
 }
 
 // Teller config for teller
@@ -94,6 +96,11 @@ type Web struct {
 	ThrottleDuration time.Duration `mapstructure:"throttle_duration"`
 	BehindProxy      bool          `mapstructure:"behind_proxy"`
 	APIEnabled       bool          `mapstructure:"api_enabled"`
+}
+
+// DummySender config for the dummy sender
+type DummySender struct {
+	HTTPAddr string `mapstructure:"http_addr"`
 }
 
 // Validate validates Web config
@@ -253,6 +260,9 @@ func setDefaults() {
 
 	// AdminPanel
 	viper.SetDefault("admin_panel.host", "127.0.0.1:7711")
+
+	// DummySender
+	viper.SetDefault("dummy_sender.http_addr", "127.0.0.1:4121")
 }
 
 // Load loads the configuration from "./$configName.*" where "*" is a

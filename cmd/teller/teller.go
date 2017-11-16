@@ -19,8 +19,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
-	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
@@ -60,45 +58,6 @@ func (s *dummyBtcScanner) GetDeposit() <-chan scanner.DepositNote {
 
 func (s *dummyBtcScanner) GetScanAddresses() ([]string, error) {
 	return []string{}, nil
-}
-
-type dummySkySender struct {
-	log logrus.FieldLogger
-}
-
-func (s *dummySkySender) CreateTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
-	s.log.WithFields(logrus.Fields{
-		"destAddr": destAddr,
-		"coins":    coins,
-	}).Info("dummySkySender.CreateTransaction")
-
-	addr, err := cipher.DecodeBase58Address(destAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &coin.Transaction{
-		Out: []coin.TransactionOutput{
-			{
-				Address: addr,
-				Coins:   coins,
-			},
-		},
-	}, nil
-}
-
-func (s *dummySkySender) BroadcastTransaction(tx *coin.Transaction) *sender.BroadcastTxResponse {
-	s.log.WithField("txid", tx.TxIDHex()).Info("dummySkySender.BroadcastTransaction")
-
-	return &sender.BroadcastTxResponse{
-		Err: fmt.Errorf("dummySkySender.BroadcastTransaction: %s %v", tx.TxIDHex(), tx),
-	}
-}
-
-func (s *dummySkySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {
-	return &sender.ConfirmResponse{
-		Confirmed: true,
-	}
 }
 
 func main() {
@@ -185,7 +144,13 @@ func run() error {
 	if cfg.DummyMode {
 		log.Info("btcd and skyd disabled, running in dummy mode")
 		scanService = &dummyBtcScanner{log: log}
-		sendRPC = &dummySkySender{log: log}
+		sendRPC = sender.NewDummySender(log, cfg.DummySender.HTTPAddr)
+		go func() {
+			if err := sendRPC.ListenAndServe(); err != nil {
+				log.WithError(err).Error("DummySender.ListenAndServe failed")
+			}
+		}()
+
 	} else {
 		// create btc rpc client
 		certs, err := ioutil.ReadFile(cfg.BtcRPC.Cert)

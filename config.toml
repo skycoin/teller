@@ -45,3 +45,8 @@ tls_key = ""
 
 [admin_panel]
 # host = "127.0.0.1:7711"
+
+
+[dummy_sender]
+# fake skycoin sender with admin interface for viewing broadcast txns and manually confirming them
+# http_addr = "127.0.0.1:4121"
