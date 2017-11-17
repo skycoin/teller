@@ -308,7 +308,7 @@ func FindRand2(addrs []Address) int64 {
 		}
 	}
 
-	return rand2 + 1
+	return rand2
 }
 
 func PrintUpdateInfo(updateType string, elapsed float64, scannedBlock int64) error {
