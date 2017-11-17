@@ -11,7 +11,7 @@ import (
 func TestDummySender(t *testing.T) {
 	log, _ := testutil.NewLogger(t)
 
-	s := NewDummySender(log, "")
+	s := NewDummySender(log)
 
 	addr := "2VZu3rZozQ6nN37YSdj3EZJV7wSFVuLSm2X"
 	var coins uint64 = 100

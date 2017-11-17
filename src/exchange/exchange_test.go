@@ -669,6 +669,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 		ConversionRate: testSkyBtcRate,
 		DepositValue:   dn.Deposit.Value,
 		Deposit:        dn.Deposit,
+		Error:          ErrEmptySendAmount.Error(),
 	}
 
 	// Periodically check the database until we observe the sent deposit
