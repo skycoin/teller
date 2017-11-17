@@ -13,7 +13,16 @@ import (
 
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcutil"
+	"time"
+	"math/rand"
 )
+
+
+type UpdateInfo struct {
+	UpdateType 		string `json:"type"`
+	Time 			string `json:"elapsed"`
+	BlockScanned 	int64 `json:"scanned_block"`
+}
 
 type NewBTCAddress struct {
 	Addresses []string `json:"btc_addresses"`
@@ -232,6 +241,172 @@ func NewBTCDClient(username, pass string) (*rpcclient.Client, error) {
 	return client, nil
 }
 
+
+func FindMin(addrs []Address) int64 {
+	min := addrs[0].MinScanBlock
+	for _, a := range addrs {
+		if a.MinScanBlock < min {
+			min = a.MinScanBlock
+		}
+	}
+
+	return min+1
+}
+
+func FindMax(addrs []Address) int64 {
+	max := addrs[0].MaxScanBlock
+	for _, a := range addrs {
+		if a.MaxScanBlock > max {
+			max = a.MaxScanBlock
+		}
+	}
+
+	return max+1
+}
+
+func FindMid(addrs []Address) int64 {
+	mid := addrs[0].MidScanBlock
+	for _, a := range addrs {
+		if a.MidScanBlock > mid {
+			mid = a.MidScanBlock
+		}
+	}
+
+	return mid+1
+}
+
+func FindRand1(addrs []Address) int64 {
+	dif := int64(0)
+	rand1 := addrs[0].MinScanBlock
+	for _, a := range addrs {
+		if a.MidScanBlock - a.MinScanBlock > 0 {
+			dif = a.MidScanBlock - a.MinScanBlock
+			rand1 = a.MinScanBlock
+			break
+		}
+	}
+
+	for _, a := range addrs {
+		if a.MidScanBlock - a.MinScanBlock < dif && a.MidScanBlock - a.MinScanBlock != 0 {
+			dif = a.MidScanBlock - a.MinScanBlock
+			rand1 = a.MinScanBlock
+		}
+	}
+
+	return rand1+1
+}
+
+func FindRand2(addrs []Address) int64 {
+	min := FindMin(addrs)
+	mid := FindMid(addrs)
+	dif := int64(0)
+	rand2 := min
+	for _, a := range addrs {
+
+		if a.MinScanBlock - min > dif && a.MinScanBlock < mid {
+			dif = a.MinScanBlock - min
+			rand2 = a.MinScanBlock
+		}
+	}
+
+	return rand2+1
+}
+
+func PrintUpdateInfo(updateType string, elapsed float64, scannedBlock int64) error {
+	var info UpdateInfo
+	info.UpdateType = updateType
+	info.BlockScanned = scannedBlock
+	info.Time = strconv.FormatFloat(elapsed, 'f', -1, 64) + "s"
+	res , err := json.MarshalIndent(info, "", "		")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(res))
+	return nil
+}
+
+func UpdateMin(addrs []Address, client *rpcclient.Client) ([]Address, error) {
+
+	startTime := time.Now()
+	min := FindMin(addrs)
+
+	deposits, err := ScanBlock(client, min)
+	if err != nil {
+		fmt.Println("Block scanning is failed:", err)
+		return nil, err
+	}
+
+	addrs = UpdateAddressInfo(addrs, deposits, min)
+	finishTime := time.Now()
+	err = PrintUpdateInfo("min", finishTime.Sub(startTime).Seconds(), min)
+	if err != nil {
+		return nil, err
+	}
+	return addrs, nil
+}
+
+func UpdateMax(addrs []Address, client *rpcclient.Client) ([]Address, error) {
+
+	startTime := time.Now()
+	max := FindMax(addrs)
+
+	deposits, err := ScanBlock(client, max)
+	if err != nil {
+		fmt.Println("Block scanning is failed:", err)
+		return nil, err
+	}
+
+	addrs = UpdateAddressInfo(addrs, deposits, max)
+	finishTime := time.Now()
+	err = PrintUpdateInfo("max", finishTime.Sub(startTime).Seconds(), max)
+	if err != nil {
+		return nil, err
+	}
+	return addrs, nil
+}
+
+func UpdateRand1(addrs []Address, client *rpcclient.Client) ([]Address, error) {
+
+	startTime := time.Now()
+	rand1 := FindRand1(addrs)
+
+	deposits, err := ScanBlock(client, rand1)
+	if err != nil {
+		fmt.Println("Block scanning is failed:", err)
+		return nil, err
+	}
+
+	addrs = UpdateAddressInfo(addrs, deposits, rand1)
+	finishTime := time.Now()
+	err = PrintUpdateInfo("rand1", finishTime.Sub(startTime).Seconds(), rand1)
+	if err != nil {
+		return nil, err
+	}
+	return addrs, nil
+}
+
+func UpdateRand2(addrs []Address, client *rpcclient.Client) ([]Address, error) {
+
+	startTime := time.Now()
+	rand2 := FindRand2(addrs)
+
+	deposits, err := ScanBlock(client, rand2)
+	if err != nil {
+		fmt.Println("Block scanning is failed:", err)
+		return nil, err
+	}
+
+	addrs = UpdateAddressInfo(addrs, deposits, rand2)
+	finishTime := time.Now()
+	err = PrintUpdateInfo("rand2", finishTime.Sub(startTime).Seconds(), rand2)
+	if err != nil {
+		return nil, err
+	}
+	return addrs, nil
+}
+
+
+
 func run() error {
 	//flags
 	user := flag.String("user", "myuser", "btcd username")
@@ -241,6 +416,11 @@ func run() error {
 	blockM := flag.Int64("m", 0, "finish blockID")
 	add := flag.String("add", "", "new btc addresses")
 	addFile := flag.String("add_file", "", "new btc addresses from file")
+	updateMin := flag.Bool("upd_min", false, "look for min and update 1 block forward")
+	updateMax := flag.Bool("upd_max", false, "look for max and update 1 block forward")
+	updateRand1 := flag.Bool("rand1", false, "look for min(max-min) and update 1 block forward")
+	updateRand2 := flag.Bool("rand2", false, "look for min(mid-min) and update 1 block forward")
+	randomize := flag.Bool("randomize", false, "randomly update 1 block forward by min/max/rand1")
 	flag.Parse()
 
 	if *add != "" {
@@ -283,6 +463,62 @@ func run() error {
 
 		addrs = UpdateAddressInfo(addrs, deposits, int64(i))
 
+	}
+
+
+	if *updateMin == true {
+		addrs, err = UpdateMin(addrs, client)
+		if err != nil {
+			return err
+		}
+	}
+
+	if *updateMax {
+		addrs, err = UpdateMax(addrs, client)
+		if err != nil {
+			return err
+		}
+	}
+
+	if *updateRand1 {
+		addrs, err = UpdateRand1(addrs, client)
+		if err != nil {
+			return err
+		}
+	}
+
+	if *updateRand2 {
+		addrs, err = UpdateRand2(addrs, client)
+		if err != nil {
+			return err
+		}
+	}
+
+	if *randomize {
+		rand.Seed(time.Now().UnixNano())
+		n := rand.Intn(4)
+		switch  n {
+		case 0:
+			addrs, err = UpdateMin(addrs, client)
+			if err != nil {
+				return err
+			}
+		case 1:
+			addrs, err = UpdateMax(addrs, client)
+			if err != nil {
+				return err
+			}
+		case 2:
+			addrs, err = UpdateRand1(addrs, client)
+			if err != nil {
+				return err
+			}
+		case 3:
+			addrs, err = UpdateRand2(addrs, client)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	err = SaveWallet(*wallet, addrs)
