@@ -11,17 +11,17 @@ import (
 	"strconv"
 	"strings"
 
+	"math/rand"
+	"time"
+
 	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/btcsuite/btcutil"
-	"time"
-	"math/rand"
 )
 
-
 type UpdateInfo struct {
-	UpdateType 		string `json:"type"`
-	Time 			string `json:"elapsed"`
-	BlockScanned 	int64 `json:"scanned_block"`
+	UpdateType   string `json:"type"`
+	Time         string `json:"elapsed"`
+	BlockScanned int64  `json:"scanned_block"`
 }
 
 type NewBTCAddress struct {
@@ -241,7 +241,6 @@ func NewBTCDClient(username, pass string) (*rpcclient.Client, error) {
 	return client, nil
 }
 
-
 func FindMin(addrs []Address) int64 {
 	min := addrs[0].MinScanBlock
 	for _, a := range addrs {
@@ -250,7 +249,7 @@ func FindMin(addrs []Address) int64 {
 		}
 	}
 
-	return min+1
+	return min + 1
 }
 
 func FindMax(addrs []Address) int64 {
@@ -261,7 +260,7 @@ func FindMax(addrs []Address) int64 {
 		}
 	}
 
-	return max+1
+	return max + 1
 }
 
 func FindMid(addrs []Address) int64 {
@@ -272,14 +271,14 @@ func FindMid(addrs []Address) int64 {
 		}
 	}
 
-	return mid+1
+	return mid + 1
 }
 
 func FindRand1(addrs []Address) int64 {
 	dif := int64(0)
 	rand1 := addrs[0].MinScanBlock
 	for _, a := range addrs {
-		if a.MidScanBlock - a.MinScanBlock > 0 {
+		if a.MidScanBlock-a.MinScanBlock > 0 {
 			dif = a.MidScanBlock - a.MinScanBlock
 			rand1 = a.MinScanBlock
 			break
@@ -287,13 +286,13 @@ func FindRand1(addrs []Address) int64 {
 	}
 
 	for _, a := range addrs {
-		if a.MidScanBlock - a.MinScanBlock < dif && a.MidScanBlock - a.MinScanBlock != 0 {
+		if a.MidScanBlock-a.MinScanBlock < dif && a.MidScanBlock-a.MinScanBlock != 0 {
 			dif = a.MidScanBlock - a.MinScanBlock
 			rand1 = a.MinScanBlock
 		}
 	}
 
-	return rand1+1
+	return rand1 + 1
 }
 
 func FindRand2(addrs []Address) int64 {
@@ -303,13 +302,13 @@ func FindRand2(addrs []Address) int64 {
 	rand2 := min
 	for _, a := range addrs {
 
-		if a.MinScanBlock - min > dif && a.MinScanBlock < mid {
+		if a.MinScanBlock-min > dif && a.MinScanBlock < mid {
 			dif = a.MinScanBlock - min
 			rand2 = a.MinScanBlock
 		}
 	}
 
-	return rand2+1
+	return rand2 + 1
 }
 
 func PrintUpdateInfo(updateType string, elapsed float64, scannedBlock int64) error {
@@ -317,7 +316,7 @@ func PrintUpdateInfo(updateType string, elapsed float64, scannedBlock int64) err
 	info.UpdateType = updateType
 	info.BlockScanned = scannedBlock
 	info.Time = strconv.FormatFloat(elapsed, 'f', -1, 64) + "s"
-	res , err := json.MarshalIndent(info, "", "		")
+	res, err := json.MarshalIndent(info, "", "		")
 	if err != nil {
 		return err
 	}
@@ -405,8 +404,6 @@ func UpdateRand2(addrs []Address, client *rpcclient.Client) ([]Address, error) {
 	return addrs, nil
 }
 
-
-
 func run() error {
 	//flags
 	user := flag.String("user", "myuser", "btcd username")
@@ -465,7 +462,6 @@ func run() error {
 
 	}
 
-
 	if *updateMin == true {
 		addrs, err = UpdateMin(addrs, client)
 		if err != nil {
@@ -497,7 +493,7 @@ func run() error {
 	if *randomize {
 		rand.Seed(time.Now().UnixNano())
 		n := rand.Intn(4)
-		switch  n {
+		switch n {
 		case 0:
 			addrs, err = UpdateMin(addrs, client)
 			if err != nil {
