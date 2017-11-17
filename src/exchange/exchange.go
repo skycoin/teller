@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/skycoin/skycoin/src/coin"
+	"github.com/skycoin/skycoin/src/util/droplet"
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
 )
@@ -103,7 +104,7 @@ func (s *Exchange) Run() error {
 
 	if err != nil {
 		err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
-		log.WithError(err).Error()
+		log.WithError(err).Error(err)
 		return err
 	}
 
@@ -114,7 +115,7 @@ func (s *Exchange) Run() error {
 
 	if err != nil {
 		err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
-		log.WithError(err).Error()
+		log.WithError(err).Error(err)
 		return err
 	}
 
@@ -263,7 +264,7 @@ func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
 }
 
 func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
-	log := s.log.WithField("depositInfo", di)
+	log := s.log.WithField("deposit", di)
 
 	if err := di.ValidateForStatus(); err != nil {
 		log.WithError(err).Error("handleDepositInfoState's DepositInfo is invalid")
@@ -280,14 +281,18 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 
 			// If the send amount is empty, skip to StatusDone.
 			if err == ErrEmptySendAmount {
+				log.Info("Send amount is 0, skipping to StatusDone")
 				di, err = s.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
 					di.Status = StatusDone
+					di.Error = ErrEmptySendAmount.Error()
 					return di
 				})
 				if err != nil {
 					log.WithError(err).Error("Update DepositInfo set StatusDone failed")
 					return di, err
 				}
+
+				log.WithError(ErrEmptySendAmount).Info("DepositInfo set to StatusDone")
 
 				return di, nil
 			}
@@ -306,9 +311,10 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 				break
 			}
 		}
+
 		if skySent == 0 {
 			err := errors.New("No output to destination address found in transaction")
-			log.WithError(err).Error()
+			log.WithError(err).Error(err)
 			return di, err
 		}
 
@@ -344,6 +350,8 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 			return di, err
 		}
 
+		log.Info("DepositInfo set to StatusWaitConfirm")
+
 		return di, nil
 
 	case StatusWaitConfirm:
@@ -365,6 +373,8 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 			return di, ErrNotConfirmed
 		}
 
+		log.Info("Transaction is confirmed")
+
 		di, err := s.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
 			di.Status = StatusDone
 			return di
@@ -373,6 +383,8 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 			log.WithError(err).Error("UpdateDepositInfo set StatusDone failed")
 			return di, err
 		}
+
+		log.Info("DepositInfo status set to StatusDone")
 
 		return di, nil
 
@@ -389,7 +401,7 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 		fallthrough
 	default:
 		err := ErrDepositStatusInvalid
-		log.WithError(err).Error()
+		log.WithError(err).Error(err)
 		return di, err
 	}
 }
@@ -401,7 +413,7 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 	// during GetOrCreateDepositInfo().
 	if di.SkyAddress == "" {
 		err := ErrNoBoundAddress
-		log.WithError(err).Error()
+		log.WithError(err).Error(err)
 		return nil, err
 	}
 
@@ -414,13 +426,20 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 		return nil, err
 	}
 
-	log = log.WithField("sendAmt", skyAmt)
+	skyAmtCoins, err := droplet.ToString(skyAmt)
+	if err != nil {
+		log.WithError(err).Error("droplet.ToString failed")
+		return nil, err
+	}
+
+	log = log.WithField("sendAmtDroplets", skyAmt)
+	log = log.WithField("sendAmtCoins", skyAmtCoins)
 
 	log.Info("Creating skycoin transaction")
 
 	if skyAmt == 0 {
 		err := ErrEmptySendAmount
-		log.WithError(err).Error()
+		log.WithError(err).Error(err)
 		return nil, err
 	}
 
@@ -485,7 +504,7 @@ func (s *Exchange) broadcastTransaction(tx *coin.Transaction) (*sender.Broadcast
 
 	if rsp.Err != nil {
 		err := fmt.Errorf("Send skycoin failed: %v", rsp.Err)
-		log.WithError(err).Error()
+		log.WithError(err).Error(err)
 		return nil, err
 	}
 

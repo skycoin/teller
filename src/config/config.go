@@ -21,8 +21,6 @@ const (
 type Config struct {
 	// Enable debug logging
 	Debug bool `mapstructure:"debug"`
-	// Run without a real btcd and skyd service
-	DummyMode bool `mapstructure:"dummy_mode"`
 	// Run with gops profiler
 	Profile bool `mapstructure:"profile"`
 	// Where log is saved
@@ -43,7 +41,7 @@ type Config struct {
 
 	AdminPanel AdminPanel `mapstructure:"admin_panel"`
 
-	DummySender DummySender `mapstructure:"dummy_sender"`
+	Dummy Dummy `mapstructure:"dummy"`
 }
 
 // Teller config for teller
@@ -98,11 +96,6 @@ type Web struct {
 	APIEnabled       bool          `mapstructure:"api_enabled"`
 }
 
-// DummySender config for the dummy sender
-type DummySender struct {
-	HTTPAddr string `mapstructure:"http_addr"`
-}
-
 // Validate validates Web config
 func (c Web) Validate() error {
 	if c.HTTPAddr == "" && c.HTTPSAddr == "" {
@@ -131,6 +124,13 @@ func (c Web) Validate() error {
 // AdminPanel config for the admin panel AdminPanel
 type AdminPanel struct {
 	Host string `mapstructure:"host"`
+}
+
+// Dummy config for the fake sender and scanner
+type Dummy struct {
+	Scanner  bool   `mapstructure:"scanner"`
+	Sender   bool   `mapstructure:"sender"`
+	HTTPAddr string `mapstructure:"http_addr"`
 }
 
 // Redacted returns a copy of the config with sensitive information redacted
@@ -163,7 +163,7 @@ func (c Config) Validate() error {
 
 	// TODO -- check btc_addresses file
 
-	if !c.DummyMode {
+	if !c.Dummy.Sender {
 		if c.SkyRPC.Address == "" {
 			oops("sky_rpc.address missing")
 		}
@@ -175,7 +175,9 @@ func (c Config) Validate() error {
 		} else {
 			conn.Close()
 		}
+	}
 
+	if !c.Dummy.Scanner {
 		if c.BtcRPC.Server == "" {
 			oops("btc_rpc.server missing")
 		}
@@ -206,7 +208,7 @@ func (c Config) Validate() error {
 		oops(fmt.Sprintf("sky_exchanger.sky_btc_exchange_rate invalid: %v", err))
 	}
 
-	if !c.DummyMode {
+	if !c.Dummy.Sender {
 		if c.SkyExchanger.Wallet == "" {
 			oops("sky_exchanger.wallet missing")
 		}
@@ -229,7 +231,6 @@ func (c Config) Validate() error {
 
 func setDefaults() {
 	// Top-level args
-	viper.SetDefault("dummy_mode", false)
 	viper.SetDefault("profile", false)
 	viper.SetDefault("debug", true)
 	viper.SetDefault("logfile", "teller.log")
@@ -262,7 +263,9 @@ func setDefaults() {
 	viper.SetDefault("admin_panel.host", "127.0.0.1:7711")
 
 	// DummySender
-	viper.SetDefault("dummy_sender.http_addr", "127.0.0.1:4121")
+	viper.SetDefault("dummy.http_addr", "127.0.0.1:4121")
+	viper.SetDefault("dummy.scanner", false)
+	viper.SetDefault("dummy.sender", false)
 }
 
 // Load loads the configuration from "./$configName.*" where "*" is a

@@ -3,7 +3,6 @@
 # Some values have no defaults and must be filled in
 
 debug = true
-dummy_mode = true
 profile = false
 # log_filename = "teller.log"
 btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
@@ -47,6 +46,9 @@ tls_key = ""
 # host = "127.0.0.1:7711"
 
 
-[dummy_sender]
-# fake skycoin sender with admin interface for viewing broadcast txns and manually confirming them
+[dummy]
+# fake sender and scanner with admin interface adding fake deposits,
+# and viewing and confirmed skycoin transactions
+sender = true
+scanner = true
 # http_addr = "127.0.0.1:4121"

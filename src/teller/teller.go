@@ -47,7 +47,7 @@ func (s *Teller) Run() error {
 	defer close(s.done)
 
 	if err := s.httpServ.Run(); err != nil {
-		log.WithError(err).Error()
+		log.WithError(err).Error(err)
 		select {
 		case <-s.quit:
 			return nil

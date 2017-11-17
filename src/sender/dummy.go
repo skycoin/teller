@@ -41,27 +41,32 @@ type DummySender struct {
 	seq           int64
 	secKey        cipher.SecKey
 	log           logrus.FieldLogger
-	httpAddr      string
 	sync.RWMutex
 }
 
 // NewDummySender creates a DummySender
-func NewDummySender(log logrus.FieldLogger, httpAddr string) *DummySender {
+func NewDummySender(log logrus.FieldLogger) *DummySender {
 	_, sec := cipher.GenerateDeterministicKeyPair([]byte(seed))
 
 	return &DummySender{
 		broadcastTxns: make(map[string]*DummyTransaction),
 		secKey:        sec,
 		log:           log.WithField("prefix", "sender.dummy"),
-		httpAddr:      httpAddr,
 	}
 }
 
 // CreateTransaction creates a fake skycoin transaction
 func (s *DummySender) CreateTransaction(addr string, coins uint64) (*coin.Transaction, error) {
+	c, err := droplet.ToString(coins)
+	if err != nil {
+		s.log.WithError(err).Error("droplet.ToString failed")
+		return nil, err
+	}
+
 	s.log.WithFields(logrus.Fields{
-		"addr":  addr,
-		"coins": coins,
+		"addr":     addr,
+		"droplets": coins,
+		"coins":    c,
 	}).Info("CreateTransaction")
 
 	a, err := cipher.DecodeBase58Address(addr)
@@ -137,22 +142,17 @@ func (s *DummySender) IsTxConfirmed(txid string) *ConfirmResponse {
 
 // HTTP interface
 
-// ListenAndServe starts the DummySender's admin HTTP interface
-func (s *DummySender) ListenAndServe() error {
-	s.log.WithField("httpAddr", s.httpAddr).Info("ListenAndServe")
-
-	mux := http.NewServeMux()
+// BindHandlers binds admin API handlers to the mux
+func (s *DummySender) BindHandlers(mux *http.ServeMux) {
 	mux.Handle("/dummy/sender/broadcasts", http.HandlerFunc(s.getBroadcastedTransactionsHandler))
 	mux.Handle("/dummy/sender/confirm", http.HandlerFunc(s.confirmBroadcastedTransactionHandler))
-
-	return http.ListenAndServe(s.httpAddr, mux)
 }
 
 func (s *DummySender) getBroadcastedTransactions() []*DummyTransaction {
 	s.RLock()
 	defer s.RUnlock()
 
-	txns := make([]*DummyTransaction, len(s.broadcastTxns))
+	txns := make([]*DummyTransaction, 0, len(s.broadcastTxns))
 	for _, txn := range s.broadcastTxns {
 		txns = append(txns, txn)
 	}
@@ -208,7 +208,7 @@ func (s *DummySender) getBroadcastedTransactionsHandler(w http.ResponseWriter, r
 	}
 
 	if err := httputil.JSONResponse(w, txnsRsp); err != nil {
-		s.log.WithError(err).Error()
+		s.log.WithError(err).Error(err)
 	}
 }
 

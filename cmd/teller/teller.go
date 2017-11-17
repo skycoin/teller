@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/signal"
 	"os/user"
@@ -141,16 +142,12 @@ func run() error {
 	var sendService *sender.SendService
 	var sendRPC sender.Sender
 
-	if cfg.DummyMode {
-		log.Info("btcd and skyd disabled, running in dummy mode")
-		scanService = &dummyBtcScanner{log: log}
-		sendRPC = sender.NewDummySender(log, cfg.DummySender.HTTPAddr)
-		go func() {
-			if err := sendRPC.ListenAndServe(); err != nil {
-				log.WithError(err).Error("DummySender.ListenAndServe failed")
-			}
-		}()
+	dummyMux := http.NewServeMux()
 
+	if cfg.Dummy.Scanner {
+		log.Info("btcd disabled, running dummy scanner")
+		scanService = scanner.NewDummyScanner(log)
+		scanService.(*scanner.DummyScanner).BindHandlers(dummyMux)
 	} else {
 		// create btc rpc client
 		certs, err := ioutil.ReadFile(cfg.BtcRPC.Cert)
@@ -193,19 +190,33 @@ func run() error {
 		background("btcScanner.Run", errC, btcScanner.Run)
 
 		scanService = btcScanner
+	}
 
+	if cfg.Dummy.Sender {
+		log.Info("skyd disabled, running dummy sender")
+		sendRPC = sender.NewDummySender(log)
+		sendRPC.(*sender.DummySender).BindHandlers(dummyMux)
+	} else {
 		skyRPC, err := sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
 		if err != nil {
 			log.WithError(err).Error("sender.NewRPC failed")
 			return err
 		}
 
-		// create skycoin send service
 		sendService = sender.NewService(log, skyRPC)
 
 		background("sendService.Run", errC, sendService.Run)
 
 		sendRPC = sender.NewRetrySender(sendService)
+	}
+
+	if cfg.Dummy.Scanner || cfg.Dummy.Sender {
+		log.Infof("Starting dummy admin interface listener on http://%s", cfg.Dummy.HTTPAddr)
+		go func() {
+			if err := http.ListenAndServe(cfg.Dummy.HTTPAddr, dummyMux); err != nil {
+				log.WithError(err).Error("Dummy ListenAndServe failed")
+			}
+		}()
 	}
 
 	// create exchange service

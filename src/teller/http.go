@@ -420,7 +420,7 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			DepositAddress: btcAddr,
 			CoinType:       scanner.CoinTypeBTC,
 		}); err != nil {
-			log.WithError(err).Error()
+			log.WithError(err).Error(err)
 		}
 	}
 }
@@ -486,7 +486,7 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 		if err := httputil.JSONResponse(w, StatusResponse{
 			Statuses: depositStatuses,
 		}); err != nil {
-			log.WithError(err).Error()
+			log.WithError(err).Error(err)
 		}
 	}
 }
@@ -533,7 +533,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			SkyBtcExchangeRate:       skyPerBTC,
 			MaxBoundBtcAddresses:     s.cfg.Teller.MaxBoundBtcAddresses,
 		}); err != nil {
-			log.WithError(err).Error()
+			log.WithError(err).Error(err)
 		}
 	}
 }
