@@ -17,7 +17,6 @@ import (
 	"github.com/boltdb/bolt"
 	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
 	"github.com/google/gops/agent"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
 	"github.com/skycoin/teller/src/addrs"
@@ -34,32 +33,6 @@ const (
 	defaultAppDir = ".teller-skycoin"
 	dbName        = "teller.db"
 )
-
-type dummyBtcScanner struct {
-	log logrus.FieldLogger
-}
-
-func (s *dummyBtcScanner) Run() error {
-	return nil
-}
-
-func (s *dummyBtcScanner) Shutdown() {}
-
-func (s *dummyBtcScanner) AddScanAddress(addr string) error {
-	s.log.WithField("addr", addr).Info("dummyBtcScanner.AddDepositAddress")
-	return nil
-}
-
-func (s *dummyBtcScanner) GetDeposit() <-chan scanner.DepositNote {
-	s.log.Info("dummyBtcScanner.GetDeposit")
-	c := make(chan scanner.DepositNote)
-	close(c)
-	return c
-}
-
-func (s *dummyBtcScanner) GetScanAddresses() ([]string, error) {
-	return []string{}, nil
-}
 
 func main() {
 	if err := run(); err != nil {

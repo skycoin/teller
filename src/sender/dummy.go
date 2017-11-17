@@ -165,14 +165,14 @@ func (s *DummySender) getBroadcastedTransactions() []*DummyTransaction {
 }
 
 type dummyTransactionResponseOutput struct {
-	Address string
-	Coins   string
+	Address string `json:"address"`
+	Coins   string `json:"coins"`
 }
 
 type dummyTransactionResponse struct {
-	Txid      string
-	Outputs   []dummyTransactionResponseOutput
-	Confirmed bool
+	Txid      string                           `json:"txid"`
+	Outputs   []dummyTransactionResponseOutput `json:"outputs"`
+	Confirmed bool                             `json:"confirmed"`
 }
 
 func (s *DummySender) getBroadcastedTransactionsHandler(w http.ResponseWriter, r *http.Request) {
