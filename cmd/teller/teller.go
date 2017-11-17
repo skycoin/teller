@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"os/signal"
 	"os/user"
@@ -16,11 +17,8 @@ import (
 	"github.com/boltdb/bolt"
 	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
 	"github.com/google/gops/agent"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
-	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
@@ -35,71 +33,6 @@ const (
 	defaultAppDir = ".teller-skycoin"
 	dbName        = "teller.db"
 )
-
-type dummyBtcScanner struct {
-	log logrus.FieldLogger
-}
-
-func (s *dummyBtcScanner) Run() error {
-	return nil
-}
-
-func (s *dummyBtcScanner) Shutdown() {}
-
-func (s *dummyBtcScanner) AddScanAddress(addr string) error {
-	s.log.WithField("addr", addr).Info("dummyBtcScanner.AddDepositAddress")
-	return nil
-}
-
-func (s *dummyBtcScanner) GetDeposit() <-chan scanner.DepositNote {
-	s.log.Info("dummyBtcScanner.GetDeposit")
-	c := make(chan scanner.DepositNote)
-	close(c)
-	return c
-}
-
-func (s *dummyBtcScanner) GetScanAddresses() ([]string, error) {
-	return []string{}, nil
-}
-
-type dummySkySender struct {
-	log logrus.FieldLogger
-}
-
-func (s *dummySkySender) CreateTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
-	s.log.WithFields(logrus.Fields{
-		"destAddr": destAddr,
-		"coins":    coins,
-	}).Info("dummySkySender.CreateTransaction")
-
-	addr, err := cipher.DecodeBase58Address(destAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	return &coin.Transaction{
-		Out: []coin.TransactionOutput{
-			{
-				Address: addr,
-				Coins:   coins,
-			},
-		},
-	}, nil
-}
-
-func (s *dummySkySender) BroadcastTransaction(tx *coin.Transaction) *sender.BroadcastTxResponse {
-	s.log.WithField("txid", tx.TxIDHex()).Info("dummySkySender.BroadcastTransaction")
-
-	return &sender.BroadcastTxResponse{
-		Err: fmt.Errorf("dummySkySender.BroadcastTransaction: %s %v", tx.TxIDHex(), tx),
-	}
-}
-
-func (s *dummySkySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {
-	return &sender.ConfirmResponse{
-		Confirmed: true,
-	}
-}
 
 func main() {
 	if err := run(); err != nil {
@@ -182,10 +115,12 @@ func run() error {
 	var sendService *sender.SendService
 	var sendRPC sender.Sender
 
-	if cfg.DummyMode {
-		log.Info("btcd and skyd disabled, running in dummy mode")
-		scanService = &dummyBtcScanner{log: log}
-		sendRPC = &dummySkySender{log: log}
+	dummyMux := http.NewServeMux()
+
+	if cfg.Dummy.Scanner {
+		log.Info("btcd disabled, running dummy scanner")
+		scanService = scanner.NewDummyScanner(log)
+		scanService.(*scanner.DummyScanner).BindHandlers(dummyMux)
 	} else {
 		// create btc rpc client
 		certs, err := ioutil.ReadFile(cfg.BtcRPC.Cert)
@@ -228,19 +163,33 @@ func run() error {
 		background("btcScanner.Run", errC, btcScanner.Run)
 
 		scanService = btcScanner
+	}
 
+	if cfg.Dummy.Sender {
+		log.Info("skyd disabled, running dummy sender")
+		sendRPC = sender.NewDummySender(log)
+		sendRPC.(*sender.DummySender).BindHandlers(dummyMux)
+	} else {
 		skyRPC, err := sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
 		if err != nil {
 			log.WithError(err).Error("sender.NewRPC failed")
 			return err
 		}
 
-		// create skycoin send service
 		sendService = sender.NewService(log, skyRPC)
 
 		background("sendService.Run", errC, sendService.Run)
 
 		sendRPC = sender.NewRetrySender(sendService)
+	}
+
+	if cfg.Dummy.Scanner || cfg.Dummy.Sender {
+		log.Infof("Starting dummy admin interface listener on http://%s", cfg.Dummy.HTTPAddr)
+		go func() {
+			if err := http.ListenAndServe(cfg.Dummy.HTTPAddr, dummyMux); err != nil {
+				log.WithError(err).Error("Dummy ListenAndServe failed")
+			}
+		}()
 	}
 
 	// create exchange service

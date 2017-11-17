@@ -4,7 +4,7 @@
 
 [![Build Status](https://travis-ci.org/skycoin/teller.svg?branch=master)](https://travis-ci.org/skycoin/teller)
 
-<!-- MarkdownTOC autolink="true" bracket="round" depth="3" -->
+<!-- MarkdownTOC autolink="true" bracket="round" depth="5" -->
 
 - [Releases & Branches](#releases--branches)
 - [Setup project](#setup-project)
@@ -23,6 +23,12 @@
     - [Bind](#bind)
     - [Status](#status)
     - [Config](#config)
+    - [Dummy](#dummy)
+        - [Scanner](#scanner)
+            - [Deposit](#deposit)
+        - [Sender](#sender)
+            - [Broadcasts](#broadcasts)
+            - [Confirm](#confirm)
 - [Code linting](#code-linting)
 - [Run tests](#run-tests)
 - [Database structure](#database-structure)
@@ -63,7 +69,6 @@ then use the `-c` or `--config` flag to load your custom config.
 Description of the config file:
 
 * `debug` [bool]: Enable debug logging.
-* `dummy_mode` [bool]: Run in ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind).
 * `profile` [bool]: Enable gops profiler.
 * `log_filename` [string]: Log file.
 * `btc_addresses` [string]: Filepath of the btc_addresses.json file. See [generate BTC addresses](#generate-btc-addresses).
@@ -90,30 +95,18 @@ Description of the config file:
 * `web.auto_tls_host` [string]: Hostname/domain to install an automatic HTTPS certificate for, using Let's Encrypt.
 * `web.tls_cert` [string]: Filepath to TLS certificate. Cannot be used with `web.auto_tls_host`.
 * `web.tls_key` [string]: Filepath to TLS key. Cannot be used with `web.auto_tls_host`.
+* `admin_panel.host` [string] Host address of the admin panel.
+* `dummy.sender` [bool]: Use a fake SKY sender (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
+* `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
+* `dummy.http_addr` [bool]: Host address for the dummy scanner and sender API.
 
 ### Running teller without btcd or skyd
 
 Teller can be run in "dummy mode". It will ignore btcd and skycoind.
-It can still provide addresses via `/api/bind` and report status with `/api/status`,
-but it will not process any deposits or send skycoins.
+It will still provide addresses via `/api/bind` and report status with `/api/status`.
+but it will not process any real deposits or send real skycoins.
 
-```sh
-# Generate btc_addresses.json file. 'foobar' is an arbitrary seed, and 10 is an arbitrary number of addresses to generate
-go run cmd/tool/tool.go -json newbtcaddress foobar 10 > /tmp/btc_addresses.json
-
-# Run proxy, a pubkey will be printed to stdout, copy it
-go run cmd/proxy/proxy.go
-
-# In a new terminal, run teller in dummy mode, provide pubkey from proxy stdout, point addresses to addr file
-cd cmd/teller/
-go run teller.go -proxy-pubkey=<proxy pubkey> -dummy -btc-addrs=/tmp/btc_addresses.json
-```
-
-Proxy API is available on `localhost:7071`. API has two methods, `/api/bind` and `/api/status`, with one query arg `skyaddr`, e.g.:
-
-```sh
-wget http://localhost:7071/api/bind?skyaddr=<skycoin addr>
-```
+See the [dummy API](#dummy) for controlling the fake deposits and sends.
 
 ### Generate BTC addresses
 
@@ -344,6 +337,78 @@ Response:
     "max_bound_btc_addrs": 5,
     "sky_btc_exchange_rate": "123.000000"
 }
+```
+
+### Dummy
+
+A dummy scanner and sender API is available over `dummy.http_addr` if
+`dummy.scanner` or `dummy.sender` are enabled.
+
+#### Scanner
+
+##### Deposit
+
+```sh
+Method: GET, POST
+URI: /dummy/scanner/deposit
+```
+
+Adds a deposit to the scanner.
+
+Example:
+
+```sh
+curl http://localhost:4121/dummy/scanner/deposit?addr=1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB&value=100000000&height=494713&tx=edb29a9b561a8d6a6118eb1f724c87f853bf471d7e4f0e9ccb9e1d340235687b&n=0
+```
+
+#### Sender
+
+##### Broadcasts
+
+```sh
+Method: GET
+URI: /dummy/sender/broadcasts
+```
+
+Lists broadcasted skycoin transactions.  Note: the dummy sender keeps its records
+in memory, if teller is restarted, the list of broadcasted transactions is reset.
+
+Example:
+
+```sh
+curl http://localhost:4121/dummy/sender/broadcasts
+```
+
+Response:
+
+```json
+[
+    {
+        "txid": "4fc9743b04c2e3f5e467cde38c0872e3e3ad9ec05d59081ad1a8bd88045635de",
+        "outputs": [
+            {
+                "address": "vpfRRmfPU11HSZjKroskGVnHg4CJ5zJ4ax",
+                "coins": "500.000000"
+            }
+        ],
+        "confirmed": false
+    }
+]
+```
+
+##### Confirm
+
+```sh
+Method: GET, POST
+URI: /dummy/sender/confirm
+```
+
+Confirms a broadcasted transaction.
+
+Example:
+
+```sh
+curl http://localhost:4121/dummy/sender/confirm?txid=4fc9743b04c2e3f5e467cde38c0872e3e3ad9ec05d59081ad1a8bd88045635de
 ```
 
 ## Code linting

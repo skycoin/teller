@@ -176,13 +176,13 @@ func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate string) (Deposit
 			skyAddr, err := s.getBindAddressTx(tx, dv.Address)
 			if err != nil {
 				err = fmt.Errorf("GetBindAddress failed: %v", err)
-				log.WithError(err).Error()
+				log.WithError(err).Error(err)
 				return err
 			}
 
 			if skyAddr == "" {
 				err = ErrNoBoundAddress
-				log.WithError(err).Error()
+				log.WithError(err).Error(err)
 				return err
 			}
 
@@ -205,7 +205,7 @@ func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate string) (Deposit
 			updatedDi, err := s.addDepositInfoTx(tx, di)
 			if err != nil {
 				err = fmt.Errorf("addDepositInfoTx failed: %v", err)
-				log.WithError(err).Error()
+				log.WithError(err).Error(err)
 				return err
 			}
 
@@ -215,7 +215,7 @@ func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate string) (Deposit
 
 		default:
 			err = fmt.Errorf("getDepositInfo failed: %v", err)
-			log.WithError(err).Error()
+			log.WithError(err).Error(err)
 			return err
 		}
 	}); err != nil {
