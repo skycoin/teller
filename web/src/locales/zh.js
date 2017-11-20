@@ -1,13 +1,10 @@
 export default {
   header: {
     navigation: {
-      distribution: '币分发',
-      distributionEvent: 'Distribution event',
       whitepapers: '白皮书',
       downloads: '下载区',
       explorer: '区块浏览器',
       blog: '开发日志',
-      buy: '购买天空币',
       roadmap: 'Roadmap'
     },
   },
@@ -16,11 +13,9 @@ export default {
     explore: '浏览',
     community: '社区',
     wallet: '下载钱包',
-    buy: '购买天空币',
     infographics: '信息图表',
     whitepapers: '白皮书',
     blockchain: '区块浏览器',
-    distribution: '币分发',
     blog: '开发日志',
     twitter: 'Twitter',
     reddit: 'Reddit',
@@ -39,20 +34,20 @@ export default {
     discord: 'Discord',
   },
   distribution: {
-    title: '天空币分发活动',
-    heading: '天空币分发活动',
-    headingEnded: 'The previous distribution event finished on',
-    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>, 
-      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the 
-      <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a> 
-      to learn when the next event begins.`,
+    rate: 'Current OTC rate: {rate} SKY/BTC',
+    title: '天空币OTC',
+    heading: '天空币OTC',
+    headingEnded: '天空币暂时关门',
+    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>,
+      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the
+      <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a>.`,
     instructions: `
 <p>参加天空币分发活动:</p>
 
 <ul>
   <li>在下面输入您的天空币地址</li>
   <li>您将收到一个唯一的比特币地址用来购买天空币</li>
-  <li>将比特币发送到您收到的地址上, 您将以每个天空币0.002比特币的价格收到发送的天空币</li>
+  <li>将比特币发送到您收到的地址上</li>
 </ul>
 
 <p>您可以通过输入您的天空币地址并点击下面的"<strong>检查状态</strong>"来核实订单的状态</p>

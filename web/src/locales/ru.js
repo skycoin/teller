@@ -1,13 +1,10 @@
 export default {
   header: {
     navigation: {
-      distribution: 'Распространение',
-      distributionEvent: 'Распространение',
       whitepapers: 'Документация',
       downloads: 'Загрузки',
       explorer: 'Обозреватель',
       blog: 'Блог',
-      buy: 'Купить Skycoin',
       roadmap: 'План',
     },
   },
@@ -16,11 +13,9 @@ export default {
     explore: 'Дополнительно',
     community: 'Сообщество',
     wallet: 'Получить Кошелёк',
-    buy: 'Купить Skycoin',
     infographics: 'Инфографика',
     whitepapers: 'Документация',
     blockchain: 'Блокчейн Обозреватель',
-    distribution: 'Распространение',
     blog: 'Блог',
     twitter: 'Twitter',
     reddit: 'Reddit',
@@ -39,12 +34,13 @@ export default {
     discord: 'Discord',
   },
   distribution: {
-    title: 'Распространение Skycoin',
-    heading: 'Распространение Skycoin',
+    rate: 'Current OTC rate: {rate} SKY/BTC',
+    title: 'Skycoin OTC',
+    heading: 'Skycoin OTC',
     headingEnded: 'The previous distribution event finished on',
-    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>, 
-      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the 
-      <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a> 
+    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>,
+      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the
+      <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a>
       to learn when the next event begins.`,
     instructions: `
 <p>Что необходимо для участия в распространении:</p>
@@ -52,7 +48,7 @@ export default {
 <ul>
   <li>Введите ваш Skycoin адрес</li>
   <li>Вы получите уникальный Bitcoin адрес для приобретения SKY</li>
-  <li>Пошлите Bitcoin на полученый адрес: 1 SKY стоит 0.002 BTC</li>
+  <li>Пошлите Bitcoin на полученый адрес</li>
 </ul>
 
 <p>Вы можете проверить статус заказа, введя адрес SKY и нажав на <strong>Проверить статус</strong>.</p>

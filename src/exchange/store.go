@@ -38,7 +38,7 @@ var (
 type Storer interface {
 	GetBindAddress(btcAddr string) (string, error)
 	BindAddress(skyAddr, btcAddr string) error
-	GetOrCreateDepositInfo(scanner.Deposit, int64) (DepositInfo, error)
+	GetOrCreateDepositInfo(scanner.Deposit, string) (DepositInfo, error)
 	GetDepositInfoArray(DepositFilter) ([]DepositInfo, error)
 	GetDepositInfoOfSkyAddress(string) ([]DepositInfo, error)
 	UpdateDepositInfo(string, func(DepositInfo) DepositInfo) (DepositInfo, error)
@@ -158,7 +158,7 @@ func (s *Store) BindAddress(skyAddr, btcAddr string) error {
 
 // GetOrCreateDepositInfo creates a DepositInfo unless one exists with the DepositInfo.DepositID key,
 // in which case it returns the existing DepositInfo.
-func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositInfo, error) {
+func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate string) (DepositInfo, error) {
 	log := s.log.WithField("deposit", dv)
 	log = log.WithField("rate", rate)
 
@@ -176,13 +176,13 @@ func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositI
 			skyAddr, err := s.getBindAddressTx(tx, dv.Address)
 			if err != nil {
 				err = fmt.Errorf("GetBindAddress failed: %v", err)
-				log.WithError(err).Error()
+				log.WithError(err).Error(err)
 				return err
 			}
 
 			if skyAddr == "" {
 				err = ErrNoBoundAddress
-				log.WithError(err).Error()
+				log.WithError(err).Error(err)
 				return err
 			}
 
@@ -205,7 +205,7 @@ func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositI
 			updatedDi, err := s.addDepositInfoTx(tx, di)
 			if err != nil {
 				err = fmt.Errorf("addDepositInfoTx failed: %v", err)
-				log.WithError(err).Error()
+				log.WithError(err).Error(err)
 				return err
 			}
 
@@ -215,7 +215,7 @@ func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositI
 
 		default:
 			err = fmt.Errorf("getDepositInfo failed: %v", err)
-			log.WithError(err).Error()
+			log.WithError(err).Error(err)
 			return err
 		}
 	}); err != nil {

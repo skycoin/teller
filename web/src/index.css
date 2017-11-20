@@ -1,4 +1,38 @@
-@import url('https://fonts.googleapis.com/css?family=Space+Mono:400,700');
+@font-face {
+    font-family: 'Montreal';
+    src: url('./montreal-bold-webfont.woff2') format('woff2'),
+         url('./montreal-bold-webfont.woff') format('woff');
+    font-weight: bold;
+    font-style: normal;
+
+}
+
+@font-face {
+    font-family: 'Montreal';
+    src: url('./montreal-regular-webfont.woff2') format('woff2'),
+         url('./montreal-regular-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+
+}
+
+@font-face {
+    font-family: 'Inconsolata';
+    src: url('./inconsolata-bold-webfont.woff2') format('woff2'),
+         url('./inconsolata-bold-webfont.woff') format('woff');
+    font-weight: bold;
+    font-style: normal;
+
+}
+
+@font-face {
+    font-family: 'Inconsolata';
+    src: url('./inconsolata-regular-webfont.woff2') format('woff2'),
+         url('./inconsolata-regular-webfont.woff') format('woff');
+    font-weight: normal;
+    font-style: normal;
+
+}
 
 html {
   box-sizing: border-box;

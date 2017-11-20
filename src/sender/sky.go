@@ -63,17 +63,11 @@ type ConfirmResponse struct {
 // SendService is in charge of sending skycoin
 type SendService struct {
 	log             logrus.FieldLogger
-	cfg             Config
 	SkyClient       SkyClient
 	quit            chan struct{}
 	done            chan struct{}
 	broadcastTxChan chan BroadcastTxRequest
 	confirmChan     chan ConfirmRequest
-}
-
-// Config sender configuration info
-type Config struct {
-	ReqBufSize uint32 // the buffer size of sending request
 }
 
 // SkyClient defines a Skycoin RPC client interface for sending and confirming
@@ -84,14 +78,14 @@ type SkyClient interface {
 }
 
 // NewService creates sender instance
-func NewService(cfg Config, log logrus.FieldLogger, skycli SkyClient) *SendService {
+func NewService(log logrus.FieldLogger, skycli SkyClient) *SendService {
 	return &SendService{
 		SkyClient:       skycli,
 		log:             log.WithField("prefix", "sender.service"),
-		cfg:             cfg,
 		quit:            make(chan struct{}),
 		done:            make(chan struct{}),
-		broadcastTxChan: make(chan BroadcastTxRequest, cfg.ReqBufSize),
+		broadcastTxChan: make(chan BroadcastTxRequest, 10),
+		confirmChan:     make(chan ConfirmRequest, 10),
 	}
 }
 

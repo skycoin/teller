@@ -26,7 +26,7 @@ func (m *MockStore) BindAddress(skyAddr, btcAddr string) error {
 	return args.Error(0)
 }
 
-func (m *MockStore) GetOrCreateDepositInfo(dv scanner.Deposit, rate int64) (DepositInfo, error) {
+func (m *MockStore) GetOrCreateDepositInfo(dv scanner.Deposit, rate string) (DepositInfo, error) {
 	args := m.Called(dv, rate)
 	return args.Get(0).(DepositInfo), args.Error(1)
 }
@@ -581,7 +581,10 @@ func TestStoreGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 		N:       di.Deposit.N,
 	}
 	require.Equal(t, di.Deposit.ID(), dv.ID())
-	existsDi, err := s.GetOrCreateDepositInfo(dv, di.ConversionRate*2)
+
+	differentRate := "112233"
+	require.NotEqual(t, differentRate, di.ConversionRate)
+	existsDi, err := s.GetOrCreateDepositInfo(dv, differentRate)
 
 	// di.Deposit won't be changed
 	require.Equal(t, di, existsDi)
@@ -591,11 +594,11 @@ func TestStoreGetOrCreateDepositInfoNoBoundSkyAddr(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	var rate int64 = 100
 	dv := scanner.Deposit{
 		Address: "foo-btc-addr",
 	}
 
+	rate := "100"
 	_, err := s.GetOrCreateDepositInfo(dv, rate)
 	require.Error(t, err)
 	require.Equal(t, err, ErrNoBoundAddress)

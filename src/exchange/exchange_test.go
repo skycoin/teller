@@ -140,11 +140,11 @@ func (scan *dummyScanner) stop() {
 }
 
 const (
-	testSkyBtcRate  int64 = 100 // 100 SKY per BTC
-	testSkyAddr           = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
-	testSkyAddr2          = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
-	dbScanTimeout         = time.Second * 3
-	dbCheckWaitTime       = time.Millisecond * 300
+	testSkyBtcRate  string = "100" // 100 SKY per BTC
+	testSkyAddr            = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
+	testSkyAddr2           = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
+	dbScanTimeout          = time.Second * 3
+	dbCheckWaitTime        = time.Millisecond * 300
 )
 
 func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
@@ -237,7 +237,7 @@ func TestExchangeRunSend(t *testing.T) {
 	require.NoError(t, err)
 
 	var value int64 = 1e8
-	skySent, err := calculateSkyValue(value, testSkyBtcRate)
+	skySent, err := CalculateBtcSkyValue(value, testSkyBtcRate)
 	require.NoError(t, err)
 	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
@@ -470,7 +470,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	var value int64 = 1e8
-	skySent, err := calculateSkyValue(value, testSkyBtcRate)
+	skySent, err := CalculateBtcSkyValue(value, testSkyBtcRate)
 	require.NoError(t, err)
 	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
@@ -546,7 +546,7 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 	require.NoError(t, err)
 
 	var value int64 = 1e8
-	skySent, err := calculateSkyValue(value, testSkyBtcRate)
+	skySent, err := CalculateBtcSkyValue(value, testSkyBtcRate)
 	require.NoError(t, err)
 	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
@@ -669,6 +669,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 		ConversionRate: testSkyBtcRate,
 		DepositValue:   dn.Deposit.Value,
 		Deposit:        dn.Deposit,
+		Error:          ErrEmptySendAmount.Error(),
 	}
 
 	// Periodically check the database until we observe the sent deposit
@@ -792,7 +793,7 @@ func testExchangeRunProcessDepositBacklog(t *testing.T, dis []DepositInfo, confi
 		expectedDis[i].Status = StatusDone
 
 		if expectedDis[i].SkySent == 0 {
-			amt, err := calculateSkyValue(di.DepositValue, e.cfg.Rate)
+			amt, err := CalculateBtcSkyValue(di.DepositValue, e.cfg.Rate)
 			require.NoError(t, err)
 			expectedDis[i].SkySent = amt
 		}
@@ -810,7 +811,7 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 
 	var depositValue int64 = 1e8
 	s := newDummySender()
-	skySent, err := calculateSkyValue(depositValue, testSkyBtcRate)
+	skySent, err := CalculateBtcSkyValue(depositValue, testSkyBtcRate)
 	require.NoError(t, err)
 	txid1 := s.predictTxid(t, testSkyAddr, skySent)
 	txid2 := s.predictTxid(t, testSkyAddr2, skySent)
@@ -867,7 +868,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 
 	var depositValue int64 = 1e8
 	s := newDummySender()
-	skySent, err := calculateSkyValue(depositValue, testSkyBtcRate)
+	skySent, err := CalculateBtcSkyValue(depositValue, testSkyBtcRate)
 	require.NoError(t, err)
 	txid1 := s.predictTxid(t, testSkyAddr, skySent)
 	txid2 := s.predictTxid(t, testSkyAddr2, skySent)
@@ -915,7 +916,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 		err := e.store.BindAddress(di.SkyAddress, di.DepositAddress)
 		require.NoError(t, err)
 
-		skySent, err := calculateSkyValue(di.DepositValue, di.ConversionRate)
+		skySent, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate)
 		require.NoError(t, err)
 
 		txid := e.sender.(*dummySender).predictTxid(t, di.SkyAddress, skySent)

@@ -84,7 +84,7 @@ func (ds *dummySkycli) changeBroadcastTxErr(err error) {
 	ds.broadcastTxErr = err
 }
 
-func (ds *dummySkycli) changeBroadcastTxTxid(txid string) {
+func (ds *dummySkycli) changeBroadcastTxTxid(txid string) { // nolint: unparam
 	ds.Lock()
 	defer ds.Unlock()
 	ds.broadcastTxTxid = txid
@@ -101,7 +101,7 @@ func TestSenderBroadcastTransaction(t *testing.T) {
 	dsc := newDummySkycli()
 
 	dsc.changeBroadcastTxTxid("1111")
-	s := NewService(Config{}, log, dsc)
+	s := NewService(log, dsc)
 	go func() {
 		s.Run()
 	}()
