@@ -39,7 +39,7 @@ const (
 
 	rpcQuirks = true
 
-	defaultBestBlockHeight = 383769
+	defaultBestBlockHeight = 492478
 	defaultBestBlockHash   = "00000000000000000c4ac9ec73ff6a465532c22fd9b2a7c0015a5e13128cb9ed"
 
 	// http API
@@ -68,7 +68,7 @@ type BlockStore struct {
 	HashBlocks      map[string]btcjson.GetBlockVerboseResult
 }
 
-var blocks []btcjson.GetBlockVerboseResult = []btcjson.GetBlockVerboseResult{
+var blocks = []btcjson.GetBlockVerboseResult{
 	{
 		Hash:   defaultBestBlockHash,
 		Height: defaultBestBlockHeight,
@@ -142,7 +142,7 @@ func createNewBlock(previousHash string, previousHeight int64, deposits []Deposi
 
 	txn := wire.NewMsgTx(1)
 
-	var n uint32 = 0
+	var n uint32
 	for _, deposit := range deposits {
 		for i := n; i < deposit.N; i++ {
 			txn.AddTxOut(wire.NewTxOut(int64(0), nil))
@@ -248,7 +248,6 @@ func handleGetBlock(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (i
 func handleGetBlockHash(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
 	c := cmd.(*btcjson.GetBlockHashCmd)
 	if hash, ok := defaultBlockStore.BlockHashes[int64(c.Index)]; ok {
-
 		return hash, nil
 	}
 
@@ -315,26 +314,34 @@ func handleGetBlockCount(s *rpcServer, cmd interface{}, closeChan <-chan struct{
 	return int64(defaultBlockStore.BestBlockHeight), nil
 }
 
-func processDeposits(deposits []Deposit) (int64, error) {
+func processDeposits(deposits []Deposit) (*btcjson.GetBlockVerboseResult, error) {
+	defaultBlockStore.Lock()
+	defer defaultBlockStore.Unlock()
+
 	bestHeight := int64(defaultBlockStore.BestBlockHeight)
 	bestHash, ok := defaultBlockStore.BlockHashes[bestHeight]
-	if ok {
-		block, err := createNewBlockWithTx(bestHash, bestHeight, deposits)
-		if err == nil {
-			defaultBlockStore.Lock()
-			defer defaultBlockStore.Unlock()
-
-			defaultBlockStore.BestBlockHeight++
-			defaultBlockStore.BlockHashes[int64(defaultBlockStore.BestBlockHeight)] = block.Hash().String()
-
-			gbvr := convertBlockToGetBlockVerboseResult(block)
-			defaultBlockStore.HashBlocks[block.Hash().String()] = *gbvr
-
-			return int64(defaultBlockStore.BestBlockHeight), nil
-		}
+	if !ok {
+		return nil, errors.New("Block not found")
 	}
 
-	return -1, errors.New("Block not found")
+	block, err := createNewBlockWithTx(bestHash, bestHeight, deposits)
+	if err != nil {
+		return nil, errors.New("createNewBlockWithTx failed")
+	}
+
+	// Update NextHash of previous block
+	prevBlockHash := defaultBlockStore.BlockHashes[bestHeight]
+	prevBlock := defaultBlockStore.HashBlocks[prevBlockHash]
+	prevBlock.NextHash = block.Hash().String()
+	defaultBlockStore.HashBlocks[prevBlockHash] = prevBlock
+
+	// Add new block
+	defaultBlockStore.BestBlockHeight++
+	defaultBlockStore.BlockHashes[int64(defaultBlockStore.BestBlockHeight)] = block.Hash().String()
+	gbvr := convertBlockToGetBlockVerboseResult(block)
+	defaultBlockStore.HashBlocks[block.Hash().String()] = *gbvr
+
+	return gbvr, nil
 }
 
 func handleNextDeposit(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
@@ -344,7 +351,7 @@ func handleNextDeposit(s *rpcServer, cmd interface{}, closeChan <-chan struct{})
 		fmt.Printf("Got %v\n", deposits)
 	}
 
-	newHeight, err := processDeposits(deposits)
+	newBlock, err := processDeposits(deposits)
 
 	if err != nil {
 		fmt.Printf("processDeposits %v\n", err)
@@ -354,7 +361,7 @@ func handleNextDeposit(s *rpcServer, cmd interface{}, closeChan <-chan struct{})
 		}
 	}
 
-	return newHeight, nil
+	return newBlock, nil
 }
 
 func (s *rpcServer) WebsocketHandler(conn *websocket.Conn, remoteAddr string) {
@@ -367,7 +374,7 @@ func (s *rpcServer) WebsocketHandler(conn *websocket.Conn, remoteAddr string) {
 	// disconnected), remove it and any notifications it registered for.
 	client, err := newWebsocketClient(s, conn, remoteAddr)
 	if err != nil {
-		fmt.Errorf("Failed to serve client %s: %v\n", remoteAddr, err)
+		fmt.Printf("Failed to serve client %s: %v\n", remoteAddr, err)
 		conn.Close()
 		return
 	}
@@ -530,12 +537,9 @@ func parseCmd(request *btcjson.Request) *parsedRPCCmd {
 func (s *rpcServer) standardCmdResult(cmd *parsedRPCCmd, closeChan <-chan struct{}) (interface{}, error) {
 	handler, ok := rpcHandlers[cmd.method]
 	if ok {
-		goto handled
+		return handler(s, cmd.cmd, closeChan)
 	}
 	return nil, btcjson.ErrRPCMethodNotFound
-handled:
-
-	return handler(s, cmd.cmd, closeChan)
 }
 
 // createMarshalledReply returns a new marshalled JSON-RPC response given the
@@ -569,10 +573,10 @@ func (s *rpcServer) httpStatusLine(req *http.Request) string {
 	text := http.StatusText(code)
 	if text != "" {
 		return proto + " " + codeStr + " " + text + "\r\n"
-	} else {
-		text = "status code " + codeStr
-		return proto + " " + codeStr + " " + text + "\r\n"
 	}
+
+	text = "status code " + codeStr
+	return proto + " " + codeStr + " " + text + "\r\n"
 }
 
 // writeHTTPResponseHeaders writes the necessary response headers prior to
@@ -698,23 +702,23 @@ func (s *rpcServer) jsonRPCRead(w http.ResponseWriter, r *http.Request) {
 	// Marshal the response.
 	msg, err := createMarshalledReply(responseID, result, jsonErr)
 	if err != nil {
-		fmt.Errorf("Failed to marshal reply: %v\n", err)
+		fmt.Printf("Failed to marshal reply: %v\n", err)
 		return
 	}
 
 	// Write the response.
 	err = s.writeHTTPResponseHeaders(r, w.Header(), buf)
 	if err != nil {
-		fmt.Errorf("%v\n", err)
+		fmt.Printf("%v\n", err)
 		return
 	}
 	if _, err := buf.Write(msg); err != nil {
-		fmt.Errorf("Failed to write marshalled reply: %v\n", err)
+		fmt.Printf("Failed to write marshalled reply: %v\n", err)
 	}
 
 	// Terminate with newline to maintain compatibility with Bitcoin Core.
 	if err := buf.WriteByte('\n'); err != nil {
-		fmt.Errorf("Failed to append terminating newline to reply: %v\n", err)
+		fmt.Printf("Failed to append terminating newline to reply: %v\n", err)
 	}
 }
 
@@ -743,8 +747,7 @@ func (s *rpcServer) Start() {
 		ws, err := websocket.Upgrade(w, r, nil, 0, 0)
 		if err != nil {
 			if _, ok := err.(websocket.HandshakeError); !ok {
-				fmt.Errorf("Unexpected websocket error: %v\n",
-					err)
+				fmt.Printf("Unexpected websocket error: %v\n", err)
 			}
 			http.Error(w, "400 Bad Request.", http.StatusBadRequest)
 			return
@@ -754,8 +757,7 @@ func (s *rpcServer) Start() {
 
 	listeners, err := setupRPCListeners(s.key, s.cert, s.address)
 	if err != nil {
-		fmt.Errorf("Unexpected setupRPCListeners error: %v\n",
-			err)
+		fmt.Printf("Unexpected setupRPCListeners error: %v\n", err)
 		return
 	}
 
@@ -781,7 +783,7 @@ func (s *rpcServer) Stop() error {
 	for _, listener := range s.listeners {
 		err := listener.Close()
 		if err != nil {
-			fmt.Errorf("Problem shutting down rpc: %v\n", err)
+			fmt.Printf("Problem shutting down rpc: %v\n", err)
 			return err
 		}
 	}
@@ -984,7 +986,7 @@ out:
 		if err != nil {
 			// Log the error if it's not due to disconnecting.
 			if err != io.EOF {
-				fmt.Errorf("Websocket receive error from %s: %v\n", c.addr, err)
+				fmt.Printf("Websocket receive error from %s: %v\n", c.addr, err)
 			}
 			break out
 		}
@@ -998,7 +1000,7 @@ out:
 			}
 			reply, err := createMarshalledReply(nil, nil, jsonErr)
 			if err != nil {
-				fmt.Errorf("Failed to marshal parse failure reply: %v\n", err)
+				fmt.Printf("Failed to marshal parse failure reply: %v\n", err)
 				continue
 			}
 			c.SendMessage(reply, nil)
@@ -1009,7 +1011,7 @@ out:
 		if cmd.err != nil {
 			reply, err := createMarshalledReply(cmd.id, nil, cmd.err)
 			if err != nil {
-				fmt.Errorf("Failed to marshal parse failure reply: %v\n", err)
+				fmt.Printf("Failed to marshal parse failure reply: %v\n", err)
 				continue
 			}
 			c.SendMessage(reply, nil)
@@ -1122,8 +1124,7 @@ func (c *wsClient) serviceRequest(r *parsedRPCCmd) {
 	}
 	reply, err := createMarshalledReply(r.id, result, err)
 	if err != nil {
-		fmt.Errorf("Failed to marshal reply for <%s> "+
-			"command: %v\n", r.method, err)
+		fmt.Printf("Failed to marshal reply for <%s> command: %v\n", r.method, err)
 		return
 	}
 	c.SendMessage(reply, nil)
@@ -1178,14 +1179,14 @@ func (c *wsClient) WaitForShutdown() {
 	c.wg.Wait()
 }
 
-type httpApiServer struct {
+type httpAPIServer struct {
 	address string
 	listen  *http.Server
 	quit    chan struct{}
 }
 
-func newHttpApiServer(address string) *httpApiServer {
-	return &httpApiServer{
+func newHTTPAPIServer(address string) *httpAPIServer {
+	return &httpAPIServer{
 		address: address,
 		quit:    make(chan struct{}),
 	}
@@ -1216,40 +1217,38 @@ func httpHandleNextDeposit(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "close")
 	r.Close = true
 
-	if r.Method == http.MethodPost {
-		// Read and respond to the request.
-		decoder := json.NewDecoder(r.Body)
-		var deposits []Deposit
-		err := decoder.Decode(&deposits)
-		r.Body.Close()
-		if err != nil {
-			errCode := http.StatusBadRequest
-			http.Error(w, fmt.Sprintf("%d error reading JSON message: %v",
-				errCode, err), errCode)
-			return
-		}
-
-		height, err := processDeposits(deposits)
-		if err != nil {
-			errCode := http.StatusBadRequest
-			http.Error(w, fmt.Sprintf("%d error processing data: %v",
-				errCode, err), errCode)
-			return
-		}
-
-		if err := JSONResponse(w, height); err != nil {
-			errCode := http.StatusBadRequest
-			http.Error(w, fmt.Sprintf("%d error responding: %v",
-				errCode, err), errCode)
-			return
-		}
-	} else {
+	if r.Method != http.MethodPost {
 		errCode := http.StatusMethodNotAllowed
-		http.Error(w, fmt.Sprintf("Accept POST requests only"), errCode)
+		http.Error(w, fmt.Sprintf("Accepts POST requests only"), errCode)
+	}
+
+	// Read and respond to the request.
+	decoder := json.NewDecoder(r.Body)
+	var deposits []Deposit
+	err := decoder.Decode(&deposits)
+	defer r.Body.Close()
+
+	if err != nil {
+		errCode := http.StatusBadRequest
+		http.Error(w, fmt.Sprintf("%d error reading JSON message: %v", errCode, err), errCode)
+		return
+	}
+
+	newBlock, err := processDeposits(deposits)
+	if err != nil {
+		errCode := http.StatusBadRequest
+		http.Error(w, fmt.Sprintf("%d error processing data: %v", errCode, err), errCode)
+		return
+	}
+
+	if err := JSONResponse(w, newBlock); err != nil {
+		errCode := http.StatusBadRequest
+		http.Error(w, fmt.Sprintf("%d error responding: %v", errCode, err), errCode)
+		return
 	}
 }
 
-func (server *httpApiServer) start() error {
+func (server *httpAPIServer) start() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/nextdeposit", httpHandleNextDeposit)
 
@@ -1272,7 +1271,7 @@ func (server *httpApiServer) start() error {
 	return nil
 }
 
-func (server *httpApiServer) stop() {
+func (server *httpAPIServer) stop() {
 	close(server.quit)
 	if server.listen != nil {
 		if err := server.listen.Close(); err != nil {
@@ -1286,7 +1285,7 @@ func run() error {
 	keyFile := flag.String("key", "rpc.key", "btcd rpc key")
 	certFile := flag.String("cert", "rpc.cert", "btcd rpc cert")
 	address := flag.String("address", "127.0.0.1:8334", "btcd listening address")
-	httpApiAddress := flag.String("api", "127.0.0.1:8834", "http api listening address")
+	httpAPIAddress := flag.String("api", "127.0.0.1:8834", "http api listening address")
 
 	flag.Parse()
 
@@ -1303,7 +1302,7 @@ func run() error {
 		maxConcurrentReqs: 10,
 	}
 
-	apiServer := newHttpApiServer(*httpApiAddress)
+	apiServer := newHTTPAPIServer(*httpAPIAddress)
 
 	defer func() {
 		apiServer.stop()
@@ -1320,7 +1319,7 @@ func run() error {
 	server.Start()
 
 	go func() {
-		fmt.Printf("HTTP API server listening on %s\n", *httpApiAddress)
+		fmt.Printf("HTTP API server listening on http://%s\n", *httpAPIAddress)
 		err := apiServer.start()
 		if err != nil {
 			fmt.Printf("HTTP API server failed to start")
