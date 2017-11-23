@@ -274,13 +274,13 @@ func FindMid(addrs []Address) int64 {
 	return mid + 1
 }
 
-func FindRand1(addrs []Address) int64 {
+func FindShort(addrs []Address) int64 {
 	dif := int64(0)
-	rand1 := addrs[0].MinScanBlock
+	short := addrs[0].MinScanBlock
 	for _, a := range addrs {
 		if a.MidScanBlock-a.MinScanBlock > 0 {
 			dif = a.MidScanBlock - a.MinScanBlock
-			rand1 = a.MinScanBlock
+			short = a.MinScanBlock
 			break
 		}
 	}
@@ -288,27 +288,27 @@ func FindRand1(addrs []Address) int64 {
 	for _, a := range addrs {
 		if a.MidScanBlock-a.MinScanBlock < dif && a.MidScanBlock-a.MinScanBlock != 0 {
 			dif = a.MidScanBlock - a.MinScanBlock
-			rand1 = a.MinScanBlock
+			short = a.MinScanBlock
 		}
 	}
 
-	return rand1 + 1
+	return short + 1
 }
 
-func FindRand2(addrs []Address) int64 {
+func FindFar(addrs []Address) int64 {
 	min := FindMin(addrs)
 	mid := FindMid(addrs)
 	dif := int64(0)
-	rand2 := min
+	far := min
 	for _, a := range addrs {
 
 		if a.MinScanBlock-min > dif && a.MinScanBlock < mid {
 			dif = a.MinScanBlock - min
-			rand2 = a.MinScanBlock
+			far = a.MinScanBlock
 		}
 	}
 
-	return rand2
+	return far
 }
 
 func PrintUpdateInfo(updateType string, elapsed float64, scannedBlock int64) error {
@@ -323,6 +323,7 @@ func PrintUpdateInfo(updateType string, elapsed float64, scannedBlock int64) err
 	fmt.Println(string(res))
 	return nil
 }
+
 
 func UpdateMin(addrs []Address, client *rpcclient.Client) ([]Address, error) {
 
@@ -364,40 +365,40 @@ func UpdateMax(addrs []Address, client *rpcclient.Client) ([]Address, error) {
 	return addrs, nil
 }
 
-func UpdateRand1(addrs []Address, client *rpcclient.Client) ([]Address, error) {
+func UpdateShort(addrs []Address, client *rpcclient.Client) ([]Address, error) {
 
 	startTime := time.Now()
-	rand1 := FindRand1(addrs)
+	short := FindShort(addrs)
 
-	deposits, err := ScanBlock(client, rand1)
+	deposits, err := ScanBlock(client, short)
 	if err != nil {
 		fmt.Println("Block scanning is failed:", err)
 		return nil, err
 	}
 
-	addrs = UpdateAddressInfo(addrs, deposits, rand1)
+	addrs = UpdateAddressInfo(addrs, deposits, short)
 	finishTime := time.Now()
-	err = PrintUpdateInfo("rand1", finishTime.Sub(startTime).Seconds(), rand1)
+	err = PrintUpdateInfo("short", finishTime.Sub(startTime).Seconds(), short)
 	if err != nil {
 		return nil, err
 	}
 	return addrs, nil
 }
 
-func UpdateRand2(addrs []Address, client *rpcclient.Client) ([]Address, error) {
+func UpdateFar(addrs []Address, client *rpcclient.Client) ([]Address, error) {
 
 	startTime := time.Now()
-	rand2 := FindRand2(addrs)
+	far := FindFar(addrs)
 
-	deposits, err := ScanBlock(client, rand2)
+	deposits, err := ScanBlock(client, far)
 	if err != nil {
 		fmt.Println("Block scanning is failed:", err)
 		return nil, err
 	}
 
-	addrs = UpdateAddressInfo(addrs, deposits, rand2)
+	addrs = UpdateAddressInfo(addrs, deposits, far)
 	finishTime := time.Now()
-	err = PrintUpdateInfo("rand2", finishTime.Sub(startTime).Seconds(), rand2)
+	err = PrintUpdateInfo("far", finishTime.Sub(startTime).Seconds(), far)
 	if err != nil {
 		return nil, err
 	}
@@ -408,16 +409,16 @@ func run() error {
 	//flags
 	user := flag.String("user", "myuser", "btcd username")
 	pass := flag.String("pass", "SomeDecentp4ssw0rd", "btcd password")
-	wallet := flag.String("wallet", "wallet.json", "wallet.json file")
+	wallet := flag.String("wallet", "wallet.json", "path to wallet.json file")
 	blockN := flag.Int64("n", 0, "start blockID")
 	blockM := flag.Int64("m", 0, "finish blockID")
-	add := flag.String("add", "", "new btc addresses")
+	add := flag.String("add", "", "add new btc addresses to wallet")
 	addFile := flag.String("add_file", "", "new btc addresses from file")
-	updateMin := flag.Bool("upd_min", false, "look for min and update 1 block forward")
-	updateMax := flag.Bool("upd_max", false, "look for max and update 1 block forward")
-	updateRand1 := flag.Bool("rand1", false, "look for min(max-min) and update 1 block forward")
-	updateRand2 := flag.Bool("rand2", false, "look for min(mid-min) and update 1 block forward")
-	randomize := flag.Bool("randomize", false, "randomly update 1 block forward by min/max/rand1")
+	updateMin := flag.Bool("update_min", false, "look for min and update 1 block forward")
+	updateMax := flag.Bool("update_max", false, "look for max and update 1 block forward")
+	updateShort := flag.Bool("update_short", false, "look for min(max-min) and update 1 block forward")
+	updateFar := flag.Bool("update_far", false, "look for min(mid-min) and update 1 block forward")
+	randomize := flag.Bool("randomize", false, "randomly update 1 block forward by min/max/short")
 	flag.Parse()
 
 	if *add != "" {
@@ -476,15 +477,15 @@ func run() error {
 		}
 	}
 
-	if *updateRand1 {
-		addrs, err = UpdateRand1(addrs, client)
+	if *updateShort {
+		addrs, err = UpdateShort(addrs, client)
 		if err != nil {
 			return err
 		}
 	}
 
-	if *updateRand2 {
-		addrs, err = UpdateRand2(addrs, client)
+	if *updateFar {
+		addrs, err = UpdateFar(addrs, client)
 		if err != nil {
 			return err
 		}
@@ -505,12 +506,12 @@ func run() error {
 				return err
 			}
 		case 2:
-			addrs, err = UpdateRand1(addrs, client)
+			addrs, err = UpdateShort(addrs, client)
 			if err != nil {
 				return err
 			}
 		case 3:
-			addrs, err = UpdateRand2(addrs, client)
+			addrs, err = UpdateFar(addrs, client)
 			if err != nil {
 				return err
 			}

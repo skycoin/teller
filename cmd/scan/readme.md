@@ -40,10 +40,10 @@ This utility have several flags:
 -pass btcd password
 -add get addresses and put in watching list
 -add_file get addresses from json file
--upd_min bool expression for update min block
--upd_max bool expression for update max block
--rand1 bool expression for update min(max-min)
--rand2 bool expression for update min(mid-min)
+-update_min bool expression for update min block
+-update_max bool expression for update max block
+-update_short bool expression for update min(max-min)
+-update_far bool expression for update min(mid-min)
 -randomize bool expression for random update(min/max/rand1/rand2)
 ```
 ### Example usage
