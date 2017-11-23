@@ -3,4 +3,4 @@
 *.log
 *.out
 cert-cache
-*.ignore.toml
+*.ignore.*
