@@ -33,6 +33,7 @@
 - [Run tests](#run-tests)
 - [Database structure](#database-structure)
 - [Frontend development](#frontend-development)
+- [Integration testing](#integration-testing)
 
 <!-- /MarkdownTOC -->
 
@@ -495,3 +496,7 @@ Note: Maps a btc txid:seq to scanner.Deposit struct
 ## Frontend development
 
 See [frontend development README](./web/README.md)
+
+## Integration testing
+
+See [integration testing checklist](./integration-testing.md)
