@@ -324,7 +324,6 @@ func PrintUpdateInfo(updateType string, elapsed float64, scannedBlock int64) err
 	return nil
 }
 
-
 func UpdateMin(addrs []Address, client *rpcclient.Client) ([]Address, error) {
 
 	startTime := time.Now()
