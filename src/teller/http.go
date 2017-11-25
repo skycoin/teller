@@ -132,13 +132,14 @@ func (s *HTTPServer) Run() error {
 		log.Info(fmt.Sprintf("HTTPS server listening on https://%s", s.cfg.Web.HTTPSAddr))
 	}
 
+	var tlsCert, tlsKey string
 	if s.cfg.Web.HTTPSAddr != "" {
 		log.Info("Using TLS")
 
 		s.httpsListener = setupHTTPListener(s.cfg.Web.HTTPSAddr, mux)
 
-		tlsCert := s.cfg.Web.TLSCert
-		tlsKey := s.cfg.Web.TLSKey
+		tlsCert = s.cfg.Web.TLSCert
+		tlsKey = s.cfg.Web.TLSKey
 
 		if s.cfg.Web.AutoTLSHost != "" {
 			log.Info("Using Let's Encrypt autocert")
@@ -159,30 +160,14 @@ func (s *HTTPServer) Run() error {
 			tlsKey = ""
 		}
 
+	}
+
+	return handleListenErr(func() error {
+		var wg sync.WaitGroup
 		errC := make(chan error)
 
-		if s.cfg.Web.HTTPAddr == "" {
-			return handleListenErr(func() error {
-				if err := s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil && err != http.ErrServerClosed {
-					log.WithError(err).Error("ListenAndServe error")
-					return err
-				}
-				return nil
-			})
-		}
-
-		return handleListenErr(func() error {
-			var wg sync.WaitGroup
-			wg.Add(2)
-
-			go func() {
-				defer wg.Done()
-				if err := s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil && err != http.ErrServerClosed {
-					log.WithError(err).Error("ListenAndServeTLS error")
-					errC <- err
-				}
-			}()
-
+		if s.cfg.Web.HTTPAddr != "" {
+			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				if err := s.httpListener.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -190,27 +175,34 @@ func (s *HTTPServer) Run() error {
 					errC <- err
 				}
 			}()
+		}
 
-			done := make(chan struct{})
-
+		if s.cfg.Web.HTTPSAddr != "" {
+			wg.Add(1)
 			go func() {
-				wg.Wait()
-				close(done)
+				defer wg.Done()
+				if err := s.httpsListener.ListenAndServeTLS(tlsCert, tlsKey); err != nil && err != http.ErrServerClosed {
+					log.WithError(err).Error("ListenAndServeTLS error")
+					errC <- err
+				}
 			}()
+		}
 
-			select {
-			case err := <-errC:
-				return err
-			case <-s.quit:
-				return nil
-			case <-done:
-				return nil
-			}
-		})
-	}
+		done := make(chan struct{})
 
-	return handleListenErr(func() error {
-		return s.httpListener.ListenAndServe()
+		go func() {
+			wg.Wait()
+			close(done)
+		}()
+
+		select {
+		case err := <-errC:
+			return err
+		case <-s.quit:
+			return nil
+		case <-done:
+			return nil
+		}
 	})
 }
 
@@ -297,6 +289,8 @@ func (s *HTTPServer) setupMux() *http.ServeMux {
 
 // Shutdown stops the HTTPServer
 func (s *HTTPServer) Shutdown() {
+	s.log.Info("Shutting down HTTP server(s)")
+	defer s.log.Info("Shutdown HTTP server(s)")
 	close(s.quit)
 
 	var wg sync.WaitGroup
@@ -312,6 +306,7 @@ func (s *HTTPServer) Shutdown() {
 			"timeout": shutdownTimeout,
 		})
 
+		defer log.Info("Shutdown server")
 		log.Info("Shutting down server")
 
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)

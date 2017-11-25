@@ -107,6 +107,7 @@ func (m *Monitor) setupMux() *http.ServeMux {
 // Shutdown close the monitor service
 func (m *Monitor) Shutdown() {
 	log := m.log.WithField("timeout", shutdownTimeout)
+	defer log.Info("Shutdown monitor service")
 
 	close(m.quit)
 	if m.ln != nil {

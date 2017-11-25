@@ -29,11 +29,6 @@ import (
 	"github.com/skycoin/teller/src/util/logger"
 )
 
-const (
-	defaultAppDir = ".teller-skycoin"
-	dbName        = "teller.db"
-)
-
 func main() {
 	if err := run(); err != nil {
 		fmt.Println(err)
@@ -42,10 +37,23 @@ func main() {
 }
 
 func run() error {
-	configName := pflag.StringP("config", "c", "config", "name of configuration file")
+	cur, err := user.Current()
+	if err != nil {
+		fmt.Println("Failed to get user's home directory:", err)
+		return err
+	}
+	defaultAppDir := filepath.Join(cur.HomeDir, ".teller-skycoin")
+
+	appDirOpt := pflag.StringP("dir", "d", defaultAppDir, "application data directory")
+	configNameOpt := pflag.StringP("config", "c", "config", "name of configuration file")
 	pflag.Parse()
 
-	cfg, err := config.Load(*configName)
+	if err := createFolderIfNotExist(*appDirOpt); err != nil {
+		fmt.Println("Create application data directory failed:", err)
+		return err
+	}
+
+	cfg, err := config.Load(*configNameOpt, *appDirOpt)
 	if err != nil {
 		return fmt.Errorf("Config error:\n%v", err)
 	}
@@ -74,15 +82,8 @@ func run() error {
 	quit := make(chan struct{})
 	go catchInterrupt(quit)
 
-	// Load config
-	appDir, err := createAppDirIfNotExist(defaultAppDir)
-	if err != nil {
-		log.WithError(err).Error("Create AppDir failed")
-		return err
-	}
-
 	// Open db
-	dbPath := filepath.Join(appDir, dbName)
+	dbPath := filepath.Join(*appDirOpt, cfg.DBFilename)
 	db, err := bolt.Open(dbPath, 0700, &bolt.Options{
 		Timeout: 1 * time.Second,
 	})
@@ -102,8 +103,7 @@ func run() error {
 			err := f()
 			if err != nil {
 				log.WithError(err).Errorf("Backgrounded task %s failed", name)
-				errC <- err
-
+				errC <- fmt.Errorf("Backgrounded task %s failed: %v", name, err)
 			} else {
 				log.Infof("Backgrounded task %s shutdown", name)
 			}
@@ -281,19 +281,14 @@ func run() error {
 	return finalErr
 }
 
-func createAppDirIfNotExist(app string) (string, error) {
-	cur, err := user.Current()
-	if err != nil {
-		return "", err
-	}
-	path := filepath.Join(cur.HomeDir, app)
+func createFolderIfNotExist(path string) error {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		// create the dir
 		if err := os.Mkdir(path, 0700); err != nil {
-			return "", err
+			return err
 		}
 	}
-	return path, nil
+	return nil
 }
 
 func catchInterrupt(quit chan<- struct{}) {

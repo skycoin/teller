@@ -61,6 +61,9 @@ func (s *Teller) Run() error {
 
 // Shutdown close the Teller
 func (s *Teller) Shutdown() {
+	s.log.Info("Shutting down teller service")
+	defer s.log.Info("Shutdown teller service")
+
 	close(s.quit)
 	s.httpServ.Shutdown()
 	<-s.done

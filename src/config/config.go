@@ -25,6 +25,8 @@ type Config struct {
 	Profile bool `mapstructure:"profile"`
 	// Where log is saved
 	LogFilename string `mapstructure:"logfile"`
+	// Where database is saved, inside the ~/.teller-skycoin data directory
+	DBFilename string `mapstructure:"dbfile"`
 
 	// Path of BTC addresses JSON file
 	BtcAddresses string `mapstructure:"btc_addresses"`
@@ -154,7 +156,7 @@ func (c Config) Validate() error {
 	}
 
 	if c.LogFilename == "" {
-		oops("log_filename missing")
+		oops("logfile missing")
 	}
 
 	if c.BtcAddresses == "" {
@@ -233,7 +235,8 @@ func setDefaults() {
 	// Top-level args
 	viper.SetDefault("profile", false)
 	viper.SetDefault("debug", true)
-	viper.SetDefault("logfile", "teller.log")
+	viper.SetDefault("logfile", "./teller.log")
+	viper.SetDefault("dbfile", "teller.db")
 
 	// Teller
 	viper.SetDefault("teller.max_bound_btc_addrs", 5)
@@ -270,14 +273,14 @@ func setDefaults() {
 
 // Load loads the configuration from "./$configName.*" where "*" is a
 // JSON, toml or yaml file (toml preferred).
-func Load(configName string) (Config, error) {
+func Load(configName, appDir string) (Config, error) {
 	if strings.HasSuffix(configName, ".toml") {
 		configName = configName[:len(configName)-len(".toml")]
 	}
 
 	viper.SetConfigName(configName)
 	viper.SetConfigType("toml")
-	viper.AddConfigPath("$HOME/.teller-skycoin")
+	viper.AddConfigPath(appDir)
 	viper.AddConfigPath(".")
 
 	setDefaults()
