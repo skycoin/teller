@@ -61,6 +61,12 @@ When a new release is published, `develop` will be merged to `master` then tagge
 
 The config file can be specified with `-c` or `--config` from the command line.
 
+Otherwise, the config file is loaded from the application data directory
+(defaulted to `$HOME/.teller-skycoin`), or the local working directory.
+
+The application data directory can be changed from the command line with
+`-d` or `--dir`.
+
 The config file uses the [toml](https://github.com/toml-lang/toml) format.
 
 Teller's default config is `config.toml`. However, you should not edit this

@@ -402,7 +402,7 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		btcAddr, err := s.service.BindAddress(bindReq.SkyAddr)
 		if err != nil {
 			log.WithError(err).Error("service.BindAddress failed")
-			if err != addrs.ErrDepositAddressEmpty {
+			if err != addrs.ErrDepositAddressEmpty && err != ErrMaxBoundAddresses {
 				err = errInternalServerError
 			}
 			errorResponse(ctx, w, http.StatusInternalServerError, err)

@@ -19,10 +19,9 @@ btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses f
 user = "" # REQUIRED
 pass = "" # REQUIRED
 cert = "" # REQUIRED
-# websockets = false
 
 [btc_scanner]
-# scan_period = 20s
+# scan_period = "20s"
 # initial_scan_height = 492478
 # confirmations_required = 1
 
@@ -37,7 +36,7 @@ wallet = "example.wlt" # REQUIRED: path to local hot wallet file
 http_addr = "127.0.0.1:7071"
 # static_dir = "./web/build"
 # throttle_max = 60
-# throttle_duration = 60s
+# throttle_duration = "60s"
 https_addr = "" # OPTIONAL: Serve on HTTPS
 auto_tls_host = "" # OPTIONAL: Hostname to use for automatic TLS certs. Used when tls_cert, tls_key unset
 tls_cert = ""

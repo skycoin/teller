@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"os/user"
 	"path/filepath"
+	"runtime/pprof"
 	"sync"
 	"time"
 
@@ -128,20 +129,21 @@ func run() error {
 			return fmt.Errorf("Failed to read cfg.BtcRPC.Cert %s: %v", cfg.BtcRPC.Cert, err)
 		}
 
+		log.Info("Connecting to btcd")
+
 		btcrpc, err := btcrpcclient.New(&btcrpcclient.ConnConfig{
 			Endpoint:     "ws",
 			Host:         cfg.BtcRPC.Server,
 			User:         cfg.BtcRPC.User,
 			Pass:         cfg.BtcRPC.Pass,
 			Certificates: certs,
-			HTTPPostMode: !cfg.BtcRPC.Websockets,
 		}, nil)
 		if err != nil {
 			log.WithError(err).Error("Connect btcd failed")
 			return err
 		}
 
-		log.Info("Connect to btcd success")
+		log.Info("Connect to btcd succeeded")
 
 		// create scan service
 		scanStore, err := scanner.NewStore(log, db)
@@ -291,10 +293,32 @@ func createFolderIfNotExist(path string) error {
 	return nil
 }
 
+func printProgramStatus() {
+	p := pprof.Lookup("goroutine")
+	if err := p.WriteTo(os.Stdout, 2); err != nil {
+		fmt.Println("ERROR:", err)
+		return
+	}
+}
+
 func catchInterrupt(quit chan<- struct{}) {
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, os.Interrupt)
 	<-sigchan
 	signal.Stop(sigchan)
 	close(quit)
+
+	// If ctrl-c is called again, panic so that the program state can be examined.
+	// Ctrl-c would be called again if program shutdown was stuck.
+	go catchInterruptPanic()
+}
+
+// catchInterruptPanic catches os.Interrupt and panics
+func catchInterruptPanic() {
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, os.Interrupt)
+	<-sigchan
+	signal.Stop(sigchan)
+	printProgramStatus()
+	panic("SIGINT")
 }

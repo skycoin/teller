@@ -59,11 +59,10 @@ type SkyRPC struct {
 
 // BtcRPC config for btcrpc
 type BtcRPC struct {
-	Server     string `mapstructure:"server"`
-	User       string `mapstructure:"user"`
-	Pass       string `mapstructure:"pass"`
-	Cert       string `mapstructure:"cert"`
-	Websockets bool   `mapstructure:"websockets"`
+	Server string `mapstructure:"server"`
+	User   string `mapstructure:"user"`
+	Pass   string `mapstructure:"pass"`
+	Cert   string `mapstructure:"cert"`
 }
 
 // BtcScanner config for BTC scanner
