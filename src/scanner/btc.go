@@ -188,7 +188,7 @@ func (s *BTCScanner) Run() error {
 			log.WithFields(logrus.Fields{
 				"scannedDeposits":      n,
 				"totalScannedDeposits": deposits,
-			}).Info("Scanned deposits from block")
+			}).Infof("Scanned %d deposits from block", n)
 
 			// Wait for the next block
 			block, err = s.waitForNextBlock(block)
@@ -327,7 +327,7 @@ func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) (int, error
 	}
 
 	log = log.WithField("scannedDeposits", len(dvs))
-	log.Info("Counted deposits from block")
+	log.Infof("Counted %d deposits from block", len(dvs))
 
 	n := 0
 	for _, dv := range dvs {
