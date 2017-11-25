@@ -418,9 +418,9 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 	}
 
 	log = log.WithField("skyAddr", di.SkyAddress)
-	log = log.WithField("skyRate", s.cfg.Rate)
+	log = log.WithField("skyRate", di.ConversionRate)
 
-	skyAmt, err := CalculateBtcSkyValue(di.DepositValue, s.cfg.Rate)
+	skyAmt, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate)
 	if err != nil {
 		log.WithError(err).Error("CalculateBtcSkyValue failed")
 		return nil, err
@@ -451,7 +451,6 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 
 	log = log.WithField("transactionOutput", tx.Out)
 
-	// Verify the transaction contains exactly output to the destination address
 	if err := verifyCreatedTransaction(tx, di, skyAmt); err != nil {
 		log.WithError(err).Error("verifyCreatedTransaction failed")
 		return nil, err

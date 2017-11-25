@@ -28,23 +28,32 @@ type dummySender struct {
 	broadcastTransactionErr error
 	confirmErr              error
 	txidConfirmMap          map[string]bool
+	changeAddr              string
+	changeCoins             uint64
 }
 
 func newDummySender() *dummySender {
 	return &dummySender{
 		txidConfirmMap: make(map[string]bool),
+		changeAddr:     "nYTKxHm6SZWAMdDVx6U9BqxKMuCjmSLp93",
+		changeCoins:    111e6,
 	}
 }
 
-func (send *dummySender) CreateTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
-	if send.createTransactionErr != nil {
-		return nil, send.createTransactionErr
+func (s *dummySender) CreateTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
+	if s.createTransactionErr != nil {
+		return nil, s.createTransactionErr
 	}
 
 	addr := cipher.MustDecodeBase58Address(destAddr)
+	changeAddr := cipher.MustDecodeBase58Address(s.changeAddr)
 
 	return &coin.Transaction{
 		Out: []coin.TransactionOutput{
+			{
+				Address: changeAddr,
+				Coins:   s.changeCoins,
+			},
 			{
 				Address: addr,
 				Coins:   coins,
@@ -53,15 +62,15 @@ func (send *dummySender) CreateTransaction(destAddr string, coins uint64) (*coin
 	}, nil
 }
 
-func (send *dummySender) BroadcastTransaction(tx *coin.Transaction) *sender.BroadcastTxResponse {
+func (s *dummySender) BroadcastTransaction(tx *coin.Transaction) *sender.BroadcastTxResponse {
 	req := sender.BroadcastTxRequest{
 		Tx:   tx,
 		RspC: make(chan *sender.BroadcastTxResponse, 1),
 	}
 
-	if send.broadcastTransactionErr != nil {
+	if s.broadcastTransactionErr != nil {
 		return &sender.BroadcastTxResponse{
-			Err: send.broadcastTransactionErr,
+			Err: s.broadcastTransactionErr,
 			Req: req,
 		}
 	}
@@ -72,39 +81,39 @@ func (send *dummySender) BroadcastTransaction(tx *coin.Transaction) *sender.Broa
 	}
 }
 
-func (send *dummySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {
-	send.RLock()
-	defer send.RUnlock()
+func (s *dummySender) IsTxConfirmed(txid string) *sender.ConfirmResponse {
+	s.RLock()
+	defer s.RUnlock()
 
 	req := sender.ConfirmRequest{
 		Txid: txid,
 	}
 
-	if send.confirmErr != nil {
+	if s.confirmErr != nil {
 		return &sender.ConfirmResponse{
-			Err: send.confirmErr,
+			Err: s.confirmErr,
 			Req: req,
 		}
 	}
 
-	confirmed := send.txidConfirmMap[txid]
+	confirmed := s.txidConfirmMap[txid]
 	return &sender.ConfirmResponse{
 		Confirmed: confirmed,
 		Req:       req,
 	}
 }
 
-func (send *dummySender) predictTxid(t *testing.T, destAddr string, coins uint64) string {
-	tx, err := send.CreateTransaction(destAddr, coins)
+func (s *dummySender) predictTxid(t *testing.T, destAddr string, coins uint64) string {
+	tx, err := s.CreateTransaction(destAddr, coins)
 	require.NoError(t, err)
 	return tx.TxIDHex()
 }
 
-func (send *dummySender) setTxConfirmed(txid string) {
-	send.Lock()
-	defer send.Unlock()
+func (s *dummySender) setTxConfirmed(txid string) {
+	s.Lock()
+	defer s.Unlock()
 
-	send.txidConfirmMap[txid] = true
+	s.txidConfirmMap[txid] = true
 }
 
 type dummyScanner struct {
@@ -1126,6 +1135,61 @@ func TestExchangeBindAddress(t *testing.T) {
 	skyAddr, err := s.store.GetBindAddress("b")
 	require.NoError(t, err)
 	require.Equal(t, "a", skyAddr)
+}
+
+func TestExchangeCreateTransaction(t *testing.T) {
+	cfg := Config{
+		Rate: "10",
+	}
+
+	log, _ := testutil.NewLogger(t)
+	s, err := NewExchange(log, nil, nil, newDummySender(), cfg)
+	require.NoError(t, err)
+
+	// Create transaction with no SkyAddress
+	di := DepositInfo{
+		SkyAddress:     "",
+		DepositValue:   1e8,
+		ConversionRate: "100",
+	}
+
+	_, err = s.createTransaction(di)
+	require.Equal(t, ErrNoBoundAddress, err)
+
+	// Create transaction with no coins sent, due to a very low DepositValue
+	di = DepositInfo{
+		SkyAddress:     "2GgFvqoyk9RjwVzj8tqfcXVXB4orBwoc9qv",
+		DepositValue:   1,
+		ConversionRate: "100",
+	}
+	_, err = s.createTransaction(di)
+	require.Equal(t, ErrEmptySendAmount, err)
+
+	// Create valid transaction
+	di = DepositInfo{
+		SkyAddress:     "2GgFvqoyk9RjwVzj8tqfcXVXB4orBwoc9qv",
+		DepositValue:   1e8,
+		ConversionRate: "100",
+	}
+	// Make sure DepositInfo.ConversionRate != s.Config.Rate, to confirm
+	// that the DepositInfo's ConversionRate is used instead of Config.Rate
+	require.NotEqual(t, s.cfg.Rate, di.ConversionRate)
+
+	tx, err := s.createTransaction(di)
+	require.NoError(t, err)
+	// Should have one output for destination and one for change
+	require.Len(t, tx.Out, 2)
+
+	// Check that the coins sent are based upon the DepositValue.ConversionRate
+	var txOut *coin.TransactionOutput
+	for _, o := range tx.Out {
+		if o.Address.String() == di.SkyAddress {
+			txOut = &o
+			break
+		}
+	}
+	require.NotNil(t, txOut)
+	require.Equal(t, uint64(100e6), txOut.Coins)
 }
 
 func TestExchangeGetDepositStatuses(t *testing.T) {

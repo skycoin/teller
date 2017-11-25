@@ -4,7 +4,8 @@
 
 debug = true
 profile = false
-# log_filename = "teller.log"
+# logfile = "./teller.log"  # logfile can be an absolute path or relative to the working directory
+# dbfile = "teller.db"  # dbfile is saved inside ~/.teller-skycoin, do not include a path
 btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
 
 [teller]
