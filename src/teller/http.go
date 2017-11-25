@@ -21,6 +21,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/util/droplet"
+	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
 	"github.com/skycoin/teller/src/scanner"
@@ -401,7 +402,10 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		btcAddr, err := s.service.BindAddress(bindReq.SkyAddr)
 		if err != nil {
 			log.WithError(err).Error("service.BindAddress failed")
-			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			if err != addrs.ErrDepositAddressEmpty {
+				err = errInternalServerError
+			}
+			errorResponse(ctx, w, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -564,12 +568,6 @@ func verifySkycoinAddress(ctx context.Context, w http.ResponseWriter, skyAddr st
 	return true
 }
 
-func handleServiceResponseError(ctx context.Context, w http.ResponseWriter, err error) {
-	if err != nil {
-		errorResponse(ctx, w, http.StatusInternalServerError, err)
-	}
-}
-
 func errorResponse(ctx context.Context, w http.ResponseWriter, code int, err error) {
 	log := logger.FromContext(ctx)
 	log.WithFields(logrus.Fields{
@@ -577,5 +575,9 @@ func errorResponse(ctx context.Context, w http.ResponseWriter, code int, err err
 		"statusMsg": http.StatusText(code),
 	}).WithError(err).Info()
 
-	httputil.ErrResponse(w, code)
+	if err != errInternalServerError {
+		httputil.ErrResponse(w, code, err.Error())
+	} else {
+		httputil.ErrResponse(w, code)
+	}
 }
