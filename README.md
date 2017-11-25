@@ -71,7 +71,8 @@ Description of the config file:
 
 * `debug` [bool]: Enable debug logging.
 * `profile` [bool]: Enable gops profiler.
-* `log_filename` [string]: Log file.
+* `logfile` [string]: Log file.  It can be an absolute path or be relative to the working directory.
+* `dbfile` [string]: Database file, saved inside the `~/.teller-skycoin` folder. Do not use a path.
 * `btc_addresses` [string]: Filepath of the btc_addresses.json file. See [generate BTC addresses](#generate-btc-addresses).
 * `teller.max_bound_btc_addrs` [int]: Maximum number of BTC addresses allowed to bind per skycoin address.
 * `sky_rpc.address` [string]: Host address of the skycoin node. See [setup skycoin node](#setup-skycoin-node).
