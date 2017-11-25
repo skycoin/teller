@@ -575,10 +575,9 @@ func errorResponse(ctx context.Context, w http.ResponseWriter, code int, err err
 		"statusMsg": http.StatusText(code),
 	}).WithError(err).Info()
 
-	msg := ""
 	if err != errInternalServerError {
-		msg = err.Error()
+		httputil.ErrResponse(w, code, err.Error())
+	} else {
+		httputil.ErrResponse(w, code)
 	}
-
-	httputil.ErrResponse(w, code, msg)
 }
