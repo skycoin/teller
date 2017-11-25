@@ -33,8 +33,8 @@ func JSONResponse(w http.ResponseWriter, data interface{}) error {
 }
 
 // LogHandler log middleware
-func LogHandler(log logrus.FieldLogger, hd http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func LogHandler(log logrus.FieldLogger, hd http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log = log.WithFields(logrus.Fields{
 			"method":     r.Method,
@@ -48,14 +48,14 @@ func LogHandler(log logrus.FieldLogger, hd http.HandlerFunc) http.HandlerFunc {
 
 		lrw := newLoggingResponseWriter(w)
 
-		hd(lrw, r)
+		hd.ServeHTTP(lrw, r)
 
 		log.WithFields(logrus.Fields{
 			"duration":   fmt.Sprintf("%dms", time.Since(t)/time.Millisecond),
 			"status":     lrw.statusCode,
 			"statusText": http.StatusText(lrw.statusCode),
 		}).Info("HTTP Request")
-	}
+	})
 }
 
 // Captures the response status of a http handler

@@ -63,9 +63,10 @@ type DepositInfo struct {
 	DepositAddress string
 	DepositID      string
 	Txid           string
-	ConversionRate int64  // Number of whole SKY per other whole coin
+	ConversionRate string // SKY per other coin, as a decimal string (allows integers, floats, fractions)
 	DepositValue   int64  // Deposit amount. Should be measured in the smallest unit possible (e.g. satoshis for BTC)
 	SkySent        uint64 // SKY sent, measured in droplets
+	Error          string // An error that occured during processing
 	// The original Deposit is saved for the records, in case there is a mistake.
 	// Do not use this data directly.  All necessary data is copied to the top level
 	// of DepositInfo (e.g. DepositID, DepositAddress, DepositValue, CoinType).
@@ -94,15 +95,16 @@ func (di DepositInfo) ValidateForStatus() error {
 		if di.DepositValue == 0 {
 			return errors.New("DepositValue is zero")
 		}
-		if di.ConversionRate == 0 {
-			return errors.New("ConversionRate is zero")
+		if _, err := ParseRate(di.ConversionRate); err != nil {
+			return err
 		}
+
 		return nil
 	}
 
 	switch di.Status {
 	case StatusDone:
-		if di.Txid == "" {
+		if di.Error != ErrEmptySendAmount.Error() && di.Txid == "" {
 			return errors.New("Txid missing")
 		}
 		// Don't check SkySent == 0, it is possible to have StatusDone with

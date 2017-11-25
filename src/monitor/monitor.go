@@ -99,14 +99,15 @@ func (m *Monitor) Run() error {
 func (m *Monitor) setupMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/api/address", httputil.LogHandler(m.log, m.addressHandler()))
-	mux.HandleFunc("/api/deposit_status", httputil.LogHandler(m.log, m.depositStatus()))
+	mux.Handle("/api/address", httputil.LogHandler(m.log, m.addressHandler()))
+	mux.Handle("/api/deposit_status", httputil.LogHandler(m.log, m.depositStatus()))
 	return mux
 }
 
 // Shutdown close the monitor service
 func (m *Monitor) Shutdown() {
 	log := m.log.WithField("timeout", shutdownTimeout)
+	defer log.Info("Shutdown monitor service")
 
 	close(m.quit)
 	if m.ln != nil {

@@ -6,55 +6,48 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/skycoin/teller/src/addrs"
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
 )
 
 var (
-	// ErrMaxBind is returned when the maximum number of address to bind to a SKY address has been reached
-	ErrMaxBind = errors.New("max bind reached")
+	// ErrMaxBoundAddresses is returned when the maximum number of address to bind to a SKY address has been reached
+	ErrMaxBoundAddresses = errors.New("The maximum number of BTC addresses have been assigned to this SKY address")
 )
-
-// Config configures Teller
-type Config struct {
-	Service ServiceConfig
-	HTTP    HTTPConfig
-}
 
 // Teller provides the HTTP and teller service
 type Teller struct {
-	log logrus.FieldLogger
-	cfg Config // Teller configuration info
-
-	httpServ *httpServer // HTTP API
-
-	quit chan struct{}
+	cfg      config.Teller
+	log      logrus.FieldLogger
+	httpServ *HTTPServer // HTTP API
+	quit     chan struct{}
+	done     chan struct{}
 }
 
 // New creates a Teller
-func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen addrs.AddrGenerator, cfg Config) (*Teller, error) {
-	if err := cfg.HTTP.Validate(); err != nil {
-		return nil, err
-	}
-
+func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen addrs.AddrGenerator, cfg config.Config) *Teller {
 	return &Teller{
-		cfg:  cfg,
+		cfg:  cfg.Teller,
 		log:  log.WithField("prefix", "teller"),
 		quit: make(chan struct{}),
-		httpServ: newHTTPServer(log, cfg.HTTP, &service{
-			cfg:       cfg.Service,
+		done: make(chan struct{}),
+		httpServ: NewHTTPServer(log, cfg.Redacted(), &Service{
+			cfg:       cfg.Teller,
 			exchanger: exchanger,
 			addrGen:   addrGen,
 		}),
-	}, nil
+	}
 }
 
 // Run starts the Teller
 func (s *Teller) Run() error {
-	s.log.Info("Starting teller...")
-	defer s.log.Info("Teller closed")
+	log := s.log.WithField("config", s.cfg)
+	log.Info("Starting teller...")
+	defer log.Info("Teller closed")
+	defer close(s.done)
 
 	if err := s.httpServ.Run(); err != nil {
-		s.log.WithError(err).Error()
+		log.WithError(err).Error(err)
 		select {
 		case <-s.quit:
 			return nil
@@ -68,18 +61,17 @@ func (s *Teller) Run() error {
 
 // Shutdown close the Teller
 func (s *Teller) Shutdown() {
+	s.log.Info("Shutting down teller service")
+	defer s.log.Info("Shutdown teller service")
+
 	close(s.quit)
 	s.httpServ.Shutdown()
+	<-s.done
 }
 
-// ServiceConfig configures service
-type ServiceConfig struct {
-	MaxBind int // maximum number of addresses allowed to bind to a SKY address
-}
-
-// service combines Exchanger and AddrGenerator
-type service struct {
-	cfg       ServiceConfig
+// Service combines Exchanger and AddrGenerator
+type Service struct {
+	cfg       config.Teller
 	exchanger exchange.Exchanger  // exchange Teller client
 	addrGen   addrs.AddrGenerator // address generator
 }
@@ -87,15 +79,15 @@ type service struct {
 // BindAddress binds skycoin address with a deposit btc address
 // return btc address
 // TODO -- support multiple coin types
-func (s *service) BindAddress(skyAddr string) (string, error) {
-	if s.cfg.MaxBind != 0 {
+func (s *Service) BindAddress(skyAddr string) (string, error) {
+	if s.cfg.MaxBoundBtcAddresses > 0 {
 		num, err := s.exchanger.GetBindNum(skyAddr)
 		if err != nil {
 			return "", err
 		}
 
-		if num >= s.cfg.MaxBind {
-			return "", ErrMaxBind
+		if num >= s.cfg.MaxBoundBtcAddresses {
+			return "", ErrMaxBoundAddresses
 		}
 	}
 
@@ -112,6 +104,6 @@ func (s *service) BindAddress(skyAddr string) (string, error) {
 }
 
 // GetDepositStatuses returns deposit status of given skycoin address
-func (s *service) GetDepositStatuses(skyAddr string) ([]exchange.DepositStatus, error) {
+func (s *Service) GetDepositStatuses(skyAddr string) ([]exchange.DepositStatus, error) {
 	return s.exchanger.GetDepositStatuses(skyAddr)
 }

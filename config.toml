@@ -1,0 +1,54 @@
+# Teller configuration
+# Defaults are shown, commented out
+# Some values have no defaults and must be filled in
+
+debug = true
+profile = false
+# logfile = "./teller.log"  # logfile can be an absolute path or relative to the working directory
+# dbfile = "teller.db"  # dbfile is saved inside ~/.teller-skycoin, do not include a path
+btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
+
+[teller]
+# max_bound_btc_addrs = 5 # 0 means unlimited
+
+[sky_rpc]
+# address = "127.0.0.1:6430"
+
+[btc_rpc]
+# server = "127.0.0.1:8334"
+user = "" # REQUIRED
+pass = "" # REQUIRED
+cert = "" # REQUIRED
+
+[btc_scanner]
+# scan_period = "20s"
+# initial_scan_height = 492478
+# confirmations_required = 1
+
+[sky_exchanger]
+sky_btc_exchange_rate = "500" # REQUIRED: SKY/BTC exchange rate as a string, can be an int, float or a rational fraction
+wallet = "example.wlt" # REQUIRED: path to local hot wallet file
+# tx_confirmation_check_wait = "5s"
+
+[web]
+# behind_proxy = false  # This must be set to true when behind a proxy for ratelimiting to work
+# api_enabled = true
+http_addr = "127.0.0.1:7071"
+# static_dir = "./web/build"
+# throttle_max = 60
+# throttle_duration = "60s"
+https_addr = "" # OPTIONAL: Serve on HTTPS
+auto_tls_host = "" # OPTIONAL: Hostname to use for automatic TLS certs. Used when tls_cert, tls_key unset
+tls_cert = ""
+tls_key = ""
+
+[admin_panel]
+# host = "127.0.0.1:7711"
+
+
+[dummy]
+# fake sender and scanner with admin interface adding fake deposits,
+# and viewing and confirmed skycoin transactions
+sender = true
+scanner = true
+# http_addr = "127.0.0.1:4121"

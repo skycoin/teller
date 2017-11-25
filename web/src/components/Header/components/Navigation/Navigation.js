@@ -3,12 +3,9 @@ import styled from 'styled-components';
 import PropTypes from 'prop-types';
 import { FormattedMessage } from 'react-intl';
 import { rem } from 'polished';
-import Hide from 'hidden-styled';
 
 import { SPACE, FONT_SIZES, FONT_FAMILIES, COLORS } from 'config';
-import { eventInProgress } from 'components/Distribution/eventStatus';
 import Link from 'components/Link';
-import Buy from 'components/Buy';
 import media from 'utils/media';
 
 const Wrapper = styled.div`
@@ -48,43 +45,27 @@ const StyledLink = styled(Link)`
   `}
 `;
 
-const InlineHide = Hide.extend`
-  display: inline;
-`;
-
 const Navigation = ({ white }) => (
   <Wrapper>
-    <StyledLink white={white} to="downloads">
+    <StyledLink white={white} href="https://www.skycoin.net/downloads" target="_blank">
       <FormattedMessage id="header.navigation.downloads" />
     </StyledLink>
 
-    <StyledLink white={white} to="whitepapers">
+    <StyledLink white={white} href="https://www.skycoin.net/whitepapers" target="_blank">
       <FormattedMessage id="header.navigation.whitepapers" />
     </StyledLink>
 
-    <StyledLink white={white} to="roadmap">
+    <StyledLink white={white} href="https://www.skycoin.net/roadmap" target="_blank">
       <FormattedMessage id="header.navigation.roadmap" />
     </StyledLink>
 
-    <StyledLink white={white} href="http://explorer.skycoin.net" target="_blank">
+    <StyledLink white={white} href="https://explorer.skycoin.net" target="_blank">
       <FormattedMessage id="header.navigation.explorer" />
     </StyledLink>
 
-    <StyledLink white={white} href="http://blog.skycoin.net" target="_blank">
+    <StyledLink white={white} href="https://blog.skycoin.net" target="_blank">
       <FormattedMessage id="header.navigation.blog" />
     </StyledLink>
-
-    <InlineHide xs sm>
-      <Buy color={white ? 'white' : 'base'} pill outlined>
-        {!eventInProgress ? (
-          <FormattedMessage id="header.navigation.buy" />
-        ) : (
-          <span>
-            <FormattedMessage id="header.navigation.distributionEvent" /> &rarr;
-          </span>
-        )}
-      </Buy>
-    </InlineHide>
   </Wrapper>
 );
 
