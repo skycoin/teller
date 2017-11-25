@@ -12,7 +12,7 @@ import (
 
 var (
 	// ErrMaxBoundAddresses is returned when the maximum number of address to bind to a SKY address has been reached
-	ErrMaxBoundAddresses = errors.New("max bind reached")
+	ErrMaxBoundAddresses = errors.New("The maximum number of BTC addresses have been assigned to this SKY address")
 )
 
 // Teller provides the HTTP and teller service
