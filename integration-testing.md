@@ -121,3 +121,37 @@ configurable rate has been changed, that deposit receives the expected rate.
 Teller scans blocks from a fixed BTC blockchain height.  When it restarts,
 it will rescan blocks that it has already scanned.  When it detects a deposit
 that has already been processed, it will not process this deposit again.
+
+## If the skycoin wallet runs out of funds, pending transactions will resume when refilled
+
+### Case 1: Teller is not stopped between refills
+
+* Start teller with a btcd node and skycoin node running
+# Use an empty skycoin wallet
+* Bind an address
+* Make a BTC deposit
+# Look for an error when creating the transaction
+* Add sufficient coins to the skycoin wallet
+* The failed deposit should succeed now
+
+### Case 2: Teller is stopped between refills
+
+* Start teller with a btcd node and skycoin node running
+# Use an empty skycoin wallet
+* Bind an address
+* Make a BTC deposit
+# Look for an error when creating the transaction
+* Stop teller
+* Add sufficient coins to the skycoin wallet
+# Start teller
+* The failed deposit should succeed now
+
+Teller will repeatedly try to create a transaction and send it until it succeeds.
+It will resume doing this between restarts.
+
+## If the BTC address pool runs out of addresses, a clear error is provided to the client and an error is logged
+
+* Start teller with a btcd node and skycoin node running
+* Use an empty btc_addresses.json file
+* Bind an address
+* Observe the error message in the client and in the logs
