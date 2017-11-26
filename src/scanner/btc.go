@@ -19,6 +19,10 @@ import (
 
 var (
 	errQuit = errors.New("Scanner quit")
+
+	// ErrBtcdTxindexDisabled is returned if RawTx is missing from GetBlockVerboseResult,
+	// which happens if txindex is not enabled in btcd.
+	ErrBtcdTxindexDisabled = errors.New("len(block.RawTx) != len(block.Tx), make sure txindex is enabled in btcd")
 )
 
 const (
@@ -105,6 +109,12 @@ func (s *BTCScanner) Run() error {
 		if err == rpcclient.ErrClientShutdown {
 			return nil
 		}
+		return err
+	}
+
+	if len(initialBlock.RawTx) != len(initialBlock.Tx) {
+		err := ErrBtcdTxindexDisabled
+		log.WithError(err).Error("Txindex looks disabled, aborting")
 		return err
 	}
 

@@ -99,6 +99,11 @@ func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.
 		panic("scanner should not be scanning blocks past the blockCount height")
 	}
 
+	block.Tx = make([]string, 0, len(block.RawTx))
+	for _, tx := range block.RawTx {
+		block.Tx = append(block.Tx, tx.Hash)
+	}
+
 	return block, nil
 }
 

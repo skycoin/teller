@@ -178,6 +178,7 @@ btcd includes a reference conf file: https://github.com/btcsuite/btcd/blob/maste
 
 In `~/.btcd/btcd.conf`, edit the following values:
 
+* `txindex` - set this to `1`.
 * `rpcuser` - use a long, random, secure string for this value. Set this as the value of `btc_rpc.user` in the teller conf.
 * `rpcpass` - use a long, random, secure string for this value. Set this as the value of `btc_rpc.pass` in the teller conf.
 
