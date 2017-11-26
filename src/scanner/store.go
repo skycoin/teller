@@ -257,7 +257,7 @@ func (s *BTCStore) ScanBlock(block *btcjson.GetBlockVerboseResult) ([]Deposit, e
 func ScanBTCBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) ([]Deposit, error) {
 	// Assert that RawTx matches Tx
 	if len(block.RawTx) != len(block.Tx) {
-		return nil, errors.New("len(block.RawTx) != len(block.Tx). Make sure txindex is enabled in btcd")
+		return nil, ErrBtcdTxindexDisabled
 	}
 
 	addrMap := map[string]struct{}{}
