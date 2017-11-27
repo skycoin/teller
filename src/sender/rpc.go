@@ -10,6 +10,11 @@ import (
 	"github.com/skycoin/skycoin/src/wallet"
 )
 
+// RPCError wraps errors from the skycoin CLI/RPC library
+type RPCError struct {
+	error
+}
+
 // RPC provides methods for sending coins
 type RPC struct {
 	walletFile string
@@ -52,17 +57,32 @@ func (c *RPC) CreateTransaction(recvAddr string, amount uint64) (*coin.Transacti
 		return nil, err
 	}
 
-	return cli.CreateRawTxFromWallet(c.rpcClient, c.walletFile, c.changeAddr, []cli.SendAmount{sendAmount})
+	txn, err := cli.CreateRawTxFromWallet(c.rpcClient, c.walletFile, c.changeAddr, []cli.SendAmount{sendAmount})
+	if err != nil {
+		return nil, RPCError{err}
+	}
+
+	return txn, nil
 }
 
 // BroadcastTransaction broadcasts a transaction and returns its txid
 func (c *RPC) BroadcastTransaction(tx *coin.Transaction) (string, error) {
-	return c.rpcClient.InjectTransaction(tx)
+	txid, err := c.rpcClient.InjectTransaction(tx)
+	if err != nil {
+		return "", RPCError{err}
+	}
+
+	return txid, nil
 }
 
 // GetTransaction returns transaction by txid
 func (c *RPC) GetTransaction(txid string) (*webrpc.TxnResult, error) {
-	return c.rpcClient.GetTransactionByID(txid)
+	txn, err := c.rpcClient.GetTransactionByID(txid)
+	if err != nil {
+		return nil, RPCError{err}
+	}
+
+	return txn, nil
 }
 
 func validateSendAmount(amt cli.SendAmount) error {
@@ -72,7 +92,7 @@ func validateSendAmount(amt cli.SendAmount) error {
 	}
 
 	if amt.Coins == 0 {
-		return errors.New("Can't send 0 coins")
+		return errors.New("Skycoin send amount is 0")
 	}
 
 	return nil
