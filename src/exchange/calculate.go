@@ -43,6 +43,38 @@ func CalculateBtcSkyValue(satoshis int64, skyPerBTC string) (uint64, error) {
 	return uint64(amt), nil
 }
 
+// CalculateEthSkyValue returns the amount of SKY (in droplets) to give for an
+// amount of Eth (in wei).
+// Rate is measured in SKY per Eth
+func CalculateEthSkyValue(wei int64, skyPerETH string) (uint64, error) {
+	if wei < 0 {
+		return 0, errors.New("wei must be greater than or equal to 0")
+	}
+	rate, err := ParseRate(skyPerETH)
+	if err != nil {
+		return 0, err
+	}
+
+	eth := decimal.New(wei, 0)
+	ethToWei := decimal.New(WeiPerETH, 0)
+	eth = eth.DivRound(ethToWei, 18)
+
+	sky := eth.Mul(rate)
+	sky = sky.Truncate(daemon.MaxDropletPrecision)
+
+	skyToDroplets := decimal.New(droplet.Multiplier, 0)
+	droplets := sky.Mul(skyToDroplets)
+
+	amt := droplets.IntPart()
+	if amt < 0 {
+		// This should never occur, but double check before we convert to uint64,
+		// otherwise we would send all the coins due to integer wrapping.
+		return 0, errors.New("calculated sky amount is negative")
+	}
+
+	return uint64(amt), nil
+}
+
 // ParseRate parses an exchange rate string and validates it
 func ParseRate(rate string) (decimal.Decimal, error) {
 	r, err := mathutil.DecimalFromString(rate)

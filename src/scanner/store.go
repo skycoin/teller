@@ -4,16 +4,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/boltdb/bolt"
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcutil"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/util/dbutil"
 )
 
 // CoinTypeBTC is BTC coin type
 const CoinTypeBTC = "BTC"
+
+// CoinTypeETH is ETH coin type
+const CoinTypeETH = "ETH"
 
 var (
 	// scan meta info bucket
@@ -67,6 +72,7 @@ type Storer interface {
 	SetDepositProcessed(string) error
 	GetUnprocessedDeposits() ([]Deposit, error)
 	ScanBlock(*btcjson.GetBlockVerboseResult) ([]Deposit, error)
+	ScanEthBlock(*types.Block) ([]Deposit, error)
 }
 
 // BTCStore records scanner meta info for BTC deposits
@@ -253,6 +259,48 @@ func (s *BTCStore) ScanBlock(block *btcjson.GetBlockVerboseResult) ([]Deposit, e
 	return dvs, nil
 }
 
+// ScanEthBlock scans a eth block for deposits and adds them
+// If the deposit already exists, the result is omitted from the returned list
+func (s *BTCStore) ScanEthBlock(block *types.Block) ([]Deposit, error) {
+	var dvs []Deposit
+
+	if err := s.db.Update(func(tx *bolt.Tx) error {
+		addrs, err := s.getScanAddressesTx(tx)
+		if err != nil {
+			s.log.WithError(err).Error("getScanAddressesTx failed")
+			return err
+		}
+
+		deposits, err := ScanETHBlock(block, addrs)
+		if err != nil {
+			s.log.WithError(err).Error("ScanETHBlock failed")
+			return err
+		}
+
+		for _, dv := range deposits {
+			if err := s.pushDepositTx(tx, dv); err != nil {
+				log := s.log.WithField("deposit", dv)
+				switch err.(type) {
+				case DepositExistsErr:
+					log.Warning("Deposit already exists in db")
+					continue
+				default:
+					log.WithError(err).Error("pushDepositTx failed")
+					return err
+				}
+			}
+
+			dvs = append(dvs, dv)
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	return dvs, nil
+}
+
 // ScanBTCBlock scan the given block and returns the next block hash or error
 func ScanBTCBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) ([]Deposit, error) {
 	addrMap := map[string]struct{}{}
@@ -280,6 +328,42 @@ func ScanBTCBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) (
 					})
 				}
 			}
+		}
+	}
+
+	return dv, nil
+}
+
+// ScanETHBlock scan the given block and returns the next block hash or error
+func ScanETHBlock(block *types.Block, depositAddrs []string) ([]Deposit, error) {
+	addrMap := map[string]struct{}{}
+	for _, a := range depositAddrs {
+		addrMap[a] = struct{}{}
+	}
+
+	var dv []Deposit
+	for i, tx := range block.Transactions() {
+		//tx, err := s.GetTransaction(txid.Hash())
+		//if err != nil {
+		//log.WithError(err).Error("get eth transcation %s failed", txid.Hash().String())
+		//continue
+		//}
+		to := tx.To()
+		if to == nil {
+			//this is a contract transcation
+			continue
+		}
+		amt := tx.Value().Int64()
+		a := strings.ToLower(to.String())
+		if _, ok := addrMap[a]; ok {
+			dv = append(dv, Deposit{
+				CoinType: CoinTypeETH,
+				Address:  a,
+				Value:    amt,
+				Height:   int64(block.NumberU64()),
+				Tx:       tx.Hash().String(),
+				N:        uint32(i),
+			})
 		}
 	}
 

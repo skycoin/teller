@@ -25,16 +25,17 @@ type Teller struct {
 }
 
 // New creates a Teller
-func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen addrs.AddrGenerator, cfg config.Config) *Teller {
+func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen, ethAddrGen addrs.AddrGenerator, cfg config.Config) *Teller {
 	return &Teller{
 		cfg:  cfg.Teller,
 		log:  log.WithField("prefix", "teller"),
 		quit: make(chan struct{}),
 		done: make(chan struct{}),
 		httpServ: NewHTTPServer(log, cfg.Redacted(), &Service{
-			cfg:       cfg.Teller,
-			exchanger: exchanger,
-			addrGen:   addrGen,
+			cfg:        cfg.Teller,
+			exchanger:  exchanger,
+			addrGen:    addrGen,
+			ethAddrGen: ethAddrGen,
 		}),
 	}
 }
@@ -71,9 +72,10 @@ func (s *Teller) Shutdown() {
 
 // Service combines Exchanger and AddrGenerator
 type Service struct {
-	cfg       config.Teller
-	exchanger exchange.Exchanger  // exchange Teller client
-	addrGen   addrs.AddrGenerator // address generator
+	cfg        config.Teller
+	exchanger  exchange.Exchanger  // exchange Teller client
+	addrGen    addrs.AddrGenerator // address generator
+	ethAddrGen addrs.AddrGenerator // address generator
 }
 
 // BindAddress binds skycoin address with a deposit btc address

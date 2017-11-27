@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/rpc"
+
 	"github.com/boltdb/bolt"
 	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
 	"github.com/google/gops/agent"
@@ -112,7 +114,9 @@ func run() error {
 	}
 
 	var btcScanner *scanner.BTCScanner
+	var ethScanner *scanner.ETHScanner
 	var scanService scanner.Scanner
+	var scanEthService scanner.Scanner
 	var sendService *sender.SendService
 	var sendRPC sender.Sender
 
@@ -163,8 +167,25 @@ func run() error {
 		}
 
 		background("btcScanner.Run", errC, btcScanner.Run)
-
 		scanService = btcScanner
+
+		ethrpc, err := rpc.Dial("http://" + cfg.EthRPC.Server + ":" + cfg.EthRPC.Port)
+		if err != nil {
+			log.WithError(err).Error("Connect geth failed")
+			return err
+		}
+		ethScanner, err = scanner.NewETHScanner(log, scanStore, ethrpc, scanner.Config{
+			ScanPeriod:            cfg.EthScanner.ScanPeriod,
+			ConfirmationsRequired: cfg.EthScanner.ConfirmationsRequired,
+			InitialScanHeight:     cfg.EthScanner.InitialScanHeight,
+		})
+		if err != nil {
+			log.WithError(err).Error("Open ethscan service failed")
+			return err
+		}
+
+		background("ethScanner.Run", errC, ethScanner.Run)
+		scanEthService = ethScanner
 	}
 
 	if cfg.Dummy.Sender {
@@ -201,8 +222,9 @@ func run() error {
 		return err
 	}
 
-	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanService, sendRPC, exchange.Config{
-		Rate: cfg.SkyExchanger.SkyBtcExchangeRate,
+	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanService, scanEthService, sendRPC, exchange.Config{
+		Rate:                    cfg.SkyExchanger.SkyBtcExchangeRate,
+		EthRate:                 cfg.SkyExchanger.SkyEthExchangeRate,
 		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
 	})
 	if err != nil {
@@ -224,8 +246,20 @@ func run() error {
 		log.WithError(err).Error("Create bitcoin deposit address manager failed")
 		return err
 	}
+	// create ethcoin address manager
+	f1, err := ioutil.ReadFile(cfg.EthAddresses)
+	if err != nil {
+		log.WithError(err).Error("Load deposit ethcoin address list failed")
+		return err
+	}
 
-	tellerServer := teller.New(log, exchangeClient, btcAddrMgr, cfg)
+	ethAddrMgr, err := addrs.NewETHAddrs(log, db, bytes.NewReader(f1))
+	if err != nil {
+		log.WithError(err).Error("Create ethcoin deposit address manager failed")
+		return err
+	}
+
+	tellerServer := teller.New(log, exchangeClient, btcAddrMgr, ethAddrMgr, cfg)
 
 	// Run the service
 	background("tellerServer.Run", errC, tellerServer.Run)
@@ -234,7 +268,7 @@ func run() error {
 	monitorCfg := monitor.Config{
 		Addr: cfg.AdminPanel.Host,
 	}
-	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, exchangeClient, btcScanner)
+	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, exchangeClient, btcScanner)
 
 	background("monitorService.Run", errC, monitorService.Run)
 
@@ -262,6 +296,11 @@ func run() error {
 	if btcScanner != nil {
 		log.Info("Shutting down btcScanner")
 		btcScanner.Shutdown()
+	}
+	// close the scan service
+	if ethScanner != nil {
+		log.Info("Shutting down ethScanner")
+		ethScanner.Shutdown()
 	}
 
 	// close exchange service

@@ -50,6 +50,7 @@ type Config struct {
 type Monitor struct {
 	log logrus.FieldLogger
 	AddrManager
+	EthAddrManager AddrManager
 	DepositStatusGetter
 	ScanAddressGetter
 	cfg  Config
@@ -58,11 +59,12 @@ type Monitor struct {
 }
 
 // New creates monitor service
-func New(log logrus.FieldLogger, cfg Config, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
+func New(log logrus.FieldLogger, cfg Config, addrManager, ethAddrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
 	return &Monitor{
 		log:                 log.WithField("prefix", "teller.monitor"),
 		cfg:                 cfg,
 		AddrManager:         addrManager,
+		EthAddrManager:      ethAddrManager,
 		DepositStatusGetter: dpstget,
 		ScanAddressGetter:   sag,
 		quit:                make(chan struct{}),
