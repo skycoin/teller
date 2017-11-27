@@ -8,6 +8,8 @@ import (
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
+	"github.com/skycoin/teller/src/scanner"
+	"github.com/skycoin/teller/src/util/dbutil"
 )
 
 var (
@@ -81,28 +83,55 @@ type Service struct {
 // BindAddress binds skycoin address with a deposit btc address
 // return btc address
 // TODO -- support multiple coin types
-func (s *Service) BindAddress(skyAddr string) (string, error) {
-	if s.cfg.MaxBoundBtcAddresses > 0 {
-		num, err := s.exchanger.GetBindNum(skyAddr)
+func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
+	switch coinType {
+	case scanner.CoinTypeBTC:
+		if s.cfg.MaxBoundBtcAddresses > 0 {
+			num, err := s.exchanger.GetBindNum(skyAddr)
+			if err != nil {
+				return "", err
+			}
+
+			if num >= s.cfg.MaxBoundBtcAddresses {
+				return "", ErrMaxBoundAddresses
+			}
+		}
+
+		btcAddr, err := s.addrGen.NewAddress()
 		if err != nil {
 			return "", err
 		}
 
-		if num >= s.cfg.MaxBoundBtcAddresses {
-			return "", ErrMaxBoundAddresses
+		btcStoreAddr := dbutil.Join(coinType, btcAddr, ":")
+		if err := s.exchanger.BindAddress(skyAddr, btcStoreAddr); err != nil {
+			return "", err
 		}
-	}
+		return btcAddr, nil
+	case scanner.CoinTypeETH:
+		if s.cfg.MaxBoundEthAddresses > 0 {
+			num, err := s.exchanger.GetBindNum(skyAddr)
+			if err != nil {
+				return "", err
+			}
 
-	btcAddr, err := s.addrGen.NewAddress()
-	if err != nil {
-		return "", err
-	}
+			if num >= s.cfg.MaxBoundEthAddresses {
+				return "", ErrMaxBoundAddresses
+			}
+		}
 
-	if err := s.exchanger.BindAddress(skyAddr, btcAddr); err != nil {
-		return "", err
-	}
+		ethAddr, err := s.ethAddrGen.NewAddress()
+		if err != nil {
+			return "", err
+		}
 
-	return btcAddr, nil
+		ethStoreAddr := dbutil.Join(coinType, ethAddr, ":")
+		if err := s.exchanger.BindAddress(skyAddr, ethStoreAddr); err != nil {
+			return "", err
+		}
+		return ethAddr, nil
+	default:
+		return "", errors.New("unsupport coinType")
+	}
 }
 
 // GetDepositStatuses returns deposit status of given skycoin address

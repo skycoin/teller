@@ -378,6 +378,7 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 
 		switch bindReq.CoinType {
 		case scanner.CoinTypeBTC:
+		case scanner.CoinTypeETH:
 		case "":
 			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing coin_type"))
 			return
@@ -399,7 +400,7 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 
 		log.Info("Calling service.BindAddress")
 
-		btcAddr, err := s.service.BindAddress(bindReq.SkyAddr)
+		coinAddr, err := s.service.BindAddress(bindReq.SkyAddr, bindReq.CoinType)
 		if err != nil {
 			log.WithError(err).Error("service.BindAddress failed")
 			if err != addrs.ErrDepositAddressEmpty && err != ErrMaxBoundAddresses {
@@ -409,15 +410,15 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		log = log.WithField("btcAddr", btcAddr)
+		log = log.WithField("coinAddr", coinAddr)
 		ctx = logger.WithContext(ctx, log)
 		r = r.WithContext(ctx)
 
 		log.Info("Bound sky and btc addresses")
 
 		if err := httputil.JSONResponse(w, BindResponse{
-			DepositAddress: btcAddr,
-			CoinType:       scanner.CoinTypeBTC,
+			DepositAddress: coinAddr,
+			CoinType:       bindReq.CoinType,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}
