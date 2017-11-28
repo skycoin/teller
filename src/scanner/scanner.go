@@ -17,6 +17,7 @@ type Scanner interface {
 // BtcRPCClient rpcclient interface
 type BtcRPCClient interface {
 	GetBlockVerboseTx(*chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
+	GetBlockVerbose(*chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
 	GetBlockHash(int64) (*chainhash.Hash, error)
 	GetBlockCount() (int64, error)
 	Shutdown()

@@ -84,48 +84,38 @@ type Service struct {
 // return btc address
 // TODO -- support multiple coin types
 func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
+	if s.cfg.MaxBoundBtcAddresses > 0 {
+		num, err := s.exchanger.GetBindNum(skyAddr)
+		if err != nil {
+			return "", err
+		}
+
+		if num >= s.cfg.MaxBoundBtcAddresses {
+			return "", ErrMaxBoundAddresses
+		}
+	}
 	switch coinType {
 	case scanner.CoinTypeBTC:
-		if s.cfg.MaxBoundBtcAddresses > 0 {
-			num, err := s.exchanger.GetBindNum(skyAddr)
-			if err != nil {
-				return "", err
-			}
-
-			if num >= s.cfg.MaxBoundBtcAddresses {
-				return "", ErrMaxBoundAddresses
-			}
-		}
 
 		btcAddr, err := s.addrGen.NewAddress()
 		if err != nil {
 			return "", err
 		}
 
-		btcStoreAddr := dbutil.Join(coinType, btcAddr, ":")
-		if err := s.exchanger.BindAddress(skyAddr, btcStoreAddr); err != nil {
+		//btcStoreAddr := dbutil.Join(coinType, btcAddr, ":")
+		if err := s.exchanger.BindAddress(skyAddr, btcAddr); err != nil {
 			return "", err
 		}
 		return btcAddr, nil
 	case scanner.CoinTypeETH:
-		if s.cfg.MaxBoundEthAddresses > 0 {
-			num, err := s.exchanger.GetBindNum(skyAddr)
-			if err != nil {
-				return "", err
-			}
-
-			if num >= s.cfg.MaxBoundEthAddresses {
-				return "", ErrMaxBoundAddresses
-			}
-		}
 
 		ethAddr, err := s.ethAddrGen.NewAddress()
 		if err != nil {
 			return "", err
 		}
 
-		ethStoreAddr := dbutil.Join(coinType, ethAddr, ":")
-		if err := s.exchanger.BindAddress(skyAddr, ethStoreAddr); err != nil {
+		//ethStoreAddr := dbutil.Join(coinType, ethAddr, ":")
+		if err := s.exchanger.BindAddress(skyAddr, ethAddr); err != nil {
 			return "", err
 		}
 		return ethAddr, nil

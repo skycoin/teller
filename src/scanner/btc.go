@@ -352,7 +352,7 @@ func (s *BTCScanner) getBlockAtHeight(height int64) (*btcjson.GetBlockVerboseRes
 		return nil, err
 	}
 
-	block, err := s.btcClient.GetBlockVerboseTx(hash)
+	block, err := s.btcClient.GetBlockVerbose(hash)
 	if err != nil {
 		log.WithError(err).Error("btcClient.GetBlockVerboseTx failed")
 		return nil, err
@@ -374,7 +374,7 @@ func (s *BTCScanner) getNextBlock(block *btcjson.GetBlockVerboseResult) (*btcjso
 	}
 
 	s.log.WithField("nextHash", nxtHash.String()).Debug("Calling s.btcClient.GetBlockVerboseTx")
-	return s.btcClient.GetBlockVerboseTx(nxtHash)
+	return s.btcClient.GetBlockVerbose(nxtHash)
 }
 
 // waitForNextBlock scans for the next block until it is available
@@ -394,7 +394,7 @@ func (s *BTCScanner) waitForNextBlock(block *btcjson.GetBlockVerboseResult) (*bt
 
 		for {
 			var err error
-			block, err = s.btcClient.GetBlockVerboseTx(hash)
+			block, err = s.btcClient.GetBlockVerbose(hash)
 			if err != nil {
 				log.WithError(err).Error("btcClient.GetBlockVerboseTx failed, retrying")
 			}
