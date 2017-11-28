@@ -176,7 +176,13 @@ func run() error {
 			log.WithError(err).Error("Connect geth failed")
 			return err
 		}
-		ethScanner, err = scanner.NewETHScanner(log, scanStore, ethrpc, scanner.Config{
+		// create scan service
+		scanEthStore, err := scanner.NewEthStore(log, db)
+		if err != nil {
+			log.WithError(err).Error("scanner.NewStore failed")
+			return err
+		}
+		ethScanner, err = scanner.NewETHScanner(log, scanEthStore, ethrpc, scanner.Config{
 			ScanPeriod:            cfg.EthScanner.ScanPeriod,
 			ConfirmationsRequired: cfg.EthScanner.ConfirmationsRequired,
 			InitialScanHeight:     cfg.EthScanner.InitialScanHeight,

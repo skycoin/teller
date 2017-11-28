@@ -9,7 +9,6 @@ import (
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
 	"github.com/skycoin/teller/src/scanner"
-	"github.com/skycoin/teller/src/util/dbutil"
 )
 
 var (
