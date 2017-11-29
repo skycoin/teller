@@ -5,6 +5,8 @@ import (
 
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 // Scanner provids apis for interacting with a scan service
@@ -19,6 +21,15 @@ type BtcRPCClient interface {
 	GetBlockVerboseTx(*chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
 	GetBlockVerbose(*chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
 	GetBlockHash(int64) (*chainhash.Hash, error)
+	GetBlockCount() (int64, error)
+	Shutdown()
+}
+
+// EthRPCClient rpcclient interface
+type EthRPCClient interface {
+	GetTransaction(txhash common.Hash) (*types.Transaction, error)
+	GetBlockAtHeight(seq uint64) (*types.Block, error)
+	GetBlockHash(int64) (common.Hash, error)
 	GetBlockCount() (int64, error)
 	Shutdown()
 }

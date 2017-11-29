@@ -15,8 +15,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/rpc"
-
 	"github.com/boltdb/bolt"
 	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
 	"github.com/google/gops/agent"
@@ -171,7 +169,7 @@ func run() error {
 		background("btcScanner.Run", errC, btcScanner.Run)
 		scanService = btcScanner
 
-		ethrpc, err := rpc.Dial("http://" + cfg.EthRPC.Server + ":" + cfg.EthRPC.Port)
+		ethrpc, err := scanner.NewEthClient(cfg.EthRPC.Server, cfg.EthRPC.Port)
 		if err != nil {
 			log.WithError(err).Error("Connect geth failed")
 			return err

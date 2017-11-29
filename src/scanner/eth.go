@@ -24,7 +24,7 @@ import (
 type ETHScanner struct {
 	log       logrus.FieldLogger
 	cfg       Config
-	ethClient *rpc.Client
+	ethClient EthRPCClient
 	store     Storer
 	// Deposit value channel, exposed by public API, intended for public consumption
 	depositC chan DepositNote
@@ -35,7 +35,7 @@ type ETHScanner struct {
 }
 
 // NewETHScanner creates scanner instance
-func NewETHScanner(log logrus.FieldLogger, store Storer, eth *rpc.Client, cfg Config) (*ETHScanner, error) {
+func NewETHScanner(log logrus.FieldLogger, store Storer, eth EthRPCClient, cfg Config) (*ETHScanner, error) {
 	if cfg.ScanPeriod == 0 {
 		cfg.ScanPeriod = blockScanPeriod
 	}
@@ -132,7 +132,7 @@ func (s *ETHScanner) Run() error {
 			})
 
 			// Check for necessary confirmations
-			bestHeight, err := s.getBlockCount()
+			bestHeight, err := s.ethClient.GetBlockCount()
 			if err != nil {
 				log.WithError(err).Error("ethClient.GetBlockCount failed")
 				if wait() != nil {
@@ -226,7 +226,7 @@ func (s *ETHScanner) Shutdown() {
 	s.log.Info("Closing ETH scanner")
 	close(s.quit)
 	close(s.depositC)
-	s.ethClient.Close()
+	s.ethClient.Shutdown()
 	s.log.Info("Waiting for ETH scanner to stop")
 	<-s.done
 	s.log.Info("ETH scanner stopped")
@@ -329,14 +329,7 @@ func (s *ETHScanner) scanBlock(block *types.Block) (int, error) {
 
 // getBlockAtHeight returns that block at a specific height
 func (s *ETHScanner) getBlockAtHeight(seq uint64) (*types.Block, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	block, err := ethclient.NewClient(s.ethClient).BlockByNumber(ctx, big.NewInt(int64(seq)))
-	if err != nil && err.Error() != "not found" {
-		return nil, err
-	}
-
-	return block, nil
+	return s.ethClient.GetBlockAtHeight(seq)
 }
 
 // getNextBlock returns the next block of given hash, return nil if next block does not exist
@@ -345,31 +338,7 @@ func (s *ETHScanner) getNextBlock(seq uint64) (*types.Block, error) {
 }
 
 func (s *ETHScanner) GetTransaction(txhash common.Hash) (*types.Transaction, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	//txhash := common.StringToHash(txid)
-	tx, _, err := ethclient.NewClient(s.ethClient).TransactionByHash(ctx, txhash)
-	if err != nil {
-		return nil, err
-	}
-	return tx, nil
-}
-
-// getBlockCount returns the height of the block in the longest (best)
-// chain.
-func (s *ETHScanner) getBlockCount() (int64, error) {
-	var bn string
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := s.ethClient.CallContext(ctx, &bn, "eth_blockNumber"); err != nil {
-		return 0, err
-	}
-	bnRealStr := bn[2:]
-	blockNum, err := strconv.ParseInt(bnRealStr, 16, 32)
-	if err != nil {
-		return 0, err
-	}
-	return int64(blockNum), nil
+	return s.ethClient.GetTransaction(txhash)
 }
 
 // waitForNextBlock scans for the next block until it is available
@@ -417,4 +386,63 @@ func (s *ETHScanner) GetScanAddresses() ([]string, error) {
 // GetDeposit returns deposit value channel.
 func (s *ETHScanner) GetDeposit() <-chan DepositNote {
 	return s.depositC
+}
+
+//EthClient is self-defined struct for implement EthRPCClient interface
+//because origin rpc.Client has't required interface
+type EthClient struct {
+	c *rpc.Client
+}
+
+func NewEthClient(server, port string) (*EthClient, error) {
+	ethrpc, err := rpc.Dial("http://" + server + ":" + port)
+	if err != nil {
+		return nil, err
+	}
+	ec := EthClient{c: ethrpc}
+	return &ec, nil
+}
+func (ec *EthClient) GetBlockCount() (int64, error) {
+	var bn string
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := ec.c.CallContext(ctx, &bn, "eth_blockNumber"); err != nil {
+		return 0, err
+	}
+	bnRealStr := bn[2:]
+	blockNum, err := strconv.ParseInt(bnRealStr, 16, 32)
+	if err != nil {
+		return 0, err
+	}
+	return int64(blockNum), nil
+}
+func (ec *EthClient) Shutdown() {
+	ec.c.Close()
+}
+func (ec *EthClient) GetBlockAtHeight(seq uint64) (*types.Block, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	block, err := ethclient.NewClient(ec.c).BlockByNumber(ctx, big.NewInt(int64(seq)))
+	if err != nil && err.Error() != "not found" {
+		return nil, err
+	}
+
+	return block, nil
+}
+func (ec *EthClient) GetTransaction(txhash common.Hash) (*types.Transaction, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	//txhash := common.StringToHash(txid)
+	tx, _, err := ethclient.NewClient(ec.c).TransactionByHash(ctx, txhash)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
+func (ec *EthClient) GetBlockHash(seq int64) (common.Hash, error) {
+	block, err := ec.GetBlockAtHeight(uint64(seq))
+	if err != nil {
+		return common.Hash{}, err
+	}
+	return block.Hash(), nil
 }
