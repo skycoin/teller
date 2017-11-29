@@ -27,8 +27,7 @@ type BtcRPCClient interface {
 
 // EthRPCClient rpcclient interface
 type EthRPCClient interface {
-	GetTransaction(txhash common.Hash) (*types.Transaction, error)
-	GetBlockAtHeight(seq uint64) (*types.Block, error)
+	GetBlockVerboseTx(seq uint64) (*types.Block, error)
 	GetBlockHash(int64) (common.Hash, error)
 	GetBlockCount() (int64, error)
 	Shutdown()

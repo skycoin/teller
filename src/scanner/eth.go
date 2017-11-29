@@ -419,7 +419,7 @@ func (ec *EthClient) GetBlockCount() (int64, error) {
 func (ec *EthClient) Shutdown() {
 	ec.c.Close()
 }
-func (ec *EthClient) GetBlockAtHeight(seq uint64) (*types.Block, error) {
+func (ec *EthClient) GetBlockVerboseTx(seq uint64) (*types.Block, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	block, err := ethclient.NewClient(ec.c).BlockByNumber(ctx, big.NewInt(int64(seq)))
