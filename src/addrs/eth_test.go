@@ -30,7 +30,7 @@ func TestNewETHAddrsAllValid(t *testing.T) {
 	require.NotNil(t, ethAddrMgr)
 }
 
-func TestNewBtcAddrsContainsInvalid(t *testing.T) {
+func TestNewEthAddrsContainsInvalid(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
@@ -55,7 +55,7 @@ func TestNewBtcAddrsContainsInvalid(t *testing.T) {
 	require.Nil(t, ethAddrMgr)
 }
 
-func TestNewBtcAddrsContainsDuplicated(t *testing.T) {
+func TestNewEthAddrsContainsDuplicated(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 

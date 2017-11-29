@@ -329,16 +329,12 @@ func (s *ETHScanner) scanBlock(block *types.Block) (int, error) {
 
 // getBlockAtHeight returns that block at a specific height
 func (s *ETHScanner) getBlockAtHeight(seq uint64) (*types.Block, error) {
-	return s.ethClient.GetBlockAtHeight(seq)
+	return s.ethClient.GetBlockVerboseTx(seq)
 }
 
 // getNextBlock returns the next block of given hash, return nil if next block does not exist
 func (s *ETHScanner) getNextBlock(seq uint64) (*types.Block, error) {
-	return s.getBlockAtHeight(seq + 1)
-}
-
-func (s *ETHScanner) GetTransaction(txhash common.Hash) (*types.Transaction, error) {
-	return s.ethClient.GetTransaction(txhash)
+	return s.ethClient.GetBlockVerboseTx(seq + 1)
 }
 
 // waitForNextBlock scans for the next block until it is available
@@ -438,11 +434,4 @@ func (ec *EthClient) GetTransaction(txhash common.Hash) (*types.Transaction, err
 		return nil, err
 	}
 	return tx, nil
-}
-func (ec *EthClient) GetBlockHash(seq int64) (common.Hash, error) {
-	block, err := ec.GetBlockAtHeight(uint64(seq))
-	if err != nil {
-		return common.Hash{}, err
-	}
-	return block.Hash(), nil
 }

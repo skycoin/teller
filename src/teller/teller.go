@@ -102,7 +102,7 @@ func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
 		}
 
 		//btcStoreAddr := dbutil.Join(coinType, btcAddr, ":")
-		if err := s.exchanger.BindAddress(skyAddr, btcAddr); err != nil {
+		if err := s.exchanger.BindAddress(skyAddr, btcAddr, coinType); err != nil {
 			return "", err
 		}
 		return btcAddr, nil
@@ -114,7 +114,7 @@ func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
 		}
 
 		//ethStoreAddr := dbutil.Join(coinType, ethAddr, ":")
-		if err := s.exchanger.BindAddress(skyAddr, ethAddr); err != nil {
+		if err := s.exchanger.BindAddress(skyAddr, ethAddr, coinType); err != nil {
 			return "", err
 		}
 		return ethAddr, nil

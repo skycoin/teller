@@ -5,7 +5,6 @@ import (
 
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 )
 
@@ -28,7 +27,6 @@ type BtcRPCClient interface {
 // EthRPCClient rpcclient interface
 type EthRPCClient interface {
 	GetBlockVerboseTx(seq uint64) (*types.Block, error)
-	GetBlockHash(int64) (common.Hash, error)
 	GetBlockCount() (int64, error)
 	Shutdown()
 }

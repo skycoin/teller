@@ -127,6 +127,12 @@ func newDummyScanner() *dummyScanner {
 	}
 }
 
+func newEthDummyScanner() *dummyScanner {
+	return &dummyScanner{
+		dvC: make(chan scanner.DepositNote, 10),
+	}
+}
+
 func (scan *dummyScanner) AddScanAddress(btcAddr string) error {
 	scan.addrs = append(scan.addrs, btcAddr)
 	return nil
@@ -160,7 +166,7 @@ func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
 
-	e, err := NewExchange(log, store, newDummyScanner(), newDummySender(), Config{
+	e, err := NewExchange(log, store, newDummyScanner(), newEthDummyScanner(), newDummySender(), Config{
 		Rate: testSkyBtcRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 	})
@@ -199,7 +205,7 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 	store := &MockStore{}
 	log, hook := testutil.NewLogger(t)
 
-	e, err := NewExchange(log, store, newDummyScanner(), newDummySender(), Config{
+	e, err := NewExchange(log, store, newDummyScanner(), newEthDummyScanner(), newDummySender(), Config{
 		Rate: testSkyBtcRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 	})
@@ -1143,7 +1149,7 @@ func TestExchangeCreateTransaction(t *testing.T) {
 	}
 
 	log, _ := testutil.NewLogger(t)
-	s, err := NewExchange(log, nil, nil, newDummySender(), cfg)
+	s, err := NewExchange(log, nil, nil, nil, newDummySender(), cfg)
 	require.NoError(t, err)
 
 	// Create transaction with no SkyAddress

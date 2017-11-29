@@ -3,7 +3,6 @@ package scanner
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -16,21 +15,10 @@ import (
 	"github.com/skycoin/teller/src/util/testutil"
 )
 
-const (
-	// run tests in parallel
-	parallel        = true
-	minShutdownWait = time.Second // set to time.Second * 5 when using -race
-)
-
 var (
-	dummyBlocksBktName = []byte("blocks")
-	errNoBlockHash     = errors.New("no block found for height")
+	dummyEthBlocksBktName = []byte("blocks")
+	errNoEthBlockHash     = errors.New("no block found for height")
 )
-
-type scannedBlock struct {
-	Hash   string
-	Height int32
-}
 
 type dummyEthrpcclient struct {
 	db                           *bolt.DB
@@ -41,7 +29,7 @@ type dummyEthrpcclient struct {
 	blockVerboseTxErrorCallCount int
 	blockVerboseTxCallCount      int
 
-	// used for testScannerBlockNextHashAppears
+	// used for testEthScannerBlockNextHashAppears
 	blockNextHashMissingOnceAt int64
 	hasSetMissingHash          bool
 }
@@ -95,7 +83,7 @@ func (dec *dummyEthrpcclient) GetBlockVerboseTx(seq uint64) (*types.Block, error
 
 	var block *types.Block
 	if err := dec.db.View(func(tx *bolt.Tx) error {
-		return dbutil.ForEach(tx, dummyBlocksBktName, func(k, v []byte) error {
+		return dbutil.ForEach(tx, dummyEthBlocksBktName, func(k, v []byte) error {
 			tmpBlock, err := NewBlockFromBlockReadable(v)
 			if err != nil {
 				return err
@@ -134,20 +122,11 @@ func (dec *dummyEthrpcclient) GetBlockCount() (int64, error) {
 	return dec.blockCount, nil
 }
 
-func (dec *dummyEthrpcclient) GetBlockHash(height int64) (common.Hash, error) {
-	hash := dec.blockHashes[height]
-	if hash == "" {
-		return common.Hash{}, errNoBlockHash
-	}
-
-	return common.StringToHash(hash), nil
-}
-
-func setupScannerWithDB(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanner {
+func setupEthScannerWithDB(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanner {
 	log, _ := testutil.NewLogger(t)
 
 	// Blocks 2325205 through 2325214 are stored in eth.db
-	// Refer to https://blockchain.info or another explorer to see the block data
+	// Refer to https://etherscan.io/ or another explorer to see the block data
 	rpc := newDummyEthrpcclient(ethDB)
 
 	// The hash of the initial scan block needs to be set. The others don't
@@ -170,7 +149,7 @@ func setupScannerWithDB(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanner {
 
 	return scr
 }
-func setupScannerWithNonExistInitHeight(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanner {
+func setupEthScannerWithNonExistInitHeight(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanner {
 	log, _ := testutil.NewLogger(t)
 
 	// Blocks 2325205 through 2325214 are stored in eth.db
@@ -196,15 +175,15 @@ func setupScannerWithNonExistInitHeight(t *testing.T, ethDB *bolt.DB, db *bolt.D
 	return scr
 }
 
-func setupScanner(t *testing.T, ethDB *bolt.DB) (*ETHScanner, func()) {
+func setupEthScanner(t *testing.T, ethDB *bolt.DB) (*ETHScanner, func()) {
 	db, shutdown := testutil.PrepareDB(t)
 
-	scr := setupScannerWithDB(t, ethDB, db)
+	scr := setupEthScannerWithDB(t, ethDB, db)
 
 	return scr, shutdown
 }
 
-func testScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int) {
+func testEthScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -250,7 +229,6 @@ func testScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int) {
 		shutdownWait = minShutdownWait
 	}
 
-	fmt.Printf("----wait-down--%+v\n", shutdownWait)
 	time.AfterFunc(shutdownWait, func() {
 		scr.Shutdown()
 	})
@@ -260,7 +238,7 @@ func testScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int) {
 	<-done
 }
 
-func testScannerRun(t *testing.T, scr *ETHScanner) {
+func testEthScannerRun(t *testing.T, scr *ETHScanner) {
 	nDeposits := 0
 
 	// This address has 0 deposits
@@ -284,38 +262,38 @@ func testScannerRun(t *testing.T, scr *ETHScanner) {
 	// to test what happens when the buffer is full
 	require.True(t, scr.cfg.DepositBufferSize < nDeposits)
 
-	testScannerRunProcessedLoop(t, scr, nDeposits)
+	testEthScannerRunProcessedLoop(t, scr, nDeposits)
 }
 
-func testScannerRunProcessDeposits(t *testing.T, ethDB *bolt.DB) {
+func testEthScannerRunProcessDeposits(t *testing.T, ethDB *bolt.DB) {
 	// Tests that the scanner will scan multiple blocks sequentially, finding
 	// all relevant deposits and adding them to the depositC channel.
 	// All deposits on the depositC channel will be successfully processed
 	// by the channel reader, and the scanner will mark these deposits as
 	// "processed".
-	scr, shutdown := setupScanner(t, ethDB)
+	scr, shutdown := setupEthScanner(t, ethDB)
 	defer shutdown()
 
-	testScannerRun(t, scr)
+	testEthScannerRun(t, scr)
 }
 
-func testScannerGetBlockCountErrorRetry(t *testing.T, ethDB *bolt.DB) {
+func testEthScannerGetBlockCountErrorRetry(t *testing.T, ethDB *bolt.DB) {
 	// Test that if the scanner scan loop encounters an error when calling
 	// GetBlockCount(), the loop continues to work fine
-	// This test is that same as testScannerRunProcessDeposits,
+	// This test is that same as testEthScannerRunProcessDeposits,
 	// except that the dummyEthrpcclient is configured to return an error
 	// from GetBlockCount() one time
-	scr, shutdown := setupScanner(t, ethDB)
+	scr, shutdown := setupEthScanner(t, ethDB)
 	defer shutdown()
 
 	scr.ethClient.(*dummyEthrpcclient).blockCountError = errors.New("block count error")
 
-	testScannerRun(t, scr)
+	testEthScannerRun(t, scr)
 }
 
-func testScannerConfirmationsRequired(t *testing.T, ethDB *bolt.DB) {
+func testEthScannerConfirmationsRequired(t *testing.T, ethDB *bolt.DB) {
 	// Test that the scanner uses cfg.ConfirmationsRequired correctly
-	scr, shutdown := setupScanner(t, ethDB)
+	scr, shutdown := setupEthScanner(t, ethDB)
 	defer shutdown()
 
 	// Scanning starts at block 2325212, set the blockCount height to 1
@@ -339,36 +317,36 @@ func testScannerConfirmationsRequired(t *testing.T, ethDB *bolt.DB) {
 	// has't enough deposit
 	require.True(t, scr.cfg.DepositBufferSize > nDeposits)
 
-	testScannerRunProcessedLoop(t, scr, nDeposits)
+	testEthScannerRunProcessedLoop(t, scr, nDeposits)
 }
 
-func testScannerScanBlockFailureRetry(t *testing.T, ethDB *bolt.DB) {
+func testEthScannerScanBlockFailureRetry(t *testing.T, ethDB *bolt.DB) {
 	// Test that when scanBlock() fails, it logs "Scan block failed"
 	// and retries scan of the same block after ScanPeriod elapses.
-	scr, shutdown := setupScanner(t, ethDB)
+	scr, shutdown := setupEthScanner(t, ethDB)
 	defer shutdown()
 
 	// Return an error on the 2nd call to GetBlockVerboseTx
 	scr.ethClient.(*dummyEthrpcclient).blockVerboseTxError = errors.New("get block verbose tx error")
 	scr.ethClient.(*dummyEthrpcclient).blockVerboseTxErrorCallCount = 2
 
-	testScannerRun(t, scr)
+	testEthScannerRun(t, scr)
 }
 
-func testScannerBlockNextHashAppears(t *testing.T, ethDB *bolt.DB) {
+func testEthScannerBlockNextHashAppears(t *testing.T, ethDB *bolt.DB) {
 	// Test that when a block has no NextHash, the scanner waits until it has
 	// one, then resumes normally
-	scr, shutdown := setupScanner(t, ethDB)
+	scr, shutdown := setupEthScanner(t, ethDB)
 	defer shutdown()
 
 	// The block at height 2325208 will lack a NextHash one time
 	// The scanner will continue and process everything normally
 	scr.ethClient.(*dummyEthrpcclient).blockNextHashMissingOnceAt = 2325208
 
-	testScannerRun(t, scr)
+	testEthScannerRun(t, scr)
 }
 
-func testScannerDuplicateDepositScans(t *testing.T, ethDB *bolt.DB) {
+func testEthScannerDuplicateDepositScans(t *testing.T, ethDB *bolt.DB) {
 	// Test that rescanning the same blocks doesn't send extra deposits
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
@@ -377,22 +355,22 @@ func testScannerDuplicateDepositScans(t *testing.T, ethDB *bolt.DB) {
 
 	// This address has:
 	// 2 deposit, in block 2325212
-	scr := setupScannerWithDB(t, ethDB, db)
+	scr := setupEthScannerWithDB(t, ethDB, db)
 	err := scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0")
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
-	testScannerRunProcessedLoop(t, scr, nDeposits)
+	testEthScannerRunProcessedLoop(t, scr, nDeposits)
 
 	// Scanning again will have no new deposits
-	scr = setupScannerWithDB(t, ethDB, db)
-	testScannerRunProcessedLoop(t, scr, 0)
+	scr = setupEthScannerWithDB(t, ethDB, db)
+	testEthScannerRunProcessedLoop(t, scr, 0)
 }
 
-func testScannerLoadUnprocessedDeposits(t *testing.T, ethDB *bolt.DB) {
+func testEthScannerLoadUnprocessedDeposits(t *testing.T, ethDB *bolt.DB) {
 	// Test that pending unprocessed deposits from the db are loaded when
 	// then scanner starts.
-	scr, shutdown := setupScanner(t, ethDB)
+	scr, shutdown := setupEthScanner(t, ethDB)
 	defer shutdown()
 
 	// NOTE: This data is fake, but the addresses and Txid are valid
@@ -442,12 +420,12 @@ func testScannerLoadUnprocessedDeposits(t *testing.T, ethDB *bolt.DB) {
 
 	// Don't add any watch addresses,
 	// only process the unprocessed deposits from the backlog
-	testScannerRunProcessedLoop(t, scr, len(unprocessedDeposits))
+	testEthScannerRunProcessedLoop(t, scr, len(unprocessedDeposits))
 }
 
-func testScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
+func testEthScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 	// Test that when processDeposit() fails, the deposit is NOT marked as processed
-	scr, shutdown := setupScanner(t, ethDB)
+	scr, shutdown := setupEthScanner(t, ethDB)
 	defer shutdown()
 
 	nDeposits := 0
@@ -507,7 +485,6 @@ func testScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 		shutdownWait = minShutdownWait
 	}
 
-	fmt.Printf("----wait-down--%+v\n", shutdownWait)
 	time.AfterFunc(shutdownWait, func() {
 		scr.Shutdown()
 	})
@@ -517,20 +494,20 @@ func testScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 	<-done
 }
 
-func testScannerInitialGetBlockHashError(t *testing.T, ethDB *bolt.DB) {
+func testEthScannerInitialGetBlockHashError(t *testing.T, ethDB *bolt.DB) {
 	// Test that scanner.Run() returns an error if the initial GetBlockHash
 	// based upon scanner.cfg.InitialScanHeight fails
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	scr := setupScannerWithNonExistInitHeight(t, ethDB, db)
+	scr := setupEthScannerWithNonExistInitHeight(t, ethDB, db)
 
 	err := scr.Run()
 	require.Error(t, err)
-	require.Equal(t, errNoBlockHash, err)
+	require.Equal(t, errNoEthBlockHash, err)
 }
 
-func TestScanner(t *testing.T) {
+func TestEthScanner(t *testing.T) {
 	ethDB := openDummyEthDB(t)
 	if !parallel {
 		defer ethDB.Close()
@@ -540,62 +517,62 @@ func TestScanner(t *testing.T) {
 		if parallel {
 			t.Parallel()
 		}
-		testScannerRunProcessDeposits(t, ethDB)
+		testEthScannerRunProcessDeposits(t, ethDB)
 	})
 
 	t.Run("GetBlockCountErrorRetry", func(t *testing.T) {
 		if parallel {
 			t.Parallel()
 		}
-		testScannerGetBlockCountErrorRetry(t, ethDB)
+		testEthScannerGetBlockCountErrorRetry(t, ethDB)
 	})
 
 	t.Run("InitialGetBlockHashError", func(t *testing.T) {
 		if parallel {
 			t.Parallel()
 		}
-		testScannerInitialGetBlockHashError(t, ethDB)
+		testEthScannerInitialGetBlockHashError(t, ethDB)
 	})
 
 	t.Run("ProcessDepositError", func(t *testing.T) {
 		if parallel {
 			t.Parallel()
 		}
-		testScannerProcessDepositError(t, ethDB)
+		testEthScannerProcessDepositError(t, ethDB)
 	})
 
 	t.Run("ConfirmationsRequired", func(t *testing.T) {
 		if parallel {
 			t.Parallel()
 		}
-		testScannerConfirmationsRequired(t, ethDB)
+		testEthScannerConfirmationsRequired(t, ethDB)
 	})
 
 	t.Run("ScanBlockFailureRetry", func(t *testing.T) {
 		if parallel {
 			t.Parallel()
 		}
-		testScannerScanBlockFailureRetry(t, ethDB)
+		testEthScannerScanBlockFailureRetry(t, ethDB)
 	})
 
 	t.Run("LoadUnprocessedDeposits", func(t *testing.T) {
 		if parallel {
 			t.Parallel()
 		}
-		testScannerLoadUnprocessedDeposits(t, ethDB)
+		testEthScannerLoadUnprocessedDeposits(t, ethDB)
 	})
 
 	t.Run("DuplicateDepositScans", func(t *testing.T) {
 		if parallel {
 			t.Parallel()
 		}
-		testScannerDuplicateDepositScans(t, ethDB)
+		testEthScannerDuplicateDepositScans(t, ethDB)
 	})
 
 	t.Run("BlockNextHashAppears", func(t *testing.T) {
 		if parallel {
 			t.Parallel()
 		}
-		testScannerBlockNextHashAppears(t, ethDB)
+		testEthScannerBlockNextHashAppears(t, ethDB)
 	})
 }
