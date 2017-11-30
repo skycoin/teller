@@ -5,9 +5,10 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/skycoin/teller/src/util/mathutil"
+
 	"github.com/skycoin/skycoin/src/daemon"
 	"github.com/skycoin/skycoin/src/util/droplet"
-	"github.com/skycoin/teller/src/util/mathutil"
 )
 
 // CalculateBtcSkyValue returns the amount of SKY (in droplets) to give for an

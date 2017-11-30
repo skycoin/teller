@@ -9,6 +9,7 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcutil"
 	"github.com/sirupsen/logrus"
+
 	"github.com/skycoin/teller/src/util/dbutil"
 )
 
