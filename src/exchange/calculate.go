@@ -34,7 +34,7 @@ func CalculateBtcSkyValue(satoshis int64, skyPerBTC string) (uint64, error) {
 	skyToDroplets := decimal.New(droplet.Multiplier, 0)
 	droplets := sky.Mul(skyToDroplets)
 
-	amt := droplets.IntPart()
+	amt := big.NewInt(1).Div(big.NewInt(droplets.IntPart()), big.NewInt(1000000)).Uint64() * 1000000
 	if amt < 0 {
 		// This should never occur, but double check before we convert to uint64,
 		// otherwise we would send all the coins due to integer wrapping.

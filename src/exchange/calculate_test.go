@@ -73,7 +73,7 @@ func TestCalculateSkyValue(t *testing.T) {
 		{
 			satoshis: 1e8, // 1 BTC
 			rate:     "1/2",
-			result:   5e5, // 0.5 SKY
+			result:   0, // 0.5 SKY
 		},
 	}
 
@@ -171,6 +171,9 @@ func TestCalculateEthSkyValue(t *testing.T) {
 	require.Equal(t, midDepositValue, big.NewInt(1e13).Int64())
 	originEth := big.NewInt(1).Mul(big.NewInt(midDepositValue), big.NewInt(1e8)) //1e21
 	require.Equal(t, 0, originEth.Cmp(testEth))
+	droplets := int64(2240200000)
+	amt := big.NewInt(1).Div(big.NewInt(droplets), big.NewInt(1000000)).Int64() * int64(1000000)
+	require.Equal(t, amt, int64(2240000000))
 
 	for _, tc := range cases {
 		name := fmt.Sprintf("wei=%d rate=%s", tc.wei, tc.rate)
