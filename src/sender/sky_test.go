@@ -6,13 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/visor"
+
 	"github.com/skycoin/teller/src/util/testutil"
-	"github.com/stretchr/testify/require"
 )
 
 type dummySkycli struct {

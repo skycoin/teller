@@ -8,6 +8,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/daemon"
 	"github.com/skycoin/skycoin/src/util/droplet"
+
 	"github.com/skycoin/teller/src/util/mathutil"
 )
 
