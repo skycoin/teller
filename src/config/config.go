@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/skycoin/teller/src/util/mathutil"
 	"github.com/spf13/viper"
+
+	"github.com/skycoin/teller/src/util/mathutil"
 )
 
 const (

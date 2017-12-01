@@ -19,7 +19,7 @@ import (
 const (
 	// run tests in parallel
 	parallel        = true
-	minShutdownWait = time.Second // set to time.Second * 5 when using -race
+	minShutdownWait = time.Second * 2 // set to time.Second * 5 when using -race
 )
 
 var (
@@ -99,6 +99,11 @@ func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.
 		panic("scanner should not be scanning blocks past the blockCount height")
 	}
 
+	block.Tx = make([]string, 0, len(block.RawTx))
+	for _, tx := range block.RawTx {
+		block.Tx = append(block.Tx, tx.Hash)
+	}
+
 	return block, nil
 }
 
@@ -159,7 +164,7 @@ func setupScanner(t *testing.T, btcDB *bolt.DB) (*BTCScanner, func()) {
 	return scr, shutdown
 }
 
-func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int) {
+func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int64) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -169,7 +174,7 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int) {
 			dv.ErrC <- nil
 		}
 
-		require.Equal(t, nDeposits, len(dvs))
+		require.Equal(t, nDeposits, int64(len(dvs)))
 
 		// check all deposits
 		err := scr.store.(*BTCStore).db.View(func(tx *bolt.Tx) error {
@@ -198,7 +203,7 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int) {
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	shutdownWait := scr.cfg.ScanPeriod * time.Duration(nDeposits*2)
+	shutdownWait := time.Duration(int64(scr.cfg.ScanPeriod) * nDeposits * 3)
 	if shutdownWait < minShutdownWait {
 		shutdownWait = minShutdownWait
 	}
@@ -213,7 +218,7 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int) {
 }
 
 func testScannerRun(t *testing.T, scr *BTCScanner) {
-	nDeposits := 0
+	var nDeposits int64
 
 	// This address has 0 deposits
 	err := scr.AddScanAddress("1LcEkgX8DCrQczLMVh9LDTRnkdVV2oun3A")
@@ -238,7 +243,7 @@ func testScannerRun(t *testing.T, scr *BTCScanner) {
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
-	require.True(t, scr.cfg.DepositBufferSize < nDeposits)
+	require.True(t, int64(scr.cfg.DepositBufferSize) < nDeposits)
 
 	testScannerRunProcessedLoop(t, scr, nDeposits)
 }
@@ -282,7 +287,7 @@ func testScannerConfirmationsRequired(t *testing.T, btcDB *bolt.DB) {
 	// Add scan addresses for blocks 235205-235214, but only expect to scan
 	// deposits from block 23505, since 235206 and 235207 don't have enough
 	// confirmations
-	nDeposits := 0
+	var nDeposits int64
 
 	// This address has:
 	// 31 deposits in block 235205
@@ -297,7 +302,7 @@ func testScannerConfirmationsRequired(t *testing.T, btcDB *bolt.DB) {
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
-	require.True(t, scr.cfg.DepositBufferSize < nDeposits)
+	require.True(t, int64(scr.cfg.DepositBufferSize) < nDeposits)
 
 	testScannerRunProcessedLoop(t, scr, nDeposits)
 }
@@ -333,7 +338,7 @@ func testScannerDuplicateDepositScans(t *testing.T, btcDB *bolt.DB) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
-	nDeposits := 0
+	var nDeposits int64
 
 	// This address has:
 	// 1 deposit, in block 235206
@@ -403,7 +408,7 @@ func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 
 	// Don't add any watch addresses,
 	// only process the unprocessed deposits from the backlog
-	testScannerRunProcessedLoop(t, scr, len(unprocessedDeposits))
+	testScannerRunProcessedLoop(t, scr, int64(len(unprocessedDeposits)))
 }
 
 func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
@@ -411,7 +416,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 	scr, shutdown := setupScanner(t, btcDB)
 	defer shutdown()
 
-	nDeposits := 0
+	var nDeposits int64
 
 	// This address has:
 	// 31 deposits in block 235205
@@ -424,7 +429,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
-	require.True(t, scr.cfg.DepositBufferSize < nDeposits)
+	require.True(t, int64(scr.cfg.DepositBufferSize) < nDeposits)
 
 	done := make(chan struct{})
 	go func() {
@@ -435,7 +440,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 			dv.ErrC <- errors.New("failed to process deposit")
 		}
 
-		require.Equal(t, nDeposits, len(dvs))
+		require.Equal(t, nDeposits, int64(len(dvs)))
 
 		// check all deposits, none should be marked as "Processed"
 		err := scr.store.(*BTCStore).db.View(func(tx *bolt.Tx) error {
@@ -464,7 +469,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	shutdownWait := scr.cfg.ScanPeriod * time.Duration(nDeposits*2)
+	shutdownWait := time.Duration(int64(scr.cfg.ScanPeriod) * nDeposits * 2)
 	if shutdownWait < minShutdownWait {
 		shutdownWait = minShutdownWait
 	}

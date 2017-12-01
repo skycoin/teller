@@ -9,6 +9,7 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcutil"
 	"github.com/sirupsen/logrus"
+
 	"github.com/skycoin/teller/src/util/dbutil"
 )
 
@@ -255,6 +256,11 @@ func (s *BTCStore) ScanBlock(block *btcjson.GetBlockVerboseResult) ([]Deposit, e
 
 // ScanBTCBlock scan the given block and returns the next block hash or error
 func ScanBTCBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) ([]Deposit, error) {
+	// Assert that RawTx matches Tx
+	if len(block.RawTx) != len(block.Tx) {
+		return nil, ErrBtcdTxindexDisabled
+	}
+
 	addrMap := map[string]struct{}{}
 	for _, a := range depositAddrs {
 		addrMap[a] = struct{}{}

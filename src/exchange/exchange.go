@@ -13,6 +13,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/util/droplet"
+
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
 )
@@ -241,18 +242,33 @@ func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
 		di, err = s.handleDepositInfoState(di)
 		log = log.WithField("depositInfo", di)
 
-		switch err {
-		case nil:
-			break
-		case ErrNotConfirmed:
+		switch err.(type) {
+		case sender.RPCError:
+			// Treat skycoin RPC/CLI errors as temporary.
+			// Some RPC/CLI errors are hypothetically permanent,
+			// but most likely it is an insufficient wallet balance or
+			// the skycoin node is unavailable.
+			// A permanent error suggests a bug in skycoin or teller so can be fixed.
+			log.WithError(err).Error("handleDepositInfoState failed")
 			select {
 			case <-time.After(s.cfg.TxConfirmationCheckWait):
 			case <-s.quit:
 				return nil
 			}
 		default:
-			log.WithError(err).Error("handleDepositInfoState failed")
-			return err
+			switch err {
+			case nil:
+				break
+			case ErrNotConfirmed:
+				select {
+				case <-time.After(s.cfg.TxConfirmationCheckWait):
+				case <-s.quit:
+					return nil
+				}
+			default:
+				log.WithError(err).Error("handleDepositInfoState failed")
+				return err
+			}
 		}
 
 		if di.Status == StatusDone {
