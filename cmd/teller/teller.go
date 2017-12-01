@@ -123,6 +123,7 @@ func run() error {
 	if cfg.Dummy.Scanner {
 		log.Info("btcd disabled, running dummy scanner")
 		scanService = scanner.NewDummyScanner(log)
+		scanEthService = scanner.NewDummyScanner(log)
 		scanService.(*scanner.DummyScanner).BindHandlers(dummyMux)
 	} else {
 		// create btc rpc client
@@ -134,12 +135,10 @@ func run() error {
 		log.Info("Connecting to btcd")
 
 		btcrpc, err := btcrpcclient.New(&btcrpcclient.ConnConfig{
-			//Endpoint:     "ws",
+			Endpoint:     "ws",
 			Host:         cfg.BtcRPC.Server,
 			User:         cfg.BtcRPC.User,
 			Pass:         cfg.BtcRPC.Pass,
-			DisableTLS:   true, // Bitcoin core does not provide TLS by default
-			HTTPPostMode: true,
 			Certificates: certs,
 		}, nil)
 		if err != nil {
