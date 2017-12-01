@@ -1,11 +1,10 @@
-// Package exchange manages the binded deposit address and skycoin address,
-// when get new deposits from scanner, exchange will find the corresponding
 // skycoin address, and use skycoin sender to send skycoins in given rate.
 package exchange
 
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -453,7 +452,8 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 			return nil, err
 		}
 	case scanner.CoinTypeETH:
-		skyAmt, err = CalculateEthSkyValue(di.DepositValue, di.ConversionRate)
+		//Value multiply by 1e8 to get back to original value, because Value divide by 1e8 when scan deposit in case overflow of uint64
+		skyAmt, err = CalculateEthSkyValue(big.NewInt(1).Mul(big.NewInt(di.DepositValue), big.NewInt(1e8)), di.ConversionRate)
 		if err != nil {
 			log.WithError(err).Error("CalculateEthSkyValue failed")
 			return nil, err

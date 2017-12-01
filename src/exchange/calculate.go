@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"errors"
+	"math/big"
 
 	"github.com/shopspring/decimal"
 
@@ -46,8 +47,8 @@ func CalculateBtcSkyValue(satoshis int64, skyPerBTC string) (uint64, error) {
 // CalculateEthSkyValue returns the amount of SKY (in droplets) to give for an
 // amount of Eth (in wei).
 // Rate is measured in SKY per Eth
-func CalculateEthSkyValue(wei int64, skyPerETH string) (uint64, error) {
-	if wei < 0 {
+func CalculateEthSkyValue(wei *big.Int, skyPerETH string) (uint64, error) {
+	if wei.Sign() < 0 {
 		return 0, errors.New("wei must be greater than or equal to 0")
 	}
 	rate, err := ParseRate(skyPerETH)
@@ -55,7 +56,7 @@ func CalculateEthSkyValue(wei int64, skyPerETH string) (uint64, error) {
 		return 0, err
 	}
 
-	eth := decimal.New(wei, 0)
+	eth := decimal.NewFromBigInt(wei, 0)
 	ethToWei := decimal.New(WeiPerETH, 0)
 	eth = eth.DivRound(ethToWei, 18)
 
@@ -65,7 +66,11 @@ func CalculateEthSkyValue(wei int64, skyPerETH string) (uint64, error) {
 	skyToDroplets := decimal.New(droplet.Multiplier, 0)
 	droplets := sky.Mul(skyToDroplets)
 
-	amt := droplets.IntPart()
+	// floor (x / e6) * e6
+	divisor := decimal.New(daemon.MaxDropletDivisor, 0)
+	dropletsInt := droplets.DivRound(divisor, 6).IntPart()
+
+	amt := dropletsInt * daemon.MaxDropletDivisor
 	if amt < 0 {
 		// This should never occur, but double check before we convert to uint64,
 		// otherwise we would send all the coins due to integer wrapping.

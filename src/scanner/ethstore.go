@@ -3,6 +3,7 @@ package scanner
 import (
 	"encoding/json"
 	"errors"
+	"math/big"
 	"strings"
 
 	"github.com/boltdb/bolt"
@@ -224,7 +225,8 @@ func ScanETHBlock(block *types.Block, depositAddrs []string) ([]Deposit, error) 
 			//this is a contract transcation
 			continue
 		}
-		amt := tx.Value().Int64()
+		//1 eth = 1e18 wei, so tx.Value() is very big that may overflow(int64) ,so store it by Divide 1e8 and recover it when used
+		amt := big.NewInt(1).Div(tx.Value(), big.NewInt(1e8)).Int64()
 		a := strings.ToLower(to.String())
 		if _, ok := addrMap[a]; ok {
 			dv = append(dv, Deposit{
