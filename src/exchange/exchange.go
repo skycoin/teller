@@ -4,7 +4,6 @@ package exchange
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
+	"github.com/skycoin/teller/src/util/mathutil"
 )
 
 const (
@@ -468,8 +468,8 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 			return nil, err
 		}
 	case scanner.CoinTypeETH:
-		//Value multiply by 1e8 to get back to original value, because Value divide by 1e8 when scan deposit in case overflow of uint64
-		skyAmt, err = CalculateEthSkyValue(big.NewInt(1).Mul(big.NewInt(di.DepositValue), big.NewInt(1e8)), di.ConversionRate)
+		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
+		skyAmt, err = CalculateEthSkyValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate)
 		if err != nil {
 			log.WithError(err).Error("CalculateEthSkyValue failed")
 			return nil, err

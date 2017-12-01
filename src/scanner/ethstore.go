@@ -3,13 +3,13 @@ package scanner
 import (
 	"encoding/json"
 	"errors"
-	"math/big"
 	"strings"
 
 	"github.com/boltdb/bolt"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/teller/src/util/dbutil"
+	"github.com/skycoin/teller/src/util/mathutil"
 )
 
 var (
@@ -225,8 +225,8 @@ func ScanETHBlock(block *types.Block, depositAddrs []string) ([]Deposit, error) 
 			//this is a contract transcation
 			continue
 		}
-		//1 eth = 1e18 wei, so tx.Value() is very big that may overflow(int64) ,so store it by Divide 1e8 and recover it when used
-		amt := big.NewInt(1).Div(tx.Value(), big.NewInt(1e8)).Int64()
+		//1 eth = 1e18 wei ,tx.Value() is very big that may overflow(int64), so store it as Gwei(1Gwei=1e9wei) and recover it when used
+		amt := mathutil.Wei2Gwei(tx.Value())
 		a := strings.ToLower(to.String())
 		if _, ok := addrMap[a]; ok {
 			dv = append(dv, Deposit{
