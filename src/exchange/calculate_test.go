@@ -39,6 +39,21 @@ func TestCalculateSkyValue(t *testing.T) {
 			rate:     "invalidrate",
 			err:      errors.New("can't convert invalidrate to decimal: exponent is not numeric"),
 		},
+		{
+			satoshis: 1,
+			rate:     "12k",
+			err:      errors.New("can't convert 12k to decimal"),
+		},
+		{
+			satoshis: 1,
+			rate:     "1b",
+			err:      errors.New("can't convert 1b to decimal"),
+		},
+		{
+			satoshis: 1,
+			rate:     "",
+			err:      errors.New("can't convert  to decimal"),
+		},
 
 		{
 			satoshis: 0,
@@ -74,6 +89,31 @@ func TestCalculateSkyValue(t *testing.T) {
 			satoshis: 1e8, // 1 BTC
 			rate:     "1/2",
 			result:   0, // 0.5 SKY
+		},
+		{
+			satoshis: 12345e8, // 12345 BTC
+			rate:     "1/2",
+			result:   6172e6, // 6172 SKY
+		},
+		{
+			satoshis: 1,
+			rate:     "0.0001",
+			result:   0, // 0 SKY
+		},
+		{
+			satoshis: 12345678, // 0.12345678 BTC
+			rate:     "512",
+			result:   63e6, // 63 SKY
+		},
+		{
+			satoshis: 123456789, // 1.23456789 BTC
+			rate:     "10000",
+			result:   12345e6, // 12345 SKY
+		},
+		{
+			satoshis: 876543219e4, // 87654.3219BTC
+			rate:     "2/3",
+			result:   58436e6, // 58436 SKY
 		},
 	}
 
@@ -122,10 +162,30 @@ func TestCalculateEthSkyValue(t *testing.T) {
 			rate: "invalidrate",
 			err:  errors.New("can't convert invalidrate to decimal: exponent is not numeric"),
 		},
+		{
+			wei:  big.NewInt(1),
+			rate: "100k",
+			err:  errors.New("can't convert 100k to decimal"),
+		},
+		{
+			wei:  big.NewInt(1),
+			rate: "0.1b",
+			err:  errors.New("can't convert 0.1b to decimal"),
+		},
+		{
+			wei:  big.NewInt(1),
+			rate: "",
+			err:  errors.New("can't convert  to decimal"),
+		},
 
 		{
 			wei:    big.NewInt(0),
 			rate:   "1",
+			result: 0,
+		},
+		{
+			wei:    big.NewInt(1000),
+			rate:   "0.001",
 			result: 0,
 		},
 
@@ -162,18 +222,29 @@ func TestCalculateEthSkyValue(t *testing.T) {
 		{
 			wei:    big.NewInt(11345e13), // 0.11345 ETH
 			rate:   "100",
-			result: 11000000, // 11 SKY
+			result: 11e6, // 11 SKY
+		},
+		{
+			wei:    big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:   "200",
+			result: 44904e6, // 44904 SKY
+		},
+		{
+			wei:    big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:   "1568",
+			result: 352053e6, // 352053(224.5236 * 1568=352053.0048) SKY
+		},
+		{
+			wei:    big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:   "0.15",
+			result: 33e6, // 33 SKY
+		},
+		{
+			wei:    big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:   "2/3",
+			result: 149e6, // 149 SKY
 		},
 	}
-	testEth := big.NewInt(1).Mul(big.NewInt(1e18), big.NewInt(1e3)) //1e21 1000ETH
-	bigNum1 := big.NewInt(1).Div(testEth, big.NewInt(1e8))          //1e13
-	midDepositValue := bigNum1.Int64()                              //1e13
-	require.Equal(t, midDepositValue, big.NewInt(1e13).Int64())
-	originEth := big.NewInt(1).Mul(big.NewInt(midDepositValue), big.NewInt(1e8)) //1e21
-	require.Equal(t, 0, originEth.Cmp(testEth))
-	droplets := int64(2240200000)
-	amt := big.NewInt(1).Div(big.NewInt(droplets), big.NewInt(1000000)).Int64() * int64(1000000)
-	require.Equal(t, amt, int64(2240000000))
 
 	for _, tc := range cases {
 		name := fmt.Sprintf("wei=%d rate=%s", tc.wei, tc.rate)
