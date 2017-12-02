@@ -31,13 +31,17 @@ type Config struct {
 
 	// Path of BTC addresses JSON file
 	BtcAddresses string `mapstructure:"btc_addresses"`
+	// Path of ETH addresses JSON file
+	EthAddresses string `mapstructure:"eth_addresses"`
 
 	Teller Teller `mapstructure:"teller"`
 
 	SkyRPC SkyRPC `mapstructure:"sky_rpc"`
 	BtcRPC BtcRPC `mapstructure:"btc_rpc"`
+	EthRPC EthRPC `mapstructure:"eth_rpc"`
 
 	BtcScanner   BtcScanner   `mapstructure:"btc_scanner"`
+	EthScanner   EthScanner   `mapstructure:"eth_scanner"`
 	SkyExchanger SkyExchanger `mapstructure:"sky_exchanger"`
 
 	Web Web `mapstructure:"web"`
@@ -51,6 +55,7 @@ type Config struct {
 type Teller struct {
 	// Max number of btc addresses a skycoin address can bind
 	MaxBoundBtcAddresses int `mapstructure:"max_bound_btc_addrs"`
+	MaxBoundEthAddresses int `mapstructure:"max_bound_eth_addrs"`
 }
 
 // SkyRPC config for Skycoin daemon node RPC
@@ -66,8 +71,22 @@ type BtcRPC struct {
 	Cert   string `mapstructure:"cert"`
 }
 
+// EthRPC config for ethrpc
+type EthRPC struct {
+	Server string `mapstructure:"server"`
+	Port   string `mapstructure:"port"`
+}
+
 // BtcScanner config for BTC scanner
 type BtcScanner struct {
+	// How often to try to scan for blocks
+	ScanPeriod            time.Duration `mapstructure:"scan_period"`
+	InitialScanHeight     int64         `mapstructure:"initial_scan_height"`
+	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
+}
+
+// EthScanner config for ETH scanner
+type EthScanner struct {
 	// How often to try to scan for blocks
 	ScanPeriod            time.Duration `mapstructure:"scan_period"`
 	InitialScanHeight     int64         `mapstructure:"initial_scan_height"`
@@ -78,6 +97,7 @@ type BtcScanner struct {
 type SkyExchanger struct {
 	// SKY/BTC exchange rate. Can be an int, float or rational fraction string
 	SkyBtcExchangeRate string `mapstructure:"sky_btc_exchange_rate"`
+	SkyEthExchangeRate string `mapstructure:"sky_eth_exchange_rate"`
 	// How long to wait before rechecking transaction confirmations
 	TxConfirmationCheckWait time.Duration `mapstructure:"tx_confirmation_check_wait"`
 	// Path of hot Skycoin wallet file on disk

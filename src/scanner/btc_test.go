@@ -64,6 +64,9 @@ func newDummyBtcrpcclient(db *bolt.DB) *dummyBtcrpcclient {
 func (dbc *dummyBtcrpcclient) Shutdown() {
 }
 
+func (dbc *dummyBtcrpcclient) GetBlockVerbose(hash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error) {
+	return dbc.GetBlockVerboseTx(hash)
+}
 func (dbc *dummyBtcrpcclient) GetBlockVerboseTx(hash *chainhash.Hash) (*btcjson.GetBlockVerboseResult, error) {
 	dbc.blockVerboseTxCallCount++
 	if dbc.blockVerboseTxCallCount == dbc.blockVerboseTxErrorCallCount {

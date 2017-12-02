@@ -16,9 +16,12 @@ import (
 // CoinTypeBTC is BTC coin type
 const CoinTypeBTC = "BTC"
 
+// CoinTypeETH is ETH coin type
+const CoinTypeETH = "ETH"
+
 var (
 	// scan meta info bucket
-	scanMetaBkt = []byte("scan_meta")
+	scanMetaBkt = []byte("scan_meta_btc")
 
 	// deposit value bucket
 	depositBkt = []byte("deposit_value")
@@ -67,7 +70,7 @@ type Storer interface {
 	AddScanAddress(string) error
 	SetDepositProcessed(string) error
 	GetUnprocessedDeposits() ([]Deposit, error)
-	ScanBlock(*btcjson.GetBlockVerboseResult) ([]Deposit, error)
+	ScanBlock(interface{}) ([]Deposit, error)
 }
 
 // BTCStore records scanner meta info for BTC deposits
@@ -214,8 +217,13 @@ func (s *BTCStore) pushDepositTx(tx *bolt.Tx, dv Deposit) error {
 
 // ScanBlock scans a btc block for deposits and adds them
 // If the deposit already exists, the result is omitted from the returned list
-func (s *BTCStore) ScanBlock(block *btcjson.GetBlockVerboseResult) ([]Deposit, error) {
+func (s *BTCStore) ScanBlock(blockInfo interface{}) ([]Deposit, error) {
 	var dvs []Deposit
+	block, ok := blockInfo.(*btcjson.GetBlockVerboseResult)
+	if !ok {
+		s.log.Error("convert to GetBlockVerboseResult failed")
+		return dvs, errors.New("convert to GetBlockVerboseResult failed")
+	}
 
 	if err := s.db.Update(func(tx *bolt.Tx) error {
 		addrs, err := s.getScanAddressesTx(tx)

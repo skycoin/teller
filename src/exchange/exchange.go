@@ -1,5 +1,3 @@
-// Package exchange manages the binded deposit address and skycoin address,
-// when get new deposits from scanner, exchange will find the corresponding
 // skycoin address, and use skycoin sender to send skycoins in given rate.
 package exchange
 
@@ -16,11 +14,13 @@ import (
 
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
+	"github.com/skycoin/teller/src/util/mathutil"
 )
 
 const (
 	// SatoshisPerBTC is the number of satoshis per 1 BTC
 	SatoshisPerBTC          int64 = 1e8
+	WeiPerETH               int64 = 1e18
 	txConfirmationCheckWait       = time.Second * 3
 )
 
@@ -43,7 +43,7 @@ type DepositFilter func(di DepositInfo) bool
 
 // Exchanger provides APIs to interact with the exchange service
 type Exchanger interface {
-	BindAddress(skyAddr, btcAddr string) error
+	BindAddress(skyAddr, btcAddr, coinType string) error
 	GetDepositStatuses(skyAddr string) ([]DepositStatus, error)
 	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
 	GetBindNum(skyAddr string) (int, error)
@@ -54,6 +54,7 @@ type Exchange struct {
 	log         logrus.FieldLogger
 	cfg         Config
 	scanner     scanner.Scanner // scanner provides APIs for interacting with the scan service
+	ethScanner  scanner.Scanner // scanner provides APIs for interacting with the scan service
 	sender      sender.Sender   // sender provides APIs for sending skycoin
 	store       Storer          // deposit info storage
 	quit        chan struct{}
@@ -64,11 +65,12 @@ type Exchange struct {
 // Config exchange config struct
 type Config struct {
 	Rate                    string // SKY/BTC rate, decimal string
+	EthRate                 string // SKY/ETH rate, decimal string
 	TxConfirmationCheckWait time.Duration
 }
 
 // NewExchange creates exchange service
-func NewExchange(log logrus.FieldLogger, store Storer, scanner scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
+func NewExchange(log logrus.FieldLogger, store Storer, scanner, ethScanner scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
 	if _, err := ParseRate(cfg.Rate); err != nil {
 		return nil, err
 	}
@@ -81,6 +83,7 @@ func NewExchange(log logrus.FieldLogger, store Storer, scanner scanner.Scanner, 
 		cfg:         cfg,
 		log:         log.WithField("prefix", "teller.exchange"),
 		scanner:     scanner,
+		ethScanner:  ethScanner,
 		sender:      sender,
 		store:       store,
 		quit:        make(chan struct{}),
@@ -162,30 +165,38 @@ func (s *Exchange) Run() error {
 
 		log := log.WithField("goroutine", "watchDeposits")
 		for {
+			var dv scanner.DepositNote
+			var ok bool
 			select {
 			case <-s.quit:
 				log.Info("exchange.Exchange watch deposits loop quit")
 				return
-			case dv, ok := <-s.scanner.GetDeposit():
+			case dv, ok = <-s.scanner.GetDeposit():
 				if !ok {
 					log.Warn("Scan service closed, watch deposits loop quit")
 					return
 				}
 
-				log := log.WithField("deposit", dv.Deposit)
-
-				// Save a new DepositInfo based upon the scanner.Deposit.
-				// If the save fails, report it to the scanner.
-				// The scanner will mark the deposit as "processed" if no error
-				// occurred.  Any unprocessed deposits held by the scanner
-				// will be resent to the exchange when teller is started.
-				if d, err := s.saveIncomingDeposit(dv.Deposit); err != nil {
-					log.WithError(err).Error("saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted.")
-					dv.ErrC <- err
-				} else {
-					dv.ErrC <- nil
-					s.depositChan <- d
+			case dv, ok = <-s.ethScanner.GetDeposit():
+				if !ok {
+					log.Warn("Scan service closed, watch deposits loop quit")
+					return
 				}
+
+			}
+			log := log.WithField("deposit", dv.Deposit)
+
+			// Save a new DepositInfo based upon the scanner.Deposit.
+			// If the save fails, report it to the scanner.
+			// The scanner will mark the deposit as "processed" if no error
+			// occurred.  Any unprocessed deposits held by the scanner
+			// will be resent to the exchange when teller is started.
+			if d, err := s.saveIncomingDeposit(dv.Deposit); err != nil {
+				log.WithError(err).Error("saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted.")
+				dv.ErrC <- err
+			} else {
+				dv.ErrC <- nil
+				s.depositChan <- d
 			}
 		}
 	}()
@@ -207,9 +218,20 @@ func (s *Exchange) Shutdown() {
 func (s *Exchange) saveIncomingDeposit(dv scanner.Deposit) (DepositInfo, error) {
 	log := s.log.WithField("deposit", dv)
 
-	log.Info("Received bitcoin deposit")
+	var rate string
+	switch dv.CoinType {
+	case scanner.CoinTypeBTC:
+		log.Info("Received bitcoin deposit")
+		rate = s.cfg.Rate
+	case scanner.CoinTypeETH:
+		log.Info("Received ethcoin deposit")
+		rate = s.cfg.EthRate
+	default:
+		log.Error("unsupport cointype %s", dv.CoinType)
+		return DepositInfo{}, errors.New("unsupport cointype")
+	}
 
-	di, err := s.store.GetOrCreateDepositInfo(dv, s.cfg.Rate)
+	di, err := s.store.GetOrCreateDepositInfo(dv, rate)
 	if err != nil {
 		log.WithError(err).Error("GetOrCreateDepositInfo failed")
 		return DepositInfo{}, err
@@ -436,10 +458,25 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 	log = log.WithField("skyAddr", di.SkyAddress)
 	log = log.WithField("skyRate", di.ConversionRate)
 
-	skyAmt, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate)
-	if err != nil {
-		log.WithError(err).Error("CalculateBtcSkyValue failed")
-		return nil, err
+	var skyAmt uint64
+	var err error
+	switch di.CoinType {
+	case scanner.CoinTypeBTC:
+		skyAmt, err = CalculateBtcSkyValue(di.DepositValue, di.ConversionRate)
+		if err != nil {
+			log.WithError(err).Error("CalculateBtcSkyValue failed")
+			return nil, err
+		}
+	case scanner.CoinTypeETH:
+		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
+		skyAmt, err = CalculateEthSkyValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate)
+		if err != nil {
+			log.WithError(err).Error("CalculateEthSkyValue failed")
+			return nil, err
+		}
+	default:
+		log.Error("Unsupport CoinType")
+		return nil, errors.New("Unsupport CoinType")
 	}
 
 	skyAmtCoins, err := droplet.ToString(skyAmt)
@@ -528,18 +565,26 @@ func (s *Exchange) broadcastTransaction(tx *coin.Transaction) (*sender.Broadcast
 	return rsp, nil
 }
 
-// BindAddress binds deposit btc address with skycoin address, and
-// add the btc address to scan service, when detect deposit coin
-// to the btc address, will send specific skycoin to the binded
+// BindAddress binds deposit btc/eth address with skycoin address, and
+// add the btc/eth address to scan service, when detect deposit coin
+// to the btc/eth address, will send specific skycoin to the binded
 // skycoin address
 // TODO -- support multiple coin types
-func (s *Exchange) BindAddress(skyAddr, btcAddr string) error {
+func (s *Exchange) BindAddress(skyAddr, btcAddr, coinType string) error {
+	//store to same bucket because btc address different with eth address
 	if err := s.store.BindAddress(skyAddr, btcAddr); err != nil {
 		return err
 	}
 
-	// add btc address to scanner
-	return s.scanner.AddScanAddress(btcAddr)
+	// add btc/etc address to scanner
+	switch coinType {
+	case scanner.CoinTypeBTC:
+		return s.scanner.AddScanAddress(btcAddr)
+	case scanner.CoinTypeETH:
+		return s.ethScanner.AddScanAddress(btcAddr)
+	default:
+		return errors.New("unknown coinType")
+	}
 }
 
 // DepositStatus json struct for deposit status
