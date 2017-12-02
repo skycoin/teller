@@ -28,6 +28,7 @@ cert = "" # REQUIRED
 [sky_exchanger]
 sky_btc_exchange_rate = "500" # REQUIRED: SKY/BTC exchange rate as a string, can be an int, float or a rational fraction
 wallet = "example.wlt" # REQUIRED: path to local hot wallet file
+# max_decimals = 0  # Number of decimal places to truncate SKY to
 # tx_confirmation_check_wait = "5s"
 
 [web]
