@@ -215,11 +215,6 @@ func ScanETHBlock(block *types.Block, depositAddrs []string) ([]Deposit, error) 
 
 	var dv []Deposit
 	for i, tx := range block.Transactions() {
-		//tx, err := s.GetTransaction(txid.Hash())
-		//if err != nil {
-		//log.WithError(err).Error("get eth transcation %s failed", txid.Hash().String())
-		//continue
-		//}
 		to := tx.To()
 		if to == nil {
 			//this is a contract transcation
