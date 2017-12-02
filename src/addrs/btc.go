@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"io"
 
-	"daoshizu.com/samoscoin/src/cipher"
-
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
+
+	"github.com/skycoin/skycoin/src/cipher"
 )
 
 const btcBucketKey = "used_btc_address"
