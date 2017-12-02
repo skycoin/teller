@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/viper"
 
+	"github.com/skycoin/skycoin/src/daemon"
 	"github.com/skycoin/teller/src/util/mathutil"
 )
 
@@ -78,6 +79,8 @@ type BtcScanner struct {
 type SkyExchanger struct {
 	// SKY/BTC exchange rate. Can be an int, float or rational fraction string
 	SkyBtcExchangeRate string `mapstructure:"sky_btc_exchange_rate"`
+	// Number of decimal places to truncate SKY to
+	MaxDecimals int `mapstructure:"max_decimals"`
 	// How long to wait before rechecking transaction confirmations
 	TxConfirmationCheckWait time.Duration `mapstructure:"tx_confirmation_check_wait"`
 	// Path of hot Skycoin wallet file on disk
@@ -220,6 +223,14 @@ func (c Config) Validate() error {
 		}
 	}
 
+	if c.SkyExchanger.MaxDecimals < 0 {
+		oops("sky_exchanger.max_decimals can't be negative")
+	}
+
+	if c.SkyExchanger.MaxDecimals > daemon.MaxDropletPrecision {
+		oops(fmt.Sprintf("sky_exchanger.max_decimals is larger than daemon.MaxDropletPrecision=%d", daemon.MaxDropletPrecision))
+	}
+
 	if err := c.Web.Validate(); err != nil {
 		oops(err.Error())
 	}
@@ -254,6 +265,7 @@ func setDefaults() {
 
 	// SkyExchanger
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)
+	viper.SetDefault("sky_exchanger.max_decimals", 0)
 
 	// Web
 	viper.SetDefault("web.http_addr", "127.0.0.1:7071")

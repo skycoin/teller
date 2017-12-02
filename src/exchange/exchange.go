@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/skycoin/skycoin/src/coin"
+	"github.com/skycoin/skycoin/src/daemon"
 	"github.com/skycoin/skycoin/src/util/droplet"
 
 	"github.com/skycoin/teller/src/scanner"
@@ -65,11 +66,29 @@ type Exchange struct {
 type Config struct {
 	Rate                    string // SKY/BTC rate, decimal string
 	TxConfirmationCheckWait time.Duration
+	MaxDecimals             int
+}
+
+// Validate returns an error if the configuration is invalid
+func (c Config) Validate() error {
+	if _, err := ParseRate(c.Rate); err != nil {
+		return err
+	}
+
+	if c.MaxDecimals < 0 {
+		return errors.New("MaxDecimals can't be negative")
+	}
+
+	if c.MaxDecimals > daemon.MaxDropletPrecision {
+		return fmt.Errorf("MaxDecimals is larger than daemon.MaxDropletPrecision=%d", daemon.MaxDropletPrecision)
+	}
+
+	return nil
 }
 
 // NewExchange creates exchange service
 func NewExchange(log logrus.FieldLogger, store Storer, scanner scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
-	if _, err := ParseRate(cfg.Rate); err != nil {
+	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -436,7 +455,7 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 	log = log.WithField("skyAddr", di.SkyAddress)
 	log = log.WithField("skyRate", di.ConversionRate)
 
-	skyAmt, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate)
+	skyAmt, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
 	if err != nil {
 		log.WithError(err).Error("CalculateBtcSkyValue failed")
 		return nil, err
