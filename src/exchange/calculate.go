@@ -38,7 +38,7 @@ func CalculateBtcSkyValue(satoshis int64, skyPerBTC string, maxDecimals int) (ui
 	skyToDroplets := decimal.New(droplet.Multiplier, 0)
 	droplets := sky.Mul(skyToDroplets)
 
-	amt := big.NewInt(1).Div(big.NewInt(droplets.IntPart()), big.NewInt(1e6)).Uint64() * 1e6
+	amt := droplets.IntPart()
 	if amt < 0 {
 		// This should never occur, but double check before we convert to uint64,
 		// otherwise we would send all the coins due to integer wrapping.
@@ -73,8 +73,7 @@ func CalculateEthSkyValue(wei *big.Int, skyPerETH string, maxDecimals int) (uint
 	skyToDroplets := decimal.New(droplet.Multiplier, 0)
 	droplets := sky.Mul(skyToDroplets)
 
-	// floor (x / e6) * e6
-	amt := big.NewInt(1).Div(big.NewInt(droplets.IntPart()), big.NewInt(1e6)).Uint64() * 1e6
+	amt := droplets.IntPart()
 	if amt < 0 {
 		// This should never occur, but double check before we convert to uint64,
 		// otherwise we would send all the coins due to integer wrapping.

@@ -83,21 +83,6 @@ func TestCalculateSkyValue(t *testing.T) {
 			rate:        "500",
 			result:      500e6,
 		},
-		{
-			satoshis: 1,
-			rate:     "12k",
-			err:      errors.New("can't convert 12k to decimal"),
-		},
-		{
-			satoshis: 1,
-			rate:     "1b",
-			err:      errors.New("can't convert 1b to decimal"),
-		},
-		{
-			satoshis: 1,
-			rate:     "",
-			err:      errors.New("can't convert  to decimal"),
-		},
 
 		{
 			maxDecimals: 0,
@@ -415,6 +400,72 @@ func TestCalculateEthSkyValue(t *testing.T) {
 			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
 			rate:        "2/3",
 			result:      149e6, // 149 SKY
+		},
+		{
+			maxDecimals: 1,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "200",
+			result:      44904e6 + 7e5, // 44904.7 SKY
+		},
+		{
+			maxDecimals: 1,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "1568",
+			result:      352053e6, // 352053(224.5236 * 1568=352053.0048) SKY
+		},
+		{
+			maxDecimals: 1,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "0.15",
+			result:      33e6 + 6e5, // 33.6 SKY
+		},
+		{
+			maxDecimals: 1,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "2/3",
+			result:      149e6 + 6e5, // 149.6 SKY
+		},
+		{
+			maxDecimals: 2,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "200",
+			result:      44904e6 + 7e5 + 2e4, // 44904.72 SKY
+		},
+		{
+			maxDecimals: 2,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "1568",
+			result:      352053e6, // 352053.00(224.5236 * 1568=352053.0048) SKY
+		},
+		{
+			maxDecimals: 2,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "0.15",
+			result:      33e6 + 6e5 + 7e4, // 33.67 SKY
+		},
+		{
+			maxDecimals: 2,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "2/3",
+			result:      149e6 + 6e5 + 8e4, // 149 SKY
+		},
+		{
+			maxDecimals: 3,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "1568",
+			result:      352053e6 + 4e3, // 352053.004(224.5236 * 1568=352053.0048) SKY
+		},
+		{
+			maxDecimals: 3,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "0.15",
+			result:      33e6 + 6e5 + 7e4 + 8e3, // 33.678 SKY
+		},
+		{
+			maxDecimals: 3,
+			wei:         big.NewInt(1).Mul(big.NewInt(2245236), big.NewInt(1e14)), // 224.5236 ETH
+			rate:        "2/3",
+			result:      149e6 + 6e5 + 8e4 + 2e3, // 149.682 SKY
 		},
 	}
 

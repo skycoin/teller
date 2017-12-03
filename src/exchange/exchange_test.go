@@ -1145,21 +1145,21 @@ func TestExchangeBindAddress(t *testing.T) {
 	log, _ := testutil.NewLogger(t)
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
-	scanner := newDummyScanner()
+	dummyScanner := newDummyScanner()
 
 	s := &Exchange{
 		store:   store,
-		scanner: scanner,
+		scanner: dummyScanner,
 	}
 
-	require.Len(t, scanner.addrs, 0)
+	require.Len(t, dummyScanner.addrs, 0)
 
 	err = s.BindAddress("a", "b", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
-	// Should be added to scanner
-	require.Len(t, scanner.addrs, 1)
-	require.Equal(t, "b", scanner.addrs[0])
+	// Should be added to dummyScanner
+	require.Len(t, dummyScanner.addrs, 1)
+	require.Equal(t, "b", dummyScanner.addrs[0])
 
 	// Should be in the store
 	skyAddr, err := s.store.GetBindAddress("b")

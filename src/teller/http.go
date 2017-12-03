@@ -496,7 +496,7 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 type ConfigResponse struct {
 	Enabled                  bool   `json:"enabled"`
 	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
-	MaxBoundBtcAddresses     int    `json:"max_bound_btc_addrs"`
+	MaxBoundAddresses        int    `json:"max_bound_addrs"`
 	SkyBtcExchangeRate       string `json:"sky_btc_exchange_rate"`
 	MaxDecimals              int    `json:"max_decimals"`
 }
@@ -535,7 +535,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
 			SkyBtcExchangeRate:       skyPerBTC,
 			MaxDecimals:              maxDecimals,
-			MaxBoundBtcAddresses:     s.cfg.Teller.MaxBoundBtcAddresses,
+			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}
