@@ -498,6 +498,7 @@ type ConfigResponse struct {
 	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
 	MaxBoundBtcAddresses     int    `json:"max_bound_btc_addrs"`
 	SkyBtcExchangeRate       string `json:"sky_btc_exchange_rate"`
+	MaxDecimals              int    `json:"max_decimals"`
 }
 
 // ConfigHandler returns the teller configuration
@@ -514,7 +515,8 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 
 		// Convert the exchange rate to a skycoin balance string
 		rate := s.cfg.SkyExchanger.SkyBtcExchangeRate
-		dropletsPerBTC, err := exchange.CalculateBtcSkyValue(exchange.SatoshisPerBTC, rate)
+		maxDecimals := s.cfg.SkyExchanger.MaxDecimals
+		dropletsPerBTC, err := exchange.CalculateBtcSkyValue(exchange.SatoshisPerBTC, rate, maxDecimals)
 		if err != nil {
 			log.WithError(err).Error("exchange.CalculateBtcSkyValue failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
@@ -532,6 +534,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			Enabled:                  s.cfg.Web.APIEnabled,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
 			SkyBtcExchangeRate:       skyPerBTC,
+			MaxDecimals:              maxDecimals,
 			MaxBoundBtcAddresses:     s.cfg.Teller.MaxBoundBtcAddresses,
 		}); err != nil {
 			log.WithError(err).Error(err)

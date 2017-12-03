@@ -91,6 +91,7 @@ Description of the config file:
 * `btc_scanner.initial_scan_height` [int]: Begin scanning from this BTC blockchain height.
 * `btc_scanner.confirmations_required` [int]: Number of confirmations required before sending skycoins for a BTC deposit.
 * `sky_exchanger.sky_btc_exchange_rate` [string]: How much SKY to send per BTC. This can be written as an integer, float, or a rational fraction.
+* `sky_exchanger.max_decimals` [int]: Number of decimal places to truncate SKY to.
 * `sky_exchanger.wallet` [string]: Filepath of the skycoin hot wallet. See [setup skycoin hot wallet](#setup-skycoin-hot-wallet).
 * `sky_exchanger.tx_confirmation_check_wait` [duration]: How often to check for a sent skycoin transaction's confirmation.
 * `web.behind_proxy` [bool]: Set true if running behind a proxy.
@@ -344,6 +345,7 @@ Response:
     "enabled": true,
     "btc_confirmations_required": 1,
     "max_bound_btc_addrs": 5,
+    "max_decimals": 0,
     "sky_btc_exchange_rate": "123.000000"
 }
 ```

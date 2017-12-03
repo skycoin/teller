@@ -2,7 +2,6 @@ package exchange
 
 import (
 	"errors"
-	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -158,6 +157,7 @@ func (scan *dummyScanner) stop() {
 
 const (
 	testSkyBtcRate  string = "100" // 100 SKY per BTC
+	testMaxDecimals        = 0
 	testSkyAddr            = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
 	testSkyAddr2           = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
 	dbScanTimeout          = time.Second * 3
@@ -254,13 +254,13 @@ func TestExchangeRunSend(t *testing.T) {
 	require.NoError(t, err)
 
 	var value int64 = 1e8
-	skySent, err := CalculateBtcSkyValue(value, testSkyBtcRate)
+	skySent, err := CalculateBtcSkyValue(value, testSkyBtcRate, testMaxDecimals)
 	require.NoError(t, err)
 	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			CoinType: "BTC",
+			CoinType: scanner.CoinTypeBTC,
 			Address:  btcAddr,
 			Value:    value,
 			Height:   20,
@@ -311,7 +311,7 @@ func TestExchangeRunSend(t *testing.T) {
 
 	expectedDeposit := DepositInfo{
 		Seq:            1,
-		CoinType:       "BTC",
+		CoinType:       scanner.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		Status:         StatusWaitConfirm,
 		SkyAddress:     skyAddr,
@@ -359,7 +359,7 @@ func TestExchangeRunSend(t *testing.T) {
 
 	expectedDeposit = DepositInfo{
 		Seq:            1,
-		CoinType:       "BTC",
+		CoinType:       scanner.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		Status:         StatusDone,
 		SkyAddress:     skyAddr,
@@ -395,7 +395,7 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			CoinType: "BTC",
+			CoinType: scanner.CoinTypeBTC,
 			Address:  btcAddr,
 			Value:    1e8,
 			Height:   20,
@@ -418,7 +418,7 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 	require.NotEmpty(t, di.UpdatedAt)
 	require.Equal(t, DepositInfo{
 		Seq:            1,
-		CoinType:       "BTC",
+		CoinType:       scanner.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		SkyAddress:     skyAddr,
 		DepositAddress: btcAddr,
@@ -449,7 +449,7 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			CoinType: "BTC",
+			CoinType: scanner.CoinTypeBTC,
 			Address:  btcAddr,
 			Value:    1e8,
 			Height:   20,
@@ -471,7 +471,7 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 	require.NotEmpty(t, di.UpdatedAt)
 	require.Equal(t, DepositInfo{
 		Seq:            1,
-		CoinType:       "BTC",
+		CoinType:       scanner.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		SkyAddress:     skyAddr,
 		DepositAddress: btcAddr,
@@ -494,7 +494,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	var value int64 = 1e8
-	skySent, err := CalculateBtcSkyValue(value, testSkyBtcRate)
+	skySent, err := CalculateBtcSkyValue(value, testSkyBtcRate, testMaxDecimals)
 	require.NoError(t, err)
 	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
@@ -503,7 +503,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			CoinType: "BTC",
+			CoinType: scanner.CoinTypeBTC,
 			Address:  btcAddr,
 			Value:    value,
 			Height:   20,
@@ -547,7 +547,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 	require.NotEmpty(t, di.UpdatedAt)
 	require.Equal(t, DepositInfo{
 		Seq:            1,
-		CoinType:       "BTC",
+		CoinType:       scanner.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		SkyAddress:     skyAddr,
 		DepositAddress: btcAddr,
@@ -572,13 +572,13 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 	require.NoError(t, err)
 
 	var value int64 = 1e8
-	skySent, err := CalculateBtcSkyValue(value, testSkyBtcRate)
+	skySent, err := CalculateBtcSkyValue(value, testSkyBtcRate, testMaxDecimals)
 	require.NoError(t, err)
 	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			CoinType: "BTC",
+			CoinType: scanner.CoinTypeBTC,
 			Address:  btcAddr,
 			Value:    value,
 			Height:   20,
@@ -599,7 +599,7 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 
 	expectedDeposit := DepositInfo{
 		Seq:            1,
-		CoinType:       "BTC",
+		CoinType:       scanner.CoinTypeBTC,
 		Status:         StatusWaitConfirm,
 		SkyAddress:     skyAddr,
 		DepositAddress: dn.Deposit.Address,
@@ -668,7 +668,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			CoinType: "BTC",
+			CoinType: scanner.CoinTypeBTC,
 			Address:  btcAddr,
 			Value:    1, // The amount is so low that no SKY can be sent
 			Height:   20,
@@ -689,7 +689,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 
 	expectedDeposit := DepositInfo{
 		Seq:            1,
-		CoinType:       "BTC",
+		CoinType:       scanner.CoinTypeBTC,
 		Status:         StatusDone,
 		SkyAddress:     skyAddr,
 		DepositAddress: dn.Deposit.Address,
@@ -823,7 +823,7 @@ func testExchangeRunProcessDepositBacklog(t *testing.T, dis []DepositInfo, confi
 		expectedDis[i].Status = StatusDone
 
 		if expectedDis[i].SkySent == 0 {
-			amt, err := CalculateBtcSkyValue(di.DepositValue, e.cfg.Rate)
+			amt, err := CalculateBtcSkyValue(di.DepositValue, e.cfg.Rate, testMaxDecimals)
 			require.NoError(t, err)
 			expectedDis[i].SkySent = amt
 		}
@@ -841,7 +841,7 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 
 	var depositValue int64 = 1e8
 	s := newDummySender()
-	skySent, err := CalculateBtcSkyValue(depositValue, testSkyBtcRate)
+	skySent, err := CalculateBtcSkyValue(depositValue, testSkyBtcRate, testMaxDecimals)
 	require.NoError(t, err)
 	txid1 := s.predictTxid(t, testSkyAddr, skySent)
 	txid2 := s.predictTxid(t, testSkyAddr2, skySent)
@@ -860,7 +860,7 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
-				CoinType: "BTC",
+				CoinType: scanner.CoinTypeBTC,
 				Address:  "foo-btc-addr-1",
 				Value:    depositValue,
 				Height:   20,
@@ -879,7 +879,7 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
-				CoinType: "BTC",
+				CoinType: scanner.CoinTypeBTC,
 				Address:  "foo-btc-addr-2",
 				Value:    depositValue,
 				Height:   20,
@@ -900,7 +900,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 
 	var depositValue int64 = 1e8
 	s := newDummySender()
-	skySent, err := CalculateBtcSkyValue(depositValue, testSkyBtcRate)
+	skySent, err := CalculateBtcSkyValue(depositValue, testSkyBtcRate, testMaxDecimals)
 	require.NoError(t, err)
 	txid1 := s.predictTxid(t, testSkyAddr, skySent)
 	txid2 := s.predictTxid(t, testSkyAddr2, skySent)
@@ -910,7 +910,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 	dis := []DepositInfo{
 		{
 			Seq:            1,
-			CoinType:       "BTC",
+			CoinType:       scanner.CoinTypeBTC,
 			Status:         StatusWaitSend,
 			SkyAddress:     testSkyAddr,
 			DepositAddress: "foo-btc-addr-1",
@@ -919,7 +919,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
-				CoinType: "BTC",
+				CoinType: scanner.CoinTypeBTC,
 				Address:  "foo-btc-addr-1",
 				Value:    depositValue,
 				Height:   20,
@@ -929,7 +929,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 		},
 		{
 			Seq:            2,
-			CoinType:       "BTC",
+			CoinType:       scanner.CoinTypeBTC,
 			Status:         StatusWaitSend,
 			SkyAddress:     testSkyAddr2,
 			DepositAddress: "foo-btc-addr-2",
@@ -938,7 +938,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
-				CoinType: "BTC",
+				CoinType: scanner.CoinTypeBTC,
 				Address:  "foo-btc-addr-2",
 				Value:    depositValue,
 				Height:   20,
@@ -952,7 +952,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 		err := e.store.BindAddress(di.SkyAddress, di.DepositAddress)
 		require.NoError(t, err)
 
-		skySent, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate)
+		skySent, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, testMaxDecimals)
 		require.NoError(t, err)
 
 		txid := e.sender.(*dummySender).predictTxid(t, di.SkyAddress, skySent)
@@ -970,7 +970,7 @@ func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			CoinType: "BTC",
+			CoinType: scanner.CoinTypeBTC,
 			Address:  btcAddr,
 			Value:    1e8,
 			Height:   20,
@@ -988,7 +988,6 @@ func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 		return true
 	})).Return(nil, nil).Twice()
 
-	fmt.Println("------------------------------978-----------------")
 	// Return error on GetOrCreateDepositInfo
 	createDepositErr := errors.New("GetOrCreateDepositInfo failed")
 	e.store.(*MockStore).On("GetOrCreateDepositInfo", dn.Deposit, testSkyBtcRate).Return(DepositInfo{}, createDepositErr)
@@ -1022,7 +1021,7 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			CoinType: "BTC",
+			CoinType: scanner.CoinTypeBTC,
 			Address:  btcAddr,
 			Value:    1e8,
 			Height:   20,
@@ -1053,7 +1052,6 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 		ConversionRate: testSkyBtcRate,
 		Deposit:        dn.Deposit,
 	}
-	fmt.Println("------------------------------1042-----------------")
 	e.store.(*MockStore).On("GetOrCreateDepositInfo", dn.Deposit, testSkyBtcRate).Return(di, nil)
 
 	// UpdateDepositInfo fails
@@ -1116,7 +1114,7 @@ func TestExchangeProcessWaitSendNoSkyAddrBound(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			CoinType: "BTC",
+			CoinType: scanner.CoinTypeBTC,
 			Address:  btcAddr,
 			Value:    1e8,
 			Height:   20,
@@ -1156,7 +1154,7 @@ func TestExchangeBindAddress(t *testing.T) {
 
 	require.Len(t, scanner.addrs, 0)
 
-	err = s.BindAddress("a", "b", "BTC")
+	err = s.BindAddress("a", "b", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	// Should be added to scanner

@@ -10,7 +10,7 @@ btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses f
 eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses file
 
 [teller]
-# max_bound_btc_addrs = 5 # 0 means unlimited
+# max_bound_addrs = 5 # 0 means unlimited
 
 [sky_rpc]
 # address = "127.0.0.1:6430"
@@ -38,6 +38,7 @@ port = "" # REQUIRED
 sky_btc_exchange_rate = "500" # REQUIRED: SKY/BTC exchange rate as a string, can be an int, float or a rational fraction
 sky_eth_exchange_rate = "100" # REQUIRED: SKY/ETH exchange rate as a string, can be an int, float or a rational fraction
 wallet = "example.wlt" # REQUIRED: path to local hot wallet file
+# max_decimals = 0  # Number of decimal places to truncate SKY to
 # tx_confirmation_check_wait = "5s"
 
 [web]

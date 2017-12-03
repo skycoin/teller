@@ -13,7 +13,7 @@ import (
 
 var (
 	// ErrMaxBoundAddresses is returned when the maximum number of address to bind to a SKY address has been reached
-	ErrMaxBoundAddresses = errors.New("The maximum number of BTC addresses have been assigned to this SKY address")
+	ErrMaxBoundAddresses = errors.New("The maximum number of addresses have been assigned to this SKY address")
 )
 
 // Teller provides the HTTP and teller service
@@ -79,48 +79,37 @@ type Service struct {
 	ethAddrGen addrs.AddrGenerator // address generator
 }
 
-// BindAddress binds skycoin address with a deposit btc address
-// return btc address
+// BindAddress binds skycoin address with a deposit address
+// return deposit address
 // TODO -- support multiple coin types
 func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
-	if s.cfg.MaxBoundBtcAddresses > 0 {
+	if s.cfg.MaxBoundAddresses > 0 {
 		num, err := s.exchanger.GetBindNum(skyAddr)
 		if err != nil {
 			return "", err
 		}
 
-		if num >= s.cfg.MaxBoundBtcAddresses {
+		if num >= s.cfg.MaxBoundAddresses {
 			return "", ErrMaxBoundAddresses
 		}
 	}
+	var addrGen addrs.AddrGenerator
 	switch coinType {
 	case scanner.CoinTypeBTC:
-
-		btcAddr, err := s.addrGen.NewAddress()
-		if err != nil {
-			return "", err
-		}
-
-		//btcStoreAddr := dbutil.Join(coinType, btcAddr, ":")
-		if err := s.exchanger.BindAddress(skyAddr, btcAddr, coinType); err != nil {
-			return "", err
-		}
-		return btcAddr, nil
+		addrGen = s.addrGen
 	case scanner.CoinTypeETH:
-
-		ethAddr, err := s.ethAddrGen.NewAddress()
-		if err != nil {
-			return "", err
-		}
-
-		//ethStoreAddr := dbutil.Join(coinType, ethAddr, ":")
-		if err := s.exchanger.BindAddress(skyAddr, ethAddr, coinType); err != nil {
-			return "", err
-		}
-		return ethAddr, nil
+		addrGen = s.ethAddrGen
 	default:
 		return "", errors.New("unsupport coinType")
 	}
+	depositAddr, err := addrGen.NewAddress()
+	if err != nil {
+		return "", err
+	}
+	if err := s.exchanger.BindAddress(skyAddr, depositAddr, coinType); err != nil {
+		return "", err
+	}
+	return depositAddr, nil
 }
 
 // GetDepositStatuses returns deposit status of given skycoin address

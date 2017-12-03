@@ -3,7 +3,6 @@ package dbutil
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/boltdb/bolt"
 )
@@ -154,9 +153,4 @@ func ForEach(tx *bolt.Tx, bktName []byte, f func(k, v []byte) error) error {
 	}
 
 	return bkt.ForEach(f)
-}
-
-//Join join multi string to one
-func Join(a, b, sep string) string {
-	return strings.Join([]string{a, b}, sep)
 }

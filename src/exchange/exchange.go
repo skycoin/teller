@@ -10,6 +10,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/skycoin/skycoin/src/coin"
+	"github.com/skycoin/skycoin/src/daemon"
 	"github.com/skycoin/skycoin/src/util/droplet"
 
 	"github.com/skycoin/teller/src/scanner"
@@ -67,6 +68,24 @@ type Config struct {
 	Rate                    string // SKY/BTC rate, decimal string
 	EthRate                 string // SKY/ETH rate, decimal string
 	TxConfirmationCheckWait time.Duration
+	MaxDecimals             int
+}
+
+// Validate returns an error if the configuration is invalid
+func (c Config) Validate() error {
+	if _, err := ParseRate(c.Rate); err != nil {
+		return err
+	}
+
+	if c.MaxDecimals < 0 {
+		return errors.New("MaxDecimals can't be negative")
+	}
+
+	if c.MaxDecimals > daemon.MaxDropletPrecision {
+		return fmt.Errorf("MaxDecimals is larger than daemon.MaxDropletPrecision=%d", daemon.MaxDropletPrecision)
+	}
+
+	return nil
 }
 
 // NewExchange creates exchange service
@@ -462,14 +481,14 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 	var err error
 	switch di.CoinType {
 	case scanner.CoinTypeBTC:
-		skyAmt, err = CalculateBtcSkyValue(di.DepositValue, di.ConversionRate)
+		skyAmt, err = CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
 		if err != nil {
 			log.WithError(err).Error("CalculateBtcSkyValue failed")
 			return nil, err
 		}
 	case scanner.CoinTypeETH:
 		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
-		skyAmt, err = CalculateEthSkyValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate)
+		skyAmt, err = CalculateEthSkyValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
 		if err != nil {
 			log.WithError(err).Error("CalculateEthSkyValue failed")
 			return nil, err
