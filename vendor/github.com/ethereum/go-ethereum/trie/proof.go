@@ -18,10 +18,11 @@ package trie
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 )
@@ -35,7 +36,7 @@ import (
 // contains all nodes of the longest existing prefix of the key
 // (at least the root node), ending with the node that proves the
 // absence of the key.
-func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
+func (t *Trie) Prove(key []byte) []rlp.RawValue {
 	// Collect all nodes on the path to key.
 	key = keybytesToHex(key)
 	nodes := []node{}
@@ -60,63 +61,67 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb DatabaseWriter) error {
 			tn, err = t.resolveHash(n, nil)
 			if err != nil {
 				log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
-				return err
+				return nil
 			}
 		default:
 			panic(fmt.Sprintf("%T: invalid node: %v", tn, tn))
 		}
 	}
 	hasher := newHasher(0, 0)
+	proof := make([]rlp.RawValue, 0, len(nodes))
 	for i, n := range nodes {
 		// Don't bother checking for errors here since hasher panics
 		// if encoding doesn't work and we're not writing to any database.
 		n, _, _ = hasher.hashChildren(n, nil)
 		hn, _ := hasher.store(n, nil, false)
-		if hash, ok := hn.(hashNode); ok || i == 0 {
+		if _, ok := hn.(hashNode); ok || i == 0 {
 			// If the node's database encoding is a hash (or is the
 			// root node), it becomes a proof element.
-			if fromLevel > 0 {
-				fromLevel--
-			} else {
-				enc, _ := rlp.EncodeToBytes(n)
-				if !ok {
-					hash = crypto.Keccak256(enc)
-				}
-				proofDb.Put(hash, enc)
-			}
+			enc, _ := rlp.EncodeToBytes(n)
+			proof = append(proof, enc)
 		}
 	}
-	return nil
+	return proof
 }
 
 // VerifyProof checks merkle proofs. The given proof must contain the
 // value for key in a trie with the given root hash. VerifyProof
 // returns an error if the proof contains invalid trie nodes or the
 // wrong value.
-func VerifyProof(rootHash common.Hash, key []byte, proofDb DatabaseReader) (value []byte, err error, nodes int) {
+func VerifyProof(rootHash common.Hash, key []byte, proof []rlp.RawValue) (value []byte, err error) {
 	key = keybytesToHex(key)
-	wantHash := rootHash[:]
-	for i := 0; ; i++ {
-		buf, _ := proofDb.Get(wantHash)
-		if buf == nil {
-			return nil, fmt.Errorf("proof node %d (hash %064x) missing", i, wantHash[:]), i
+	sha := sha3.NewKeccak256()
+	wantHash := rootHash.Bytes()
+	for i, buf := range proof {
+		sha.Reset()
+		sha.Write(buf)
+		if !bytes.Equal(sha.Sum(nil), wantHash) {
+			return nil, fmt.Errorf("bad proof node %d: hash mismatch", i)
 		}
 		n, err := decodeNode(wantHash, buf, 0)
 		if err != nil {
-			return nil, fmt.Errorf("bad proof node %d: %v", i, err), i
+			return nil, fmt.Errorf("bad proof node %d: %v", i, err)
 		}
 		keyrest, cld := get(n, key)
 		switch cld := cld.(type) {
 		case nil:
-			// The trie doesn't contain the key.
-			return nil, nil, i
+			if i != len(proof)-1 {
+				return nil, fmt.Errorf("key mismatch at proof node %d", i)
+			} else {
+				// The trie doesn't contain the key.
+				return nil, nil
+			}
 		case hashNode:
 			key = keyrest
 			wantHash = cld
 		case valueNode:
-			return cld, nil, i + 1
+			if i != len(proof)-1 {
+				return nil, errors.New("additional nodes at end of proof")
+			}
+			return cld, nil
 		}
 	}
+	return nil, errors.New("unexpected end of proof")
 }
 
 func get(tn node, key []byte) ([]byte, node) {

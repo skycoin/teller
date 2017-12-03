@@ -130,8 +130,6 @@ docker run -d --name ethereum-node -v /Users/alice/ethereum:/root \
 
 This will start geth in fast sync mode with a DB memory allowance of 512MB just as the above command does.  It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports. There is also an `alpine` tag available for a slim version of the image.
 
-Do not forget `--rpcaddr 0.0.0.0`, if you want to access RPC from other containers and/or hosts. By default, `geth` binds to the local interface and RPC endpoints is not accessible from the outside.
-
 ### Programatically interfacing Geth nodes
 
 As a developer, sooner rather than later you'll want to start interacting with Geth and the Ethereum
@@ -266,7 +264,7 @@ instance for mining, run it with all your usual flags, extended by:
 $ geth <usual-flags> --mine --minerthreads=1 --etherbase=0x0000000000000000000000000000000000000000
 ```
 
-Which will start mining blocks and transactions on a single CPU thread, crediting all proceedings to
+Which will start mining bocks and transactions on a single CPU thread, crediting all proceedings to
 the account specified by `--etherbase`. You can further tune the mining by changing the default gas
 limit blocks converge to (`--targetgaslimit`) and the price transactions are accepted at (`--gasprice`).
 
