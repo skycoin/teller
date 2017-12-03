@@ -182,6 +182,9 @@ func (c Config) Validate() error {
 	if c.BtcAddresses == "" {
 		oops("btc_addresses missing")
 	}
+	if c.EthAddresses == "" {
+		oops("eth_addresses missing")
+	}
 
 	// TODO -- check btc_addresses file
 
@@ -217,6 +220,12 @@ func (c Config) Validate() error {
 		if _, err := os.Stat(c.BtcRPC.Cert); os.IsNotExist(err) {
 			oops("btc_rpc.cert file does not exist")
 		}
+		if c.EthRPC.Server == "" {
+			oops("eth_rpc.server missing")
+		}
+		if c.EthRPC.Port == "" {
+			oops("eth_rpc.port missing")
+		}
 	}
 
 	if c.BtcScanner.ConfirmationsRequired < 0 {
@@ -225,9 +234,18 @@ func (c Config) Validate() error {
 	if c.BtcScanner.InitialScanHeight < 0 {
 		oops("btc_scanner.initial_scan_height must be >= 0")
 	}
+	if c.EthScanner.ConfirmationsRequired < 0 {
+		oops("eth_scanner.confirmations_required must be >= 0")
+	}
+	if c.EthScanner.InitialScanHeight < 0 {
+		oops("eth_scanner.initial_scan_height must be >= 0")
+	}
 
 	if _, err := mathutil.DecimalFromString(c.SkyExchanger.SkyBtcExchangeRate); err != nil {
 		oops(fmt.Sprintf("sky_exchanger.sky_btc_exchange_rate invalid: %v", err))
+	}
+	if _, err := mathutil.DecimalFromString(c.SkyExchanger.SkyEthExchangeRate); err != nil {
+		oops(fmt.Sprintf("sky_exchanger.sky_eth_exchange_rate invalid: %v", err))
 	}
 
 	if !c.Dummy.Sender {

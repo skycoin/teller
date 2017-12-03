@@ -48,10 +48,22 @@
   version = "v1.1.0"
 
 [[projects]]
+  name = "github.com/ethereum/go-ethereum"
+  packages = [".","common","common/hexutil","common/math","core/types","crypto","crypto/secp256k1","crypto/sha3","ethclient","log","params","rlp","rpc","trie"]
+  revision = "4bb3c89d44e372e6a9ab85a8be0c9345265c763a"
+  version = "v1.7.3"
+
+[[projects]]
   name = "github.com/fsnotify/fsnotify"
   packages = ["."]
   revision = "629574ca2a5df945712d3079857300b5e4da0236"
   version = "v1.4.2"
+
+[[projects]]
+  name = "github.com/go-stack/stack"
+  packages = ["."]
+  revision = "259ab82a6cad3992b4e21ff5cac294ccb06474bc"
+  version = "v1.7.0"
 
 [[projects]]
   name = "github.com/google/gops"
@@ -130,6 +142,12 @@
   packages = ["difflib"]
   revision = "792786c7400a136282c1664665ae0a8db921c6c2"
   version = "v1.0.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/rcrowley/go-metrics"
+  packages = ["."]
+  revision = "e181e095bae94582363434144c61a9653aff6e50"
 
 [[projects]]
   name = "github.com/rs/cors"
@@ -218,7 +236,7 @@
 [[projects]]
   branch = "master"
   name = "golang.org/x/net"
-  packages = ["context"]
+  packages = ["context","websocket"]
   revision = "945ddfdd3bb885ce838728b0169bf94ae76970c8"
 
 [[projects]]
@@ -240,6 +258,24 @@
   revision = "8be79e1e0910c292df4e79c241bb7e8f7e725959"
 
 [[projects]]
+  name = "gopkg.in/fatih/set.v0"
+  packages = ["."]
+  revision = "57907de300222151a123d29255ed17f5ed43fad3"
+  version = "v0.1.0"
+
+[[projects]]
+  branch = "v2"
+  name = "gopkg.in/karalabe/cookiejar.v2"
+  packages = ["collections/prque"]
+  revision = "8dcd6a7f4951f6ff3ee9cbb919a06d8925822e57"
+
+[[projects]]
+  branch = "v2"
+  name = "gopkg.in/natefinch/npipe.v2"
+  packages = ["."]
+  revision = "c1b8fa8bdccecb0b8db834ee0b92fdbcfa606dd6"
+
+[[projects]]
   branch = "v2"
   name = "gopkg.in/yaml.v2"
   packages = ["."]
@@ -248,6 +284,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8aa4ef4389f24deb8956c70f1360445bb159b3e087428f768359e07473cd3a26"
+  inputs-digest = "0867c90c3b3c393df35e7d95d048f7c7fa7a485786963cb2e1b197017b1e2eb6"
   solver-name = "gps-cdcl"
   solver-version = 1
