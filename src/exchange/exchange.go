@@ -20,6 +20,7 @@ import (
 
 const (
 	// SatoshisPerBTC is the number of satoshis per 1 BTC
+	// WeiPerBTC is the number of wei per 1 ETH
 	SatoshisPerBTC          int64 = 1e8
 	WeiPerETH               int64 = 1e18
 	txConfirmationCheckWait       = time.Second * 3
@@ -37,6 +38,9 @@ var (
 	ErrDepositStatusInvalid = errors.New("Deposit status cannot be handled")
 	// ErrNoBoundAddress is returned if no skycoin address is bound to a deposit's address
 	ErrNoBoundAddress = errors.New("Deposit has no bound skycoin address")
+
+	// ErrUnsupportedCoinType is returned if coin type is not in ["BTC", "ETH"]
+	ErrUnsupportedCoinType = errors.New("unsupported coin type")
 )
 
 // DepositFilter filters deposits
@@ -246,8 +250,8 @@ func (s *Exchange) saveIncomingDeposit(dv scanner.Deposit) (DepositInfo, error) 
 		log.Info("Received ethcoin deposit")
 		rate = s.cfg.EthRate
 	default:
-		log.Error("unsupport cointype %s", dv.CoinType)
-		return DepositInfo{}, errors.New("unsupport cointype")
+		log.WithError(ErrUnsupportedCoinType).Error()
+		return DepositInfo{}, ErrUnsupportedCoinType
 	}
 
 	di, err := s.store.GetOrCreateDepositInfo(dv, rate)
@@ -463,6 +467,30 @@ func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 	}
 }
 
+func (s *Exchange) calculateSkyDroplets(di DepositInfo) (uint64, error) {
+	log := s.log
+	var err error
+	var skyAmt uint64
+	switch di.CoinType {
+	case scanner.CoinTypeBTC:
+		skyAmt, err = CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
+		if err != nil {
+			log.WithError(err).Error("CalculateBtcSkyValue failed")
+			return 0, err
+		}
+	case scanner.CoinTypeETH:
+		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
+		skyAmt, err = CalculateEthSkyValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
+		if err != nil {
+			log.WithError(err).Error("CalculateEthSkyValue failed")
+			return 0, err
+		}
+	default:
+		log.WithError(ErrUnsupportedCoinType).Error()
+		return 0, ErrUnsupportedCoinType
+	}
+	return skyAmt, nil
+}
 func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) {
 	log := s.log.WithField("deposit", di)
 
@@ -477,27 +505,11 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 	log = log.WithField("skyAddr", di.SkyAddress)
 	log = log.WithField("skyRate", di.ConversionRate)
 
-	var skyAmt uint64
-	var err error
-	switch di.CoinType {
-	case scanner.CoinTypeBTC:
-		skyAmt, err = CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
-		if err != nil {
-			log.WithError(err).Error("CalculateBtcSkyValue failed")
-			return nil, err
-		}
-	case scanner.CoinTypeETH:
-		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
-		skyAmt, err = CalculateEthSkyValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
-		if err != nil {
-			log.WithError(err).Error("CalculateEthSkyValue failed")
-			return nil, err
-		}
-	default:
-		log.Error("Unsupport CoinType")
-		return nil, errors.New("Unsupport CoinType")
+	skyAmt, err := s.calculateSkyDroplets(di)
+	if err != nil {
+		log.WithError(err).Error("calculateSkyDroplets failed")
+		return nil, err
 	}
-
 	skyAmtCoins, err := droplet.ToString(skyAmt)
 	if err != nil {
 		log.WithError(err).Error("droplet.ToString failed")

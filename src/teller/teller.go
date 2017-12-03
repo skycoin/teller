@@ -100,7 +100,7 @@ func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
 	case scanner.CoinTypeETH:
 		addrGen = s.ethAddrGen
 	default:
-		return "", errors.New("unsupport coinType")
+		return "", exchange.ErrUnsupportedCoinType
 	}
 	depositAddr, err := addrGen.NewAddress()
 	if err != nil {
