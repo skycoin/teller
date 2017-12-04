@@ -12,12 +12,15 @@
     - [Configure teller](#configure-teller)
     - [Running teller without btcd or skyd](#running-teller-without-btcd-or-skyd)
     - [Generate BTC addresses](#generate-btc-addresses)
+    - [Generate ETH addresses](#generate-eth-addresses)
     - [Setup skycoin hot wallet](#setup-skycoin-hot-wallet)
     - [Run teller](#run-teller)
     - [Setup skycoin node](#setup-skycoin-node)
     - [Setup btcd](#setup-btcd)
         - [Configure btcd](#configure-btcd)
         - [Obtain btcd RPC certificate](#obtain-btcd-rpc-certificate)
+    - [Setup geth](#setup-geth)
+        - [Configure geth](#configure-geth)
     - [Using a reverse proxy to expose teller](#using-a-reverse-proxy-to-expose-teller)
 - [API](#api)
     - [Bind](#bind)
@@ -259,6 +262,7 @@ These rules need to be duplicated for another port (e.g. 7072) for the HTTPS lis
 
 Follow the instructions from the geth wiki to install geth:
 https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum
+
 ```
 Building geth requires both a Go (version 1.7 or later) and a C compiler. 
 You can install them using your favourite package manager. 
@@ -266,6 +270,8 @@ Once the dependencies are installed, run
 cd go-ethereum
 make geth
 copy geth to you system PATH, such as: cp build/bin/geth /usr/bin
+
+```
 
 #### Configure geth
 
@@ -283,15 +289,17 @@ careful which APIs you enable. By default Geth enables all APIs over the IPC (ip
 and only the db, eth, net and web3 APIs over the HTTP and WebSocket interfaces.
 
 ```
-reference:
-https: //github.com/ethereum/go-ethereum/wiki/Management-APIs
 
-### Using a reverse proxy to expose teller
+Ethereum Api See https://github.com/ethereum/go-ethereum/wiki/Management-APIs
+
+### you can using a reverse proxy to expose geth rpc port such as [Using a reverse proxy to expose teller](#using-a-reverse-proxy-to-expose-teller)
 Now, run `geth`:
-
 
 ```sh
 geth --datadir=xxx 
+
+as a daemon
+nohup geth --datadir=xxxx > geth.log 2>&1 &
 ```
 ## API
 
