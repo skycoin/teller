@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync"
@@ -496,8 +497,10 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 type ConfigResponse struct {
 	Enabled                  bool   `json:"enabled"`
 	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
+	EthConfirmationsRequired int64  `json:"eth_confirmations_required"`
 	MaxBoundAddresses        int    `json:"max_bound_addrs"`
 	SkyBtcExchangeRate       string `json:"sky_btc_exchange_rate"`
+	SkyEthExchangeRate       string `json:"sky_eth_exchange_rate"`
 	MaxDecimals              int    `json:"max_decimals"`
 }
 
@@ -529,11 +532,26 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
+		rate = s.cfg.SkyExchanger.SkyEthExchangeRate
+		dropletsPerETH, err := exchange.CalculateEthSkyValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
+		if err != nil {
+			log.WithError(err).Error("exchange.CalculateEthSkyValue failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
+		skyPerETH, err := droplet.ToString(dropletsPerETH)
+		if err != nil {
+			log.WithError(err).Error("droplet.ToString failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
 
 		if err := httputil.JSONResponse(w, ConfigResponse{
 			Enabled:                  s.cfg.Web.APIEnabled,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
+			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
 			SkyBtcExchangeRate:       skyPerBTC,
+			SkyEthExchangeRate:       skyPerETH,
 			MaxDecimals:              maxDecimals,
 			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
 		}); err != nil {
