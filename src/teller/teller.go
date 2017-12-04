@@ -8,7 +8,6 @@ import (
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/scanner"
 )
 
 var (
@@ -26,17 +25,16 @@ type Teller struct {
 }
 
 // New creates a Teller
-func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen, ethAddrGen addrs.AddrGenerator, cfg config.Config) *Teller {
+func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrManager *addrs.AddrManager, cfg config.Config) *Teller {
 	return &Teller{
 		cfg:  cfg.Teller,
 		log:  log.WithField("prefix", "teller"),
 		quit: make(chan struct{}),
 		done: make(chan struct{}),
 		httpServ: NewHTTPServer(log, cfg.Redacted(), &Service{
-			cfg:        cfg.Teller,
-			exchanger:  exchanger,
-			addrGen:    addrGen,
-			ethAddrGen: ethAddrGen,
+			cfg:         cfg.Teller,
+			exchanger:   exchanger,
+			addrManager: addrManager,
 		}),
 	}
 }
@@ -73,10 +71,9 @@ func (s *Teller) Shutdown() {
 
 // Service combines Exchanger and AddrGenerator
 type Service struct {
-	cfg        config.Teller
-	exchanger  exchange.Exchanger  // exchange Teller client
-	addrGen    addrs.AddrGenerator // address generator
-	ethAddrGen addrs.AddrGenerator // address generator
+	cfg         config.Teller
+	exchanger   exchange.Exchanger // exchange Teller client
+	addrManager *addrs.AddrManager // address manager
 }
 
 // BindAddress binds skycoin address with a deposit address according to coinType
@@ -92,14 +89,9 @@ func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
 			return "", ErrMaxBoundAddresses
 		}
 	}
-	var addrGen addrs.AddrGenerator
-	switch coinType {
-	case scanner.CoinTypeBTC:
-		addrGen = s.addrGen
-	case scanner.CoinTypeETH:
-		addrGen = s.ethAddrGen
-	default:
-		return "", exchange.ErrUnsupportedCoinType
+	addrGen, err := s.addrManager.GetGenerator(coinType)
+	if err != nil {
+		return "", err
 	}
 	depositAddr, err := addrGen.NewAddress()
 	if err != nil {

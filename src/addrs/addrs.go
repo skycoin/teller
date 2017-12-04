@@ -26,6 +26,42 @@ type Addrs struct {
 	addresses []string // address pool for deposit
 }
 
+//AddrManager control all AddrGenerator according to coinType
+type AddrManager struct {
+	Mutex    sync.RWMutex
+	AGHolder map[string]AddrGenerator
+	AGcount  int
+}
+
+//NewAddrManager create a Manager
+func NewAddrManager() *AddrManager {
+	return &AddrManager{AGcount: 0, AGHolder: make(map[string]AddrGenerator)}
+}
+
+//PushGenerator add a AddrGenerater with coinType
+func (am *AddrManager) PushGenerator(ag AddrGenerator, coinType string) error {
+	am.Mutex.Lock()
+	defer am.Mutex.Unlock()
+	_, ok := am.AGHolder[coinType]
+	if ok {
+		return errors.New("coinType already exists")
+	}
+	am.AGHolder[coinType] = ag
+	am.AGcount++
+	return nil
+}
+
+//GetGenerator return AddrGenerator of coinType
+func (am *AddrManager) GetGenerator(coinType string) (AddrGenerator, error) {
+	am.Mutex.Lock()
+	defer am.Mutex.Unlock()
+	ag, ok := am.AGHolder[coinType]
+	if !ok {
+		return nil, errors.New("cointype not exists")
+	}
+	return ag, nil
+}
+
 // NewAddrs creates Addrs instance, will load and verify the addresses
 func NewAddrs(log logrus.FieldLogger, db *bolt.DB, addresses []string, bucketKey string) (*Addrs, error) {
 	used, err := NewStore(db, bucketKey)
