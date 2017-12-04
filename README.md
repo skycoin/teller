@@ -56,6 +56,7 @@ When a new release is published, `develop` will be merged to `master` then tagge
 * Have `GOPATH` env set
 * [Setup skycoin node](#setup-skycoin-node)
 * [Setup btcd](#setup-btcd)
+* [Setup geth](#setup-geth)
 
 ### Configure teller
 
@@ -80,7 +81,8 @@ Description of the config file:
 * `logfile` [string]: Log file.  It can be an absolute path or be relative to the working directory.
 * `dbfile` [string]: Database file, saved inside the `~/.teller-skycoin` folder. Do not use a path.
 * `btc_addresses` [string]: Filepath of the btc_addresses.json file. See [generate BTC addresses](#generate-btc-addresses).
-* `teller.max_bound_btc_addrs` [int]: Maximum number of BTC addresses allowed to bind per skycoin address.
+* `eth_addresses` [string]: Filepath of the eth_addresses.json file. See [generate ETH addresses](#generate-eth-addresses).
+* `teller.max_bound_addrs` [int]: Maximum number addresses allowed to bind per skycoin address.
 * `sky_rpc.address` [string]: Host address of the skycoin node. See [setup skycoin node](#setup-skycoin-node).
 * `btc_rpc.server` [string]: Host address of the btcd node.
 * `btc_rpc.user` [string]: btcd RPC username.
@@ -92,6 +94,12 @@ Description of the config file:
 * `btc_scanner.confirmations_required` [int]: Number of confirmations required before sending skycoins for a BTC deposit.
 * `sky_exchanger.sky_btc_exchange_rate` [string]: How much SKY to send per BTC. This can be written as an integer, float, or a rational fraction.
 * `sky_exchanger.max_decimals` [int]: Number of decimal places to truncate SKY to.
+* `eth_rpc.server` [string]: Host address of the geth node.
+* `eth_rpc.port` [string]: Host port of the geth node.
+* `eth_scanner.scan_period` [duration]: How often to scan for ethereum blocks.
+* `eth_scanner.initial_scan_height` [int]: Begin scanning from this ETH blockchain height.
+* `eth_scanner.confirmations_required` [int]: Number of confirmations required before sending skycoins for a ETH deposit.
+* `sky_exchanger.sky_eth_exchange_rate` [string]: How much SKY to send per ETH. This can be written as an integer, float, or a rational fraction.
 * `sky_exchanger.wallet` [string]: Filepath of the skycoin hot wallet. See [setup skycoin hot wallet](#setup-skycoin-hot-wallet).
 * `sky_exchanger.tx_confirmation_check_wait` [duration]: How often to check for a sent skycoin transaction's confirmation.
 * `web.behind_proxy` [bool]: Set true if running behind a proxy.
@@ -109,9 +117,9 @@ Description of the config file:
 * `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
 * `dummy.http_addr` [bool]: Host address for the dummy scanner and sender API.
 
-### Running teller without btcd or skyd
+### Running teller without btcd, geth or skyd
 
-Teller can be run in "dummy mode". It will ignore btcd and skycoind.
+Teller can be run in "dummy mode". It will ignore btcd, geth and skycoind.
 It will still provide addresses via `/api/bind` and report status with `/api/status`.
 but it will not process any real deposits or send real skycoins.
 
@@ -127,6 +135,26 @@ go run cmd/tool/tool.go -json newbtcaddress $seed $num > addresses.json
 
 Name the `addresses.json` file whatever you want.  Use this file as the
 value of `btc_addresses` in the config file.
+
+### Generate ETH addresses
+
+```
+Creating a new account
+
+geth account new
+Creates a new account and prints the address.
+
+On the console, command (`geth console`) use:
+
+> personal.newAccount("passphrase")
+The account is saved in encrypted format. You must remember this passphrase to unlock your account in the future.
+
+For non-interactive use the passphrase can be specified with the --password flag:
+
+geth --password <passwordfile> account new
+Note, this is meant to be used for testing only, it is a bad idea to save your password to file or expose in any other way.
+```
+then put those address into `eth_addresses.json` which format like `btc_addresses.json`
 
 ### Setup skycoin hot wallet
 
@@ -227,6 +255,44 @@ sudo echo "iptables -t nat -A PREROUTING -i enp2s0 -p tcp --dport 80 -j REDIRECT
 
 These rules need to be duplicated for another port (e.g. 7072) for the HTTPS listener, when exposing HTTPS.
 
+### Setup geth
+
+Follow the instructions from the geth wiki to install geth:
+https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum
+```
+Building geth requires both a Go (version 1.7 or later) and a C compiler. 
+You can install them using your favourite package manager. 
+Once the dependencies are installed, run 
+cd go-ethereum
+make geth
+copy geth to you system PATH, such as: cp build/bin/geth /usr/bin
+
+#### Configure geth
+
+specified the following values:
+
+* `--datadir` - set this to directory that store ethereum block chain data.
+* `--rpc` - Enable the HTTP-RPC server
+* --rpcaddr` - HTTP-RPC server listening interface (default: "localhost") Set this as the value of `eth_rpc.server` in the teller conf.
+* `--rpcport`- HTTP-RPC server listening port (default: 8545) Set this as the value of `eth_rpc.port` in the teller conf.
+
+```
+Please note, offering an API over the HTTP (rpc) or WebSocket (ws) interfaces will give
+everyone access to the APIs who can access this interface (DApps, browser tabs, etc). Be
+careful which APIs you enable. By default Geth enables all APIs over the IPC (ipc) interface
+and only the db, eth, net and web3 APIs over the HTTP and WebSocket interfaces.
+
+```
+reference:
+https: //github.com/ethereum/go-ethereum/wiki/Management-APIs
+
+### Using a reverse proxy to expose teller
+Now, run `geth`:
+
+
+```sh
+geth --datadir=xxx 
+```
 ## API
 
 The HTTP API service is provided by the proxy and serve on port 7071 by default.
@@ -248,11 +314,11 @@ Request Body: {
 }
 ```
 
-Binds a skycoin address to a BTC address. A skycoin address can be bound to
-multiple BTC addresses. The default maximum number of bound addresses is 5.
+Binds a skycoin address to a BTC/ETH address. A skycoin address can be bound to
+multiple BTC/ETH addresses. The default maximum number of bound addresses is 5.
 
 Coin type specifies which coin deposit address type to generate.
-Options are: BTC [TODO: support more coin types].
+Options are: BTC/ETH [TODO: support more coin types].
 
 Example:
 
@@ -268,6 +334,19 @@ Response:
     "coin_type": "BTC",
 }
 ```
+ETH example:
+```sh
+curl -H  -X POST "Content-Type: application/json" -d '{"skyaddr":"...","coin_type":"ETH"}' http://localhost:7071/api/bind
+```
+
+Response:
+
+```json
+{
+    "deposit_address": "0x392cded14b8f12cb6cbb1c7922810f4fbd80c3f6",
+    "coin_type": "ETH",
+}
+```
 
 ### Status
 
@@ -280,15 +359,15 @@ Query Args: skyaddr
 
 Returns statuses of a skycoin address.
 
-Since a single skycoin address can be bound to multiple BTC addresses the result is in an array.
-The default maximum number of BTC addresses per skycoin address is 5.
+Since a single skycoin address can be bound to multiple BTC/ETH addresses the result is in an array.
+The default maximum number of BTC/ETH addresses per skycoin address is 5.
 
-We cannot return the BTC address for security reasons so they are numbered and timestamped instead.
+We cannot return the BTC/ETH address for security reasons so they are numbered and timestamped instead.
 
 Possible statuses are:
 
-* `waiting_deposit` - Skycoin address is bound, no deposit seen on BTC address yet
-* `waiting_send` - BTC deposit detected, waiting to send skycoin out
+* `waiting_deposit` - Skycoin address is bound, no deposit seen on BTC/ETH address yet
+* `waiting_send` - BTC/ETH deposit detected, waiting to send skycoin out
 * `waiting_confirm` - Skycoin sent out, waiting to confirm the skycoin transaction
 * `done` - Skycoin transaction confirmed
 
@@ -344,9 +423,11 @@ Response:
 {
     "enabled": true,
     "btc_confirmations_required": 1,
-    "max_bound_btc_addrs": 5,
+    "eth_confirmations_required": 5,
+    "max_bound_addrs": 5,
     "max_decimals": 0,
     "sky_btc_exchange_rate": "123.000000"
+    "sky_eth_exchange_rate": "30.000000"
 }
 ```
 
@@ -439,10 +520,18 @@ make test
 
 ```
 Bucket: used_btc_address
-File: btcaddrs/store.go
+File: addrs/store.go
 
 Maps: `btcaddr -> ""`
 Note: Marks a btc address as used
+```
+
+```
+Bucket: used_eth_address
+File: addrs/store.go
+
+Maps: `ethaddr -> ""`
+Note: Marks a eth address as used
 ```
 
 ```
@@ -456,24 +545,24 @@ Note: unused
 Bucket: deposit_info
 File: exchange/store.go
 
-Maps: btcTx[%tx:%n] -> exchange.DepositInfo
-Note: Maps a btc txid:seq to exchange.DepositInfo struct
+Maps: btcTx[%tx:%n]/ethTx[%tx:%n] -> exchange.DepositInfo
+Note: Maps a btc/eth txid:seq to exchange.DepositInfo struct
 ```
 
 ```
 Bucket: bind_address
 File: exchange/store.go
 
-Maps: btcaddr -> skyaddr
-Note: Maps a btc addr to a sky addr
+Maps: btcaddr/ethaddr -> skyaddr
+Note: Maps a btc/eth addr to a sky addr
 ```
 
 ```
 Bucket: sky_deposit_seqs_index
 File: exchange/store.go
 
-Maps: skyaddr -> [btcaddrs]
-Note: Maps a sky addr to multiple btc addrs
+Maps: skyaddr -> [btcaddrs/ethaddrs]
+Note: Maps a sky addr to multiple btc/eth addrs
 ```
 
 ```
@@ -485,7 +574,7 @@ Note: Maps a btcaddr to multiple btc txns
 ```
 
 ```
-Bucket: scan_meta
+Bucket: scan_meta_btc
 File: scanner/store.go
 
 Maps: "deposit_addresses" -> [btcaddrs]
@@ -496,11 +585,22 @@ Note: Saves list of btc txid:seq (as JSON)
 ```
 
 ```
+Bucket: scan_meta_eth
+File: scanner/store.go
+
+Maps: "deposit_addresses" -> [ethaddrs]
+Note: Saves list of eth addresss being scanned
+
+Maps: "dv_index_list" -> [ethTx[%tx:%n]][json]
+Note: Saves list of eth txid:seq (as JSON)
+```
+
+```
 Bucket: deposit_value
 File: scanner/store.go
 
-Maps: btcTx[%tx:%n] -> scanner.Deposit
-Note: Maps a btc txid:seq to scanner.Deposit struct
+Maps: btcTx/ethTx[%tx:%n] -> scanner.Deposit
+Note: Maps a btc/eth txid:seq to scanner.Deposit struct
 ```
 
 ## Frontend development
