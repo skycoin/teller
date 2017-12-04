@@ -250,7 +250,7 @@ func TestExchangeRunSend(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	var value int64 = 1e8
@@ -387,7 +387,7 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	// Force sender to return a broadcast tx error so that the deposit stays at StatusWaitSend
@@ -441,7 +441,7 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	// Force sender to return a create tx error so that the deposit stays at StatusWaitSend
@@ -490,7 +490,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	var value int64 = 1e8
@@ -568,7 +568,7 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	var value int64 = 1e8
@@ -663,7 +663,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	dn := scanner.DepositNote{
@@ -949,7 +949,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 	}
 
 	testExchangeRunProcessDepositBacklog(t, dis, func(e *Exchange, di DepositInfo) {
-		err := e.store.BindAddress(di.SkyAddress, di.DepositAddress)
+		err := e.store.BindAddress(di.SkyAddress, di.DepositAddress, di.CoinType)
 		require.NoError(t, err)
 
 		skySent, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, testMaxDecimals)
@@ -1162,7 +1162,7 @@ func TestExchangeBindAddress(t *testing.T) {
 	require.Equal(t, "b", dummyScanner.addrs[0])
 
 	// Should be in the store
-	skyAddr, err := s.store.GetBindAddress("b")
+	skyAddr, err := s.store.GetBindAddress("b", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 	require.Equal(t, "a", skyAddr)
 }
@@ -1249,7 +1249,7 @@ func TestExchangeGetBindNum(t *testing.T) {
 	require.Equal(t, num, 0)
 	require.NoError(t, err)
 
-	err = s.store.BindAddress("a", "b")
+	err = s.store.BindAddress("a", "b", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	num, err = s.GetBindNum("a")

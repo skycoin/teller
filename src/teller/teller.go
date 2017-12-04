@@ -79,9 +79,8 @@ type Service struct {
 	ethAddrGen addrs.AddrGenerator // address generator
 }
 
-// BindAddress binds skycoin address with a deposit address
+// BindAddress binds skycoin address with a deposit address according to coinType
 // return deposit address
-// TODO -- support multiple coin types
 func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
 	if s.cfg.MaxBoundAddresses > 0 {
 		num, err := s.exchanger.GetBindNum(skyAddr)

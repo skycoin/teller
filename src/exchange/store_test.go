@@ -16,13 +16,13 @@ type MockStore struct {
 	mock.Mock
 }
 
-func (m *MockStore) GetBindAddress(btcAddr string) (string, error) {
-	args := m.Called(btcAddr)
+func (m *MockStore) GetBindAddress(btcAddr, coinType string) (string, error) {
+	args := m.Called(btcAddr, coinType)
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockStore) BindAddress(skyAddr, btcAddr string) error {
-	args := m.Called(skyAddr, btcAddr)
+func (m *MockStore) BindAddress(skyAddr, btcAddr, coinType string) error {
+	args := m.Called(skyAddr, btcAddr, coinType)
 	return args.Error(0)
 }
 
@@ -63,7 +63,7 @@ func (m *MockStore) UpdateDepositInfoCallback(btcTx string, f func(DepositInfo) 
 	return args.Get(0).(DepositInfo), args.Error(1)
 }
 
-func (m *MockStore) GetSkyBindBtcAddresses(skyAddr string) ([]string, error) {
+func (m *MockStore) GetSkyBindAddresses(skyAddr string) ([]string, error) {
 	args := m.Called(skyAddr)
 
 	btcAddrs := args.Get(0)
@@ -92,7 +92,8 @@ func TestStoreNewStore(t *testing.T) {
 	err := s.db.View(func(tx *bolt.Tx) error {
 		require.NotNil(t, tx.Bucket(exchangeMetaBkt))
 		require.NotNil(t, tx.Bucket(depositInfoBkt))
-		require.NotNil(t, tx.Bucket(bindAddressBkt))
+		require.NotNil(t, tx.Bucket(dbutil.ByteJoin(bindAddressBkt, scanner.CoinTypeBTC, "_")))
+		require.NotNil(t, tx.Bucket(dbutil.ByteJoin(bindAddressBkt, scanner.CoinTypeETH, "_")))
 		require.NotNil(t, tx.Bucket(skyDepositSeqsIndexBkt))
 		require.NotNil(t, tx.Bucket(btcTxsBkt))
 		return nil
@@ -173,12 +174,12 @@ func TestStoreBindAddress(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	err := s.BindAddress("sa1", "ba1")
+	err := s.BindAddress("sa1", "ba1", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	// check bucket
 	err = s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(bindAddressBkt)
+		bkt := tx.Bucket(dbutil.ByteJoin(bindAddressBkt, scanner.CoinTypeBTC, "_"))
 		require.NotNil(t, bkt)
 		v := bkt.Get([]byte("ba1"))
 		require.Equal(t, "sa1", string(v))
@@ -192,7 +193,7 @@ func TestStoreBindAddress(t *testing.T) {
 	require.NoError(t, err)
 
 	// A sky address can have multiple addresses bound to it
-	err = s.BindAddress("sa1", "ba2")
+	err = s.BindAddress("sa1", "ba2", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 }
 
@@ -200,14 +201,14 @@ func TestStoreBindAddressTwiceFails(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	err := s.BindAddress("a", "b")
+	err := s.BindAddress("a", "b", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
-	err = s.BindAddress("a", "b")
+	err = s.BindAddress("a", "b", scanner.CoinTypeBTC)
 	require.Error(t, err)
 	require.Equal(t, ErrAddressAlreadyBound, err)
 
-	err = s.BindAddress("c", "b")
+	err = s.BindAddress("c", "b", scanner.CoinTypeBTC)
 	require.Error(t, err)
 	require.Equal(t, ErrAddressAlreadyBound, err)
 }
@@ -217,11 +218,11 @@ func TestStoreGetBindAddress(t *testing.T) {
 	defer shutdown()
 
 	// init the bind address bucket
-	err := s.BindAddress("skyaddr1", "btcaddr1")
+	err := s.BindAddress("skyaddr1", "btcaddr1", scanner.CoinTypeBTC)
 	require.NoError(t, err)
-	err = s.BindAddress("skyaddr2", "btcaddr2")
+	err = s.BindAddress("skyaddr2", "btcaddr2", scanner.CoinTypeBTC)
 	require.NoError(t, err)
-	err = s.BindAddress("skyaddr2", "btcaddr3")
+	err = s.BindAddress("skyaddr2", "btcaddr3", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	var testCases = []struct {
@@ -263,7 +264,7 @@ func TestStoreGetBindAddress(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			addr, err := s.GetBindAddress(tc.btcAddr)
+			addr, err := s.GetBindAddress(tc.btcAddr, scanner.CoinTypeBTC)
 			require.NoError(t, err)
 			if tc.ok {
 				require.Equal(t, tc.expectSkyAddr, addr)
@@ -380,7 +381,7 @@ func TestStoreGetDepositInfoOfSkyAddress(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	err := s.BindAddress("skyaddr1", "btcaddr1")
+	err := s.BindAddress("skyaddr1", "btcaddr1", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	dpis, err := s.GetDepositInfoOfSkyAddress("skyaddr1")
@@ -388,7 +389,7 @@ func TestStoreGetDepositInfoOfSkyAddress(t *testing.T) {
 	require.Len(t, dpis, 1)
 	require.Equal(t, dpis[0].DepositAddress, "btcaddr1")
 
-	err = s.BindAddress("skyaddr1", "btcaddr2")
+	err = s.BindAddress("skyaddr1", "btcaddr2", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	dpis, err = s.GetDepositInfoOfSkyAddress("skyaddr1")
@@ -410,9 +411,9 @@ func TestStoreGetDepositInfoOfSkyAddress(t *testing.T) {
 	require.Equal(t, di3.Seq, uint64(1))
 	require.NoError(t, err)
 
-	err = s.BindAddress("skyaddr3", "btcaddr3")
+	err = s.BindAddress("skyaddr3", "btcaddr3", scanner.CoinTypeBTC)
 	require.NoError(t, err)
-	err = s.BindAddress("skyaddr3", "btcaddr4")
+	err = s.BindAddress("skyaddr3", "btcaddr4", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	di4 := DepositInfo{
@@ -542,6 +543,7 @@ func TestStoreGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 	defer shutdown()
 
 	di := DepositInfo{
+		CoinType:       scanner.CoinTypeBTC,
 		Status:         StatusWaitSend,
 		DepositAddress: "foo-btc-addr",
 		DepositID:      "foo-tx:1",
@@ -549,11 +551,12 @@ func TestStoreGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 		DepositValue:   1e6,
 		ConversionRate: testSkyBtcRate,
 		Deposit: scanner.Deposit{
-			Address: "foo-btc-addr",
-			Value:   1e6,
-			Height:  20,
-			Tx:      "foo-tx",
-			N:       1,
+			CoinType: scanner.CoinTypeBTC,
+			Address:  "foo-btc-addr",
+			Value:    1e6,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        1,
 		},
 	}
 
@@ -574,11 +577,12 @@ func TestStoreGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 
 	// GetOrCreateDepositInfo, deposit info exists
 	dv := scanner.Deposit{
-		Address: di.Deposit.Address + "-2",
-		Value:   di.Deposit.Value * 2,
-		Height:  di.Deposit.Height + 1,
-		Tx:      di.Deposit.Tx,
-		N:       di.Deposit.N,
+		CoinType: scanner.CoinTypeBTC,
+		Address:  di.Deposit.Address + "-2",
+		Value:    di.Deposit.Value * 2,
+		Height:   di.Deposit.Height + 1,
+		Tx:       di.Deposit.Tx,
+		N:        di.Deposit.N,
 	}
 	require.Equal(t, di.Deposit.ID(), dv.ID())
 
@@ -595,7 +599,8 @@ func TestStoreGetOrCreateDepositInfoNoBoundSkyAddr(t *testing.T) {
 	defer shutdown()
 
 	dv := scanner.Deposit{
-		Address: "foo-btc-addr",
+		Address:  "foo-btc-addr",
+		CoinType: scanner.CoinTypeBTC,
 	}
 
 	rate := "100"
@@ -604,29 +609,29 @@ func TestStoreGetOrCreateDepositInfoNoBoundSkyAddr(t *testing.T) {
 	require.Equal(t, err, ErrNoBoundAddress)
 }
 
-func TestStoreGetSkyBindBtcAddresses(t *testing.T) {
+func TestStoreGetSkyBindAddresses(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
 
 	skyAddr := "skyAddr"
-	addrs, err := s.GetSkyBindBtcAddresses(skyAddr)
+	addrs, err := s.GetSkyBindAddresses(skyAddr)
 	require.NoError(t, err)
 	require.Nil(t, addrs)
 
 	btcAddr1 := "btcaddr1"
-	err = s.BindAddress(skyAddr, btcAddr1)
+	err = s.BindAddress(skyAddr, btcAddr1, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
-	addrs, err = s.GetSkyBindBtcAddresses(skyAddr)
+	addrs, err = s.GetSkyBindAddresses(skyAddr)
 	require.NoError(t, err)
 	require.Len(t, addrs, 1)
 	require.Equal(t, addrs[0], btcAddr1)
 
 	btcAddr2 := "btcaddr2"
-	err = s.BindAddress(skyAddr, btcAddr2)
+	err = s.BindAddress(skyAddr, btcAddr2, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
-	addrs, err = s.GetSkyBindBtcAddresses(skyAddr)
+	addrs, err = s.GetSkyBindAddresses(skyAddr)
 	require.NoError(t, err)
 	require.Len(t, addrs, 2)
 	require.Equal(t, addrs[0], btcAddr1)

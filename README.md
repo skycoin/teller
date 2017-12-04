@@ -550,11 +550,19 @@ Note: Maps a btc/eth txid:seq to exchange.DepositInfo struct
 ```
 
 ```
-Bucket: bind_address
+Bucket: bind_address_BTC
 File: exchange/store.go
 
-Maps: btcaddr/ethaddr -> skyaddr
-Note: Maps a btc/eth addr to a sky addr
+Maps: btcaddr -> skyaddr
+Note: Maps a btc addr to a sky addr
+```
+
+```
+Bucket: bind_address_ETH
+File: exchange/store.go
+
+Maps: ethaddr -> skyaddr
+Note: Maps a eth addr to a sky addr
 ```
 
 ```

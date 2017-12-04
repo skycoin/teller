@@ -48,7 +48,7 @@ type DepositFilter func(di DepositInfo) bool
 
 // Exchanger provides APIs to interact with the exchange service
 type Exchanger interface {
-	BindAddress(skyAddr, btcAddr, coinType string) error
+	BindAddress(skyAddr, depositAddr, coinType string) error
 	GetDepositStatuses(skyAddr string) ([]DepositStatus, error)
 	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
 	GetBindNum(skyAddr string) (int, error)
@@ -596,23 +596,21 @@ func (s *Exchange) broadcastTransaction(tx *coin.Transaction) (*sender.Broadcast
 	return rsp, nil
 }
 
-// BindAddress binds deposit btc/eth address with skycoin address, and
+// BindAddress binds deposit address with skycoin address, and
 // add the btc/eth address to scan service, when detect deposit coin
 // to the btc/eth address, will send specific skycoin to the binded
 // skycoin address
-// TODO -- support multiple coin types
-func (s *Exchange) BindAddress(skyAddr, btcAddr, coinType string) error {
-	//store to same bucket because btc address different with eth address
-	if err := s.store.BindAddress(skyAddr, btcAddr); err != nil {
+func (s *Exchange) BindAddress(skyAddr, depositAddr, coinType string) error {
+	if err := s.store.BindAddress(skyAddr, depositAddr, coinType); err != nil {
 		return err
 	}
 
 	// add btc/etc address to scanner
 	switch coinType {
 	case scanner.CoinTypeBTC:
-		return s.scanner.AddScanAddress(btcAddr)
+		return s.scanner.AddScanAddress(depositAddr)
 	case scanner.CoinTypeETH:
-		return s.ethScanner.AddScanAddress(btcAddr)
+		return s.ethScanner.AddScanAddress(depositAddr)
 	default:
 		return errors.New("unknown coinType")
 	}
@@ -678,8 +676,8 @@ func (s *Exchange) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDet
 	return dss, nil
 }
 
-// GetBindNum returns the number of btc address the given sky address binded
+// GetBindNum returns the number of btc/eth address the given sky address binded
 func (s *Exchange) GetBindNum(skyAddr string) (int, error) {
-	addrs, err := s.store.GetSkyBindBtcAddresses(skyAddr)
+	addrs, err := s.store.GetSkyBindAddresses(skyAddr)
 	return len(addrs), err
 }
