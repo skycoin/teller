@@ -73,6 +73,11 @@ type DepositInfo struct {
 	Deposit scanner.Deposit
 }
 
+type DepositStats struct {
+	TotalBTCReceived int64 `json:"total_btc_received"`
+	TotalSKYSent     int64 `json:"total_sky_sent"`
+}
+
 // ValidateForStatus does a consistency check of the data based upon the Status value
 func (di DepositInfo) ValidateForStatus() error {
 

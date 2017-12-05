@@ -48,6 +48,7 @@ type Exchanger interface {
 	GetDepositStatuses(skyAddr string) ([]DepositStatus, error)
 	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
 	GetBindNum(skyAddr string) (int, error)
+	GetDepositStats() (*DepositStats, error)
 }
 
 // Exchange manages coin exchange between deposits and skycoin
@@ -625,4 +626,15 @@ func (s *Exchange) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDet
 func (s *Exchange) GetBindNum(skyAddr string) (int, error) {
 	addrs, err := s.store.GetSkyBindBtcAddresses(skyAddr)
 	return len(addrs), err
+}
+
+func (s *Exchange) GetDepositStats() (stats *DepositStats, err error) {
+	tbr, tss, err := s.store.GetDepositStats()
+	if err != nil {
+		return nil, err
+	}
+	return &DepositStats{
+		TotalBTCReceived: tbr,
+		TotalSKYSent:     tss,
+	}, nil
 }

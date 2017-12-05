@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/exchange"
+	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/util/testutil"
 )
 
@@ -41,6 +42,21 @@ func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositF
 		}
 	}
 	return ds, nil
+}
+
+func (dps dummyDepositStatusGetter) GetDepositStats() (*exchange.DepositStats, error) {
+	var totalBTCReceived int64
+	var totalSKYSent int64
+	for _, dpi := range dps.dpis {
+		if dpi.CoinType == scanner.CoinTypeBTC {
+			totalBTCReceived += dpi.DepositValue
+		}
+		totalSKYSent += int64(dpi.SkySent)
+	}
+	return &exchange.DepositStats{
+		TotalBTCReceived: totalBTCReceived,
+		TotalSKYSent:     totalSKYSent,
+	}, nil
 }
 
 type dummyScanAddrs struct {
