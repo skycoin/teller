@@ -227,7 +227,20 @@ func run() error {
 		return err
 	}
 
-	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanService, scanEthService, sendRPC, exchange.Config{
+	multiplexer := scanner.NewMultiplexer()
+	err = multiplexer.AddScanner(scanService, scanner.CoinTypeBTC)
+	if err != nil {
+		log.WithError(err).Error("multiplexer.AddScanner failed")
+		return err
+	}
+	err = multiplexer.AddScanner(scanEthService, scanner.CoinTypeETH)
+	if err != nil {
+		log.WithError(err).Error("multiplexer.AddScanner failed")
+		return err
+	}
+	background("multiplex.Run", errC, multiplexer.Multiplex)
+
+	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, exchange.Config{
 		Rate:                    cfg.SkyExchanger.SkyBtcExchangeRate,
 		EthRate:                 cfg.SkyExchanger.SkyEthExchangeRate,
 		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,

@@ -58,10 +58,9 @@ type Exchanger interface {
 type Exchange struct {
 	log         logrus.FieldLogger
 	cfg         Config
-	scanner     scanner.Scanner // scanner provides APIs for interacting with the scan service
-	ethScanner  scanner.Scanner // scanner provides APIs for interacting with the scan service
-	sender      sender.Sender   // sender provides APIs for sending skycoin
-	store       Storer          // deposit info storage
+	multiplexer *scanner.Multiplexer // multiplex provides APIs for interacting with the scan service
+	sender      sender.Sender        // sender provides APIs for sending skycoin
+	store       Storer               // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
 	depositChan chan DepositInfo
@@ -93,7 +92,7 @@ func (c Config) Validate() error {
 }
 
 // NewExchange creates exchange service
-func NewExchange(log logrus.FieldLogger, store Storer, scanner, ethScanner scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
+func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, cfg Config) (*Exchange, error) {
 	if _, err := ParseRate(cfg.Rate); err != nil {
 		return nil, err
 	}
@@ -105,8 +104,7 @@ func NewExchange(log logrus.FieldLogger, store Storer, scanner, ethScanner scann
 	return &Exchange{
 		cfg:         cfg,
 		log:         log.WithField("prefix", "teller.exchange"),
-		scanner:     scanner,
-		ethScanner:  ethScanner,
+		multiplexer: multiplexer,
 		sender:      sender,
 		store:       store,
 		quit:        make(chan struct{}),
@@ -194,13 +192,7 @@ func (s *Exchange) Run() error {
 			case <-s.quit:
 				log.Info("exchange.Exchange watch deposits loop quit")
 				return
-			case dv, ok = <-s.scanner.GetDeposit():
-				if !ok {
-					log.Warn("Scan service closed, watch deposits loop quit")
-					return
-				}
-
-			case dv, ok = <-s.ethScanner.GetDeposit():
+			case dv, ok = <-s.multiplexer.GetDeposits():
 				if !ok {
 					log.Warn("Scan service closed, watch deposits loop quit")
 					return
@@ -606,14 +598,7 @@ func (s *Exchange) BindAddress(skyAddr, depositAddr, coinType string) error {
 	}
 
 	// add btc/etc address to scanner
-	switch coinType {
-	case scanner.CoinTypeBTC:
-		return s.scanner.AddScanAddress(depositAddr)
-	case scanner.CoinTypeETH:
-		return s.ethScanner.AddScanAddress(depositAddr)
-	default:
-		return errors.New("unknown coinType")
-	}
+	return s.multiplexer.AddScanAddress(depositAddr, coinType)
 }
 
 // DepositStatus json struct for deposit status
