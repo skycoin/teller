@@ -227,15 +227,15 @@ func run() error {
 		return err
 	}
 
-	multiplexer := scanner.NewMultiplexer()
+	multiplexer := scanner.NewMultiplexer(log)
 	err = multiplexer.AddScanner(scanService, scanner.CoinTypeBTC)
 	if err != nil {
-		log.WithError(err).Error("multiplexer.AddScanner failed")
+		log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeBTC)
 		return err
 	}
 	err = multiplexer.AddScanner(scanEthService, scanner.CoinTypeETH)
 	if err != nil {
-		log.WithError(err).Error("multiplexer.AddScanner failed")
+		log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeETH)
 		return err
 	}
 	background("multiplex.Run", errC, multiplexer.Multiplex)
