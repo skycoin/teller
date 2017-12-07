@@ -264,8 +264,7 @@ func (s *BTCStore) ScanBlock(blockInfo interface{}) ([]Deposit, error) {
 
 // ScanBTCBlock scan the given block and returns the next block hash or error
 func ScanBTCBlock(block *btcjson.GetBlockVerboseResult, depositAddrs []string) ([]Deposit, error) {
-	// Assert that RawTx matches Tx
-	if len(block.RawTx) != len(block.Tx) {
+	if len(block.RawTx) == 0 {
 		return nil, ErrBtcdTxindexDisabled
 	}
 
