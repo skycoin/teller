@@ -56,7 +56,6 @@ func (m *Multiplexer) AddScanAddress(depositAddr, coinType string) error {
 	if !existsScanner {
 		return errors.New("unknown cointype")
 	}
-	fmt.Printf("-------------------cointype-------%v\n", coinType)
 	return scanner.AddScanAddress(depositAddr)
 }
 
@@ -95,10 +94,19 @@ func (m *Multiplexer) GetScannerCount() int {
 }
 
 // Shutdown shutdown the multiplexer
-func (m *Multiplexer) Shudown() {
+func (m *Multiplexer) Shutdown() {
 	m.log.Info("Closing Multiplexer")
 	close(m.quit)
 	close(m.outChan)
 	m.log.Info("Waiting for Multiplexer to stop")
 	<-m.done
+}
+
+// GetScanner returns Scanner according to coinType
+func (m *Multiplexer) GetScanner(coinType string) Scanner {
+	scanner, existsScanner := m.scannerMap[coinType]
+	if !existsScanner {
+		return nil
+	}
+	return scanner
 }

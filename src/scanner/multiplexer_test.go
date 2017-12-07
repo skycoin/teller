@@ -135,7 +135,7 @@ func TestMultiplexerOnlyBtc(t *testing.T) {
 
 	time.AfterFunc(shutdownWait, func() {
 		scr.Shutdown()
-		m.Shudown()
+		m.Shutdown()
 	})
 	err := scr.Run()
 	require.NoError(t, err)
@@ -196,7 +196,7 @@ func TestMultiplexerForAll(t *testing.T) {
 	time.AfterFunc(shutdownWait, func() {
 		ethscr.Shutdown()
 		scr.Shutdown()
-		m.Shudown()
+		m.Shutdown()
 	})
 	go ethscr.Run()
 	err := scr.Run()
