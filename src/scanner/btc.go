@@ -22,7 +22,7 @@ var (
 
 	// ErrBtcdTxindexDisabled is returned if RawTx is missing from GetBlockVerboseResult,
 	// which happens if txindex is not enabled in btcd.
-	ErrBtcdTxindexDisabled = errors.New("len(block.RawTx) != len(block.Tx), make sure txindex is enabled in btcd")
+	ErrBtcdTxindexDisabled = errors.New("len(block.RawTx) == 0, make sure txindex is enabled in btcd")
 )
 
 const (
@@ -112,7 +112,7 @@ func (s *BTCScanner) Run() error {
 		return err
 	}
 
-	if len(initialBlock.RawTx) != len(initialBlock.Tx) {
+	if len(initialBlock.RawTx) == 0 {
 		err := ErrBtcdTxindexDisabled
 		log.WithError(err).Error("Txindex looks disabled, aborting")
 		return err

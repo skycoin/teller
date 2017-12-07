@@ -309,6 +309,7 @@ func convertBlockToGetBlockVerboseResult(block *btcutil.Block) *btcjson.GetBlock
 	for _, tx := range txRawResults {
 		result.Tx = append(result.Tx, tx.Hash)
 	}
+	result.Tx = nil
 
 	return &result
 }
