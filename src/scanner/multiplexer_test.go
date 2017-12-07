@@ -69,12 +69,15 @@ func testAddBtcScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*BTCScanner, 
 	scr, shutdown := setupScanner(t, db)
 	err := m.AddScanner(scr, CoinTypeBTC)
 	require.NoError(t, err)
-	require.Equal(t, 1, m.GetScannerCount())
+	count := m.GetScannerCount()
+
 	//add btc again, should be error
 	err = m.AddScanner(scr, CoinTypeBTC)
 	require.Equal(t, ErrBtcScannerAlreadyExists, err)
-	//only 1 scanner
-	require.Equal(t, 1, m.GetScannerCount())
+	//scanner count no change
+	require.Equal(t, count, m.GetScannerCount())
+
+	//add wrong scanner
 	err = m.AddScanner(nil, CoinTypeBTC)
 	require.Equal(t, ErrNilScanner, err)
 	return scr, shutdown
@@ -89,9 +92,6 @@ func testAddEthScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*ETHScanner, 
 	err = m.AddScanner(ethscr, CoinTypeETH)
 	require.Equal(t, ErrEthScannerAlreadyExists, err)
 	return ethscr, ethshutdown
-}
-
-func shutdownMultiplexer(m *Multiplexer) {
 }
 
 func TestMultiplexerOnlyBtc(t *testing.T) {
@@ -159,8 +159,13 @@ func TestMultiplexerForAll(t *testing.T) {
 	//add btc scanner to multiplexer
 	scr, shutdown := testAddBtcScanner(t, btcDB, m)
 	defer shutdown()
+
+	//add eth scanner to multiplexer
 	ethscr, ethshutdown := testAddEthScanner(t, ethDB, m)
 	defer ethshutdown()
+
+	// 2 scanner in multiplexer
+	require.Equal(t, 2, m.GetScannerCount())
 
 	nDepositsBtc := testAddBtcScanAddresses(t, m)
 	nDepositsEth := testAddEthScanAddresses(t, m)
@@ -194,7 +199,6 @@ func TestMultiplexerForAll(t *testing.T) {
 		m.Shudown()
 	})
 	go ethscr.Run()
-	//require.NoError(t, err)
 	err := scr.Run()
 	require.NoError(t, err)
 	<-done

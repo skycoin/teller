@@ -89,11 +89,7 @@ func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
 			return "", ErrMaxBoundAddresses
 		}
 	}
-	addrGen, err := s.addrManager.GetGenerator(coinType)
-	if err != nil {
-		return "", err
-	}
-	depositAddr, err := addrGen.NewAddress()
+	depositAddr, err := s.addrManager.NewAddress(coinType)
 	if err != nil {
 		return "", err
 	}

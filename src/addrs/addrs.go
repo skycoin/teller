@@ -12,6 +12,7 @@ import (
 
 // ErrDepositAddressEmpty represents all deposit addresses are used
 var ErrDepositAddressEmpty = errors.New("Deposit address pool is empty")
+var ErrCointypeNotExists = errors.New("Cointype not exists")
 
 // AddrGenerator generate new deposit address
 type AddrGenerator interface {
@@ -26,19 +27,19 @@ type Addrs struct {
 	addresses []string // address pool for deposit
 }
 
-//AddrManager control all AddrGenerator according to coinType
+// AddrManager control all AddrGenerator according to coinType
 type AddrManager struct {
 	Mutex    sync.RWMutex
 	AGHolder map[string]AddrGenerator
 	AGcount  int
 }
 
-//NewAddrManager create a Manager
+// NewAddrManager create a Manager
 func NewAddrManager() *AddrManager {
 	return &AddrManager{AGcount: 0, AGHolder: make(map[string]AddrGenerator)}
 }
 
-//PushGenerator add a AddrGenerater with coinType
+// PushGenerator add a AddrGenerater with coinType
 func (am *AddrManager) PushGenerator(ag AddrGenerator, coinType string) error {
 	am.Mutex.Lock()
 	defer am.Mutex.Unlock()
@@ -51,15 +52,19 @@ func (am *AddrManager) PushGenerator(ag AddrGenerator, coinType string) error {
 	return nil
 }
 
-//GetGenerator return AddrGenerator of coinType
-func (am *AddrManager) GetGenerator(coinType string) (AddrGenerator, error) {
+// NewAddress return new address according to coinType
+func (am *AddrManager) NewAddress(coinType string) (string, error) {
 	am.Mutex.Lock()
 	defer am.Mutex.Unlock()
 	ag, ok := am.AGHolder[coinType]
 	if !ok {
-		return nil, errors.New("cointype not exists")
+		return "", ErrCointypeNotExists
 	}
-	return ag, nil
+	depositAddr, err := ag.NewAddress()
+	if err != nil {
+		return "", err
+	}
+	return depositAddr, nil
 }
 
 // NewAddrs creates Addrs instance, will load and verify the addresses
