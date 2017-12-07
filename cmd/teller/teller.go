@@ -227,7 +227,20 @@ func run() error {
 		return err
 	}
 
-	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanService, scanEthService, sendRPC, exchange.Config{
+	multiplexer := scanner.NewMultiplexer(log)
+	err = multiplexer.AddScanner(scanService, scanner.CoinTypeBTC)
+	if err != nil {
+		log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeBTC)
+		return err
+	}
+	err = multiplexer.AddScanner(scanEthService, scanner.CoinTypeETH)
+	if err != nil {
+		log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeETH)
+		return err
+	}
+	background("multiplex.Run", errC, multiplexer.Multiplex)
+
+	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, exchange.Config{
 		Rate:                    cfg.SkyExchanger.SkyBtcExchangeRate,
 		EthRate:                 cfg.SkyExchanger.SkyEthExchangeRate,
 		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
@@ -239,6 +252,9 @@ func run() error {
 
 	background("exchangeClient.Run", errC, exchangeClient.Run)
 
+	//create AddrManager
+	addrManager := addrs.NewAddrManager()
+
 	// create bitcoin address manager
 	f, err := ioutil.ReadFile(cfg.BtcAddresses)
 	if err != nil {
@@ -249,6 +265,10 @@ func run() error {
 	btcAddrMgr, err := addrs.NewBTCAddrs(log, db, bytes.NewReader(f))
 	if err != nil {
 		log.WithError(err).Error("Create bitcoin deposit address manager failed")
+		return err
+	}
+	if err := addrManager.PushGenerator(btcAddrMgr, scanner.CoinTypeBTC); err != nil {
+		log.WithError(err).Error("add btc address manager failed")
 		return err
 	}
 	// create ethcoin address manager
@@ -263,8 +283,12 @@ func run() error {
 		log.WithError(err).Error("Create ethcoin deposit address manager failed")
 		return err
 	}
+	if err := addrManager.PushGenerator(ethAddrMgr, scanner.CoinTypeETH); err != nil {
+		log.WithError(err).Error("add eth address manager failed")
+		return err
+	}
 
-	tellerServer := teller.New(log, exchangeClient, btcAddrMgr, ethAddrMgr, cfg)
+	tellerServer := teller.New(log, exchangeClient, addrManager, cfg)
 
 	// Run the service
 	background("tellerServer.Run", errC, tellerServer.Run)
