@@ -390,6 +390,7 @@ type EthClient struct {
 	c *rpc.Client
 }
 
+//NewEthClient create ethereum rpc client
 func NewEthClient(server, port string) (*EthClient, error) {
 	ethrpc, err := rpc.Dial("http://" + server + ":" + port)
 	if err != nil {
@@ -398,6 +399,8 @@ func NewEthClient(server, port string) (*EthClient, error) {
 	ec := EthClient{c: ethrpc}
 	return &ec, nil
 }
+
+//GetBlockCount returns ethereum block count
 func (ec *EthClient) GetBlockCount() (int64, error) {
 	var bn string
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -412,9 +415,13 @@ func (ec *EthClient) GetBlockCount() (int64, error) {
 	}
 	return int64(blockNum), nil
 }
+
+//Shutdown close rpc connection
 func (ec *EthClient) Shutdown() {
 	ec.c.Close()
 }
+
+//GetBlockVerboseTx returns ethereum block data
 func (ec *EthClient) GetBlockVerboseTx(seq uint64) (*types.Block, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -425,6 +432,8 @@ func (ec *EthClient) GetBlockVerboseTx(seq uint64) (*types.Block, error) {
 
 	return block, nil
 }
+
+//GetTransaction returns transaction by txhash
 func (ec *EthClient) GetTransaction(txhash common.Hash) (*types.Transaction, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

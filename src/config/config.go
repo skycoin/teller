@@ -65,16 +65,18 @@ type SkyRPC struct {
 
 // BtcRPC config for btcrpc
 type BtcRPC struct {
-	Server string `mapstructure:"server"`
-	User   string `mapstructure:"user"`
-	Pass   string `mapstructure:"pass"`
-	Cert   string `mapstructure:"cert"`
+	Server  string `mapstructure:"server"`
+	User    string `mapstructure:"user"`
+	Pass    string `mapstructure:"pass"`
+	Cert    string `mapstructure:"cert"`
+	Enabled bool   `mapstructure:"enabled"`
 }
 
 // EthRPC config for ethrpc
 type EthRPC struct {
-	Server string `mapstructure:"server"`
-	Port   string `mapstructure:"port"`
+	Server  string `mapstructure:"server"`
+	Port    string `mapstructure:"port"`
+	Enabled bool   `mapstructure:"enabled"`
 }
 
 // BtcScanner config for BTC scanner
@@ -184,11 +186,15 @@ func (c Config) Validate() error {
 	if c.BtcAddresses == "" {
 		oops("btc_addresses missing")
 	}
+	if _, err := os.Stat(c.BtcAddresses); os.IsNotExist(err) {
+		oops("btc_adresses file does not exist")
+	}
 	if c.EthAddresses == "" {
 		oops("eth_addresses missing")
 	}
-
-	// TODO -- check btc_addresses file
+	if _, err := os.Stat(c.EthAddresses); os.IsNotExist(err) {
+		oops("eth_adresses file does not exist")
+	}
 
 	if !c.Dummy.Sender {
 		if c.SkyRPC.Address == "" {
@@ -205,28 +211,32 @@ func (c Config) Validate() error {
 	}
 
 	if !c.Dummy.Scanner {
-		if c.BtcRPC.Server == "" {
-			oops("btc_rpc.server missing")
-		}
+		if c.BtcRPC.Enabled {
+			if c.BtcRPC.Server == "" {
+				oops("btc_rpc.server missing")
+			}
 
-		if c.BtcRPC.User == "" {
-			oops("btc_rpc.user missing")
-		}
-		if c.BtcRPC.Pass == "" {
-			oops("btc_rpc.pass missing")
-		}
-		if c.BtcRPC.Cert == "" {
-			oops("btc_rpc.cert missing")
-		}
+			if c.BtcRPC.User == "" {
+				oops("btc_rpc.user missing")
+			}
+			if c.BtcRPC.Pass == "" {
+				oops("btc_rpc.pass missing")
+			}
+			if c.BtcRPC.Cert == "" {
+				oops("btc_rpc.cert missing")
+			}
 
-		if _, err := os.Stat(c.BtcRPC.Cert); os.IsNotExist(err) {
-			oops("btc_rpc.cert file does not exist")
+			if _, err := os.Stat(c.BtcRPC.Cert); os.IsNotExist(err) {
+				oops("btc_rpc.cert file does not exist")
+			}
 		}
-		if c.EthRPC.Server == "" {
-			oops("eth_rpc.server missing")
-		}
-		if c.EthRPC.Port == "" {
-			oops("eth_rpc.port missing")
+		if c.EthRPC.Enabled {
+			if c.EthRPC.Server == "" {
+				oops("eth_rpc.server missing")
+			}
+			if c.EthRPC.Port == "" {
+				oops("eth_rpc.port missing")
+			}
 		}
 	}
 

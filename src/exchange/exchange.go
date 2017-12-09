@@ -229,21 +229,30 @@ func (s *Exchange) Shutdown() {
 	s.log.Info("Shutdown complete")
 }
 
+//getRate returns conversion rate according to coin type
+func (s *Exchange) getRate(coinType string) (string, error) {
+	switch coinType {
+	case scanner.CoinTypeBTC:
+		s.log.Info("Received bitcoin deposit")
+		return s.cfg.Rate, nil
+	case scanner.CoinTypeETH:
+		s.log.Info("Received ethcoin deposit")
+		return s.cfg.EthRate, nil
+	default:
+		s.log.WithError(ErrUnsupportedCoinType).Error()
+		return "", ErrUnsupportedCoinType
+	}
+}
+
 // saveIncomingDeposit is called when receiving a deposit from the scanner
 func (s *Exchange) saveIncomingDeposit(dv scanner.Deposit) (DepositInfo, error) {
 	log := s.log.WithField("deposit", dv)
 
 	var rate string
-	switch dv.CoinType {
-	case scanner.CoinTypeBTC:
-		log.Info("Received bitcoin deposit")
-		rate = s.cfg.Rate
-	case scanner.CoinTypeETH:
-		log.Info("Received ethcoin deposit")
-		rate = s.cfg.EthRate
-	default:
-		log.WithError(ErrUnsupportedCoinType).Error()
-		return DepositInfo{}, ErrUnsupportedCoinType
+	rate, err := s.getRate(dv.CoinType)
+	if err != nil {
+		log.WithError(err).Error("get conversion rate failed")
+		return DepositInfo{}, err
 	}
 
 	di, err := s.store.GetOrCreateDepositInfo(dv, rate)

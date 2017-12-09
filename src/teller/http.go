@@ -378,9 +378,22 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
+		if !s.cfg.Web.APIEnabled {
+			errorResponse(ctx, w, http.StatusForbidden, errors.New("API disabled"))
+			return
+		}
+
 		switch bindReq.CoinType {
 		case scanner.CoinTypeBTC:
+			if !s.cfg.BtcRPC.Enabled {
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeBTC))
+				return
+			}
 		case scanner.CoinTypeETH:
+			if !s.cfg.EthRPC.Enabled {
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeETH))
+				return
+			}
 		case "":
 			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing coin_type"))
 			return
@@ -392,11 +405,6 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		log.Info()
 
 		if !verifySkycoinAddress(ctx, w, bindReq.SkyAddr) {
-			return
-		}
-
-		if !s.cfg.Web.APIEnabled {
-			errorResponse(ctx, w, http.StatusForbidden, errors.New("API disabled"))
 			return
 		}
 
@@ -416,7 +424,7 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		ctx = logger.WithContext(ctx, log)
 		r = r.WithContext(ctx)
 
-		log.Info("Bound sky and btc addresses")
+		log.Infof("Bound sky and %s addresses", bindReq.CoinType)
 
 		if err := httputil.JSONResponse(w, BindResponse{
 			DepositAddress: coinAddr,
