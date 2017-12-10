@@ -74,6 +74,11 @@ func (m *MockStore) GetSkyBindBtcAddresses(skyAddr string) ([]string, error) {
 	return btcAddrs.([]string), args.Error(1)
 }
 
+func (m *MockStore) GetDepositStats() (int64, int64, error) {
+	args := m.Called()
+	return args.Get(0).(int64), args.Get(1).(int64), args.Error(2)
+}
+
 func newTestStore(t *testing.T) (*Store, func()) {
 	db, shutdown := testutil.PrepareDB(t)
 

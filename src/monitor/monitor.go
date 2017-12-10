@@ -34,6 +34,7 @@ type AddrManager interface {
 // DepositStatusGetter  interface provides api to access exchange resource
 type DepositStatusGetter interface {
 	GetDepositStatusDetail(flt exchange.DepositFilter) ([]exchange.DepositStatusDetail, error)
+	GetDepositStats() (*exchange.DepositStats, error)
 }
 
 // ScanAddressGetter get scanning address interface
@@ -101,6 +102,7 @@ func (m *Monitor) setupMux() *http.ServeMux {
 
 	mux.Handle("/api/address", httputil.LogHandler(m.log, m.addressHandler()))
 	mux.Handle("/api/deposit_status", httputil.LogHandler(m.log, m.depositStatus()))
+	mux.Handle("/api/stats", httputil.LogHandler(m.log, m.statsHandler()))
 	return mux
 }
 
@@ -158,7 +160,7 @@ func (m *Monitor) addressHandler() http.HandlerFunc {
 	}
 }
 
-// depostStatus returns all deposit status
+// depositStatus returns all deposit status
 // Method: GET
 // URI: /api/deposit_status
 // Args:
@@ -207,6 +209,34 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 			}
 
 			httputil.JSONResponse(w, dpis)
+		}
+	}
+}
+
+// stats returns all deposit stats, including total BTC received and total SKY sent.
+// Method: GET
+// URI: /api/stats
+func (m *Monitor) statsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			httputil.ErrResponse(w, http.StatusMethodNotAllowed)
+			return
+		}
+
+		ts, err := m.GetDepositStats()
+		if err != nil {
+			log.WithError(err).Error("GetDepositStats failed")
+			httputil.ErrResponse(w, http.StatusInternalServerError)
+			return
+		}
+
+		if err := httputil.JSONResponse(w, ts); err != nil {
+			log.WithError(err).Error("Write json response failed")
+			return
 		}
 	}
 }

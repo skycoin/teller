@@ -44,6 +44,7 @@ type Storer interface {
 	UpdateDepositInfo(string, func(DepositInfo) DepositInfo) (DepositInfo, error)
 	UpdateDepositInfoCallback(string, func(DepositInfo) DepositInfo, func(DepositInfo) error) (DepositInfo, error)
 	GetSkyBindBtcAddresses(string) ([]string, error)
+	GetDepositStats() (int64, int64, error)
 }
 
 // Store storage for exchange
@@ -472,4 +473,29 @@ func (s *Store) getSkyBindBtcAddressesTx(tx *bolt.Tx, skyAddr string) ([]string,
 	}
 
 	return addrs, nil
+}
+
+func (s *Store) GetDepositStats() (int64, int64, error) {
+	var totalBTCReceived int64
+	var totalSKYSent int64
+
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		return dbutil.ForEach(tx, depositInfoBkt, func(k, v []byte) error {
+			var dpi DepositInfo
+			if err := json.Unmarshal(v, &dpi); err != nil {
+				return err
+			}
+
+			if dpi.CoinType == scanner.CoinTypeBTC {
+				totalBTCReceived += dpi.DepositValue
+			}
+			totalSKYSent += int64(dpi.SkySent)
+
+			return nil
+		})
+	}); err != nil {
+		return -1, -1, err
+	}
+
+	return totalBTCReceived, totalSKYSent, nil
 }
