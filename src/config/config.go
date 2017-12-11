@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/skycoin/skycoin/src/daemon"
+	"github.com/skycoin/skycoin/src/wallet"
 	"github.com/skycoin/teller/src/util/mathutil"
 )
 
@@ -266,7 +267,14 @@ func (c Config) Validate() error {
 		}
 
 		if _, err := os.Stat(c.SkyExchanger.Wallet); os.IsNotExist(err) {
-			oops("sky_exchanger.wallet file does not exist")
+			oops(fmt.Sprintf("sky_exchanger.wallet file %s does not exist", c.SkyExchanger.Wallet))
+		}
+
+		w, err := wallet.Load(c.SkyExchanger.Wallet)
+		if err != nil {
+			oops(fmt.Sprintf("sky_exchanger.wallet file %s failed to load: %v", c.SkyExchanger.Wallet, err))
+		} else if err := w.Validate(); err != nil {
+			oops(fmt.Sprintf("sky_exchanger.wallet file %s is invalid: %v", c.SkyExchanger.Wallet, err))
 		}
 	}
 
