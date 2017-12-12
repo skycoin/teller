@@ -1,14 +1,10 @@
 .DEFAULT_GOAL := help
-.PHONY: teller install-skycoin-cli test lint lint-fast check format cover help
+.PHONY: teller test lint lint-fast check format cover help
 
 PACKAGES = $(shell find ./src -type d -not -path '\./src')
 
-teller: SKYCOIN-CLI-exists ## Run teller. To add arguments, do 'make ARGS="--foo" teller'.
+teller: ## Run teller. To add arguments, do 'make ARGS="--foo" teller'.
 	go run cmd/teller/teller.go ${ARGS}
-
-install-skycoin-cli: ## Install skycoin-cli
-	go get github.com/skycoin/skycoin/cmd/cli
-	@mv $$GOPATH/bin/cli $$GOPATH/bin/skycoin-cli
 
 test: ## Run tests
 	go test ./cmd/... -timeout=1m -cover
