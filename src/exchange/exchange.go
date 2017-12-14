@@ -12,8 +12,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/skycoin/skycoin/src/coin"
-	"github.com/skycoin/skycoin/src/daemon"
 	"github.com/skycoin/skycoin/src/util/droplet"
+	"github.com/skycoin/skycoin/src/visor"
 
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
@@ -80,8 +80,8 @@ func (c Config) Validate() error {
 		return errors.New("MaxDecimals can't be negative")
 	}
 
-	if c.MaxDecimals > daemon.MaxDropletPrecision {
-		return fmt.Errorf("MaxDecimals is larger than daemon.MaxDropletPrecision=%d", daemon.MaxDropletPrecision)
+	if uint64(c.MaxDecimals) > visor.MaxDropletPrecision {
+		return fmt.Errorf("MaxDecimals is larger than visor.MaxDropletPrecision=%d", visor.MaxDropletPrecision)
 	}
 
 	return nil
