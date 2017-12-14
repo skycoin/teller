@@ -42,6 +42,12 @@
   revision = "31079b6807923eb23992c421b114992b95131b55"
 
 [[projects]]
+  name = "github.com/cenkalti/backoff"
+  packages = ["."]
+  revision = "61153c768f31ee5f130071d08fc82b85208528de"
+  version = "v1.1.0"
+
+[[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
@@ -151,9 +157,9 @@
 
 [[projects]]
   name = "github.com/skycoin/skycoin"
-  packages = ["src/api/cli","src/api/webrpc","src/cipher","src/cipher/base58","src/cipher/chacha20","src/cipher/encoder","src/cipher/go-bip39","src/cipher/ripemd160","src/cipher/secp256k1-go","src/cipher/secp256k1-go/secp256k1-go2","src/coin","src/daemon","src/daemon/gnet","src/daemon/pex","src/daemon/strand","src/util/droplet","src/util/file","src/util/http","src/util/logging","src/util/utc","src/visor","src/visor/blockdb","src/visor/bucket","src/visor/historydb","src/wallet"]
-  revision = "1f4165a330902e2a6178c1a76ef7dd905e583019"
-  version = "v0.20.4"
+  packages = ["src/api/cli","src/api/webrpc","src/cipher","src/cipher/base58","src/cipher/chacha20","src/cipher/encoder","src/cipher/go-bip39","src/cipher/ripemd160","src/cipher/secp256k1-go","src/cipher/secp256k1-go/secp256k1-go2","src/coin","src/daemon","src/daemon/gnet","src/daemon/pex","src/daemon/strand","src/util/droplet","src/util/elapse","src/util/fee","src/util/file","src/util/http","src/util/logging","src/util/utc","src/visor","src/visor/blockdb","src/visor/bucket","src/visor/historydb","src/wallet"]
+  revision = "bf49bf9a06ead0aa5cf7b51c347223dee1c6cc4b"
+  version = "v0.21.0"
 
 [[projects]]
   branch = "master"
@@ -248,6 +254,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8aa4ef4389f24deb8956c70f1360445bb159b3e087428f768359e07473cd3a26"
+  inputs-digest = "4ffef568f035d3797d58ff5ac9c4bdf885809d57616db8e5f8394ee9c8ee8d7e"
   solver-name = "gps-cdcl"
   solver-version = 1
