@@ -455,6 +455,7 @@ func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) 
 
 	log = log.WithField("skyAddr", di.SkyAddress)
 	log = log.WithField("skyRate", di.ConversionRate)
+	log = log.WithField("maxDecimals", s.cfg.MaxDecimals)
 
 	skyAmt, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
 	if err != nil {

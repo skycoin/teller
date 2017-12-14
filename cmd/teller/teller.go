@@ -204,6 +204,7 @@ func run() error {
 	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanService, sendRPC, exchange.Config{
 		Rate: cfg.SkyExchanger.SkyBtcExchangeRate,
 		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
+		MaxDecimals:             cfg.SkyExchanger.MaxDecimals,
 	})
 	if err != nil {
 		log.WithError(err).Error("exchange.NewExchange failed")
