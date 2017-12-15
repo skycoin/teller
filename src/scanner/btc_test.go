@@ -18,7 +18,7 @@ import (
 
 const (
 	// run tests in parallel
-	parallel        = false
+	parallel        = true
 	minShutdownWait = time.Second * 2 // set to time.Second * 5 when using -race
 )
 
@@ -503,70 +503,70 @@ func testScannerInitialGetBlockHashError(t *testing.T, btcDB *bolt.DB) {
 
 func TestScanner(t *testing.T) {
 	btcDB := openDummyBtcDB(t)
-	if !parallel {
-		defer btcDB.Close()
-	}
+	defer btcDB.Close()
+	t.Run("group", func(t *testing.T) {
 
-	t.Run("RunProcessDeposits", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testScannerRunProcessDeposits(t, btcDB)
-	})
+		t.Run("RunProcessDeposits", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testScannerRunProcessDeposits(t, btcDB)
+		})
 
-	t.Run("GetBlockCountErrorRetry", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testScannerGetBlockCountErrorRetry(t, btcDB)
-	})
+		t.Run("GetBlockCountErrorRetry", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testScannerGetBlockCountErrorRetry(t, btcDB)
+		})
 
-	t.Run("InitialGetBlockHashError", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testScannerInitialGetBlockHashError(t, btcDB)
-	})
+		t.Run("InitialGetBlockHashError", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testScannerInitialGetBlockHashError(t, btcDB)
+		})
 
-	t.Run("ProcessDepositError", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testScannerProcessDepositError(t, btcDB)
-	})
+		t.Run("ProcessDepositError", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testScannerProcessDepositError(t, btcDB)
+		})
 
-	t.Run("ConfirmationsRequired", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testScannerConfirmationsRequired(t, btcDB)
-	})
+		t.Run("ConfirmationsRequired", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testScannerConfirmationsRequired(t, btcDB)
+		})
 
-	t.Run("ScanBlockFailureRetry", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testScannerScanBlockFailureRetry(t, btcDB)
-	})
+		t.Run("ScanBlockFailureRetry", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testScannerScanBlockFailureRetry(t, btcDB)
+		})
 
-	t.Run("LoadUnprocessedDeposits", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testScannerLoadUnprocessedDeposits(t, btcDB)
-	})
+		t.Run("LoadUnprocessedDeposits", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testScannerLoadUnprocessedDeposits(t, btcDB)
+		})
 
-	t.Run("DuplicateDepositScans", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testScannerDuplicateDepositScans(t, btcDB)
-	})
+		t.Run("DuplicateDepositScans", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testScannerDuplicateDepositScans(t, btcDB)
+		})
 
-	t.Run("BlockNextHashAppears", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testScannerBlockNextHashAppears(t, btcDB)
+		t.Run("BlockNextHashAppears", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testScannerBlockNextHashAppears(t, btcDB)
+		})
 	})
 }

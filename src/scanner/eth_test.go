@@ -511,70 +511,70 @@ func testEthScannerInitialGetBlockHashError(t *testing.T, ethDB *bolt.DB) {
 
 func TestEthScanner(t *testing.T) {
 	ethDB := openDummyEthDB(t)
-	if !parallel {
-		defer ethDB.Close()
-	}
+	defer ethDB.Close()
+	t.Run("group", func(t *testing.T) {
 
-	t.Run("RunProcessDeposits", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testEthScannerRunProcessDeposits(t, ethDB)
-	})
+		t.Run("RunProcessDeposits", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testEthScannerRunProcessDeposits(t, ethDB)
+		})
 
-	t.Run("GetBlockCountErrorRetry", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testEthScannerGetBlockCountErrorRetry(t, ethDB)
-	})
+		t.Run("GetBlockCountErrorRetry", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testEthScannerGetBlockCountErrorRetry(t, ethDB)
+		})
 
-	t.Run("InitialGetBlockHashError", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testEthScannerInitialGetBlockHashError(t, ethDB)
-	})
+		t.Run("InitialGetBlockHashError", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testEthScannerInitialGetBlockHashError(t, ethDB)
+		})
 
-	t.Run("ProcessDepositError", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testEthScannerProcessDepositError(t, ethDB)
-	})
+		t.Run("ProcessDepositError", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testEthScannerProcessDepositError(t, ethDB)
+		})
 
-	t.Run("ConfirmationsRequired", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testEthScannerConfirmationsRequired(t, ethDB)
-	})
+		t.Run("ConfirmationsRequired", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testEthScannerConfirmationsRequired(t, ethDB)
+		})
 
-	t.Run("ScanBlockFailureRetry", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testEthScannerScanBlockFailureRetry(t, ethDB)
-	})
+		t.Run("ScanBlockFailureRetry", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testEthScannerScanBlockFailureRetry(t, ethDB)
+		})
 
-	t.Run("LoadUnprocessedDeposits", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testEthScannerLoadUnprocessedDeposits(t, ethDB)
-	})
+		t.Run("LoadUnprocessedDeposits", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testEthScannerLoadUnprocessedDeposits(t, ethDB)
+		})
 
-	t.Run("DuplicateDepositScans", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testEthScannerDuplicateDepositScans(t, ethDB)
-	})
+		t.Run("DuplicateDepositScans", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testEthScannerDuplicateDepositScans(t, ethDB)
+		})
 
-	t.Run("BlockNextHashAppears", func(t *testing.T) {
-		if parallel {
-			t.Parallel()
-		}
-		testEthScannerBlockNextHashAppears(t, ethDB)
+		t.Run("BlockNextHashAppears", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testEthScannerBlockNextHashAppears(t, ethDB)
+		})
 	})
 }
