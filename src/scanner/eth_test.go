@@ -135,7 +135,8 @@ func setupEthScannerWithDB(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanne
 	// 2325214 is the highest block in the test data eth.db
 	rpc.blockCount = 2325214
 
-	store, err := NewEthStore(log, db)
+	store, err := NewStore(log, db)
+	store.AddSupportedCoin(CoinTypeETH)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -159,7 +160,8 @@ func setupEthScannerWithNonExistInitHeight(t *testing.T, ethDB *bolt.DB, db *bol
 	// 2325214 is the highest block in the test data eth.db
 	rpc.blockCount = 2325214
 
-	store, err := NewEthStore(log, db)
+	store, err := NewStore(log, db)
+	store.AddSupportedCoin(CoinTypeETH)
 	require.NoError(t, err)
 
 	//Block 2325204 isn't exists in db
@@ -196,7 +198,7 @@ func testEthScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int
 		require.Equal(t, nDeposits, len(dvs))
 
 		// check all deposits
-		err := scr.store.(*ETHStore).db.View(func(tx *bolt.Tx) error {
+		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
@@ -405,16 +407,16 @@ func testEthScannerLoadUnprocessedDeposits(t *testing.T, ethDB *bolt.DB) {
 		Processed: true,
 	}
 
-	err := scr.store.(*ETHStore).db.Update(func(tx *bolt.Tx) error {
+	err := scr.store.(*Store).db.Update(func(tx *bolt.Tx) error {
 		for _, d := range unprocessedDeposits {
-			if err := scr.store.(*ETHStore).pushDepositTx(tx, d); err != nil {
+			if err := scr.store.(*Store).pushDepositTx(tx, d); err != nil {
 				require.NoError(t, err)
 				return err
 			}
 		}
 
 		// Add a processed deposit to make sure that processed deposits are filtered
-		return scr.store.(*ETHStore).pushDepositTx(tx, processedDeposit)
+		return scr.store.(*Store).pushDepositTx(tx, processedDeposit)
 	})
 	require.NoError(t, err)
 
@@ -452,7 +454,7 @@ func testEthScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 		require.Equal(t, nDeposits, len(dvs))
 
 		// check all deposits, none should be marked as "Processed"
-		err := scr.store.(*ETHStore).db.View(func(tx *bolt.Tx) error {
+		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)

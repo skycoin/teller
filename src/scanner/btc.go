@@ -330,7 +330,7 @@ func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) (int, error
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.store.ScanBlock(block)
+	dvs, err := s.store.ScanBlock(block, CoinTypeBTC)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err

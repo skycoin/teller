@@ -145,6 +145,7 @@ func setupScannerWithDB(t *testing.T, btcDB *bolt.DB, db *bolt.DB) *BTCScanner {
 	rpc.blockCount = 235214
 
 	store, err := NewStore(log, db)
+	store.AddSupportedCoin(CoinTypeBTC)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -180,7 +181,7 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int64)
 		require.Equal(t, nDeposits, int64(len(dvs)))
 
 		// check all deposits
-		err := scr.store.(*BTCStore).db.View(func(tx *bolt.Tx) error {
+		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
@@ -396,16 +397,16 @@ func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 		Processed: true,
 	}
 
-	err := scr.store.(*BTCStore).db.Update(func(tx *bolt.Tx) error {
+	err := scr.store.(*Store).db.Update(func(tx *bolt.Tx) error {
 		for _, d := range unprocessedDeposits {
-			if err := scr.store.(*BTCStore).pushDepositTx(tx, d); err != nil {
+			if err := scr.store.(*Store).pushDepositTx(tx, d); err != nil {
 				require.NoError(t, err)
 				return err
 			}
 		}
 
 		// Add a processed deposit to make sure that processed deposits are filtered
-		return scr.store.(*BTCStore).pushDepositTx(tx, processedDeposit)
+		return scr.store.(*Store).pushDepositTx(tx, processedDeposit)
 	})
 	require.NoError(t, err)
 
@@ -446,7 +447,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 		require.Equal(t, nDeposits, int64(len(dvs)))
 
 		// check all deposits, none should be marked as "Processed"
-		err := scr.store.(*BTCStore).db.View(func(tx *bolt.Tx) error {
+		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)

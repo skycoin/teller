@@ -305,7 +305,7 @@ func (s *ETHScanner) scanBlock(block *types.Block) (int, error) {
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.store.ScanBlock(block)
+	dvs, err := s.store.ScanBlock(block, CoinTypeETH)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err

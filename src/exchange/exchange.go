@@ -38,9 +38,6 @@ var (
 	ErrDepositStatusInvalid = errors.New("Deposit status cannot be handled")
 	// ErrNoBoundAddress is returned if no skycoin address is bound to a deposit's address
 	ErrNoBoundAddress = errors.New("Deposit has no bound skycoin address")
-
-	// ErrUnsupportedCoinType is returned if coin type is not in ["BTC", "ETH"]
-	ErrUnsupportedCoinType = errors.New("unsupported coin type")
 )
 
 // DepositFilter filters deposits
@@ -240,8 +237,8 @@ func (s *Exchange) getRate(coinType string) (string, error) {
 		s.log.Info("Received ethcoin deposit")
 		return s.cfg.EthRate, nil
 	default:
-		s.log.WithError(ErrUnsupportedCoinType).Error()
-		return "", ErrUnsupportedCoinType
+		s.log.WithError(scanner.ErrUnsupportedCoinType).Error()
+		return "", scanner.ErrUnsupportedCoinType
 	}
 }
 
@@ -488,8 +485,8 @@ func (s *Exchange) calculateSkyDroplets(di DepositInfo) (uint64, error) {
 			return 0, err
 		}
 	default:
-		log.WithError(ErrUnsupportedCoinType).Error()
-		return 0, ErrUnsupportedCoinType
+		log.WithError(scanner.ErrUnsupportedCoinType).Error()
+		return 0, scanner.ErrUnsupportedCoinType
 	}
 	return skyAmt, nil
 }
