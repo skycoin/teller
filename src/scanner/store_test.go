@@ -18,8 +18,8 @@ type MockStore struct {
 	mock.Mock
 }
 
-func (m *MockStore) GetScanAddresses() ([]string, error) {
-	args := m.Called()
+func (m *MockStore) GetScanAddresses(coinType string) ([]string, error) {
+	args := m.Called(coinType)
 
 	addrs := args.Get(0)
 
@@ -30,8 +30,8 @@ func (m *MockStore) GetScanAddresses() ([]string, error) {
 	return addrs.([]string), args.Error(1)
 }
 
-func (m *MockStore) AddScanAddress(addr string) error {
-	args := m.Called(addr)
+func (m *MockStore) AddScanAddress(addr, coinType string) error {
+	args := m.Called(addr, coinType)
 	return args.Error(1)
 }
 
@@ -80,10 +80,12 @@ func TestNewStore(t *testing.T) {
 	log, _ := testutil.NewLogger(t)
 
 	s, err := NewStore(log, db)
+	s.AddSupportedCoin(CoinTypeBTC)
 	require.NoError(t, err)
 
 	s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(scanMetaBkt)
+		scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, CoinTypeBTC, "_")
+		bkt := tx.Bucket(scanBktFullName)
 		require.NotNil(t, bkt)
 
 		require.NotNil(t, tx.Bucket(depositBkt))
@@ -99,6 +101,7 @@ func TestGetDepositAddresses(t *testing.T) {
 	log, _ := testutil.NewLogger(t)
 
 	s, err := NewStore(log, db)
+	s.AddSupportedCoin(CoinTypeBTC)
 	require.NoError(t, err)
 
 	var addrs = []string{
@@ -108,11 +111,11 @@ func TestGetDepositAddresses(t *testing.T) {
 	}
 
 	for _, a := range addrs {
-		err := s.AddScanAddress(a)
+		err := s.AddScanAddress(a, CoinTypeBTC)
 		require.NoError(t, err)
 	}
 
-	as, err := s.GetScanAddresses()
+	as, err := s.GetScanAddresses(CoinTypeBTC)
 	require.NoError(t, err)
 
 	sort.Strings(as)
@@ -123,7 +126,8 @@ func TestGetDepositAddresses(t *testing.T) {
 	// check db
 	s.db.View(func(tx *bolt.Tx) error {
 		var as []string
-		err := dbutil.GetBucketObject(tx, scanMetaBkt, depositAddressesKey, &as)
+		scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, CoinTypeBTC, "_")
+		err := dbutil.GetBucketObject(tx, scanBktFullName, depositAddressesKey, &as)
 		require.NoError(t, err)
 
 		require.Equal(t, len(addrs), len(as))
@@ -174,15 +178,17 @@ func TestAddDepositAddress(t *testing.T) {
 			log, _ := testutil.NewLogger(t)
 
 			s, err := NewStore(log, db)
+			s.AddSupportedCoin(CoinTypeBTC)
 			require.NoError(t, err)
 
 			err = db.Update(func(tx *bolt.Tx) error {
-				return dbutil.PutBucketValue(tx, scanMetaBkt, depositAddressesKey, tc.initAddrs)
+				scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, CoinTypeBTC, "_")
+				return dbutil.PutBucketValue(tx, scanBktFullName, depositAddressesKey, tc.initAddrs)
 			})
 			require.NoError(t, err)
 
 			for _, a := range tc.addAddrs {
-				if er := s.AddScanAddress(a); er != nil {
+				if er := s.AddScanAddress(a, CoinTypeBTC); er != nil {
 					err = er
 				}
 			}
@@ -221,6 +227,7 @@ func TestPushDeposit(t *testing.T) {
 	log, _ := testutil.NewLogger(t)
 
 	s, err := NewStore(log, db)
+	s.AddSupportedCoin(CoinTypeBTC)
 	require.NoError(t, err)
 
 	err = db.Update(func(tx *bolt.Tx) error {

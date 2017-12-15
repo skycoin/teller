@@ -330,7 +330,7 @@ func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) (int, error
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.store.ScanBlock(block)
+	dvs, err := s.store.ScanBlock(block, CoinTypeBTC)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -450,12 +450,12 @@ func (s *BTCScanner) waitForNextBlock(block *btcjson.GetBlockVerboseResult) (*bt
 
 // AddScanAddress adds new scan address
 func (s *BTCScanner) AddScanAddress(addr string) error {
-	return s.store.AddScanAddress(addr)
+	return s.store.AddScanAddress(addr, CoinTypeBTC)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *BTCScanner) GetScanAddresses() ([]string, error) {
-	return s.store.GetScanAddresses()
+	return s.store.GetScanAddresses(CoinTypeBTC)
 }
 
 // GetDeposit returns deposit value channel.

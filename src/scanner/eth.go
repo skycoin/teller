@@ -305,7 +305,7 @@ func (s *ETHScanner) scanBlock(block *types.Block) (int, error) {
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.store.ScanBlock(block)
+	dvs, err := s.store.ScanBlock(block, CoinTypeETH)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -371,12 +371,12 @@ func (s *ETHScanner) waitForNextBlock(block *types.Block) (*types.Block, error) 
 
 // AddScanAddress adds new scan address
 func (s *ETHScanner) AddScanAddress(addr string) error {
-	return s.store.AddScanAddress(addr)
+	return s.store.AddScanAddress(addr, CoinTypeETH)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *ETHScanner) GetScanAddresses() ([]string, error) {
-	return s.store.GetScanAddresses()
+	return s.store.GetScanAddresses(CoinTypeETH)
 }
 
 // GetDeposit returns deposit value channel.
