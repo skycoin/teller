@@ -62,7 +62,7 @@ func createBtcScanner(log *logrus.Logger, cfg config.Config, db *bolt.DB) (*scan
 	log.Info("Connect to btcd succeeded")
 
 	// create scan service
-	scanStore, err := scanner.NewStore(log, db)
+	scanStore, err := scanner.NewStore(log, db, scanner.CoinTypeBTC)
 	if err != nil {
 		log.WithError(err).Error("scanner.NewStore failed")
 		return nil, err
@@ -87,7 +87,7 @@ func createEthScanner(log *logrus.Logger, cfg config.Config, db *bolt.DB) (*scan
 		return nil, err
 	}
 	// create scan service
-	scanEthStore, err := scanner.NewEthStore(log, db)
+	scanEthStore, err := scanner.NewStore(log, db, scanner.CoinTypeETH)
 	if err != nil {
 		log.WithError(err).Error("scanner.NewStore failed")
 		return nil, err
