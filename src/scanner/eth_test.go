@@ -136,7 +136,7 @@ func setupEthScannerWithDB(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanne
 	rpc.blockCount = 2325214
 
 	store, err := NewStore(log, db)
-	store.AddSupportedCoin(CoinTypeETH)
+	store.AddSupportedCoin(CoinTypeETH, ScanETHBlock)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -161,7 +161,7 @@ func setupEthScannerWithNonExistInitHeight(t *testing.T, ethDB *bolt.DB, db *bol
 	rpc.blockCount = 2325214
 
 	store, err := NewStore(log, db)
-	store.AddSupportedCoin(CoinTypeETH)
+	store.AddSupportedCoin(CoinTypeETH, ScanETHBlock)
 	require.NoError(t, err)
 
 	//Block 2325204 isn't exists in db

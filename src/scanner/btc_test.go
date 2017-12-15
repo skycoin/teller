@@ -145,7 +145,7 @@ func setupScannerWithDB(t *testing.T, btcDB *bolt.DB, db *bolt.DB) *BTCScanner {
 	rpc.blockCount = 235214
 
 	store, err := NewStore(log, db)
-	store.AddSupportedCoin(CoinTypeBTC)
+	store.AddSupportedCoin(CoinTypeBTC, ScanBTCBlock)
 	require.NoError(t, err)
 
 	cfg := Config{

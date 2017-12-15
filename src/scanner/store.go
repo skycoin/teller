@@ -80,9 +80,9 @@ type Storer interface {
 
 // Store records scanner meta info for BTC deposits
 type Store struct {
-	db              *bolt.DB
-	log             logrus.FieldLogger
-	scanCallbackMap map[string]func(blockInfo interface{}, depositAddrs []string) ([]Deposit, error)
+	db             *bolt.DB
+	log            logrus.FieldLogger
+	scanHandlerMap map[string]func(blockInfo interface{}, depositAddrs []string) ([]Deposit, error)
 }
 
 // NewStore creates a scanner Store
@@ -98,24 +98,20 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 		return nil, err
 	}
 	return &Store{
-		db:              db,
-		log:             log,
-		scanCallbackMap: make(map[string]func(blockInfo interface{}, depositAddrs []string) ([]Deposit, error)),
+		db:             db,
+		log:            log,
+		scanHandlerMap: make(map[string]func(blockInfo interface{}, depositAddrs []string) ([]Deposit, error)),
 	}, nil
 }
 
 //AddSupportedCoin create scaninfo bucket and callback for specified coin
-func (s *Store) AddSupportedCoin(coinType string) error {
-	_, exists := s.scanCallbackMap[coinType]
+func (s *Store) AddSupportedCoin(coinType string, scanHandler func(blockInfo interface{}, depositAddrs []string) ([]Deposit, error)) error {
+	if scanHandler == nil {
+		return errors.New("Scan handler cann't nil")
+	}
+	_, exists := s.scanHandlerMap[coinType]
 	if !exists {
-		switch coinType {
-		case CoinTypeBTC:
-			s.scanCallbackMap[coinType] = ScanBTCBlock
-		case CoinTypeETH:
-			s.scanCallbackMap[coinType] = ScanETHBlock
-		default:
-			return ErrUnsupportedCoinType
-		}
+		s.scanHandlerMap[coinType] = scanHandler
 	}
 	if err := s.db.Update(func(tx *bolt.Tx) error {
 		scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, coinType, "_")
@@ -247,7 +243,7 @@ func (s *Store) pushDepositTx(tx *bolt.Tx, dv Deposit) error {
 // ScanBlock scans a coin block for deposits and adds them
 // If the deposit already exists, the result is omitted from the returned list
 func (s *Store) ScanBlock(blockInfo interface{}, coinType string) ([]Deposit, error) {
-	callback, exists := s.scanCallbackMap[coinType]
+	callback, exists := s.scanHandlerMap[coinType]
 	if !exists {
 		var dvs []Deposit
 		return dvs, ErrUnsupportedCoinType

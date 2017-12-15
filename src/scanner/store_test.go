@@ -80,8 +80,10 @@ func TestNewStore(t *testing.T) {
 	log, _ := testutil.NewLogger(t)
 
 	s, err := NewStore(log, db)
-	s.AddSupportedCoin(CoinTypeBTC)
+	s.AddSupportedCoin(CoinTypeBTC, ScanBTCBlock)
 	require.NoError(t, err)
+	err = s.AddSupportedCoin(CoinTypeBTC, nil)
+	require.Equal(t, err, errors.New("Scan handler cann't nil"))
 
 	s.db.View(func(tx *bolt.Tx) error {
 		scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, CoinTypeBTC, "_")
@@ -101,7 +103,7 @@ func TestGetDepositAddresses(t *testing.T) {
 	log, _ := testutil.NewLogger(t)
 
 	s, err := NewStore(log, db)
-	s.AddSupportedCoin(CoinTypeBTC)
+	s.AddSupportedCoin(CoinTypeBTC, ScanBTCBlock)
 	require.NoError(t, err)
 
 	var addrs = []string{
@@ -178,7 +180,7 @@ func TestAddDepositAddress(t *testing.T) {
 			log, _ := testutil.NewLogger(t)
 
 			s, err := NewStore(log, db)
-			s.AddSupportedCoin(CoinTypeBTC)
+			s.AddSupportedCoin(CoinTypeBTC, ScanBTCBlock)
 			require.NoError(t, err)
 
 			err = db.Update(func(tx *bolt.Tx) error {
@@ -227,7 +229,7 @@ func TestPushDeposit(t *testing.T) {
 	log, _ := testutil.NewLogger(t)
 
 	s, err := NewStore(log, db)
-	s.AddSupportedCoin(CoinTypeBTC)
+	s.AddSupportedCoin(CoinTypeBTC, ScanBTCBlock)
 	require.NoError(t, err)
 
 	err = db.Update(func(tx *bolt.Tx) error {
