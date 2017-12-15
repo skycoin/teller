@@ -252,6 +252,13 @@ func TestCalculateSkyValue(t *testing.T) {
 			rate:        "0.0001",
 			result:      1e2, // 0.0001 SKY
 		},
+
+		{
+			maxDecimals: 3,
+			satoshis:    125e4,
+			rate:        "1250",
+			result:      15e6 + 6e5 + 2e4 + 5e3, // 15.625 SKY
+		},
 	}
 
 	for _, tc := range cases {

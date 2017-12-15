@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/skycoin/skycoin/src/daemon"
+	"github.com/skycoin/skycoin/src/visor"
 	"github.com/skycoin/skycoin/src/wallet"
 	"github.com/skycoin/teller/src/util/mathutil"
 )
@@ -282,8 +282,8 @@ func (c Config) Validate() error {
 		oops("sky_exchanger.max_decimals can't be negative")
 	}
 
-	if c.SkyExchanger.MaxDecimals > daemon.MaxDropletPrecision {
-		oops(fmt.Sprintf("sky_exchanger.max_decimals is larger than daemon.MaxDropletPrecision=%d", daemon.MaxDropletPrecision))
+	if uint64(c.SkyExchanger.MaxDecimals) > visor.MaxDropletPrecision {
+		oops(fmt.Sprintf("sky_exchanger.max_decimals is larger than visor.MaxDropletPrecision=%d", visor.MaxDropletPrecision))
 	}
 
 	if err := c.Web.Validate(); err != nil {
