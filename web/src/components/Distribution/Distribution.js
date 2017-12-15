@@ -8,22 +8,19 @@ import Helmet from 'react-helmet';
 import { Flex, Box } from 'grid-styled';
 import { FormattedMessage, FormattedHTMLMessage, injectIntl } from 'react-intl';
 import { rem } from 'polished';
+import { COLORS, SPACE, BOX_SHADOWS, BORDER_RADIUS } from 'config';
 
-import { COLORS, SPACE, BOX_SHADOWS, BORDER_RADIUS, DISTRIBUTION_END, DISTRIBUTION_START } from '@skycoin/config';
-import { media } from '@skycoin/utils';
-import Button from '@skycoin/button';
-import Container from '@skycoin/container';
-import Footer from '@skycoin/footer';
-import Header from '@skycoin/header';
-import Heading from '@skycoin/heading';
-import Input from '@skycoin/input';
-import Modal, { styles } from '@skycoin/modal';
-import Text from '@skycoin/text';
+import Button from 'components/Button';
+import Container from 'components/Container';
+import Footer from 'components/Footer';
+import Header from 'components/Header';
+import Heading from 'components/Heading';
+import Input from 'components/Input';
+import Modal, { styles } from 'components/Modal';
+import Text from 'components/Text';
+import media from '../../utils/media';
 
-import { checkStatus, getAddress } from '../../utils/distributionAPI';
-
-const eventInProgress = !moment().isBefore(DISTRIBUTION_START) && !moment().isAfter(moment(DISTRIBUTION_END));
-const endDate = moment(DISTRIBUTION_END).format('Do MMMM, YYYY h:mm');
+import { checkStatus, getAddress, getConfig } from '../../utils/distributionAPI';
 
 const Wrapper = styled.div`
   background-color: ${COLORS.gray[1]};
@@ -58,6 +55,14 @@ class Distribution extends React.Component {
     this.getAddress = this.getAddress.bind(this);
     this.checkStatus = this.checkStatus.bind(this);
     this.closeModals = this.closeModals.bind(this);
+  }
+
+  componentDidMount() {
+    this.getConfig();
+  }
+
+  getConfig() {
+    getConfig().then(config => this.setState({ ...config }));
   }
 
   getAddress() {
@@ -164,7 +169,7 @@ class Distribution extends React.Component {
                     id={`distribution.statuses.${status.status}`}
                     values={{
                       id: String(status.seq),
-                      updated: moment.unix(status.update_at).locale(intl.locale).format('LL LTS'),
+                      updated: moment.unix(status.updated_at).locale(intl.locale).format('LL LTS'),
                     }}
                   />
                 </p>
@@ -173,11 +178,9 @@ class Distribution extends React.Component {
           </Modal>
 
           <Container>
-            {!eventInProgress ? <Flex column>
+            {!this.state.enabled ? <Flex column>
               <Heading heavy as="h2" fontSize={[5, 6]} color="black" mb={[4, 6]}>
                 <FormattedMessage id="distribution.headingEnded" />
-                {' '}
-                {endDate}
               </Heading>
               <Text heavy color="black" fontSize={[2, 3]} as="div">
                 <FormattedHTMLMessage id="distribution.ended" />
@@ -187,6 +190,14 @@ class Distribution extends React.Component {
                 <Heading heavy as="h2" fontSize={[5, 6]} color="black" mb={[4, 6]}>
                   <FormattedMessage id="distribution.heading" />
                 </Heading>
+                <Text heavy color="black" fontSize={[2, 3]} mb={[4, 6]} as="div">
+                  <FormattedMessage
+                    id="distribution.rate"
+                    values={{
+                      rate: +this.state.sky_btc_exchange_rate,
+                    }}
+                  />
+                </Text>
 
                 <Text heavy color="black" fontSize={[2, 3]} as="div">
                   <FormattedHTMLMessage id="distribution.instructions" />

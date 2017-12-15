@@ -1,11 +1,46 @@
 export default {
+  header: {
+    navigation: {
+      whitepapers: 'Документация',
+      downloads: 'Загрузки',
+      explorer: 'Обозреватель',
+      blog: 'Блог',
+      roadmap: 'План',
+    },
+  },
+  footer: {
+    getStarted: 'Начать',
+    explore: 'Дополнительно',
+    community: 'Сообщество',
+    wallet: 'Получить Кошелёк',
+    infographics: 'Инфографика',
+    whitepapers: 'Документация',
+    blockchain: 'Блокчейн Обозреватель',
+    blog: 'Блог',
+    twitter: 'Twitter',
+    reddit: 'Reddit',
+    github: 'Github',
+    telegram: 'Telegram',
+    slack: 'Slack',
+    roadmap: 'План',
+    skyMessenger: 'Sky-Messenger',
+    cxPlayground: 'CX Playground',
+    team: 'Команда',
+    subscribe: 'Рассылка',
+    market: 'Markets',
+    bitcoinTalks: 'Bitcointalks ANN',
+    instagram: 'Instagram',
+    facebook: 'Facebook',
+    discord: 'Discord',
+  },
   distribution: {
-    title: 'Распространение Skycoin',
-    heading: 'Распространение Skycoin',
+    rate: 'Current OTC rate: {rate} SKY/BTC',
+    title: 'Skycoin OTC',
+    heading: 'Skycoin OTC',
     headingEnded: 'The previous distribution event finished on',
-    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>, 
-      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the 
-      <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a> 
+    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>,
+      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the
+      <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a>
       to learn when the next event begins.`,
     instructions: `
 <p>Что необходимо для участия в распространении:</p>
@@ -13,13 +48,12 @@ export default {
 <ul>
   <li>Введите ваш Skycoin адрес</li>
   <li>Вы получите уникальный Bitcoin адрес для приобретения SKY</li>
-  <li>Пошлите Bitcoin на полученый адрес: 1 SKY стоит 0.002 BTC</li>
+  <li>Пошлите Bitcoin на полученый адрес</li>
 </ul>
 
 <p>Вы можете проверить статус заказа, введя адрес SKY и нажав на <strong>Проверить статус</strong>.</p>
 <p>Каждый раз при нажатии на <strong>Получить адрес</strong>, генерируется новый BTC адрес. Один адрес SKY может иметь не более 5 BTC-адресов.</p>
     `,
-   
     statusFor: 'Статус по {skyAddress}',
     enterAddress: 'Введите адрес Skycoin',
     getAddress: 'Получить адрес',
@@ -34,6 +68,6 @@ export default {
       waiting_send: '[tx-{id} {updated}] BTC депозит подтверждён. Skycoin транзакция поставлена в очередь.',
       waiting_confirm: '[tx-{id} {updated}] Skycoin транзакция отправлена. Ожидаем подтверждение.',
       done: '[tx-{id} {updated}] Завершена. Проверьте ваш Skycoin кошелёк.',
-    }, 
+    },
   },
 };

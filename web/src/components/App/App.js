@@ -10,7 +10,7 @@ import { IntlProvider, addLocaleData } from 'react-intl';
 import zh from 'react-intl/locale-data/zh';
 import ru from 'react-intl/locale-data/ru';
 
-import { COLORS, BREAKPOINTS, SPACE, FONT_SIZES, FLAGS } from '@skycoin/config';
+import { COLORS, BREAKPOINTS, SPACE, FONT_SIZES, FLAGS } from '../../config';
 import * as locales from '../../locales';
 
 import Routes from '../Routes';

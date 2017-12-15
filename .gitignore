@@ -1,2 +1,6 @@
 .vscode
 .DS_Store
+*.log
+*.out
+cert-cache
+*.ignore.*
