@@ -2,22 +2,21 @@
 package pex
 
 import (
-	"encoding/json"
 	"errors"
-	"fmt"
+	"io/ioutil"
+	"math"
 	"math/rand"
 	"net"
+	"net/http"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
-	"math"
+	"github.com/cenkalti/backoff"
 
-	"sync"
-
-	"github.com/skycoin/skycoin/src/util/file"
 	"github.com/skycoin/skycoin/src/util/logging"
 	"github.com/skycoin/skycoin/src/util/utc"
 )
@@ -29,53 +28,67 @@ import (
 // - save last time connected to, use 0 for never
 // - only transmit peers that have active or recent connections
 
-var (
+const (
+	// DefaultPeerListURL is the default URL to download remote peers list from, if enabled
+	DefaultPeerListURL = "https://downloads.skycoin.net/blockchain/peers.txt"
 	// PeerDatabaseFilename filename for disk-cached peers
 	PeerDatabaseFilename = "peers.txt"
-	// BlacklistedDatabaseFilename  filename for disk-cached blacklisted peers
-	BlacklistedDatabaseFilename = "blacklisted_peers.txt"
-	// ErrPeerlistFull returned when the Pex is at a maximum
+	// MaxPeerRetryTimes is the maximum number of times to retry a peer
+	MaxPeerRetryTimes = 10
+)
+
+var (
+	// ErrPeerlistFull is returned when the Pex is at a maximum
 	ErrPeerlistFull = errors.New("Peer list full")
-	// ErrInvalidAddress Returned when an address appears malformed
+	// ErrInvalidAddress is returned when an address appears malformed
 	ErrInvalidAddress = errors.New("Invalid address")
+	// ErrNoLocalhost is returned if a localhost addresses are not allowed
+	ErrNoLocalhost = errors.New("Localhost address is not allowed")
+	// ErrNotExternalIP is returned if an IP address is not a global unicast address
+	ErrNotExternalIP = errors.New("IP is not a valid external IP")
+	// ErrPortTooLow is returned if a port is less than 1024
+	ErrPortTooLow = errors.New("Port must be >= 1024")
 	// ErrBlacklistedAddress returned when attempting to add a blacklisted peer
 	ErrBlacklistedAddress = errors.New("Blacklisted address")
-	// RefreshBlacklistRate How often to updated expired entries in the blacklist
-	RefreshBlacklistRate = time.Second * 30
+
 	// Logging. See http://godoc.org/github.com/op/go-logging for
 	// instructions on how to include this log's output
 	logger = logging.MustGetLogger("pex")
 	// Default rng
 	rnum = rand.New(rand.NewSource(time.Now().Unix()))
 	// For removing inadvertent whitespace from addresses
-	whitespaceFilter = regexp.MustCompile("\\s")
+	whitespaceFilter = regexp.MustCompile(`\s`)
 )
 
-// ValidateAddress returns true if ipPort is a valid ip:host string
-func ValidateAddress(ipPort string, allowLocalhost bool) bool {
+// validateAddress returns a sanitized address if valid, otherwise an error
+func validateAddress(ipPort string, allowLocalhost bool) (string, error) {
 	ipPort = whitespaceFilter.ReplaceAllString(ipPort, "")
 	pts := strings.Split(ipPort, ":")
 	if len(pts) != 2 {
-		return false
+		return "", ErrInvalidAddress
 	}
 
 	ip := net.ParseIP(pts[0])
 	if ip == nil {
-		return false
+		return "", ErrInvalidAddress
 	} else if ip.IsLoopback() {
 		if !allowLocalhost {
-			return false
+			return "", ErrNoLocalhost
 		}
 	} else if !ip.IsGlobalUnicast() {
-		return false
+		return "", ErrNotExternalIP
 	}
 
 	port, err := strconv.ParseUint(pts[1], 10, 16)
-	if err != nil || port < 1024 {
-		return false
+	if err != nil {
+		return "", ErrInvalidAddress
 	}
 
-	return true
+	if port < 1024 {
+		return "", ErrPortTooLow
+	}
+
+	return ipPort, nil
 }
 
 // Peer represents a known peer
@@ -84,8 +97,8 @@ type Peer struct {
 	LastSeen        int64  // Unix timestamp when this peer was last seen
 	Private         bool   // Whether it should omitted from public requests
 	Trusted         bool   // Whether this peer is trusted
-	HasIncomingPort bool   // Whether this peer has incoming port
-	RetryTimes      int    // Records the retry times
+	HasIncomingPort bool   // Whether this peer has accessable public port
+	RetryTimes      int    `json:"-"` // records the retry times
 }
 
 // NewPeer returns a *Peer initialised by an address string of the form ip:port
@@ -107,7 +120,7 @@ func (peer *Peer) Seen() {
 // IncreaseRetryTimes adds the retry times
 func (peer *Peer) IncreaseRetryTimes() {
 	peer.RetryTimes++
-	logger.Debug("Increase retry times of %v to %v", peer.Addr, peer.RetryTimes)
+	logger.Debug("Increase retry times of %v: %v", peer.Addr, peer.RetryTimes)
 }
 
 // ResetRetryTimes resets the retry time
@@ -135,545 +148,450 @@ func (peer *Peer) String() string {
 	return peer.Addr
 }
 
-// Peerlist is a map of addresses to *PeerStates
-type Peerlist struct {
-	lock  sync.RWMutex
-	peers map[string]*Peer
+// Config pex config
+type Config struct {
+	// Folder where peers database should be saved
+	DataDirectory string
+	// Maximum number of peers to keep account of in the PeerList
+	Max int
+	// Cull peers after they havent been seen in this much time
+	Expiration time.Duration
+	// Cull expired peers on this interval
+	CullRate time.Duration
+	// clear old peers on this interval
+	ClearOldRate time.Duration
+	// How often to clear expired blacklist entries
+	UpdateBlacklistRate time.Duration
+	// How often to request peers via PEX
+	RequestRate time.Duration
+	// How many peers to send back in response to a peers request
+	ReplyCount int
+	// Localhost peers are allowed in the peerlist
+	AllowLocalhost bool
+	// Disable exchanging of peers.  Peers are still loaded from disk
+	Disabled bool
+	// Whether the network is disabled
+	NetworkDisabled bool
+	// Download peers list from remote host
+	DownloadPeerList bool
+	// Download peers list from this URL
+	PeerListURL string
 }
 
-// GetPublicTrustPeers returns all trusted public peers
-func (pl *Peerlist) GetPublicTrustPeers() []Peer {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	addrs := pl.getTrustedAddresses(false)
-	return copyPeers(pl.peers, addrs)
-}
-
-// GetPrivateTrustPeers returns all trusted private peers
-func (pl *Peerlist) GetPrivateTrustPeers() []Peer {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	addrs := pl.getTrustedAddresses(true)
-	return copyPeers(pl.peers, addrs)
-}
-
-// GetAllTrustedPeers returns all trusted peers, including private and public peers.
-func (pl *Peerlist) GetAllTrustedPeers() []Peer {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	addrs := pl.getAllTrustedAddresses()
-	return copyPeers(pl.peers, addrs)
-}
-
-// Returns a copy of peers from addrs. Called must hold a read lock.
-func copyPeers(peerlist map[string]*Peer, addrs []string) []Peer {
-	peers := make([]Peer, len(addrs))
-	for i, addr := range addrs {
-		peers[i] = *peerlist[addr]
+// NewConfig creates default pex config.
+func NewConfig() Config {
+	return Config{
+		DataDirectory:       "./",
+		Max:                 1000,
+		Expiration:          time.Hour * 24 * 7,
+		CullRate:            time.Minute * 10,
+		ClearOldRate:        time.Minute * 10,
+		UpdateBlacklistRate: time.Minute,
+		RequestRate:         time.Minute,
+		ReplyCount:          30,
+		AllowLocalhost:      false,
+		Disabled:            false,
+		NetworkDisabled:     false,
+		DownloadPeerList:    false,
+		PeerListURL:         DefaultPeerListURL,
 	}
-	return peers
-}
-
-// Returns trusted peers matching Private flag. Caller must hold a read lock.
-func (pl *Peerlist) getTrustedAddresses(private bool) []string {
-	addrs := []string{}
-	for addr, p := range pl.peers {
-		if !p.Trusted {
-			continue
-		}
-
-		if !p.CanTry() {
-			continue
-		}
-
-		if private && p.Private {
-			addrs = append(addrs, addr)
-		} else if !private && !p.Private {
-			addrs = append(addrs, addr)
-		}
-	}
-	return addrs
-}
-
-// Returns all trusted peers, private or not. Caller must hold a read lock.
-func (pl *Peerlist) getAllTrustedAddresses() []string {
-	return append(pl.getTrustedAddresses(false), pl.getTrustedAddresses(true)...)
-}
-
-// GetPublicAddresses returns the string addresses of all public peers
-func (pl *Peerlist) GetPublicAddresses() []string {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	return pl.getAddresses(false)
-}
-
-// GetPrivateAddresses returns the string addresses of all private peers
-func (pl *Peerlist) GetPrivateAddresses() []string {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	return pl.getAddresses(true)
-}
-
-// RemovePeer removes peer
-func (pl *Peerlist) RemovePeer(a string) {
-	pl.lock.Lock()
-	defer pl.lock.Unlock()
-
-	delete(pl.peers, a)
-}
-
-// GetAllAddresses returns the string addresses of all peers, public or private
-func (pl *Peerlist) GetAllAddresses() []string {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	return append(pl.getAddresses(false), pl.getAddresses(true)...)
-}
-
-// GetPeerByAddr returns peer of given address
-func (pl *Peerlist) GetPeerByAddr(a string) (Peer, bool) {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	if p, ok := pl.peers[a]; ok {
-		return *p, true
-	}
-
-	return Peer{}, false
-}
-
-// ClearOld removes public peers that haven't been seen in timeAgo seconds
-func (pl *Peerlist) ClearOld(timeAgo time.Duration) {
-	pl.lock.Lock()
-	defer pl.lock.Unlock()
-
-	t := utc.Now()
-
-	for addr, peer := range pl.peers {
-		lastSeen := time.Unix(peer.LastSeen, 0)
-		if !peer.Private && t.Sub(lastSeen) > timeAgo {
-			delete(pl.peers, addr)
-		}
-	}
-}
-
-// Returns the string addresses of all public peers.  Called must hold a read lock.
-func (pl *Peerlist) getAddresses(private bool) []string {
-	keys := make([]string, 0, len(pl.peers))
-	for key, p := range pl.peers {
-		if !p.CanTry() {
-			continue
-		}
-
-		if private && p.Private {
-			keys = append(keys, key)
-		} else if !private && !p.Private {
-			keys = append(keys, key)
-		}
-	}
-
-	return keys
-}
-
-// Returns n random peers, or all of the peers, whichever is lower.
-// If count is 0, all of the peers are returned, shuffled.
-// Caller must hold a read lock.
-func (pl *Peerlist) random(count int, includePrivate bool) []Peer {
-	keys := pl.getAddresses(false)
-	if includePrivate {
-		keys = append(keys, pl.getAddresses(true)...)
-	}
-
-	if len(keys) == 0 {
-		return []Peer{}
-	}
-
-	max := count
-	if count == 0 || count > len(keys) {
-		max = len(keys)
-	}
-
-	peers := make([]Peer, 0, max)
-	perm := rand.Perm(len(keys))
-	for _, i := range perm[:max] {
-		peers = append(peers, *pl.peers[keys[i]])
-	}
-
-	return peers
-}
-
-func (pl *Peerlist) getExchgAddr(private bool) []string {
-	keys := []string{}
-	for a, p := range pl.peers {
-		if p.HasIncomingPort && p.Private == private {
-			keys = append(keys, a)
-		}
-	}
-	return keys
-}
-
-// returns all exchangeable addresses
-func (pl *Peerlist) getAllExchgAddr() []string {
-	return append(pl.getExchgAddr(true), pl.getExchgAddr(false)...)
-}
-
-// returns n random exchangeable peers, return all if count is 0.
-func (pl *Peerlist) randomExchg(count int, includePrivate bool) []Peer {
-	keys := []string{}
-
-	if includePrivate {
-		keys = pl.getAllExchgAddr()
-	} else {
-		keys = pl.getExchgAddr(false)
-	}
-
-	if len(keys) == 0 {
-		return make([]Peer, 0)
-	}
-
-	max := count
-	if count == 0 || count > len(keys) {
-		max = len(keys)
-	}
-
-	peers := make([]Peer, 0, max)
-	perm := rand.Perm(len(keys))
-	for _, i := range perm[:max] {
-		peers = append(peers, *pl.peers[keys[i]])
-	}
-
-	return peers
-}
-
-// RandomExchgPublic returns n random exchangeable public peers
-// return all exchangeable public peers if count is 0.
-func (pl *Peerlist) RandomExchgPublic(count int) []Peer {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	return pl.randomExchg(count, false)
-}
-
-// RandomExchgAll returns n random exchangeable peers, including private peers.
-// return all exchangeable peers if count is 0.
-func (pl *Peerlist) RandomExchgAll(count int) []Peer {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	return pl.randomExchg(count, true)
-}
-
-// RandomPublic returns n random peers, or all of the peers, whichever is lower.
-// If count is 0, all of the peers are returned, shuffled.  Will not include
-// private peers.
-func (pl *Peerlist) RandomPublic(count int) []Peer {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	return pl.random(count, false)
-}
-
-// RandomAll returns n random peers, or all of the peers, whichever is lower.
-// If count is 0, all of the peers are returned, shuffled.  Includes private
-// peers.
-func (pl *Peerlist) RandomAll(count int) []Peer {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	return pl.random(count, true)
-}
-
-// PeerJSON is for saving and loading peers to disk. Some fields are strange,
-// to be backwards compatible due to variable name changes
-type PeerJSON struct {
-	Addr string // An address of the form ip:port
-	// Unix timestamp when this peer was last seen.
-	// This could be a time.Time string or an int64 timestamp
-	LastSeen        interface{}
-	Private         bool  // Whether it should omitted from public requests
-	Trusted         bool  // Whether this peer is trusted
-	HasIncomePort   *bool `json:"HasIncomePort,omitempty"` // Whether this peer has incoming port [DEPRECATED]
-	HasIncomingPort *bool // Whether this peer has incoming port
-}
-
-// NewPeerJSON returns a PeerJSON from a Peer
-func NewPeerJSON(p Peer) PeerJSON {
-	hasIncomingPort := p.HasIncomingPort
-
-	return PeerJSON{
-		Addr:            p.Addr,
-		LastSeen:        p.LastSeen,
-		Private:         p.Private,
-		Trusted:         p.Trusted,
-		HasIncomingPort: &hasIncomingPort,
-	}
-}
-
-// NewPeerFromJSON converts a PeerJSON to a Peer
-func NewPeerFromJSON(p PeerJSON) (Peer, error) {
-	hasIncomingPort := false
-	if p.HasIncomingPort != nil {
-		hasIncomingPort = *p.HasIncomingPort
-	} else if p.HasIncomePort != nil {
-		hasIncomingPort = *p.HasIncomePort
-	}
-
-	// LastSeen could be a RFC3339Nano timestamp or an int64 unix timestamp
-	var lastSeen int64
-	switch p.LastSeen.(type) {
-	case string:
-		lastSeenTime, err := time.Parse(time.RFC3339Nano, p.LastSeen.(string))
-		if err != nil {
-			return Peer{}, err
-		}
-		lastSeen = lastSeenTime.Unix()
-	case json.Number:
-		lastSeenNum := p.LastSeen.(json.Number)
-		var err error
-		lastSeen, err = lastSeenNum.Int64()
-		if err != nil {
-			return Peer{}, err
-		}
-	default:
-		return Peer{}, fmt.Errorf("Invalid type %T for LastSeen field", p.LastSeen)
-	}
-
-	return Peer{
-		Addr:            p.Addr,
-		LastSeen:        lastSeen,
-		Private:         p.Private,
-		Trusted:         p.Trusted,
-		HasIncomingPort: hasIncomingPort,
-	}, nil
-}
-
-// Save saves known peers to disk as a newline delimited list of addresses to
-// <dir><PeerDatabaseFilename>
-func (pl *Peerlist) Save(dir string) error {
-	pl.lock.RLock()
-	defer pl.lock.RUnlock()
-
-	filename := PeerDatabaseFilename
-	fn := filepath.Join(dir, filename)
-
-	// filter the peers that has retrytime > 10
-	peers := make(map[string]PeerJSON)
-	for k, p := range pl.peers {
-		if p.RetryTimes <= 10 {
-			peers[k] = NewPeerJSON(*p)
-		}
-	}
-
-	err := file.SaveJSON(fn, peers, 0600)
-	if err != nil {
-		logger.Notice("SavePeerList Failed: %v", err)
-	}
-
-	return err
-}
-
-// IncreaseRetryTimes increases retry times
-func (pl *Peerlist) IncreaseRetryTimes(addr string) {
-	pl.lock.Lock()
-	defer pl.lock.Unlock()
-
-	if _, ok := pl.peers[addr]; ok {
-		pl.peers[addr].IncreaseRetryTimes()
-		pl.peers[addr].Seen()
-	}
-}
-
-// ResetRetryTimes reset retry times
-func (pl *Peerlist) ResetRetryTimes(addr string) {
-	pl.lock.Lock()
-	defer pl.lock.Unlock()
-
-	if _, ok := pl.peers[addr]; ok {
-		pl.peers[addr].ResetRetryTimes()
-		pl.peers[addr].Seen()
-	}
-}
-
-// ResetAllRetryTimes reset all peers' retry times
-func (pl *Peerlist) ResetAllRetryTimes() {
-	pl.lock.Lock()
-	defer pl.lock.Unlock()
-
-	logger.Info("Reset all peer's retry times")
-	for _, p := range pl.peers {
-		p.ResetRetryTimes()
-	}
-}
-
-// LoadPeerlist loads a newline delimited list of addresses from
-// "<dir>/<PeerDatabaseFilename>"
-func LoadPeerlist(dir string) (*Peerlist, error) {
-	peersJSON := make(map[string]PeerJSON)
-
-	fn := filepath.Join(dir, PeerDatabaseFilename)
-	if err := file.LoadJSON(fn, &peersJSON); err != nil {
-		return nil, err
-	}
-
-	peers := make(map[string]*Peer, len(peersJSON))
-	for addr, peerJSON := range peersJSON {
-		peer, err := NewPeerFromJSON(peerJSON)
-		if err != nil {
-			return nil, err
-		}
-		peers[addr] = &peer
-	}
-
-	return &Peerlist{
-		peers: peers,
-	}, nil
 }
 
 // Pex manages a set of known peers and controls peer acquisition
 type Pex struct {
+	sync.RWMutex
 	// All known peers
-	*Peerlist
-	// If false, localhost peers will be rejected from the peerlist
-	AllowLocalhost bool
-	maxPeers       int
+	peerlist peerlist
+	Config   Config
+	quit     chan struct{}
+	done     chan struct{}
 }
 
-// NewPex creates pex
-func NewPex(maxPeers int) *Pex {
-	return &Pex{
-		Peerlist: &Peerlist{
-			peers: make(map[string]*Peer, maxPeers),
-		},
-		maxPeers:       maxPeers,
-		AllowLocalhost: false,
+// New creates pex
+func New(cfg Config, defaultConns []string) (*Pex, error) {
+	pex := &Pex{
+		Config:   cfg,
+		peerlist: newPeerlist(),
+		quit:     make(chan struct{}),
+		done:     make(chan struct{}),
 	}
+
+	// Load peers from disk
+	if err := pex.load(); err != nil {
+		return nil, err
+	}
+
+	// Load default hardcoded peers
+	for _, addr := range defaultConns {
+		// Default peers will mark as trusted peers.
+		if err := pex.AddPeer(addr); err != nil {
+			logger.Critical("add peer failed:%v", err)
+			continue
+		}
+		if err := pex.SetTrusted(addr); err != nil {
+			logger.Critical("pex.SetTrust failed: %v", err)
+		}
+	}
+
+	// Save peers to disk
+	if err := pex.save(); err != nil {
+		return nil, err
+	}
+
+	// Download peers from remote peers list
+	if pex.Config.DownloadPeerList {
+		go func() {
+			if err := pex.downloadPeers(); err != nil {
+				logger.Error("Failed to download peers list: %v", err)
+			}
+		}()
+	}
+
+	return pex, nil
 }
 
-// AddPeer adds a peer to the peer list, given an address. If the peer list is
-// full, PeerlistFullError is returned
-func (px *Pex) AddPeer(ip string) (Peer, error) {
-	if !ValidateAddress(ip, px.AllowLocalhost) {
-		return Peer{}, ErrInvalidAddress
-	}
+// Run starts the pex service
+func (px *Pex) Run() error {
+	logger.Info("Pex.Run started")
+	defer logger.Info("Pex.Run stopped")
+	defer close(px.done)
 
-	px.lock.Lock()
-	defer px.lock.Unlock()
+	defer func() {
+		// Save the peerlist
+		logger.Info("Save peerlist")
+		if err := px.save(); err != nil {
+			logger.Error("Save peers failed: %v", err)
+		}
+	}()
 
-	return px.addPeer(ip)
-}
+	clearOldTicker := time.NewTicker(px.Config.ClearOldRate)
 
-// addPeer adds a peer to the peer list, given an address. If the peer list is
-// full, PeerlistFullError is returned.
-// Caller must hold a write lock.
-func (px *Pex) addPeer(ip string) (Peer, error) {
-	peer, ok := px.peers[ip]
-
-	if peer == nil && ok {
-		logger.Warning("PeerList contains a nil peer with address %s", ip)
-	}
-
-	if peer != nil {
-		return *peer, nil
-	} else if px.full() {
-		return Peer{}, ErrPeerlistFull
-	}
-
-	peer = NewPeer(ip)
-	px.peers[ip] = peer
-	return *peer, nil
-}
-
-// SetPrivate updates the private value of given ip in peerlist
-func (px *Pex) SetPrivate(ip string, private bool) error {
-	if !ValidateAddress(ip, px.AllowLocalhost) {
-		return ErrInvalidAddress
-	}
-
-	px.lock.Lock()
-	defer px.lock.Unlock()
-
-	if p, ok := px.peers[ip]; ok {
-		p.Private = private
-		return nil
-	}
-
-	return fmt.Errorf("Set peer.Private failed: %v does not exist in peerlist", ip)
-}
-
-// SetTrustState updates the peer's Trusted statue
-func (px *Pex) SetTrustState(addr string, trusted bool) error {
-	if !ValidateAddress(addr, px.AllowLocalhost) {
-		return ErrInvalidAddress
-	}
-
-	px.lock.Lock()
-	defer px.lock.Unlock()
-
-	if p, ok := px.peers[addr]; ok {
-		p.Trusted = trusted
-		return nil
-	}
-
-	return fmt.Errorf("%s does not exist in peel list", addr)
-
-}
-
-// SetPeerHasIncomingPort update whether the peer has incoming port.
-func (px *Pex) SetPeerHasIncomingPort(addr string, v bool) error {
-	if !ValidateAddress(addr, px.AllowLocalhost) {
-		return ErrInvalidAddress
-	}
-
-	px.lock.Lock()
-	defer px.lock.Unlock()
-
-	if p, ok := px.peers[addr]; ok {
-		p.HasIncomingPort = v
-		p.Seen()
-		return nil
-	}
-
-	return fmt.Errorf("peer %s is not in exchange peer list", addr)
-}
-
-// Full returns true if no more peers can be added
-func (px *Pex) Full() bool {
-	px.lock.RLock()
-	defer px.lock.RUnlock()
-
-	return px.full()
-}
-
-// Returns true if the peer list is full. Called must hold a read lock on the peer list.
-func (px *Pex) full() bool {
-	return px.maxPeers > 0 && len(px.peers) >= px.maxPeers
-}
-
-// AddPeers add multiple peers at once.
-// Any errors will be logged, but not returned.
-func (px *Pex) AddPeers(peers []string) {
-	px.lock.Lock()
-	defer px.lock.Unlock()
-
-	for _, p := range peers {
-		if _, err := px.addPeer(p); err != nil {
-			logger.Warning("Failed to add peer %s, Reason: %v", p, err)
+	for {
+		select {
+		case <-clearOldTicker.C:
+			// Remove peers we haven't seen in a while
+			if !px.Config.Disabled && !px.Config.NetworkDisabled {
+				px.Lock()
+				px.peerlist.clearOld(px.Config.Expiration)
+				px.Unlock()
+			}
+		case <-px.quit:
+			return nil
 		}
 	}
 }
 
-// Load loads peers
-func (px *Pex) Load(dir string) error {
-	pl, err := LoadPeerlist(dir)
+// Shutdown notifies the pex service to exist
+func (px *Pex) Shutdown() {
+	logger.Info("Shutting down pex")
+	defer logger.Info("Pex shutdown")
+	close(px.quit)
+	<-px.done
+}
+
+func (px *Pex) downloadPeers() error {
+	body, err := backoffDownloadText(px.Config.PeerListURL)
+	if err != nil {
+		logger.Error("Failed to download peers from %s. err: %s", px.Config.PeerListURL, err.Error())
+		return err
+	}
+
+	peers := parseRemotePeerList(body)
+	logger.Info("Downloaded peers list from %s, got %d peers", px.Config.PeerListURL, len(peers))
+
+	n := px.AddPeers(peers)
+	logger.Info("Added %d/%d peers from downloaded peers list", n, len(peers))
+
+	return nil
+}
+
+func (px *Pex) load() error {
+	px.Lock()
+	defer px.Unlock()
+
+	fp := filepath.Join(px.Config.DataDirectory, PeerDatabaseFilename)
+	peers, err := loadPeersFromFile(fp)
 	if err != nil {
 		return err
 	}
 
-	px.Peerlist = pl
+	// file does not exist
+	if peers == nil {
+		return nil
+	}
+
+	// remove invalid peers and limit the max number of peers to pex.Config.Max
+	var validPeers []Peer
+	for addr, p := range peers {
+		if _, err := validateAddress(addr, px.Config.AllowLocalhost); err != nil {
+			logger.Error("Invalid peer address: %v", err)
+			continue
+		}
+
+		validPeers = append(validPeers, *p)
+		if px.Config.Max > 0 && len(validPeers) >= px.Config.Max {
+			break
+		}
+	}
+
+	px.peerlist.setPeers(validPeers)
 	return nil
+}
+
+// SavePeers persists the peerlist
+func (px *Pex) save() error {
+	px.Lock()
+	defer px.Unlock()
+
+	fn := filepath.Join(px.Config.DataDirectory, PeerDatabaseFilename)
+	return px.peerlist.save(fn)
+}
+
+// AddPeer adds a peer to the peer list, given an address. If the peer list is
+// full, PeerlistFullError is returned */
+func (px *Pex) AddPeer(addr string) error {
+	px.Lock()
+	defer px.Unlock()
+
+	cleanAddr, err := validateAddress(addr, px.Config.AllowLocalhost)
+	if err != nil {
+		logger.Error("Invalid address %s: %v", addr, err)
+		return ErrInvalidAddress
+	}
+
+	if px.Config.Max > 0 && px.peerlist.len() >= px.Config.Max {
+		return ErrPeerlistFull
+	}
+
+	px.peerlist.addPeer(cleanAddr)
+	return nil
+}
+
+// AddPeers add multiple peers at once. Any errors will be logged, but not returned
+// Returns the number of peers that were added without error.  Note that
+// adding a duplicate peer will not cause an error.
+func (px *Pex) AddPeers(addrs []string) int {
+	px.Lock()
+	defer px.Unlock()
+
+	if px.Config.Max > 0 && px.peerlist.len() >= px.Config.Max {
+		logger.Warning("Add peers failed, peer list is full")
+		return 0
+	}
+
+	// validate the addresses
+	var validAddrs []string
+	for _, addr := range addrs {
+		a, err := validateAddress(addr, px.Config.AllowLocalhost)
+		if err != nil {
+			logger.Info("Add peers sees an invalid address %s: %v", addr, err)
+			continue
+		}
+		validAddrs = append(validAddrs, a)
+	}
+	addrs = validAddrs
+
+	// Shuffle the addresses before capping them
+	for i := len(addrs) - 1; i > 0; i-- {
+		j := rand.Intn(i + 1)
+		addrs[i], addrs[j] = addrs[j], addrs[i]
+	}
+
+	if px.Config.Max > 0 {
+		rcap := px.Config.Max - px.peerlist.len()
+		if len(addrs) > rcap {
+			addrs = addrs[:rcap]
+		}
+	}
+
+	px.peerlist.addPeers(addrs)
+	return len(addrs)
+}
+
+// SetPrivate updates peer's private value
+func (px *Pex) SetPrivate(addr string, private bool) error {
+	px.Lock()
+	defer px.Unlock()
+
+	cleanAddr, err := validateAddress(addr, px.Config.AllowLocalhost)
+	if err != nil {
+		logger.Error("Invalid address %s: %v", addr, err)
+		return ErrInvalidAddress
+	}
+
+	return px.peerlist.setPrivate(cleanAddr, private)
+}
+
+// SetTrusted updates peer's trusted value
+func (px *Pex) SetTrusted(addr string) error {
+	px.Lock()
+	defer px.Unlock()
+
+	cleanAddr, err := validateAddress(addr, px.Config.AllowLocalhost)
+	if err != nil {
+		logger.Error("Invalid address %s: %v", addr, err)
+		return ErrInvalidAddress
+	}
+
+	return px.peerlist.setTrusted(cleanAddr, true)
+}
+
+// SetHasIncomingPort sets if the peer has public port
+func (px *Pex) SetHasIncomingPort(addr string, hasPublicPort bool) error {
+	px.Lock()
+	defer px.Unlock()
+
+	cleanAddr, err := validateAddress(addr, px.Config.AllowLocalhost)
+	if err != nil {
+		logger.Error("Invalid address %s: %v", addr, err)
+		return ErrInvalidAddress
+	}
+
+	return px.peerlist.setHasIncomingPort(cleanAddr, hasPublicPort)
+}
+
+// RemovePeer removes peer
+func (px *Pex) RemovePeer(addr string) {
+	px.Lock()
+	defer px.Unlock()
+	px.peerlist.removePeer(addr)
+}
+
+// GetPeerByAddr returns peer of given address
+func (px *Pex) GetPeerByAddr(addr string) (Peer, bool) {
+	px.RLock()
+	defer px.RUnlock()
+	return px.peerlist.getPeerByAddr(addr)
+}
+
+// Trusted returns trusted peers
+func (px *Pex) Trusted() Peers {
+	px.RLock()
+	defer px.RUnlock()
+	return px.peerlist.getPeers(isTrusted)
+}
+
+// Private returns private peers
+func (px *Pex) Private() Peers {
+	px.RLock()
+	defer px.RUnlock()
+	return px.peerlist.getPeers(isPrivate)
+}
+
+// TrustedPublic returns trusted public peers
+func (px *Pex) TrustedPublic() Peers {
+	px.RLock()
+	defer px.RUnlock()
+	return px.peerlist.getPeers(isPublic, isTrusted)
+}
+
+// RandomPublic returns N random public peers
+func (px *Pex) RandomPublic(n int) Peers {
+	px.RLock()
+	defer px.RUnlock()
+	return px.peerlist.random(n, isPublic)
+}
+
+// RandomExchangeable returns N random exchangeable peers
+func (px *Pex) RandomExchangeable(n int) Peers {
+	px.RLock()
+	defer px.RUnlock()
+	return px.peerlist.random(n, isExchangeable...)
+}
+
+// IncreaseRetryTimes increases retry times
+func (px *Pex) IncreaseRetryTimes(addr string) {
+	px.Lock()
+	defer px.Unlock()
+	px.peerlist.increaseRetryTimes(addr)
+}
+
+// ResetRetryTimes reset retry times
+func (px *Pex) ResetRetryTimes(addr string) {
+	px.Lock()
+	defer px.Unlock()
+	px.peerlist.resetRetryTimes(addr)
+}
+
+// ResetAllRetryTimes reset all peers' retry times
+func (px *Pex) ResetAllRetryTimes() {
+	px.Lock()
+	defer px.Unlock()
+	px.peerlist.resetAllRetryTimes()
+}
+
+// IsFull returns whether the peer list is full
+func (px *Pex) IsFull() bool {
+	px.RLock()
+	defer px.RUnlock()
+	return px.Config.Max > 0 && px.peerlist.len() >= px.Config.Max
+}
+
+// downloadText downloads a text format file from url.
+// Returns the raw response body as a string.
+// TODO -- move to util, add backoff options
+func downloadText(url string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
+}
+
+func backoffDownloadText(url string) (string, error) {
+	var body string
+
+	b := backoff.NewExponentialBackOff()
+
+	notify := func(err error, wait time.Duration) {
+		logger.Error("waiting %v to retry downloadText, error: %v", wait, err)
+	}
+
+	operation := func() error {
+		logger.Info("Trying to download peers list from %s", url)
+		var err error
+		body, err = downloadText(url)
+		return err
+	}
+
+	if err := backoff.RetryNotify(operation, b, notify); err != nil {
+		logger.Info("Gave up dowloading peers list from %s: %v", url, err)
+		return "", err
+	}
+
+	logger.Info("Peers list downloaded from %s", url)
+
+	return body, nil
+}
+
+// parseRemotePeerList parses a remote peers.txt file
+// The peers list format is newline separated ip:port
+// Any lines that don't parse to an ip:port are skipped
+// Localhost ip:port addresses are ignored
+func parseRemotePeerList(body string) []string {
+	var peers []string
+	for _, addr := range strings.Split(string(body), "\n") {
+		addr = whitespaceFilter.ReplaceAllString(addr, "")
+		if addr == "" {
+			continue
+		}
+
+		// Never allow localhost addresses from the remote peers list
+		a, err := validateAddress(addr, false)
+		if err != nil {
+			logger.Error("Remote peers list has invalid address %s: %v", addr, err)
+			continue
+		}
+
+		peers = append(peers, a)
+	}
+
+	return peers
 }

@@ -275,6 +275,7 @@ func run() error {
 		Rate:                    cfg.SkyExchanger.SkyBtcExchangeRate,
 		EthRate:                 cfg.SkyExchanger.SkyEthExchangeRate,
 		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
+		MaxDecimals:             cfg.SkyExchanger.MaxDecimals,
 	})
 	if err != nil {
 		log.WithError(err).Error("exchange.NewExchange failed")
