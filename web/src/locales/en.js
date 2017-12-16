@@ -48,7 +48,6 @@ export default {
   <li>Enter your Skycoin address below</li>
   <li>You&apos;ll receive a unique Bitcoin address to purchase SKY</li>
   <li>Send BTC to the address</li>
-  <li><strong>Only send a multiple of the SKY/BTC rate. SKY is sent in whole numbers; fractional SKY is not sent.</strong></li>
 </ul>
 
 <p>You can check the status of your order by entering your address and selecting <strong>Check status</strong>.</p>
