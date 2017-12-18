@@ -178,11 +178,10 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int64)
 			dv.ErrC <- nil
 		}
 
-		h, _ := scr.GetBlockCount()
 		require.Equal(t, nDeposits, int64(len(dvs)))
 
 		// check all deposits
-		err := scr.GetStore().(*Store).db.View(func(tx *bolt.Tx) error {
+		err := scr.Base.Store.(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
@@ -208,7 +207,7 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int64)
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	shutdownWait := time.Duration(int64(scr.cfg.ScanPeriod) * nDeposits * 3)
+	shutdownWait := time.Duration(int64(scr.Base.Cfg.ScanPeriod) * nDeposits * 3)
 	if shutdownWait < minShutdownWait {
 		shutdownWait = minShutdownWait
 	}
@@ -248,7 +247,7 @@ func testScannerRun(t *testing.T, scr *BTCScanner) {
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
-	require.True(t, int64(scr.cfg.DepositBufferSize) < nDeposits)
+	require.True(t, int64(scr.Base.Cfg.DepositBufferSize) < nDeposits)
 
 	testScannerRunProcessedLoop(t, scr, nDeposits)
 }
@@ -280,14 +279,14 @@ func testScannerGetBlockCountErrorRetry(t *testing.T, btcDB *bolt.DB) {
 }
 
 func testScannerConfirmationsRequired(t *testing.T, btcDB *bolt.DB) {
-	// Test that the scanner uses cfg.ConfirmationsRequired correctly
+	// Test that the scanner uses Base.Cfg.ConfirmationsRequired correctly
 	scr, shutdown := setupScanner(t, btcDB)
 	defer shutdown()
 
 	// Scanning starts at block 23505, set the blockCount height to 2
 	// confirmations higher, so that only block 23505 is processed.
-	//scr.cfg.ConfirmationsRequired = 2
-	scr.base.SetConfirm(2)
+	scr.Base.Cfg.ConfirmationsRequired = 2
+	//scr.base.SetConfirm(2)
 	scr.btcClient.(*dummyBtcrpcclient).blockCount = 235208
 	h1, err1 := scr.GetBlockCount()
 	require.NoError(t, err1)
@@ -311,7 +310,7 @@ func testScannerConfirmationsRequired(t *testing.T, btcDB *bolt.DB) {
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
-	require.True(t, int64(scr.cfg.DepositBufferSize) < nDeposits)
+	require.True(t, int64(scr.Base.Cfg.DepositBufferSize) < nDeposits)
 
 	testScannerRunProcessedLoop(t, scr, nDeposits)
 }
@@ -402,16 +401,16 @@ func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 		Processed: true,
 	}
 
-	err := scr.GetStore().(*Store).db.Update(func(tx *bolt.Tx) error {
+	err := scr.Base.Store.(*Store).db.Update(func(tx *bolt.Tx) error {
 		for _, d := range unprocessedDeposits {
-			if err := scr.GetStore().(*Store).pushDepositTx(tx, d); err != nil {
+			if err := scr.Base.Store.(*Store).pushDepositTx(tx, d); err != nil {
 				require.NoError(t, err)
 				return err
 			}
 		}
 
 		// Add a processed deposit to make sure that processed deposits are filtered
-		return scr.GetStore().(*Store).pushDepositTx(tx, processedDeposit)
+		return scr.Base.Store.(*Store).pushDepositTx(tx, processedDeposit)
 	})
 	require.NoError(t, err)
 
@@ -438,7 +437,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
-	require.True(t, int64(scr.cfg.DepositBufferSize) < nDeposits)
+	require.True(t, int64(scr.Base.Cfg.DepositBufferSize) < nDeposits)
 
 	done := make(chan struct{})
 	go func() {
@@ -452,7 +451,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 		require.Equal(t, nDeposits, int64(len(dvs)))
 
 		// check all deposits, none should be marked as "Processed"
-		err := scr.GetStore().(*Store).db.View(func(tx *bolt.Tx) error {
+		err := scr.Base.Store.(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
@@ -478,7 +477,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	shutdownWait := time.Duration(int64(scr.cfg.ScanPeriod) * nDeposits * 2)
+	shutdownWait := time.Duration(int64(scr.Base.Cfg.ScanPeriod) * nDeposits * 2)
 	if shutdownWait < minShutdownWait {
 		shutdownWait = minShutdownWait
 	}
@@ -494,7 +493,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 
 func testScannerInitialGetBlockHashError(t *testing.T, btcDB *bolt.DB) {
 	// Test that scanner.Run() returns an error if the initial GetBlockHash
-	// based upon scanner.cfg.InitialScanHeight fails
+	// based upon scanner.Base.Cfg.InitialScanHeight fails
 	scr, shutdown := setupScanner(t, btcDB)
 	defer shutdown()
 

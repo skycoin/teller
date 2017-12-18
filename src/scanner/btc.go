@@ -42,8 +42,7 @@ type BTCScanner struct {
 	log       logrus.FieldLogger
 	btcClient BtcRPCClient
 	// Deposit value channel, exposed by public API, intended for public consumption
-	base *BaseScanner
-	cfg  Config
+	Base *BaseScanner
 }
 
 // NewBTCScanner creates scanner instance
@@ -61,20 +60,19 @@ func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg C
 	return &BTCScanner{
 		btcClient: btc,
 		log:       log.WithField("prefix", "scanner.btc"),
-		base:      bs,
-		cfg:       cfg,
+		Base:      bs,
 	}, nil
 }
 
 func (s *BTCScanner) Run() error {
-	return s.base.Run(s.getBlockAtHeight, s.GetBlockCount, s.scanBlock, s.waitForNextBlock, s.getBlockHashAndHeight)
+	return s.Base.Run(s.GetBlockCount, s.getBlockAtHeight, s.getBlockHashAndHeight, s.waitForNextBlock, s.scanBlock)
 }
 
 // Shutdown shutdown the scanner
 func (s *BTCScanner) Shutdown() {
 	s.log.Info("Closing BTC scanner")
 	s.btcClient.Shutdown()
-	s.base.Shutdown()
+	s.Base.Shutdown()
 	s.log.Info("Waiting for BTC scanner to stop")
 	s.log.Info("BTC scanner stopped")
 }
@@ -89,8 +87,7 @@ func (s *BTCScanner) scanBlock(blk interface{}) (int, error) {
 
 	log.Debug("Scanning block")
 
-	store := s.base.GetStore()
-	dvs, err := store.ScanBlock(block, CoinTypeBTC)
+	dvs, err := s.Base.Store.ScanBlock(block, CoinTypeBTC)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -102,9 +99,9 @@ func (s *BTCScanner) scanBlock(blk interface{}) (int, error) {
 	n := 0
 	for _, dv := range dvs {
 		select {
-		case s.base.ScannedDeposits <- dv:
+		case s.Base.ScannedDeposits <- dv:
 			n++
-		case <-s.base.GetQuit():
+		case <-s.Base.GetQuit():
 			return n, errQuit
 		}
 	}
@@ -180,9 +177,9 @@ func (s *BTCScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
 
 			if err != nil || block.NextHash == "" {
 				select {
-				case <-s.base.GetQuit():
+				case <-s.Base.GetQuit():
 					return nil, errQuit
-				case <-time.After(s.base.GetScanPeriod()):
+				case <-time.After(s.Base.GetScanPeriod()):
 					continue
 				}
 			}
@@ -201,9 +198,9 @@ func (s *BTCScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
 		}
 		if err != nil || nextBlock == nil {
 			select {
-			case <-s.base.GetQuit():
+			case <-s.Base.GetQuit():
 				return nil, errQuit
-			case <-time.After(s.base.GetScanPeriod()):
+			case <-time.After(s.Base.GetScanPeriod()):
 				continue
 			}
 		}
@@ -219,19 +216,14 @@ func (s *BTCScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
 
 // AddScanAddress adds new scan address
 func (s *BTCScanner) AddScanAddress(addr string) error {
-	return s.base.GetStore().AddScanAddress(addr, CoinTypeBTC)
+	return s.Base.Store.AddScanAddress(addr, CoinTypeBTC)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *BTCScanner) GetScanAddresses() ([]string, error) {
-	return s.base.GetStore().GetScanAddresses(CoinTypeBTC)
+	return s.Base.Store.GetScanAddresses(CoinTypeBTC)
 }
 
-// GetDeposit returns deposit value channel.
 func (s *BTCScanner) GetDeposit() <-chan DepositNote {
-	return s.base.GetDeposit()
-}
-
-func (s *BTCScanner) GetStore() Storer {
-	return s.base.GetStore()
+	return s.Base.DepositC
 }
