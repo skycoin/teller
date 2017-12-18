@@ -178,10 +178,11 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int64)
 			dv.ErrC <- nil
 		}
 
+		h, _ := scr.GetBlockCount()
 		require.Equal(t, nDeposits, int64(len(dvs)))
 
 		// check all deposits
-		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
+		err := scr.GetStore().(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
@@ -285,11 +286,15 @@ func testScannerConfirmationsRequired(t *testing.T, btcDB *bolt.DB) {
 
 	// Scanning starts at block 23505, set the blockCount height to 2
 	// confirmations higher, so that only block 23505 is processed.
-	scr.cfg.ConfirmationsRequired = 2
+	//scr.cfg.ConfirmationsRequired = 2
+	scr.base.SetConfirm(2)
 	scr.btcClient.(*dummyBtcrpcclient).blockCount = 235208
+	h1, err1 := scr.GetBlockCount()
+	require.NoError(t, err1)
+	require.Equal(t, int64(235208), h1)
 
 	// Add scan addresses for blocks 235205-235214, but only expect to scan
-	// deposits from block 23505, since 235206 and 235207 don't have enough
+	// deposits from block 235205, since 235206 and 235207 don't have enough
 	// confirmations
 	var nDeposits int64
 
@@ -397,16 +402,16 @@ func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 		Processed: true,
 	}
 
-	err := scr.store.(*Store).db.Update(func(tx *bolt.Tx) error {
+	err := scr.GetStore().(*Store).db.Update(func(tx *bolt.Tx) error {
 		for _, d := range unprocessedDeposits {
-			if err := scr.store.(*Store).pushDepositTx(tx, d); err != nil {
+			if err := scr.GetStore().(*Store).pushDepositTx(tx, d); err != nil {
 				require.NoError(t, err)
 				return err
 			}
 		}
 
 		// Add a processed deposit to make sure that processed deposits are filtered
-		return scr.store.(*Store).pushDepositTx(tx, processedDeposit)
+		return scr.GetStore().(*Store).pushDepositTx(tx, processedDeposit)
 	})
 	require.NoError(t, err)
 
@@ -447,7 +452,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 		require.Equal(t, nDeposits, int64(len(dvs)))
 
 		// check all deposits, none should be marked as "Processed"
-		err := scr.store.(*Store).db.View(func(tx *bolt.Tx) error {
+		err := scr.GetStore().(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)

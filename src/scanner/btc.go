@@ -8,12 +8,10 @@ package scanner
 
 import (
 	"errors"
-	"sync"
 	"time"
 
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
-	"github.com/btcsuite/btcd/rpcclient"
 	"github.com/sirupsen/logrus"
 )
 
@@ -42,15 +40,10 @@ type Config struct {
 // BTCScanner blockchain scanner to check if there're deposit coins
 type BTCScanner struct {
 	log       logrus.FieldLogger
-	cfg       Config
 	btcClient BtcRPCClient
-	store     Storer
 	// Deposit value channel, exposed by public API, intended for public consumption
-	depositC chan DepositNote
-	// Internal deposit value channel
-	scannedDeposits chan Deposit
-	quit            chan struct{}
-	done            chan struct{}
+	base *BaseScanner
+	cfg  Config
 }
 
 // NewBTCScanner creates scanner instance
@@ -63,274 +56,41 @@ func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg C
 		cfg.DepositBufferSize = depositBufferSize
 	}
 
+	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.btc"), cfg)
+
 	return &BTCScanner{
-		btcClient:       btc,
-		log:             log.WithField("prefix", "scanner.btc"),
-		cfg:             cfg,
-		store:           store,
-		depositC:        make(chan DepositNote),
-		quit:            make(chan struct{}),
-		done:            make(chan struct{}),
-		scannedDeposits: make(chan Deposit, depositBufferSize),
+		btcClient: btc,
+		log:       log.WithField("prefix", "scanner.btc"),
+		base:      bs,
+		cfg:       cfg,
 	}, nil
 }
 
-// Run starts the scanner
 func (s *BTCScanner) Run() error {
-	log := s.log.WithField("config", s.cfg)
-	log.Info("Start bitcoin blockchain scan service")
-	defer func() {
-		log.Info("Bitcoin blockchain scan service closed")
-		close(s.done)
-	}()
-
-	var wg sync.WaitGroup
-
-	// Load unprocessed deposits
-	log.Info("Loading unprocessed deposits")
-	if err := s.loadUnprocessedDeposits(); err != nil {
-		if err == errQuit {
-			return nil
-		}
-
-		log.WithError(err).Error("loadUnprocessedDeposits failed")
-		return err
-	}
-
-	// Load the initial scan block
-	log.Info("Loading the initial scan block")
-	initialBlock, err := s.getBlockAtHeight(s.cfg.InitialScanHeight)
-	if err != nil {
-		log.WithError(err).Error("getBlockAtHeight failed")
-
-		// If teller is shutdown while this call is in progress, the rpcclient
-		// returns ErrClientShutdown. This is an expected condition and not
-		// an error, so return nil
-		if err == rpcclient.ErrClientShutdown {
-			return nil
-		}
-		return err
-	}
-
-	if len(initialBlock.RawTx) == 0 {
-		err := ErrBtcdTxindexDisabled
-		log.WithError(err).Error("Txindex looks disabled, aborting")
-		return err
-	}
-
-	s.log.WithFields(logrus.Fields{
-		"initialHash":   initialBlock.Hash,
-		"initialHeight": initialBlock.Height,
-	}).Info("Begin scanning blockchain")
-
-	// This loop scans for a new BTC block every ScanPeriod.
-	// When a new block is found, it compares the block against our scanning
-	// deposit addresses. If a matching deposit is found, it saves it to the DB.
-	log.Info("Launching scan goroutine")
-	wg.Add(1)
-	go func(block *btcjson.GetBlockVerboseResult) {
-		defer wg.Done()
-		defer log.Info("Scan goroutine exited")
-
-		// Wait before retrying again
-		// Returns true if the scanner quit
-		wait := func() error {
-			select {
-			case <-s.quit:
-				return errQuit
-			case <-time.After(s.cfg.ScanPeriod):
-				return nil
-			}
-		}
-
-		deposits := 0
-		for {
-			select {
-			case <-s.quit:
-				return
-			default:
-			}
-
-			log = log.WithFields(logrus.Fields{
-				"height": block.Height,
-				"hash":   block.Hash,
-			})
-
-			// Check for necessary confirmations
-			bestHeight, err := s.btcClient.GetBlockCount()
-			if err != nil {
-				log.WithError(err).Error("btcClient.GetBlockCount failed")
-				if wait() != nil {
-					return
-				}
-
-				continue
-			}
-
-			log = log.WithField("bestHeight", bestHeight)
-
-			// If not enough confirmations exist for this block, wait
-			if block.Height+s.cfg.ConfirmationsRequired > bestHeight {
-				log.Info("Not enough confirmations, waiting")
-				if wait() != nil {
-					return
-				}
-
-				continue
-			}
-
-			// Scan the block for deposits
-			n, err := s.scanBlock(block)
-			if err != nil {
-				if err == errQuit {
-					return
-				}
-
-				log.WithError(err).Error("Scan block failed")
-				if wait() != nil {
-					return
-				}
-
-				continue
-			}
-
-			deposits += n
-			log.WithFields(logrus.Fields{
-				"scannedDeposits":      n,
-				"totalScannedDeposits": deposits,
-			}).Infof("Scanned %d deposits from block", n)
-
-			// Wait for the next block
-			block, err = s.waitForNextBlock(block)
-			if err != nil {
-				if err == errQuit {
-					return
-				}
-
-				log.WithError(err).Error("s.waitForNextBlock failed")
-				if wait() != nil {
-					return
-				}
-				continue
-			}
-		}
-	}(initialBlock)
-
-	// This loop gets the head deposit value (from an array saved in the db)
-	// It sends each head to depositC, which is processed by Exchange.
-	// The loop blocks until the Exchange writes to the ErrC channel
-	log.Info("Launching deposit pipe goroutine")
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer log.Info("Deposit pipe goroutine exited")
-		for {
-			select {
-			case <-s.quit:
-				return
-			case dv := <-s.scannedDeposits:
-				if err := s.processDeposit(dv); err != nil {
-					if err == errQuit {
-						return
-					}
-
-					msg := "processDeposit failed. This deposit will be reprocessed the next time the scanner is run."
-					s.log.WithField("deposit", dv).WithError(err).Error(msg)
-				}
-			}
-		}
-	}()
-
-	wg.Wait()
-
-	return nil
+	return s.base.Run(s.getBlockAtHeight, s.GetBlockCount, s.scanBlock, s.waitForNextBlock, s.getBlockHashAndHeight)
 }
 
 // Shutdown shutdown the scanner
 func (s *BTCScanner) Shutdown() {
 	s.log.Info("Closing BTC scanner")
-	close(s.quit)
-	close(s.depositC)
 	s.btcClient.Shutdown()
+	s.base.Shutdown()
 	s.log.Info("Waiting for BTC scanner to stop")
-	<-s.done
 	s.log.Info("BTC scanner stopped")
-}
-
-// loadUnprocessedDeposits loads unprocessed Deposits into the scannedDeposits
-// channel. This is called during initialization, to resume processing.
-func (s *BTCScanner) loadUnprocessedDeposits() error {
-	s.log.Info("Loading unprocessed deposit values")
-
-	dvs, err := s.store.GetUnprocessedDeposits()
-	if err != nil {
-		s.log.WithError(err).Error("GetUnprocessedDeposits failed")
-		return err
-	}
-
-	s.log.WithField("depositsLen", len(dvs)).Info("Loaded unprocessed deposit values")
-
-	for _, dv := range dvs {
-		select {
-		case <-s.quit:
-			return errQuit
-		case s.scannedDeposits <- dv:
-		}
-	}
-
-	return nil
-}
-
-// processDeposit sends a deposit to depositC, which is read by exchange.Exchange.
-// Exchange will reply with an error or nil on the DepositNote's ErrC channel.
-// If no error is reported, the deposit will be marked as "processed".
-// If this exits early, or the exchange reported an error, the deposit will
-// not be marked as processed. When restarted, unprocessed deposits will be
-// sent to the exchange for processing again.
-func (s *BTCScanner) processDeposit(dv Deposit) error {
-	log := s.log.WithField("deposit", dv)
-	log.Info("Sending deposit to depositC")
-
-	dn := NewDepositNote(dv)
-
-	select {
-	case <-s.quit:
-		return errQuit
-	case s.depositC <- dn:
-		select {
-		case <-s.quit:
-			return errQuit
-		case err, ok := <-dn.ErrC:
-			if err == nil {
-				if ok {
-					if err := s.store.SetDepositProcessed(dv.ID()); err != nil {
-						log.WithError(err).Error("SetDepositProcessed error")
-						return err
-					}
-					log.Info("Deposit is processed")
-				} else {
-					log.Warn("DepositNote.ErrC unexpectedly closed")
-				}
-			} else {
-				log.WithError(err).Error("DepositNote.ErrC error")
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 // scanBlock scans for a new BTC block every ScanPeriod.
 // When a new block is found, it compares the block against our scanning
 // deposit addresses. If a matching deposit is found, it saves it to the DB.
-func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) (int, error) {
+func (s *BTCScanner) scanBlock(blk interface{}) (int, error) {
+	block := blk.(*btcjson.GetBlockVerboseResult)
 	log := s.log.WithField("hash", block.Hash)
 	log = log.WithField("height", block.Height)
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.store.ScanBlock(block, CoinTypeBTC)
+	store := s.base.GetStore()
+	dvs, err := store.ScanBlock(block, CoinTypeBTC)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -342,9 +102,9 @@ func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) (int, error
 	n := 0
 	for _, dv := range dvs {
 		select {
-		case s.scannedDeposits <- dv:
+		case s.base.ScannedDeposits <- dv:
 			n++
-		case <-s.quit:
+		case <-s.base.GetQuit():
 			return n, errQuit
 		}
 	}
@@ -353,10 +113,10 @@ func (s *BTCScanner) scanBlock(block *btcjson.GetBlockVerboseResult) (int, error
 }
 
 // getBlockAtHeight returns that block at a specific height
-func (s *BTCScanner) getBlockAtHeight(height int64) (*btcjson.GetBlockVerboseResult, error) {
+func (s *BTCScanner) getBlockAtHeight(height int64) (interface{}, error) {
 	log := s.log.WithField("blockHeight", height)
 
-	hash, err := s.btcClient.GetBlockHash(s.cfg.InitialScanHeight)
+	hash, err := s.btcClient.GetBlockHash(height)
 	if err != nil {
 		log.WithError(err).Error("btcClient.GetBlockHash failed")
 		return nil, err
@@ -387,8 +147,17 @@ func (s *BTCScanner) getNextBlock(block *btcjson.GetBlockVerboseResult) (*btcjso
 	return s.btcClient.GetBlockVerboseTx(nxtHash)
 }
 
+func (s *BTCScanner) GetBlockCount() (int64, error) {
+	return s.btcClient.GetBlockCount()
+}
+func (s *BTCScanner) getBlockHashAndHeight(block interface{}) (string, int64) {
+	b := block.(*btcjson.GetBlockVerboseResult)
+	return b.Hash, b.Height
+}
+
 // waitForNextBlock scans for the next block until it is available
-func (s *BTCScanner) waitForNextBlock(block *btcjson.GetBlockVerboseResult) (*btcjson.GetBlockVerboseResult, error) {
+func (s *BTCScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
+	block := blk.(*btcjson.GetBlockVerboseResult)
 	log := s.log.WithField("blockHash", block.Hash)
 	log = log.WithField("blockHeight", block.Height)
 	log.Debug("Waiting for the next block")
@@ -411,9 +180,9 @@ func (s *BTCScanner) waitForNextBlock(block *btcjson.GetBlockVerboseResult) (*bt
 
 			if err != nil || block.NextHash == "" {
 				select {
-				case <-s.quit:
+				case <-s.base.GetQuit():
 					return nil, errQuit
-				case <-time.After(s.cfg.ScanPeriod):
+				case <-time.After(s.base.GetScanPeriod()):
 					continue
 				}
 			}
@@ -432,9 +201,9 @@ func (s *BTCScanner) waitForNextBlock(block *btcjson.GetBlockVerboseResult) (*bt
 		}
 		if err != nil || nextBlock == nil {
 			select {
-			case <-s.quit:
+			case <-s.base.GetQuit():
 				return nil, errQuit
-			case <-time.After(s.cfg.ScanPeriod):
+			case <-time.After(s.base.GetScanPeriod()):
 				continue
 			}
 		}
@@ -450,15 +219,19 @@ func (s *BTCScanner) waitForNextBlock(block *btcjson.GetBlockVerboseResult) (*bt
 
 // AddScanAddress adds new scan address
 func (s *BTCScanner) AddScanAddress(addr string) error {
-	return s.store.AddScanAddress(addr, CoinTypeBTC)
+	return s.base.GetStore().AddScanAddress(addr, CoinTypeBTC)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *BTCScanner) GetScanAddresses() ([]string, error) {
-	return s.store.GetScanAddresses(CoinTypeBTC)
+	return s.base.GetStore().GetScanAddresses(CoinTypeBTC)
 }
 
 // GetDeposit returns deposit value channel.
 func (s *BTCScanner) GetDeposit() <-chan DepositNote {
-	return s.depositC
+	return s.base.GetDeposit()
+}
+
+func (s *BTCScanner) GetStore() Storer {
+	return s.base.GetStore()
 }
