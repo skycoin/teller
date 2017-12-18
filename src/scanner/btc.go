@@ -47,14 +47,6 @@ type BTCScanner struct {
 
 // NewBTCScanner creates scanner instance
 func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg Config) (*BTCScanner, error) {
-	if cfg.ScanPeriod == 0 {
-		cfg.ScanPeriod = blockScanPeriod
-	}
-
-	if cfg.DepositBufferSize == 0 {
-		cfg.DepositBufferSize = depositBufferSize
-	}
-
 	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.btc"), cfg)
 
 	return &BTCScanner{
@@ -101,7 +93,7 @@ func (s *BTCScanner) scanBlock(blk interface{}) (int, error) {
 		select {
 		case s.Base.ScannedDeposits <- dv:
 			n++
-		case <-s.Base.GetQuit():
+		case <-s.Base.Quit:
 			return n, errQuit
 		}
 	}
@@ -147,6 +139,7 @@ func (s *BTCScanner) getNextBlock(block *btcjson.GetBlockVerboseResult) (*btcjso
 func (s *BTCScanner) GetBlockCount() (int64, error) {
 	return s.btcClient.GetBlockCount()
 }
+
 func (s *BTCScanner) getBlockHashAndHeight(block interface{}) (string, int64) {
 	b := block.(*btcjson.GetBlockVerboseResult)
 	return b.Hash, b.Height
@@ -177,7 +170,7 @@ func (s *BTCScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
 
 			if err != nil || block.NextHash == "" {
 				select {
-				case <-s.Base.GetQuit():
+				case <-s.Base.Quit:
 					return nil, errQuit
 				case <-time.After(s.Base.GetScanPeriod()):
 					continue
@@ -198,7 +191,7 @@ func (s *BTCScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
 		}
 		if err != nil || nextBlock == nil {
 			select {
-			case <-s.Base.GetQuit():
+			case <-s.Base.Quit:
 				return nil, errQuit
 			case <-time.After(s.Base.GetScanPeriod()):
 				continue

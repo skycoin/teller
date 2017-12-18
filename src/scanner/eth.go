@@ -10,7 +10,6 @@ import (
 	"context"
 	"math/big"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -23,289 +22,47 @@ import (
 // ETHScanner blockchain scanner to check if there're deposit coins
 type ETHScanner struct {
 	log       logrus.FieldLogger
-	cfg       Config
 	ethClient EthRPCClient
-	store     Storer
-	// Deposit value channel, exposed by public API, intended for public consumption
-	depositC chan DepositNote
-	// Internal deposit value channel
-	scannedDeposits chan Deposit
-	quit            chan struct{}
-	done            chan struct{}
+	Base      *BaseScanner
 }
 
 // NewETHScanner creates scanner instance
 func NewETHScanner(log logrus.FieldLogger, store Storer, eth EthRPCClient, cfg Config) (*ETHScanner, error) {
-	if cfg.ScanPeriod == 0 {
-		cfg.ScanPeriod = blockScanPeriod
-	}
 
-	if cfg.DepositBufferSize == 0 {
-		cfg.DepositBufferSize = depositBufferSize
-	}
+	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.eth"), cfg)
 
 	return &ETHScanner{
-		ethClient:       eth,
-		log:             log.WithField("prefix", "scanner.eth"),
-		cfg:             cfg,
-		store:           store,
-		depositC:        make(chan DepositNote),
-		quit:            make(chan struct{}),
-		done:            make(chan struct{}),
-		scannedDeposits: make(chan Deposit, depositBufferSize),
+		ethClient: eth,
+		log:       log.WithField("prefix", "scanner.eth"),
+		Base:      bs,
 	}, nil
 }
 
 // Run starts the scanner
 func (s *ETHScanner) Run() error {
-	log := s.log.WithField("config", s.cfg)
-	log.Info("Start ethcoin blockchain scan service")
-	defer func() {
-		log.Info("Ethcoin blockchain scan service closed")
-		close(s.done)
-	}()
-
-	var wg sync.WaitGroup
-
-	// Load unprocessed deposits
-	log.Info("Loading unprocessed deposits")
-	if err := s.loadUnprocessedDeposits(); err != nil {
-		if err == errQuit {
-			return nil
-		}
-
-		log.WithError(err).Error("loadUnprocessedDeposits failed")
-		return err
-	}
-
-	// Load the initial scan block
-	log.Info("Loading the initial scan block")
-	initialBlock, err := s.getBlockAtHeight(uint64(s.cfg.InitialScanHeight))
-	if err != nil {
-		log.WithError(err).Error("getBlockAtHeight failed")
-
-		// If teller is shutdown while this call is in progress, the rpcclient
-		// returns ErrClientShutdown. This is an expected condition and not
-		// an error, so return nil
-		//if err == rpcclient.ErrClientShutdown {
-		//return nil
-		//}
-		return err
-	}
-
-	s.log.WithFields(logrus.Fields{
-		"initialHash":   initialBlock.Hash().String(),
-		"initialHeight": initialBlock.NumberU64(),
-	}).Info("Begin scanning blockchain")
-
-	// This loop scans for a new ETH block every ScanPeriod.
-	// When a new block is found, it compares the block against our scanning
-	// deposit addresses. If a matching deposit is found, it saves it to the DB.
-	log.Info("Launching scan goroutine")
-	wg.Add(1)
-	go func(block *types.Block) {
-		defer wg.Done()
-		defer log.Info("Scan goroutine exited")
-
-		// Wait before retrying again
-		// Returns true if the scanner quit
-		wait := func() error {
-			select {
-			case <-s.quit:
-				return errQuit
-			case <-time.After(s.cfg.ScanPeriod):
-				return nil
-			}
-		}
-
-		deposits := 0
-		for {
-			select {
-			case <-s.quit:
-				return
-			default:
-			}
-
-			log = log.WithFields(logrus.Fields{
-				"height": block.NumberU64(),
-				"hash":   block.Hash().String(),
-			})
-
-			// Check for necessary confirmations
-			bestHeight, err := s.ethClient.GetBlockCount()
-			if err != nil {
-				log.WithError(err).Error("ethClient.GetBlockCount failed")
-				if wait() != nil {
-					return
-				}
-
-				continue
-			}
-
-			log = log.WithField("bestHeight", bestHeight)
-
-			// If not enough confirmations exist for this block, wait
-			if int64(block.NumberU64())+s.cfg.ConfirmationsRequired > bestHeight {
-				log.Info("Not enough confirmations, waiting")
-				if wait() != nil {
-					return
-				}
-
-				continue
-			}
-
-			// Scan the block for deposits
-			n, err := s.scanBlock(block)
-			if err != nil {
-				if err == errQuit {
-					return
-				}
-
-				log.WithError(err).Error("Scan block failed")
-				if wait() != nil {
-					return
-				}
-
-				continue
-			}
-
-			deposits += n
-			log.WithFields(logrus.Fields{
-				"scannedDeposits":      n,
-				"totalScannedDeposits": deposits,
-			}).Infof("Scanned %d deposits from block", n)
-
-			// Wait for the next block
-			block, err = s.waitForNextBlock(block)
-			if err != nil {
-				if err == errQuit {
-					return
-				}
-
-				log.WithError(err).Error("s.waitForNextBlock failed")
-				if wait() != nil {
-					return
-				}
-				continue
-			}
-		}
-	}(initialBlock)
-
-	// This loop gets the head deposit value (from an array saved in the db)
-	// It sends each head to depositC, which is processed by Exchange.
-	// The loop blocks until the Exchange writes to the ErrC channel
-	log.Info("Launching deposit pipe goroutine")
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer log.Info("Deposit pipe goroutine exited")
-		for {
-			select {
-			case <-s.quit:
-				return
-			case dv := <-s.scannedDeposits:
-				if err := s.processDeposit(dv); err != nil {
-					if err == errQuit {
-						return
-					}
-
-					msg := "processDeposit failed. This deposit will be reprocessed the next time the scanner is run."
-					s.log.WithField("deposit", dv).WithError(err).Error(msg)
-				}
-			}
-		}
-	}()
-
-	wg.Wait()
-
-	return nil
+	return s.Base.Run(s.ethClient.GetBlockCount, s.getBlockAtHeight, s.getBlockHashAndHeight, s.waitForNextBlock, s.scanBlock)
 }
 
 // Shutdown shutdown the scanner
 func (s *ETHScanner) Shutdown() {
 	s.log.Info("Closing ETH scanner")
-	close(s.quit)
-	close(s.depositC)
 	s.ethClient.Shutdown()
+	s.Base.Shutdown()
 	s.log.Info("Waiting for ETH scanner to stop")
-	<-s.done
 	s.log.Info("ETH scanner stopped")
-}
-
-// loadUnprocessedDeposits loads unprocessed Deposits into the scannedDeposits
-// channel. This is called during initialization, to resume processing.
-func (s *ETHScanner) loadUnprocessedDeposits() error {
-	s.log.Info("Loading unprocessed deposit values")
-
-	dvs, err := s.store.GetUnprocessedDeposits()
-	if err != nil {
-		s.log.WithError(err).Error("GetUnprocessedDeposits failed")
-		return err
-	}
-
-	s.log.WithField("depositsLen", len(dvs)).Info("Loaded unprocessed deposit values")
-
-	for _, dv := range dvs {
-		select {
-		case <-s.quit:
-			return errQuit
-		case s.scannedDeposits <- dv:
-		}
-	}
-
-	return nil
-}
-
-// processDeposit sends a deposit to depositC, which is read by exchange.Exchange.
-// Exchange will reply with an error or nil on the DepositNote's ErrC channel.
-// If no error is reported, the deposit will be marked as "processed".
-// If this exits early, or the exchange reported an error, the deposit will
-// not be marked as processed. When restarted, unprocessed deposits will be
-// sent to the exchange for processing again.
-func (s *ETHScanner) processDeposit(dv Deposit) error {
-	log := s.log.WithField("deposit", dv)
-	log.Info("Sending deposit to depositC")
-
-	dn := NewDepositNote(dv)
-
-	select {
-	case <-s.quit:
-		return errQuit
-	case s.depositC <- dn:
-		select {
-		case <-s.quit:
-			return errQuit
-		case err, ok := <-dn.ErrC:
-			if err == nil {
-				if ok {
-					if err := s.store.SetDepositProcessed(dv.ID()); err != nil {
-						log.WithError(err).Error("SetDepositProcessed error")
-						return err
-					}
-					log.Info("Deposit is processed")
-				} else {
-					log.Warn("DepositNote.ErrC unexpectedly closed")
-				}
-			} else {
-				log.WithError(err).Error("DepositNote.ErrC error")
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 // scanBlock scans for a new ETH block every ScanPeriod.
 // When a new block is found, it compares the block against our scanning
 // deposit addresses. If a matching deposit is found, it saves it to the DB.
-func (s *ETHScanner) scanBlock(block *types.Block) (int, error) {
+func (s *ETHScanner) scanBlock(blk interface{}) (int, error) {
+	block := blk.(*types.Block)
 	log := s.log.WithField("hash", block.Hash().String())
 	log = log.WithField("height", block.NumberU64())
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.store.ScanBlock(block, CoinTypeETH)
+	dvs, err := s.Base.Store.ScanBlock(block, CoinTypeETH)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -317,9 +74,9 @@ func (s *ETHScanner) scanBlock(block *types.Block) (int, error) {
 	n := 0
 	for _, dv := range dvs {
 		select {
-		case s.scannedDeposits <- dv:
+		case s.Base.ScannedDeposits <- dv:
 			n++
-		case <-s.quit:
+		case <-s.Base.Quit:
 			return n, errQuit
 		}
 	}
@@ -328,8 +85,8 @@ func (s *ETHScanner) scanBlock(block *types.Block) (int, error) {
 }
 
 // getBlockAtHeight returns that block at a specific height
-func (s *ETHScanner) getBlockAtHeight(seq uint64) (*types.Block, error) {
-	return s.ethClient.GetBlockVerboseTx(seq)
+func (s *ETHScanner) getBlockAtHeight(seq int64) (interface{}, error) {
+	return s.ethClient.GetBlockVerboseTx(uint64(seq))
 }
 
 // getNextBlock returns the next block of given hash, return nil if next block does not exist
@@ -338,7 +95,8 @@ func (s *ETHScanner) getNextBlock(seq uint64) (*types.Block, error) {
 }
 
 // waitForNextBlock scans for the next block until it is available
-func (s *ETHScanner) waitForNextBlock(block *types.Block) (*types.Block, error) {
+func (s *ETHScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
+	block := blk.(*types.Block)
 	log := s.log.WithField("blockHash", block.Hash().String())
 	log = log.WithField("blockHeight", block.NumberU64())
 	log.Debug("Waiting for the next block")
@@ -353,9 +111,9 @@ func (s *ETHScanner) waitForNextBlock(block *types.Block) (*types.Block, error) 
 		}
 		if err != nil || nextBlock == nil {
 			select {
-			case <-s.quit:
+			case <-s.Base.Quit:
 				return nil, errQuit
-			case <-time.After(s.cfg.ScanPeriod):
+			case <-time.After(s.Base.GetScanPeriod()):
 				continue
 			}
 		}
@@ -371,17 +129,17 @@ func (s *ETHScanner) waitForNextBlock(block *types.Block) (*types.Block, error) 
 
 // AddScanAddress adds new scan address
 func (s *ETHScanner) AddScanAddress(addr string) error {
-	return s.store.AddScanAddress(addr, CoinTypeETH)
+	return s.Base.Store.AddScanAddress(addr, CoinTypeETH)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *ETHScanner) GetScanAddresses() ([]string, error) {
-	return s.store.GetScanAddresses(CoinTypeETH)
+	return s.Base.Store.GetScanAddresses(CoinTypeETH)
 }
 
 // GetDeposit returns deposit value channel.
 func (s *ETHScanner) GetDeposit() <-chan DepositNote {
-	return s.depositC
+	return s.Base.DepositC
 }
 
 //EthClient is self-defined struct for implement EthRPCClient interface
@@ -414,6 +172,11 @@ func (ec *EthClient) GetBlockCount() (int64, error) {
 		return 0, err
 	}
 	return int64(blockNum), nil
+}
+
+func (s *ETHScanner) getBlockHashAndHeight(block interface{}) (string, int64) {
+	b := block.(*types.Block)
+	return b.Hash().String(), int64(b.NumberU64())
 }
 
 //Shutdown close rpc connection
