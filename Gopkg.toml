@@ -47,7 +47,8 @@
 
 [[constraint]]
   name = "github.com/skycoin/skycoin"
-  version = "v0.21.0"
+  # This revision is v0.21.1 plus a fix for base58 address verification
+  revision = "c86e0afdebd0c06ee8ea8d01ac7dce84fef04ddc"
 
 [[constraint]]
   name = "github.com/stretchr/testify"
