@@ -83,10 +83,10 @@ func TestNewStore(t *testing.T) {
 	require.NoError(t, err)
 
 	s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(scanMetaBkt)
+		bkt := tx.Bucket(ScanMetaBkt)
 		require.NotNil(t, bkt)
 
-		require.NotNil(t, tx.Bucket(depositBkt))
+		require.NotNil(t, tx.Bucket(DepositBkt))
 
 		return nil
 	})
@@ -123,7 +123,7 @@ func TestGetDepositAddresses(t *testing.T) {
 	// check db
 	s.db.View(func(tx *bolt.Tx) error {
 		var as []string
-		err := dbutil.GetBucketObject(tx, scanMetaBkt, depositAddressesKey, &as)
+		err := dbutil.GetBucketObject(tx, ScanMetaBkt, DepositAddressesKey, &as)
 		require.NoError(t, err)
 
 		require.Equal(t, len(addrs), len(as))
@@ -177,7 +177,7 @@ func TestAddDepositAddress(t *testing.T) {
 			require.NoError(t, err)
 
 			err = db.Update(func(tx *bolt.Tx) error {
-				return dbutil.PutBucketValue(tx, scanMetaBkt, depositAddressesKey, tc.initAddrs)
+				return dbutil.PutBucketValue(tx, ScanMetaBkt, DepositAddressesKey, tc.initAddrs)
 			})
 			require.NoError(t, err)
 
