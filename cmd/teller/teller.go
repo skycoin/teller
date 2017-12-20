@@ -61,7 +61,7 @@ func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.
 
 	log.Info("Connect to btcd succeeded")
 
-	scanStore.AddSupportedCoin(scanner.CoinTypeBTC, scanner.ScanBTCBlock)
+	scanStore.AddSupportedCoin(scanner.CoinTypeBTC)
 
 	btcScanner, err := scanner.NewBTCScanner(log, scanStore, btcrpc, scanner.Config{
 		ScanPeriod:            cfg.BtcScanner.ScanPeriod,
@@ -82,7 +82,7 @@ func createEthScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.
 		return nil, err
 	}
 
-	scanStore.AddSupportedCoin(scanner.CoinTypeETH, scanner.ScanETHBlock)
+	scanStore.AddSupportedCoin(scanner.CoinTypeETH)
 
 	ethScanner, err := scanner.NewETHScanner(log, scanStore, ethrpc, scanner.Config{
 		ScanPeriod:            cfg.EthScanner.ScanPeriod,

@@ -12,6 +12,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+	"github.com/btcsuite/btcutil"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,12 +22,6 @@ var (
 	// ErrBtcdTxindexDisabled is returned if RawTx is missing from GetBlockVerboseResult,
 	// which happens if txindex is not enabled in btcd.
 	ErrBtcdTxindexDisabled = errors.New("len(block.RawTx) == 0, make sure txindex is enabled in btcd")
-)
-
-const (
-	checkHeadDepositPeriod = time.Second * 5
-	blockScanPeriod        = time.Second * 5
-	depositBufferSize      = 100
 )
 
 // Config scanner config info
@@ -57,7 +52,7 @@ func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg C
 }
 
 func (s *BTCScanner) Run() error {
-	return s.Base.Run(s.GetBlockCount, s.getBlockAtHeight, s.getBlockHashAndHeight, s.waitForNextBlock, s.scanBlock)
+	return s.Base.Run(s.GetBlockCount, s.getBlockAtHeight, s.waitForNextBlock, s.scanBlock)
 }
 
 // Shutdown shutdown the scanner
@@ -72,8 +67,7 @@ func (s *BTCScanner) Shutdown() {
 // scanBlock scans for a new BTC block every ScanPeriod.
 // When a new block is found, it compares the block against our scanning
 // deposit addresses. If a matching deposit is found, it saves it to the DB.
-func (s *BTCScanner) scanBlock(blk interface{}) (int, error) {
-	block := blk.(*btcjson.GetBlockVerboseResult)
+func (s *BTCScanner) scanBlock(block *CommonBlock) (int, error) {
 	log := s.log.WithField("hash", block.Hash)
 	log = log.WithField("height", block.Height)
 
@@ -101,8 +95,13 @@ func (s *BTCScanner) scanBlock(blk interface{}) (int, error) {
 	return n, nil
 }
 
+//GetBlockCount returns bitcoin block count
+func (s *BTCScanner) GetBlockCount() (int64, error) {
+	return s.btcClient.GetBlockCount()
+}
+
 // getBlockAtHeight returns that block at a specific height
-func (s *BTCScanner) getBlockAtHeight(height int64) (interface{}, error) {
+func (s *BTCScanner) getBlockAtHeight(height int64) (*CommonBlock, error) {
 	log := s.log.WithField("blockHeight", height)
 
 	hash, err := s.btcClient.GetBlockHash(height)
@@ -117,11 +116,36 @@ func (s *BTCScanner) getBlockAtHeight(height int64) (interface{}, error) {
 		return nil, err
 	}
 
-	return block, nil
+	return btcBlock2CommonBlock(block)
+
+}
+
+// btcBlock2CommonBlock convert bitcoin block to common block
+func btcBlock2CommonBlock(block *btcjson.GetBlockVerboseResult) (*CommonBlock, error) {
+	if len(block.RawTx) == 0 {
+		return nil, ErrBtcdTxindexDisabled
+	}
+	cb := CommonBlock{Hash: block.Hash, NextHash: block.NextHash, Height: block.Height}
+	cb.RawTx = make([]CommonTx, len(block.RawTx))
+	for _, tx := range block.RawTx {
+		cbTx := CommonTx{Txid: tx.Txid}
+		cbTx.Vout = make([]CommonVout, len(tx.Vout))
+		for _, v := range tx.Vout {
+			amt, err := btcutil.NewAmount(v.Value)
+			if err != nil {
+				return nil, err
+			}
+			cv := CommonVout{Value: int64(amt), Addresses: v.ScriptPubKey.Addresses}
+			cbTx.Vout = append(cbTx.Vout, cv)
+		}
+		cb.RawTx = append(cb.RawTx, cbTx)
+	}
+
+	return &cb, nil
 }
 
 // getNextBlock returns the next block from another block, return nil if next block does not exist
-func (s *BTCScanner) getNextBlock(block *btcjson.GetBlockVerboseResult) (*btcjson.GetBlockVerboseResult, error) {
+func (s *BTCScanner) getNextBlock(block *CommonBlock) (*CommonBlock, error) {
 	if block.NextHash == "" {
 		return nil, errors.New("Block.NextHash is empty")
 	}
@@ -133,21 +157,16 @@ func (s *BTCScanner) getNextBlock(block *btcjson.GetBlockVerboseResult) (*btcjso
 	}
 
 	s.log.WithField("nextHash", nxtHash.String()).Debug("Calling s.btcClient.GetBlockVerboseTx")
-	return s.btcClient.GetBlockVerboseTx(nxtHash)
-}
-
-func (s *BTCScanner) GetBlockCount() (int64, error) {
-	return s.btcClient.GetBlockCount()
-}
-
-func (s *BTCScanner) getBlockHashAndHeight(block interface{}) (string, int64) {
-	b := block.(*btcjson.GetBlockVerboseResult)
-	return b.Hash, b.Height
+	btc, err := s.btcClient.GetBlockVerboseTx(nxtHash)
+	if err != nil {
+		s.log.WithError(err).Error("chainhash.NewHashFromStr failed")
+		return nil, err
+	}
+	return btcBlock2CommonBlock(btc)
 }
 
 // waitForNextBlock scans for the next block until it is available
-func (s *BTCScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
-	block := blk.(*btcjson.GetBlockVerboseResult)
+func (s *BTCScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) {
 	log := s.log.WithField("blockHash", block.Hash)
 	log = log.WithField("blockHeight", block.Height)
 	log.Debug("Waiting for the next block")
@@ -162,13 +181,12 @@ func (s *BTCScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
 		}
 
 		for {
-			var err error
-			block, err = s.btcClient.GetBlockVerboseTx(hash)
+			btcBlock, err := s.btcClient.GetBlockVerboseTx(hash)
 			if err != nil {
 				log.WithError(err).Error("btcClient.GetBlockVerboseTx failed, retrying")
 			}
 
-			if err != nil || block.NextHash == "" {
+			if err != nil || btcBlock.NextHash == "" {
 				select {
 				case <-s.Base.Quit:
 					return nil, errQuit
@@ -176,7 +194,7 @@ func (s *BTCScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
 					continue
 				}
 			}
-
+			block, _ = btcBlock2CommonBlock(btcBlock)
 			break
 		}
 	}
@@ -217,6 +235,7 @@ func (s *BTCScanner) GetScanAddresses() ([]string, error) {
 	return s.Base.Store.GetScanAddresses(CoinTypeBTC)
 }
 
+//GetDeposit returns channel of depositnote
 func (s *BTCScanner) GetDeposit() <-chan DepositNote {
 	return s.Base.DepositC
 }

@@ -4,16 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/boltdb/bolt"
-	"github.com/btcsuite/btcd/btcjson"
-	"github.com/btcsuite/btcutil"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/sirupsen/logrus"
 
 	"github.com/skycoin/teller/src/util/dbutil"
-	"github.com/skycoin/teller/src/util/mathutil"
 )
 
 // CoinTypeBTC is BTC coin type
@@ -35,6 +30,7 @@ var (
 	// deposit values index list bucket
 	dvIndexListKey = "dv_index_list"
 
+	// unsupported coin type
 	ErrUnsupportedCoinType = errors.New("unsupported coin type")
 )
 
@@ -75,14 +71,13 @@ type Storer interface {
 	AddScanAddress(string, string) error
 	SetDepositProcessed(string) error
 	GetUnprocessedDeposits() ([]Deposit, error)
-	ScanBlock(interface{}, string) ([]Deposit, error)
+	ScanBlock(*CommonBlock, string) ([]Deposit, error)
 }
 
 // Store records scanner meta info for BTC deposits
 type Store struct {
-	db             *bolt.DB
-	log            logrus.FieldLogger
-	scanHandlerMap map[string]func(blockInfo interface{}, depositAddrs []string) ([]Deposit, error)
+	db  *bolt.DB
+	log logrus.FieldLogger
 }
 
 // NewStore creates a scanner Store
@@ -98,21 +93,13 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 		return nil, err
 	}
 	return &Store{
-		db:             db,
-		log:            log,
-		scanHandlerMap: make(map[string]func(blockInfo interface{}, depositAddrs []string) ([]Deposit, error)),
+		db:  db,
+		log: log,
 	}, nil
 }
 
 //AddSupportedCoin create scaninfo bucket and callback for specified coin
-func (s *Store) AddSupportedCoin(coinType string, scanHandler func(blockInfo interface{}, depositAddrs []string) ([]Deposit, error)) error {
-	if scanHandler == nil {
-		return errors.New("Scan handler cann't nil")
-	}
-	_, exists := s.scanHandlerMap[coinType]
-	if !exists {
-		s.scanHandlerMap[coinType] = scanHandler
-	}
+func (s *Store) AddSupportedCoin(coinType string) error {
 	if err := s.db.Update(func(tx *bolt.Tx) error {
 		scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, coinType, "_")
 		if _, err := tx.CreateBucketIfNotExists(scanBktFullName); err != nil {
@@ -242,20 +229,15 @@ func (s *Store) pushDepositTx(tx *bolt.Tx, dv Deposit) error {
 
 // ScanBlock scans a coin block for deposits and adds them
 // If the deposit already exists, the result is omitted from the returned list
-func (s *Store) ScanBlock(blockInfo interface{}, coinType string) ([]Deposit, error) {
-	callback, exists := s.scanHandlerMap[coinType]
-	if !exists {
-		var dvs []Deposit
-		return dvs, ErrUnsupportedCoinType
-	}
-	return s.scanBlock(blockInfo, coinType, callback)
+func (s *Store) ScanBlock(block *CommonBlock, coinType string) ([]Deposit, error) {
+	return s.scanBlock(block, coinType)
 }
 
 // scanBlock scans a coin block for deposits and adds them
 // 1. get deposit address by coinType
 // 2. call callback function to get deposit
 // 3. push deposit into db, finished at one transaction
-func (s *Store) scanBlock(blockInfo interface{}, coinType string, scanBlockCallback func(blockInfo interface{}, depositAddrs []string) ([]Deposit, error)) ([]Deposit, error) {
+func (s *Store) scanBlock(block *CommonBlock, coinType string) ([]Deposit, error) {
 	var dvs []Deposit
 
 	if err := s.db.Update(func(tx *bolt.Tx) error {
@@ -265,7 +247,7 @@ func (s *Store) scanBlock(blockInfo interface{}, coinType string, scanBlockCallb
 			return err
 		}
 
-		deposits, err := scanBlockCallback(blockInfo, addrs)
+		deposits, err := scanSpecifiedBlock(block, coinType, addrs)
 		if err != nil {
 			s.log.WithError(err).Error("ScanBlock failed")
 			return err
@@ -296,15 +278,8 @@ func (s *Store) scanBlock(blockInfo interface{}, coinType string, scanBlockCallb
 }
 
 // ScanBTCBlock scan the given block and returns the next block hash or error
-func ScanBTCBlock(blockInfo interface{}, depositAddrs []string) ([]Deposit, error) {
+func scanSpecifiedBlock(block *CommonBlock, coinType string, depositAddrs []string) ([]Deposit, error) {
 	var dv []Deposit
-	block, ok := blockInfo.(*btcjson.GetBlockVerboseResult)
-	if !ok {
-		return dv, errors.New("convert to GetBlockVerboseResult failed")
-	}
-	if len(block.RawTx) == 0 {
-		return nil, ErrBtcdTxindexDisabled
-	}
 
 	addrMap := map[string]struct{}{}
 	for _, a := range depositAddrs {
@@ -313,15 +288,12 @@ func ScanBTCBlock(blockInfo interface{}, depositAddrs []string) ([]Deposit, erro
 
 	for _, tx := range block.RawTx {
 		for _, v := range tx.Vout {
-			amt, err := btcutil.NewAmount(v.Value)
-			if err != nil {
-				return nil, err
-			}
+			amt := v.Value
 
-			for _, a := range v.ScriptPubKey.Addresses {
+			for _, a := range v.Addresses {
 				if _, ok := addrMap[a]; ok {
 					dv = append(dv, Deposit{
-						CoinType: CoinTypeBTC,
+						CoinType: coinType,
 						Address:  a,
 						Value:    int64(amt),
 						Height:   block.Height,
@@ -330,42 +302,6 @@ func ScanBTCBlock(blockInfo interface{}, depositAddrs []string) ([]Deposit, erro
 					})
 				}
 			}
-		}
-	}
-
-	return dv, nil
-}
-
-// ScanETHBlock scan the given block and returns the next block hash or error
-func ScanETHBlock(blockInfo interface{}, depositAddrs []string) ([]Deposit, error) {
-	var dv []Deposit
-	block, ok := blockInfo.(*types.Block)
-	if !ok {
-		return dv, errors.New("convert to types.Block failed")
-	}
-	addrMap := map[string]struct{}{}
-	for _, a := range depositAddrs {
-		addrMap[a] = struct{}{}
-	}
-
-	for i, tx := range block.Transactions() {
-		to := tx.To()
-		if to == nil {
-			//this is a contract transcation
-			continue
-		}
-		//1 eth = 1e18 wei ,tx.Value() is very big that may overflow(int64), so store it as Gwei(1Gwei=1e9wei) and recover it when used
-		amt := mathutil.Wei2Gwei(tx.Value())
-		a := strings.ToLower(to.String())
-		if _, ok := addrMap[a]; ok {
-			dv = append(dv, Deposit{
-				CoinType: CoinTypeETH,
-				Address:  a,
-				Value:    amt,
-				Height:   int64(block.NumberU64()),
-				Tx:       tx.Hash().String(),
-				N:        uint32(i),
-			})
 		}
 	}
 

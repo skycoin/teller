@@ -10,6 +10,7 @@ import (
 	"context"
 	"math/big"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -17,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/sirupsen/logrus"
+	"github.com/skycoin/teller/src/util/mathutil"
 )
 
 // ETHScanner blockchain scanner to check if there're deposit coins
@@ -40,7 +42,7 @@ func NewETHScanner(log logrus.FieldLogger, store Storer, eth EthRPCClient, cfg C
 
 // Run starts the scanner
 func (s *ETHScanner) Run() error {
-	return s.Base.Run(s.ethClient.GetBlockCount, s.getBlockAtHeight, s.getBlockHashAndHeight, s.waitForNextBlock, s.scanBlock)
+	return s.Base.Run(s.ethClient.GetBlockCount, s.getBlockAtHeight, s.waitForNextBlock, s.scanBlock)
 }
 
 // Shutdown shutdown the scanner
@@ -55,10 +57,9 @@ func (s *ETHScanner) Shutdown() {
 // scanBlock scans for a new ETH block every ScanPeriod.
 // When a new block is found, it compares the block against our scanning
 // deposit addresses. If a matching deposit is found, it saves it to the DB.
-func (s *ETHScanner) scanBlock(blk interface{}) (int, error) {
-	block := blk.(*types.Block)
-	log := s.log.WithField("hash", block.Hash().String())
-	log = log.WithField("height", block.NumberU64())
+func (s *ETHScanner) scanBlock(block *CommonBlock) (int, error) {
+	log := s.log.WithField("hash", block.Hash)
+	log = log.WithField("height", block.Height)
 
 	log.Debug("Scanning block")
 
@@ -85,24 +86,31 @@ func (s *ETHScanner) scanBlock(blk interface{}) (int, error) {
 }
 
 // getBlockAtHeight returns that block at a specific height
-func (s *ETHScanner) getBlockAtHeight(seq int64) (interface{}, error) {
-	return s.ethClient.GetBlockVerboseTx(uint64(seq))
+func (s *ETHScanner) getBlockAtHeight(seq int64) (*CommonBlock, error) {
+	b, err := s.ethClient.GetBlockVerboseTx(uint64(seq))
+	if err != nil {
+		return nil, err
+	}
+	return ethBlock2CommonBlock(b)
 }
 
 // getNextBlock returns the next block of given hash, return nil if next block does not exist
-func (s *ETHScanner) getNextBlock(seq uint64) (*types.Block, error) {
-	return s.ethClient.GetBlockVerboseTx(seq + 1)
+func (s *ETHScanner) getNextBlock(seq uint64) (*CommonBlock, error) {
+	b, err := s.ethClient.GetBlockVerboseTx(seq + 1)
+	if err != nil {
+		return nil, err
+	}
+	return ethBlock2CommonBlock(b)
 }
 
 // waitForNextBlock scans for the next block until it is available
-func (s *ETHScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
-	block := blk.(*types.Block)
-	log := s.log.WithField("blockHash", block.Hash().String())
-	log = log.WithField("blockHeight", block.NumberU64())
+func (s *ETHScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) {
+	log := s.log.WithField("blockHash", block.Hash)
+	log = log.WithField("blockHeight", block.Height)
 	log.Debug("Waiting for the next block")
 
 	for {
-		nextBlock, err := s.getNextBlock(block.NumberU64())
+		nextBlock, err := s.getNextBlock(uint64(block.Height))
 		if err != nil {
 			log.WithError(err).Error("getNextBlock failed")
 		}
@@ -119,8 +127,8 @@ func (s *ETHScanner) waitForNextBlock(blk interface{}) (interface{}, error) {
 		}
 
 		log.WithFields(logrus.Fields{
-			"hash":   nextBlock.Hash().String(),
-			"height": nextBlock.NumberU64(),
+			"hash":   nextBlock.Hash,
+			"height": nextBlock.Height,
 		}).Debug("Found nextBlock")
 
 		return nextBlock, nil
@@ -140,6 +148,30 @@ func (s *ETHScanner) GetScanAddresses() ([]string, error) {
 // GetDeposit returns deposit value channel.
 func (s *ETHScanner) GetDeposit() <-chan DepositNote {
 	return s.Base.DepositC
+}
+
+// ethBlock2CommonBlock convert ethereum block to common block
+func ethBlock2CommonBlock(block *types.Block) (*CommonBlock, error) {
+	cb := CommonBlock{Hash: block.Hash().String(), Height: int64(block.NumberU64())}
+	cb.RawTx = make([]CommonTx, len(block.Transactions()))
+	for i, tx := range block.Transactions() {
+		to := tx.To()
+		if to == nil {
+			//this is a contract transcation
+			continue
+		}
+		cbTx := CommonTx{Txid: tx.Hash().String()}
+		cbTx.Vout = make([]CommonVout, 1)
+		//1 eth = 1e18 wei ,tx.Value() is very big that may overflow(int64), so store it as Gwei(1Gwei=1e9wei) and recover it when used
+		amt := mathutil.Wei2Gwei(tx.Value())
+
+		//ethcoin address must be lowercase
+		realaddr := strings.ToLower(to.String())
+		cv := CommonVout{N: uint32(i), Value: int64(amt), Addresses: []string{realaddr}}
+		cbTx.Vout = append(cbTx.Vout, cv)
+		cb.RawTx = append(cb.RawTx, cbTx)
+	}
+	return &cb, nil
 }
 
 //EthClient is self-defined struct for implement EthRPCClient interface
@@ -172,11 +204,6 @@ func (ec *EthClient) GetBlockCount() (int64, error) {
 		return 0, err
 	}
 	return int64(blockNum), nil
-}
-
-func (s *ETHScanner) getBlockHashAndHeight(block interface{}) (string, int64) {
-	b := block.(*types.Block)
-	return b.Hash().String(), int64(b.NumberU64())
 }
 
 //Shutdown close rpc connection
