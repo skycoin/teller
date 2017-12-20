@@ -320,7 +320,7 @@ func setDefaults() {
 
 	// SkyExchanger
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)
-	viper.SetDefault("sky_exchanger.max_decimals", 0)
+	viper.SetDefault("sky_exchanger.max_decimals", 3)
 
 	// Web
 	viper.SetDefault("web.http_addr", "127.0.0.1:7071")
