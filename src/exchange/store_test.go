@@ -95,12 +95,12 @@ func TestStoreNewStore(t *testing.T) {
 
 	// check the buckets
 	err := s.db.View(func(tx *bolt.Tx) error {
-		require.NotNil(t, tx.Bucket(exchangeMetaBkt))
-		require.NotNil(t, tx.Bucket(depositInfoBkt))
-		require.NotNil(t, tx.Bucket(dbutil.ByteJoin(bindAddressBkt, scanner.CoinTypeBTC, "_")))
-		require.NotNil(t, tx.Bucket(dbutil.ByteJoin(bindAddressBkt, scanner.CoinTypeETH, "_")))
-		require.NotNil(t, tx.Bucket(skyDepositSeqsIndexBkt))
-		require.NotNil(t, tx.Bucket(btcTxsBkt))
+		require.NotNil(t, tx.Bucket(ExchangeMetaBkt))
+		require.NotNil(t, tx.Bucket(DepositInfoBkt))
+		require.NotNil(t, tx.Bucket(dbutil.ByteJoin(BindAddressBkt, scanner.CoinTypeBTC, "_")))
+		require.NotNil(t, tx.Bucket(dbutil.ByteJoin(BindAddressBkt, scanner.CoinTypeETH, "_")))
+		require.NotNil(t, tx.Bucket(SkyDepositSeqsIndexBkt))
+		require.NotNil(t, tx.Bucket(BtcTxsBkt))
 		return nil
 	})
 	require.NoError(t, err)
@@ -184,7 +184,7 @@ func TestStoreBindAddress(t *testing.T) {
 
 	// check bucket
 	err = s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(dbutil.ByteJoin(bindAddressBkt, scanner.CoinTypeBTC, "_"))
+		bkt := tx.Bucket(dbutil.ByteJoin(BindAddressBkt, scanner.CoinTypeBTC, "_"))
 		require.NotNil(t, bkt)
 		v := bkt.Get([]byte("ba1"))
 		require.Equal(t, "sa1", string(v))

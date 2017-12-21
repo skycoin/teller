@@ -87,7 +87,7 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 	}
 
 	if err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(depositBkt)
+		_, err := tx.CreateBucketIfNotExists(DepositBkt)
 		return err
 	}); err != nil {
 		return nil, err

@@ -71,11 +71,11 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 		}
 
 		// create bind address bucket if not exist
-		btcBktFullName := dbutil.ByteJoin(bindAddressBkt, scanner.CoinTypeBTC, "_")
+		btcBktFullName := dbutil.ByteJoin(BindAddressBkt, scanner.CoinTypeBTC, "_")
 		if _, err := tx.CreateBucketIfNotExists(btcBktFullName); err != nil {
 			return dbutil.NewCreateBucketFailedErr(btcBktFullName, err)
 		}
-		ethBktFullName := dbutil.ByteJoin(bindAddressBkt, scanner.CoinTypeETH, "_")
+		ethBktFullName := dbutil.ByteJoin(BindAddressBkt, scanner.CoinTypeETH, "_")
 		if _, err := tx.CreateBucketIfNotExists(ethBktFullName); err != nil {
 			return dbutil.NewCreateBucketFailedErr(ethBktFullName, err)
 		}
@@ -115,7 +115,7 @@ func (s *Store) GetBindAddress(depositAddr, coinType string) (string, error) {
 // getBindAddressTx returns bound skycoin address of given bitcoin address.
 // If no skycoin address is found, returns empty string and nil error.
 func (s *Store) getBindAddressTx(tx *bolt.Tx, depositAddr, coinType string) (string, error) {
-	bindBktFullName := dbutil.ByteJoin(bindAddressBkt, coinType, "_")
+	bindBktFullName := dbutil.ByteJoin(BindAddressBkt, coinType, "_")
 	skyAddr, err := dbutil.GetBucketString(tx, bindBktFullName, depositAddr)
 	switch err.(type) {
 	case nil:
@@ -154,11 +154,11 @@ func (s *Store) BindAddress(skyAddr, depositAddr, coinType string) error {
 		}
 
 		addrs = append(addrs, depositAddr)
-		if err := dbutil.PutBucketValue(tx, skyDepositSeqsIndexBkt, skyAddr, addrs); err != nil {
+		if err := dbutil.PutBucketValue(tx, SkyDepositSeqsIndexBkt, skyAddr, addrs); err != nil {
 			return err
 		}
 
-		bindBktFullName := dbutil.ByteJoin(bindAddressBkt, coinType, "_")
+		bindBktFullName := dbutil.ByteJoin(BindAddressBkt, coinType, "_")
 		return dbutil.PutBucketValue(tx, bindBktFullName, depositAddr, skyAddr)
 	})
 }
@@ -356,7 +356,7 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 
 		for _, depositAddr := range depositAddrs {
 			var txns []string
-			if err := dbutil.GetBucketObject(tx, btcTxsBkt, depositAddr, &txns); err != nil {
+			if err := dbutil.GetBucketObject(tx, BtcTxsBkt, depositAddr, &txns); err != nil {
 				switch err.(type) {
 				case dbutil.ObjectNotExistErr:
 				default:

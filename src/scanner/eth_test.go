@@ -201,7 +201,7 @@ func testEthScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int
 		err := scr.Base.Store.(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
-				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
+				err := dbutil.GetBucketObject(tx, DepositBkt, dv.ID(), &d)
 				require.NoError(t, err)
 				if err != nil {
 					return err
@@ -457,7 +457,7 @@ func testEthScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 		err := scr.Base.Store.(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
-				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
+				err := dbutil.GetBucketObject(tx, DepositBkt, dv.ID(), &d)
 				require.NoError(t, err)
 				if err != nil {
 					return err
