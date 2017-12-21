@@ -597,9 +597,6 @@ File: scanner/store.go
 
 Maps: "deposit_addresses" -> [btcaddrs]
 Note: Saves list of btc addresss being scanned
-
-Maps: "dv_index_list" -> [btcTx[%tx:%n]][json]
-Note: Saves list of btc txid:seq (as JSON)
 ```
 
 ```

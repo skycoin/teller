@@ -15,20 +15,20 @@ import (
 )
 
 var (
-	// exchange meta info bucket
-	exchangeMetaBkt = []byte("exchange_meta")
+	// ExchangeMetaBkt stores metadata about the exchange (unused)
+	ExchangeMetaBkt = []byte("exchange_meta")
 
-	// deposit status bucket
-	depositInfoBkt = []byte("deposit_info")
+	// DepositInfoBkt maps a BTC transaction to a DepositInfo
+	DepositInfoBkt = []byte("deposit_info")
 
-	// bind address bucket
-	bindAddressBkt = []byte("bind_address")
+	// BindAddressBkt maps a BTC address to a SKY address
+	BindAddressBkt = []byte("bind_address")
 
-	btcTxsBkt = []byte("btc_txs")
+	// BtcTxsBkt maps a BTC address to multiple BTC transactions
+	BtcTxsBkt = []byte("btc_txs")
 
-	// index bucket for skycoin address and deposit seqs, skycoin address as key
-	// deposit info seq array as value
-	skyDepositSeqsIndexBkt = []byte("sky_deposit_seqs_index")
+	// SkyDepositSeqsIndexBkt maps a SKY address to its BTC addresses
+	SkyDepositSeqsIndexBkt = []byte("sky_deposit_seqs_index")
 
 	// ErrAddressAlreadyBound is returned if an address has already been bound to a SKY address
 	ErrAddressAlreadyBound = errors.New("Address already bound to a SKY address")
@@ -61,13 +61,13 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		// create exchange meta bucket if not exist
-		if _, err := tx.CreateBucketIfNotExists(exchangeMetaBkt); err != nil {
-			return dbutil.NewCreateBucketFailedErr(exchangeMetaBkt, err)
+		if _, err := tx.CreateBucketIfNotExists(ExchangeMetaBkt); err != nil {
+			return dbutil.NewCreateBucketFailedErr(ExchangeMetaBkt, err)
 		}
 
 		// create deposit status bucket if not exist
-		if _, err := tx.CreateBucketIfNotExists(depositInfoBkt); err != nil {
-			return dbutil.NewCreateBucketFailedErr(depositInfoBkt, err)
+		if _, err := tx.CreateBucketIfNotExists(DepositInfoBkt); err != nil {
+			return dbutil.NewCreateBucketFailedErr(DepositInfoBkt, err)
 		}
 
 		// create bind address bucket if not exist
@@ -80,12 +80,12 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 			return dbutil.NewCreateBucketFailedErr(ethBktFullName, err)
 		}
 
-		if _, err := tx.CreateBucketIfNotExists(skyDepositSeqsIndexBkt); err != nil {
-			return dbutil.NewCreateBucketFailedErr(skyDepositSeqsIndexBkt, err)
+		if _, err := tx.CreateBucketIfNotExists(SkyDepositSeqsIndexBkt); err != nil {
+			return dbutil.NewCreateBucketFailedErr(SkyDepositSeqsIndexBkt, err)
 		}
 
-		if _, err := tx.CreateBucketIfNotExists(btcTxsBkt); err != nil {
-			return dbutil.NewCreateBucketFailedErr(btcTxsBkt, err)
+		if _, err := tx.CreateBucketIfNotExists(BtcTxsBkt); err != nil {
+			return dbutil.NewCreateBucketFailedErr(BtcTxsBkt, err)
 		}
 
 		return nil
@@ -117,7 +117,6 @@ func (s *Store) GetBindAddress(depositAddr, coinType string) (string, error) {
 func (s *Store) getBindAddressTx(tx *bolt.Tx, depositAddr, coinType string) (string, error) {
 	bindBktFullName := dbutil.ByteJoin(bindAddressBkt, coinType, "_")
 	skyAddr, err := dbutil.GetBucketString(tx, bindBktFullName, depositAddr)
-
 	switch err.(type) {
 	case nil:
 		return skyAddr, nil
@@ -146,7 +145,7 @@ func (s *Store) BindAddress(skyAddr, depositAddr, coinType string) error {
 
 		// update index of skycoin address and the deposit seq
 		var addrs []string
-		if err := dbutil.GetBucketObject(tx, skyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
+		if err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
 			switch err.(type) {
 			case dbutil.ObjectNotExistErr:
 			default:
@@ -253,13 +252,13 @@ func (s *Store) addDepositInfoTx(tx *bolt.Tx, di DepositInfo) (DepositInfo, erro
 	log := s.log.WithField("depositInfo", di)
 
 	// check if the dpi with DepositID already exist
-	if hasKey, err := dbutil.BucketHasKey(tx, depositInfoBkt, di.DepositID); err != nil {
+	if hasKey, err := dbutil.BucketHasKey(tx, DepositInfoBkt, di.DepositID); err != nil {
 		return di, err
 	} else if hasKey {
 		return di, fmt.Errorf("deposit info of btctx \"%s\" already exists", di.DepositID)
 	}
 
-	seq, err := dbutil.NextSequence(tx, depositInfoBkt)
+	seq, err := dbutil.NextSequence(tx, DepositInfoBkt)
 	if err != nil {
 		return di, err
 	}
@@ -273,13 +272,13 @@ func (s *Store) addDepositInfoTx(tx *bolt.Tx, di DepositInfo) (DepositInfo, erro
 		return di, err
 	}
 
-	if err := dbutil.PutBucketValue(tx, depositInfoBkt, updatedDi.DepositID, updatedDi); err != nil {
+	if err := dbutil.PutBucketValue(tx, DepositInfoBkt, updatedDi.DepositID, updatedDi); err != nil {
 		return di, err
 	}
 
 	// update btc_txids bucket
 	var txs []string
-	if err := dbutil.GetBucketObject(tx, btcTxsBkt, updatedDi.DepositAddress, &txs); err != nil {
+	if err := dbutil.GetBucketObject(tx, BtcTxsBkt, updatedDi.DepositAddress, &txs); err != nil {
 		switch err.(type) {
 		case dbutil.ObjectNotExistErr:
 		default:
@@ -288,7 +287,7 @@ func (s *Store) addDepositInfoTx(tx *bolt.Tx, di DepositInfo) (DepositInfo, erro
 	}
 
 	txs = append(txs, updatedDi.DepositID)
-	if err := dbutil.PutBucketValue(tx, btcTxsBkt, updatedDi.DepositAddress, txs); err != nil {
+	if err := dbutil.PutBucketValue(tx, BtcTxsBkt, updatedDi.DepositAddress, txs); err != nil {
 		return di, err
 	}
 
@@ -312,7 +311,7 @@ func (s *Store) getDepositInfo(btcTx string) (DepositInfo, error) {
 func (s *Store) getDepositInfoTx(tx *bolt.Tx, btcTx string) (DepositInfo, error) {
 	var dpi DepositInfo
 
-	if err := dbutil.GetBucketObject(tx, depositInfoBkt, btcTx, &dpi); err != nil {
+	if err := dbutil.GetBucketObject(tx, DepositInfoBkt, btcTx, &dpi); err != nil {
 		return DepositInfo{}, err
 	}
 
@@ -324,7 +323,7 @@ func (s *Store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
 	var dpis []DepositInfo
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
-		return dbutil.ForEach(tx, depositInfoBkt, func(k, v []byte) error {
+		return dbutil.ForEach(tx, DepositInfoBkt, func(k, v []byte) error {
 			var dpi DepositInfo
 			if err := json.Unmarshal(v, &dpi); err != nil {
 				return err
@@ -379,7 +378,7 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 
 			for _, txn := range txns {
 				var dpi DepositInfo
-				if err := dbutil.GetBucketObject(tx, depositInfoBkt, txn, &dpi); err != nil {
+				if err := dbutil.GetBucketObject(tx, DepositInfoBkt, txn, &dpi); err != nil {
 					return err
 				}
 
@@ -420,7 +419,7 @@ func (s *Store) UpdateDepositInfoCallback(btcTx string, update func(DepositInfo)
 
 	var dpi DepositInfo
 	if err := s.db.Update(func(tx *bolt.Tx) error {
-		if err := dbutil.GetBucketObject(tx, depositInfoBkt, btcTx, &dpi); err != nil {
+		if err := dbutil.GetBucketObject(tx, DepositInfoBkt, btcTx, &dpi); err != nil {
 			return err
 		}
 
@@ -435,7 +434,7 @@ func (s *Store) UpdateDepositInfoCallback(btcTx string, update func(DepositInfo)
 		dpi = update(dpi)
 		dpi.UpdatedAt = time.Now().UTC().Unix()
 
-		if err := dbutil.PutBucketValue(tx, depositInfoBkt, btcTx, dpi); err != nil {
+		if err := dbutil.PutBucketValue(tx, DepositInfoBkt, btcTx, dpi); err != nil {
 			return err
 		}
 
@@ -466,7 +465,7 @@ func (s *Store) GetSkyBindAddresses(skyAddr string) ([]string, error) {
 // getSkyBindBtcAddressesTx returns the addresses of the given sky address bound
 func (s *Store) getSkyBindBtcAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, error) {
 	var addrs []string
-	if err := dbutil.GetBucketObject(tx, skyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
+	if err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
 		switch err.(type) {
 		case dbutil.ObjectNotExistErr:
 			err = nil
@@ -487,7 +486,7 @@ func (s *Store) GetDepositStats() (int64, int64, error) {
 	var totalSKYSent int64
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
-		return dbutil.ForEach(tx, depositInfoBkt, func(k, v []byte) error {
+		return dbutil.ForEach(tx, DepositInfoBkt, func(k, v []byte) error {
 			var dpi DepositInfo
 			if err := json.Unmarshal(v, &dpi); err != nil {
 				return err

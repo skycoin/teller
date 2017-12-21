@@ -166,6 +166,16 @@ func TestSenderBroadcastTransaction(t *testing.T) {
 
 	t.Log("=== Run\tTest invalid request address")
 	txid, err = broadcastTx(sdr, "invalid address", 20)
+	require.Equal(t, "Invalid base58 character", err.Error())
+	require.Empty(t, txid)
+
+	t.Log("=== Run\tTest invalid request address 2")
+	txid, err = broadcastTx(sdr, " bxpUG8sCjeT6X1ES5SbD2LZrRudqiTY7wx", 20)
+	require.Equal(t, "Invalid base58 character", err.Error())
+	require.Empty(t, txid)
+
+	t.Log("=== Run\tTest invalid request address 3")
+	txid, err = broadcastTx(sdr, "bxpUG8sCjeT6X1ES5SbD2LZrRudqiTY7wxx", 20)
 	require.Equal(t, "Invalid address length", err.Error())
 	require.Empty(t, txid)
 }

@@ -369,6 +369,9 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		}
 		defer r.Body.Close()
 
+		// Remove extraneous whitespace
+		bindReq.SkyAddr = strings.Trim(bindReq.SkyAddr, "\n\t ")
+
 		log = log.WithField("bindReq", bindReq)
 		ctx = logger.WithContext(ctx, log)
 		r = r.WithContext(ctx)
@@ -455,6 +458,10 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 		}
 
 		skyAddr := r.URL.Query().Get("skyaddr")
+
+		// Remove extraneous whitespace
+		skyAddr = strings.Trim(skyAddr, "\n\t ")
+
 		if skyAddr == "" {
 			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing skyaddr"))
 			return

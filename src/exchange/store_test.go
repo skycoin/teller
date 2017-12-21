@@ -125,7 +125,7 @@ func TestStoreAddDepositInfo(t *testing.T) {
 	// check in db
 	err = s.db.View(func(tx *bolt.Tx) error {
 		var dpi DepositInfo
-		err := dbutil.GetBucketObject(tx, depositInfoBkt, "btx1:2", &dpi)
+		err := dbutil.GetBucketObject(tx, DepositInfoBkt, "btx1:2", &dpi)
 		require.NoError(t, err)
 		if err != nil {
 			return err
@@ -134,7 +134,7 @@ func TestStoreAddDepositInfo(t *testing.T) {
 		require.NotEmpty(t, dpi.UpdatedAt)
 
 		var txns []string
-		err = dbutil.GetBucketObject(tx, btcTxsBkt, "btcaddr1", &txns)
+		err = dbutil.GetBucketObject(tx, BtcTxsBkt, "btcaddr1", &txns)
 		require.NoError(t, err)
 		if err != nil {
 			return err
@@ -158,7 +158,7 @@ func TestStoreAddDepositInfo(t *testing.T) {
 
 	err = s.db.View(func(tx *bolt.Tx) error {
 		var dpi DepositInfo
-		err := dbutil.GetBucketObject(tx, depositInfoBkt, "btx1:2", &dpi)
+		err := dbutil.GetBucketObject(tx, DepositInfoBkt, "btx1:2", &dpi)
 		require.NoError(t, err)
 		if err != nil {
 			return err
@@ -190,7 +190,7 @@ func TestStoreBindAddress(t *testing.T) {
 		require.Equal(t, "sa1", string(v))
 
 		var addrs []string
-		err := dbutil.GetBucketObject(tx, skyDepositSeqsIndexBkt, "sa1", &addrs)
+		err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, "sa1", &addrs)
 		require.NoError(t, err)
 		require.Equal(t, "ba1", addrs[0])
 		return nil
@@ -330,7 +330,7 @@ func TestStoreUpdateDepositInfo(t *testing.T) {
 
 	err = s.db.View(func(tx *bolt.Tx) error {
 		var dpi1 DepositInfo
-		err := dbutil.GetBucketObject(tx, depositInfoBkt, "btx1:1", &dpi1)
+		err := dbutil.GetBucketObject(tx, DepositInfoBkt, "btx1:1", &dpi1)
 		require.NoError(t, err)
 		if err != nil {
 			return err
@@ -339,7 +339,7 @@ func TestStoreUpdateDepositInfo(t *testing.T) {
 		require.Equal(t, dpi1.Status, StatusWaitSend)
 
 		var dpi2 DepositInfo
-		err = dbutil.GetBucketObject(tx, depositInfoBkt, "btx2:1", &dpi2)
+		err = dbutil.GetBucketObject(tx, DepositInfoBkt, "btx2:1", &dpi2)
 		require.NoError(t, err)
 		if err != nil {
 			return err
@@ -364,7 +364,7 @@ func TestStoreUpdateDepositInfo(t *testing.T) {
 
 	err = s.db.View(func(tx *bolt.Tx) error {
 		var dpi1 DepositInfo
-		err := dbutil.GetBucketObject(tx, depositInfoBkt, "btx1:1", &dpi1)
+		err := dbutil.GetBucketObject(tx, DepositInfoBkt, "btx1:1", &dpi1)
 		require.NoError(t, err)
 		if err != nil {
 			return err

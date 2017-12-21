@@ -87,7 +87,7 @@ func TestNewStore(t *testing.T) {
 		bkt := tx.Bucket(scanBktFullName)
 		require.NotNil(t, bkt)
 
-		require.NotNil(t, tx.Bucket(depositBkt))
+		require.NotNil(t, tx.Bucket(DepositBkt))
 
 		return nil
 	})

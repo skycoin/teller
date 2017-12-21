@@ -184,7 +184,7 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int64)
 		err := scr.Base.Store.(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
-				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
+				err := dbutil.GetBucketObject(tx, DepositBkt, dv.ID(), &d)
 				require.NoError(t, err)
 				if err != nil {
 					return err
@@ -454,7 +454,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 		err := scr.Base.Store.(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
-				err := dbutil.GetBucketObject(tx, depositBkt, dv.ID(), &d)
+				err := dbutil.GetBucketObject(tx, DepositBkt, dv.ID(), &d)
 				require.NoError(t, err)
 				if err != nil {
 					return err
