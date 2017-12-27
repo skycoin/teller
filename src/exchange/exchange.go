@@ -66,7 +66,7 @@ type Exchange struct {
 
 // Config exchange config struct
 type Config struct {
-	Rate                    string // SKY/BTC rate, decimal string
+	BtcRate                 string // SKY/BTC rate, decimal string
 	EthRate                 string // SKY/ETH rate, decimal string
 	TxConfirmationCheckWait time.Duration
 	MaxDecimals             int
@@ -74,7 +74,7 @@ type Config struct {
 
 // Validate returns an error if the configuration is invalid
 func (c Config) Validate() error {
-	if _, err := ParseRate(c.Rate); err != nil {
+	if _, err := ParseRate(c.BtcRate); err != nil {
 		return err
 	}
 
@@ -91,7 +91,7 @@ func (c Config) Validate() error {
 
 // NewExchange creates exchange service
 func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, cfg Config) (*Exchange, error) {
-	if _, err := ParseRate(cfg.Rate); err != nil {
+	if _, err := ParseRate(cfg.BtcRate); err != nil {
 		return nil, err
 	}
 
@@ -232,7 +232,7 @@ func (s *Exchange) getRate(coinType string) (string, error) {
 	switch coinType {
 	case scanner.CoinTypeBTC:
 		s.log.Info("Received bitcoin deposit")
-		return s.cfg.Rate, nil
+		return s.cfg.BtcRate, nil
 	case scanner.CoinTypeETH:
 		s.log.Info("Received ethcoin deposit")
 		return s.cfg.EthRate, nil

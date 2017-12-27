@@ -170,7 +170,7 @@ func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 	go multiplexer.Multiplex()
 
 	e, err := NewExchange(log, store, multiplexer, newDummySender(), Config{
-		Rate: testSkyBtcRate,
+		BtcRate:                 testSkyBtcRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 	})
 	require.NoError(t, err)
@@ -221,7 +221,7 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 	go multiplexer.Multiplex()
 
 	e, err := NewExchange(log, store, multiplexer, newDummySender(), Config{
-		Rate: testSkyBtcRate,
+		BtcRate:                 testSkyBtcRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 	})
 	require.NoError(t, err)
@@ -838,7 +838,7 @@ func testExchangeRunProcessDepositBacklog(t *testing.T, dis []DepositInfo, confi
 		expectedDis[i].Status = StatusDone
 
 		if expectedDis[i].SkySent == 0 {
-			amt, err := CalculateBtcSkyValue(di.DepositValue, e.cfg.Rate, testMaxDecimals)
+			amt, err := CalculateBtcSkyValue(di.DepositValue, e.cfg.BtcRate, testMaxDecimals)
 			require.NoError(t, err)
 			expectedDis[i].SkySent = amt
 		}
@@ -1192,7 +1192,7 @@ func TestExchangeBindAddress(t *testing.T) {
 
 func TestExchangeCreateTransaction(t *testing.T) {
 	cfg := Config{
-		Rate: "10",
+		BtcRate: "10",
 	}
 
 	log, _ := testutil.NewLogger(t)
@@ -1227,9 +1227,9 @@ func TestExchangeCreateTransaction(t *testing.T) {
 		DepositValue:   1e8,
 		ConversionRate: "100",
 	}
-	// Make sure DepositInfo.ConversionRate != s.Config.Rate, to confirm
-	// that the DepositInfo's ConversionRate is used instead of Config.Rate
-	require.NotEqual(t, s.cfg.Rate, di.ConversionRate)
+	// Make sure DepositInfo.ConversionRate != s.Config.BtcRate, to confirm
+	// that the DepositInfo's ConversionRate is used instead of Config.BtcRate
+	require.NotEqual(t, s.cfg.BtcRate, di.ConversionRate)
 
 	tx, err := s.createTransaction(di)
 	require.NoError(t, err)

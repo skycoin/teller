@@ -188,13 +188,13 @@ func (c Config) Validate() error {
 		oops("btc_addresses missing")
 	}
 	if _, err := os.Stat(c.BtcAddresses); os.IsNotExist(err) {
-		oops("btc_adresses file does not exist")
+		oops("btc_addresses file does not exist")
 	}
 	if c.EthAddresses == "" {
 		oops("eth_addresses missing")
 	}
 	if _, err := os.Stat(c.EthAddresses); os.IsNotExist(err) {
-		oops("eth_adresses file does not exist")
+		oops("eth_addresses file does not exist")
 	}
 
 	if !c.Dummy.Sender {

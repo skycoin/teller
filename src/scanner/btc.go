@@ -125,17 +125,23 @@ func btcBlock2CommonBlock(block *btcjson.GetBlockVerboseResult) (*CommonBlock, e
 	if len(block.RawTx) == 0 {
 		return nil, ErrBtcdTxindexDisabled
 	}
-	cb := CommonBlock{Hash: block.Hash, NextHash: block.NextHash, Height: block.Height}
-	cb.RawTx = make([]CommonTx, len(block.RawTx))
+	cb := CommonBlock{}
+	cb.Hash = block.Hash
+	cb.NextHash = block.NextHash
+	cb.Height = block.Height
+	cb.RawTx = make([]CommonTx, 0, len(block.RawTx))
 	for _, tx := range block.RawTx {
-		cbTx := CommonTx{Txid: tx.Txid}
-		cbTx.Vout = make([]CommonVout, len(tx.Vout))
+		cbTx := CommonTx{}
+		cbTx.Txid = tx.Txid
+		cbTx.Vout = make([]CommonVout, 0, len(tx.Vout))
 		for _, v := range tx.Vout {
 			amt, err := btcutil.NewAmount(v.Value)
 			if err != nil {
 				return nil, err
 			}
-			cv := CommonVout{Value: int64(amt), Addresses: v.ScriptPubKey.Addresses}
+			cv := CommonVout{}
+			cv.Value = int64(amt)
+			cv.Addresses = v.ScriptPubKey.Addresses
 			cbTx.Vout = append(cbTx.Vout, cv)
 		}
 		cb.RawTx = append(cb.RawTx, cbTx)
@@ -194,7 +200,11 @@ func (s *BTCScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 					continue
 				}
 			}
-			block, _ = btcBlock2CommonBlock(btcBlock)
+			block, err = btcBlock2CommonBlock(btcBlock)
+			if err != nil {
+				log.WithError(err).Error("btc block 2 common block failed")
+				return nil, err
+			}
 			break
 		}
 	}

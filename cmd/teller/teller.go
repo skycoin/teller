@@ -271,7 +271,7 @@ func run() error {
 		return err
 	}
 	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, exchange.Config{
-		Rate:                    cfg.SkyExchanger.SkyBtcExchangeRate,
+		BtcRate:                 cfg.SkyExchanger.SkyBtcExchangeRate,
 		EthRate:                 cfg.SkyExchanger.SkyEthExchangeRate,
 		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
 		MaxDecimals:             cfg.SkyExchanger.MaxDecimals,

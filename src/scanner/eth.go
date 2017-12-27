@@ -152,22 +152,28 @@ func (s *ETHScanner) GetDeposit() <-chan DepositNote {
 
 // ethBlock2CommonBlock convert ethereum block to common block
 func ethBlock2CommonBlock(block *types.Block) (*CommonBlock, error) {
-	cb := CommonBlock{Hash: block.Hash().String(), Height: int64(block.NumberU64())}
-	cb.RawTx = make([]CommonTx, len(block.Transactions()))
+	cb := CommonBlock{}
+	cb.Hash = block.Hash().String()
+	cb.Height = int64(block.NumberU64())
+	cb.RawTx = make([]CommonTx, 0, len(block.Transactions()))
 	for i, tx := range block.Transactions() {
 		to := tx.To()
 		if to == nil {
 			//this is a contract transcation
 			continue
 		}
-		cbTx := CommonTx{Txid: tx.Hash().String()}
-		cbTx.Vout = make([]CommonVout, 1)
+		cbTx := CommonTx{}
+		cbTx.Txid = tx.Hash().String()
+		cbTx.Vout = make([]CommonVout, 0, 1)
 		//1 eth = 1e18 wei ,tx.Value() is very big that may overflow(int64), so store it as Gwei(1Gwei=1e9wei) and recover it when used
 		amt := mathutil.Wei2Gwei(tx.Value())
 
 		//ethcoin address must be lowercase
 		realaddr := strings.ToLower(to.String())
-		cv := CommonVout{N: uint32(i), Value: int64(amt), Addresses: []string{realaddr}}
+		cv := CommonVout{}
+		cv.N = uint32(i)
+		cv.Value = int64(amt)
+		cv.Addresses = []string{realaddr}
 		cbTx.Vout = append(cbTx.Vout, cv)
 		cb.RawTx = append(cb.RawTx, cbTx)
 	}
