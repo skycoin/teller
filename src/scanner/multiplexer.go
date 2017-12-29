@@ -56,7 +56,7 @@ func (m *Multiplexer) AddScanAddress(depositAddr, coinType string) error {
 	if !existsScanner {
 		return errors.New("unknown cointype")
 	}
-	return scanner.AddScanAddress(depositAddr)
+	return scanner.AddScanAddress(depositAddr, coinType)
 }
 
 //Multiplex forward multi-scanner deposit to a shared aggregate channel, think of "Goroutine merging channel"
@@ -84,7 +84,7 @@ func (m *Multiplexer) Multiplex() error {
 }
 
 // GetDeposits returns deposit values channel.
-func (m *Multiplexer) GetDeposits() <-chan DepositNote {
+func (m *Multiplexer) GetDeposit() <-chan DepositNote {
 	return m.outChan
 }
 

@@ -225,14 +225,14 @@ func testScannerRun(t *testing.T, scr *BTCScanner) {
 	var nDeposits int64
 
 	// This address has 0 deposits
-	err := scr.AddScanAddress("1LcEkgX8DCrQczLMVh9LDTRnkdVV2oun3A")
+	err := scr.AddScanAddress("1LcEkgX8DCrQczLMVh9LDTRnkdVV2oun3A", CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 0
 
 	// This address has:
 	// 1 deposit, in block 235206
 	// 1 deposit, in block 235207
-	err = scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA")
+	err = scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA", CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -241,7 +241,7 @@ func testScannerRun(t *testing.T, scr *BTCScanner) {
 	// 47 deposits in block 235206
 	// 22 deposits, in block 235207
 	// 26 deposits, in block 235214
-	err = scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
+	err = scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 126
 
@@ -304,7 +304,7 @@ func testScannerConfirmationsRequired(t *testing.T, btcDB *bolt.DB) {
 	// 26 deposits, in block 235214
 	// Only blocks 235205 and 235206 are processed, because blockCount is set
 	// to 235208 and the confirmations required is set to 2
-	err := scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
+	err := scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 78
 
@@ -352,7 +352,7 @@ func testScannerDuplicateDepositScans(t *testing.T, btcDB *bolt.DB) {
 	// 1 deposit, in block 235206
 	// 1 deposit, in block 235207
 	scr := setupScannerWithDB(t, btcDB, db)
-	err := scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA")
+	err := scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA", CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -431,7 +431,7 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 	// 47 deposits in block 235206
 	// 22 deposits, in block 235207
 	// 26 deposits, in block 235214
-	err := scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9")
+	err := scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 126
 

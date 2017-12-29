@@ -116,7 +116,7 @@ func TestMultiplexerOnlyBtc(t *testing.T) {
 	go func() {
 		defer close(done)
 		var dvs []DepositNote
-		for dv := range m.GetDeposits() {
+		for dv := range m.GetDeposit() {
 			dvs = append(dvs, dv)
 			dv.ErrC <- nil
 		}
@@ -176,7 +176,7 @@ func TestMultiplexerForAll(t *testing.T) {
 	go func() {
 		defer close(done)
 		var dvs []DepositNote
-		for dv := range m.GetDeposits() {
+		for dv := range m.GetDeposit() {
 			dvs = append(dvs, dv)
 			dv.ErrC <- nil
 		}

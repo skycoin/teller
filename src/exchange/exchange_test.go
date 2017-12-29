@@ -128,7 +128,7 @@ func newDummyScanner() *dummyScanner {
 	}
 }
 
-func (scan *dummyScanner) AddScanAddress(btcAddr string) error {
+func (scan *dummyScanner) AddScanAddress(btcAddr, coinType string) error {
 	scan.addrs = append(scan.addrs, btcAddr)
 	return nil
 }
@@ -197,9 +197,10 @@ func setupExchange(t *testing.T, log *logrus.Logger) (*Exchange, func(), func())
 	return e, run, shutdown
 }
 func closeMultiplexer(e *Exchange) {
-	e.multiplexer.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).stop()
-	e.multiplexer.GetScanner(scanner.CoinTypeETH).(*dummyScanner).stop()
-	e.multiplexer.Shutdown()
+	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).stop()
+	mp.GetScanner(scanner.CoinTypeETH).(*dummyScanner).stop()
+	mp.Shutdown()
 }
 
 func runExchange(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
@@ -283,7 +284,8 @@ func TestExchangeRunSend(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.multiplexer.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
@@ -419,7 +421,8 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.multiplexer.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
@@ -473,7 +476,8 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.multiplexer.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
@@ -527,7 +531,8 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.multiplexer.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
@@ -602,7 +607,8 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.multiplexer.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
@@ -692,7 +698,8 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.multiplexer.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
@@ -999,7 +1006,8 @@ func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.multiplexer.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// Configure database mocks
 
@@ -1050,7 +1058,8 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.multiplexer.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// Configure database mocks
 
@@ -1144,7 +1153,8 @@ func TestExchangeProcessWaitSendNoSkyAddrBound(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.multiplexer.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes

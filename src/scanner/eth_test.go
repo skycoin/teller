@@ -244,19 +244,19 @@ func testEthScannerRun(t *testing.T, scr *ETHScanner) {
 	nDeposits := 0
 
 	// This address has 0 deposits
-	err := scr.AddScanAddress("0x2cf014d432e92685ef1cf7bc7967a4e4debca092")
+	err := scr.AddScanAddress("0x2cf014d432e92685ef1cf7bc7967a4e4debca092", CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 0
 
 	// This address has:
 	// 1 deposit, in block 2325212
-	err = scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0")
+	err = scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
 	// This address has:
 	// 9 deposits in block 2325213
-	err = scr.AddScanAddress("0xbfc39b6f805a9e40e77291aff27aee3c96915bdd")
+	err = scr.AddScanAddress("0xbfc39b6f805a9e40e77291aff27aee3c96915bdd", CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 9
 
@@ -312,7 +312,7 @@ func testEthScannerConfirmationsRequired(t *testing.T, ethDB *bolt.DB) {
 	// 2 deposits in block 2325212
 	// Only blocks 2325212  are processed, because blockCount is set
 	// to 2325214 and the confirmations required is set to 1
-	err := scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0")
+	err := scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -358,7 +358,7 @@ func testEthScannerDuplicateDepositScans(t *testing.T, ethDB *bolt.DB) {
 	// This address has:
 	// 2 deposit, in block 2325212
 	scr := setupEthScannerWithDB(t, ethDB, db)
-	err := scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0")
+	err := scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -434,7 +434,7 @@ func testEthScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 
 	// This address has:
 	// 9 deposits in block 2325213
-	err := scr.AddScanAddress("0xbfc39b6f805a9e40e77291aff27aee3c96915bdd")
+	err := scr.AddScanAddress("0xbfc39b6f805a9e40e77291aff27aee3c96915bdd", CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 9
 

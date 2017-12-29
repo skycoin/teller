@@ -56,9 +56,9 @@ type Exchanger interface {
 type Exchange struct {
 	log         logrus.FieldLogger
 	cfg         Config
-	multiplexer *scanner.Multiplexer // multiplex provides APIs for interacting with the scan service
-	sender      sender.Sender        // sender provides APIs for sending skycoin
-	store       Storer               // deposit info storage
+	multiplexer scanner.Scanner // multiplex provides APIs for interacting with the scan service
+	sender      sender.Sender   // sender provides APIs for sending skycoin
+	store       Storer          // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
 	depositChan chan DepositInfo
@@ -90,7 +90,7 @@ func (c Config) Validate() error {
 }
 
 // NewExchange creates exchange service
-func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, cfg Config) (*Exchange, error) {
+func NewExchange(log logrus.FieldLogger, store Storer, multiplexer scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
 	if _, err := ParseRate(cfg.BtcRate); err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (s *Exchange) Run() error {
 			case <-s.quit:
 				log.Info("exchange.Exchange watch deposits loop quit")
 				return
-			case dv, ok = <-s.multiplexer.GetDeposits():
+			case dv, ok = <-s.multiplexer.GetDeposit():
 				if !ok {
 					log.Warn("Scan service closed, watch deposits loop quit")
 					return

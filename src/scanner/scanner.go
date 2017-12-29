@@ -10,8 +10,7 @@ import (
 
 // Scanner provids apis for interacting with a scan service
 type Scanner interface {
-	AddScanAddress(string) error
-	GetScanAddresses() ([]string, error)
+	AddScanAddress(string, string) error
 	GetDeposit() <-chan DepositNote
 }
 

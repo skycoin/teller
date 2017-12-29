@@ -236,8 +236,8 @@ func (s *BTCScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 }
 
 // AddScanAddress adds new scan address
-func (s *BTCScanner) AddScanAddress(addr string) error {
-	return s.Base.Store.AddScanAddress(addr, CoinTypeBTC)
+func (s *BTCScanner) AddScanAddress(addr, coinType string) error {
+	return s.Base.Store.AddScanAddress(addr, coinType)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan

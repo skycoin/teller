@@ -136,8 +136,8 @@ func (s *ETHScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 }
 
 // AddScanAddress adds new scan address
-func (s *ETHScanner) AddScanAddress(addr string) error {
-	return s.Base.Store.AddScanAddress(addr, CoinTypeETH)
+func (s *ETHScanner) AddScanAddress(addr, coinType string) error {
+	return s.Base.Store.AddScanAddress(addr, coinType)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan
