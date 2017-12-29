@@ -37,7 +37,7 @@ type BTCScanner struct {
 	log       logrus.FieldLogger
 	btcClient BtcRPCClient
 	// Deposit value channel, exposed by public API, intended for public consumption
-	Base *BaseScanner
+	Base CommonScanner
 }
 
 // NewBTCScanner creates scanner instance
@@ -73,7 +73,7 @@ func (s *BTCScanner) scanBlock(block *CommonBlock) (int, error) {
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.Base.Store.ScanBlock(block, CoinTypeBTC)
+	dvs, err := s.Base.GetStorer().ScanBlock(block, CoinTypeBTC)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -85,9 +85,9 @@ func (s *BTCScanner) scanBlock(block *CommonBlock) (int, error) {
 	n := 0
 	for _, dv := range dvs {
 		select {
-		case s.Base.ScannedDeposits <- dv:
+		case s.Base.GetScannedDepositChan() <- dv:
 			n++
-		case <-s.Base.Quit:
+		case <-s.Base.GetQuitChan():
 			return n, errQuit
 		}
 	}
@@ -194,7 +194,7 @@ func (s *BTCScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 
 			if err != nil || btcBlock.NextHash == "" {
 				select {
-				case <-s.Base.Quit:
+				case <-s.Base.GetQuitChan():
 					return nil, errQuit
 				case <-time.After(s.Base.GetScanPeriod()):
 					continue
@@ -219,7 +219,7 @@ func (s *BTCScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 		}
 		if err != nil || nextBlock == nil {
 			select {
-			case <-s.Base.Quit:
+			case <-s.Base.GetQuitChan():
 				return nil, errQuit
 			case <-time.After(s.Base.GetScanPeriod()):
 				continue
@@ -237,15 +237,15 @@ func (s *BTCScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 
 // AddScanAddress adds new scan address
 func (s *BTCScanner) AddScanAddress(addr, coinType string) error {
-	return s.Base.Store.AddScanAddress(addr, coinType)
+	return s.Base.GetStorer().AddScanAddress(addr, coinType)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *BTCScanner) GetScanAddresses() ([]string, error) {
-	return s.Base.Store.GetScanAddresses(CoinTypeBTC)
+	return s.Base.GetStorer().GetScanAddresses(CoinTypeBTC)
 }
 
 //GetDeposit returns channel of depositnote
 func (s *BTCScanner) GetDeposit() <-chan DepositNote {
-	return s.Base.DepositC
+	return s.Base.GetDeposit()
 }

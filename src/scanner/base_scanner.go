@@ -13,15 +13,30 @@ const (
 	depositBufferSize      = 100
 )
 
+type CommonScanner interface {
+	GetScanPeriod() time.Duration
+	GetStorer() Storer
+	GetDeposit() <-chan DepositNote
+	GetQuitChan() <-chan struct{}
+	GetScannedDepositChan() chan Deposit
+	Shutdown()
+	Run(
+		getBlockCount func() (int64, error),
+		getBlockAtHeight func(int64) (*CommonBlock, error),
+		waitForNextBlock func(*CommonBlock) (*CommonBlock, error),
+		scanBlock func(*CommonBlock) (int, error),
+	) error
+}
+
 //BaseScanner common structure that provide the scanning functionality
 type BaseScanner struct {
 	Cfg      Config
-	Store    Storer
+	store    Storer
 	log      logrus.FieldLogger
-	DepositC chan DepositNote
+	depositC chan DepositNote
 	// Internal deposit value channel
-	ScannedDeposits chan Deposit
-	Quit            chan struct{}
+	scannedDeposits chan Deposit
+	quit            chan struct{}
 	done            chan struct{}
 }
 
@@ -57,10 +72,10 @@ func NewBaseScanner(store Storer, log logrus.FieldLogger, cfg Config) *BaseScann
 	}
 	return &BaseScanner{
 		log:             log,
-		Store:           store,
-		Quit:            make(chan struct{}),
-		DepositC:        make(chan DepositNote),
-		ScannedDeposits: make(chan Deposit, cfg.DepositBufferSize),
+		store:           store,
+		quit:            make(chan struct{}),
+		depositC:        make(chan DepositNote),
+		scannedDeposits: make(chan Deposit, cfg.DepositBufferSize),
 		done:            make(chan struct{}),
 		Cfg:             cfg,
 	}
@@ -71,7 +86,7 @@ func NewBaseScanner(store Storer, log logrus.FieldLogger, cfg Config) *BaseScann
 func (s *BaseScanner) loadUnprocessedDeposits() error {
 	s.log.Info("Loading unprocessed deposit values")
 
-	dvs, err := s.Store.GetUnprocessedDeposits()
+	dvs, err := s.store.GetUnprocessedDeposits()
 	if err != nil {
 		s.log.WithError(err).Error("GetUnprocessedDeposits failed")
 		return err
@@ -81,16 +96,16 @@ func (s *BaseScanner) loadUnprocessedDeposits() error {
 
 	for _, dv := range dvs {
 		select {
-		case <-s.Quit:
+		case <-s.quit:
 			return errQuit
-		case s.ScannedDeposits <- dv:
+		case s.scannedDeposits <- dv:
 		}
 	}
 
 	return nil
 }
 
-// processDeposit sends a deposit to DepositC, which is read by exchange.Exchange.
+// processDeposit sends a deposit to depositC, which is read by exchange.Exchange.
 // Exchange will reply with an error or nil on the DepositNote's ErrC channel.
 // If no error is reported, the deposit will be marked as "processed".
 // If this exits early, or the exchange reported an error, the deposit will
@@ -103,16 +118,16 @@ func (s *BaseScanner) processDeposit(dv Deposit) error {
 	dn := NewDepositNote(dv)
 
 	select {
-	case <-s.Quit:
+	case <-s.quit:
 		return errQuit
-	case s.DepositC <- dn:
+	case s.depositC <- dn:
 		select {
-		case <-s.Quit:
+		case <-s.quit:
 			return errQuit
 		case err, ok := <-dn.ErrC:
 			if err == nil {
 				if ok {
-					if err := s.Store.SetDepositProcessed(dv.ID()); err != nil {
+					if err := s.store.SetDepositProcessed(dv.ID()); err != nil {
 						log.WithError(err).Error("SetDepositProcessed error")
 						return err
 					}
@@ -135,10 +150,30 @@ func (s *BaseScanner) GetScanPeriod() time.Duration {
 	return s.Cfg.ScanPeriod
 }
 
+//GetStore returns base storer
+func (s *BaseScanner) GetStorer() Storer {
+	return s.store
+}
+
+//GetDeposit returns channel of depositnote
+func (s *BaseScanner) GetDeposit() <-chan DepositNote {
+	return s.depositC
+}
+
+//GetQuitChan returns quit channel
+func (s *BaseScanner) GetQuitChan() <-chan struct{} {
+	return s.quit
+}
+
+//GetScannedDepositChan returns scanned deposit channel
+func (s *BaseScanner) GetScannedDepositChan() chan Deposit {
+	return s.scannedDeposits
+}
+
 //Shutdown shutdown base scanner
 func (s *BaseScanner) Shutdown() {
-	close(s.DepositC)
-	close(s.Quit)
+	close(s.depositC)
+	close(s.quit)
 	<-s.done
 }
 
@@ -197,7 +232,7 @@ func (s *BaseScanner) Run(
 		// Returns true if the scanner quit
 		wait := func() error {
 			select {
-			case <-s.Quit:
+			case <-s.quit:
 				return errQuit
 			case <-time.After(s.Cfg.ScanPeriod):
 				return nil
@@ -207,7 +242,7 @@ func (s *BaseScanner) Run(
 		deposits := 0
 		for {
 			select {
-			case <-s.Quit:
+			case <-s.quit:
 				return
 			default:
 			}
@@ -287,9 +322,9 @@ func (s *BaseScanner) Run(
 		defer log.Info("Deposit pipe goroutine exited")
 		for {
 			select {
-			case <-s.Quit:
+			case <-s.quit:
 				return
-			case dv := <-s.ScannedDeposits:
+			case dv := <-s.scannedDeposits:
 				if err := s.processDeposit(dv); err != nil {
 					if err == errQuit {
 						return

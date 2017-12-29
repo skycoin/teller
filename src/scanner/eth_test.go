@@ -198,7 +198,7 @@ func testEthScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int
 		require.Equal(t, nDeposits, len(dvs))
 
 		// check all deposits
-		err := scr.Base.Store.(*Store).db.View(func(tx *bolt.Tx) error {
+		err := scr.Base.GetStorer().(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, DepositBkt, dv.ID(), &d)
@@ -226,7 +226,7 @@ func testEthScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	shutdownWait := scr.Base.Cfg.ScanPeriod * time.Duration(nDeposits*2)
+	shutdownWait := scr.Base.(*BaseScanner).Cfg.ScanPeriod * time.Duration(nDeposits*2)
 	if shutdownWait < minShutdownWait {
 		shutdownWait = minShutdownWait
 	}
@@ -262,7 +262,7 @@ func testEthScannerRun(t *testing.T, scr *ETHScanner) {
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
-	require.True(t, scr.Base.Cfg.DepositBufferSize < nDeposits)
+	require.True(t, scr.Base.(*BaseScanner).Cfg.DepositBufferSize < nDeposits)
 
 	testEthScannerRunProcessedLoop(t, scr, nDeposits)
 }
@@ -300,7 +300,7 @@ func testEthScannerConfirmationsRequired(t *testing.T, ethDB *bolt.DB) {
 
 	// Scanning starts at block 2325212, set the blockCount height to 1
 	// confirmations higher, so that only block 2325212 is processed.
-	scr.Base.Cfg.ConfirmationsRequired = 1
+	scr.Base.(*BaseScanner).Cfg.ConfirmationsRequired = 1
 	scr.ethClient.(*dummyEthrpcclient).blockCount = 2325214
 
 	// Add scan addresses for blocks 2325205-2325214, but only expect to scan
@@ -317,7 +317,7 @@ func testEthScannerConfirmationsRequired(t *testing.T, ethDB *bolt.DB) {
 	nDeposits = nDeposits + 2
 
 	// has't enough deposit
-	require.True(t, scr.Base.Cfg.DepositBufferSize > nDeposits)
+	require.True(t, scr.Base.(*BaseScanner).Cfg.DepositBufferSize > nDeposits)
 
 	testEthScannerRunProcessedLoop(t, scr, nDeposits)
 }
@@ -407,16 +407,16 @@ func testEthScannerLoadUnprocessedDeposits(t *testing.T, ethDB *bolt.DB) {
 		Processed: true,
 	}
 
-	err := scr.Base.Store.(*Store).db.Update(func(tx *bolt.Tx) error {
+	err := scr.Base.GetStorer().(*Store).db.Update(func(tx *bolt.Tx) error {
 		for _, d := range unprocessedDeposits {
-			if err := scr.Base.Store.(*Store).pushDepositTx(tx, d); err != nil {
+			if err := scr.Base.GetStorer().(*Store).pushDepositTx(tx, d); err != nil {
 				require.NoError(t, err)
 				return err
 			}
 		}
 
 		// Add a processed deposit to make sure that processed deposits are filtered
-		return scr.Base.Store.(*Store).pushDepositTx(tx, processedDeposit)
+		return scr.Base.GetStorer().(*Store).pushDepositTx(tx, processedDeposit)
 	})
 	require.NoError(t, err)
 
@@ -440,7 +440,7 @@ func testEthScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
-	require.True(t, scr.Base.Cfg.DepositBufferSize < nDeposits)
+	require.True(t, scr.Base.(*BaseScanner).Cfg.DepositBufferSize < nDeposits)
 
 	done := make(chan struct{})
 	go func() {
@@ -454,7 +454,7 @@ func testEthScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 		require.Equal(t, nDeposits, len(dvs))
 
 		// check all deposits, none should be marked as "Processed"
-		err := scr.Base.Store.(*Store).db.View(func(tx *bolt.Tx) error {
+		err := scr.Base.GetStorer().(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, DepositBkt, dv.ID(), &d)
@@ -482,7 +482,7 @@ func testEthScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	shutdownWait := scr.Base.Cfg.ScanPeriod * time.Duration(nDeposits*2)
+	shutdownWait := scr.Base.(*BaseScanner).Cfg.ScanPeriod * time.Duration(nDeposits*2)
 	if shutdownWait < minShutdownWait {
 		shutdownWait = minShutdownWait
 	}
