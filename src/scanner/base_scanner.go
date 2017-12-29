@@ -18,7 +18,7 @@ type CommonScanner interface {
 	GetStorer() Storer
 	GetDeposit() <-chan DepositNote
 	GetQuitChan() <-chan struct{}
-	GetScannedDepositChan() chan Deposit
+	GetScannedDepositChan() chan<- Deposit
 	Shutdown()
 	Run(
 		getBlockCount func() (int64, error),
@@ -166,7 +166,7 @@ func (s *BaseScanner) GetQuitChan() <-chan struct{} {
 }
 
 //GetScannedDepositChan returns scanned deposit channel
-func (s *BaseScanner) GetScannedDepositChan() chan Deposit {
+func (s *BaseScanner) GetScannedDepositChan() chan<- Deposit {
 	return s.scannedDeposits
 }
 
