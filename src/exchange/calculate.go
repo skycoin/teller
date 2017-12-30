@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"errors"
+	"math/big"
 
 	"github.com/shopspring/decimal"
 
@@ -32,6 +33,41 @@ func CalculateBtcSkyValue(satoshis int64, skyPerBTC string, maxDecimals int) (ui
 	btc = btc.DivRound(btcToSatoshi, 8)
 
 	sky := btc.Mul(rate)
+	sky = sky.Truncate(int32(maxDecimals))
+
+	skyToDroplets := decimal.New(droplet.Multiplier, 0)
+	droplets := sky.Mul(skyToDroplets)
+
+	amt := droplets.IntPart()
+	if amt < 0 {
+		// This should never occur, but double check before we convert to uint64,
+		// otherwise we would send all the coins due to integer wrapping.
+		return 0, errors.New("calculated sky amount is negative")
+	}
+
+	return uint64(amt), nil
+}
+
+// CalculateEthSkyValue returns the amount of SKY (in droplets) to give for an
+// amount of Eth (in wei).
+// Rate is measured in SKY per Eth
+func CalculateEthSkyValue(wei *big.Int, skyPerETH string, maxDecimals int) (uint64, error) {
+	if wei.Sign() < 0 {
+		return 0, errors.New("wei must be greater than or equal to 0")
+	}
+	if maxDecimals < 0 {
+		return 0, errors.New("maxDecimals can't be negative")
+	}
+	rate, err := ParseRate(skyPerETH)
+	if err != nil {
+		return 0, err
+	}
+
+	eth := decimal.NewFromBigInt(wei, 0)
+	ethToWei := decimal.New(WeiPerETH, 0)
+	eth = eth.DivRound(ethToWei, 18)
+
+	sky := eth.Mul(rate)
 	sky = sky.Truncate(int32(maxDecimals))
 
 	skyToDroplets := decimal.New(droplet.Multiplier, 0)

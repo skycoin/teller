@@ -33,3 +33,13 @@ func DecimalFromString(s string) (decimal.Decimal, error) {
 	// Parse the fixed-precision float string (decimal.New doesn't support big.Rat)
 	return decimal.NewFromString(t)
 }
+
+//Wei2Gwei convert wei to gwei 1e9wei = 1gwei
+func Wei2Gwei(wei *big.Int) int64 {
+	return big.NewInt(1).Div(wei, big.NewInt(1e9)).Int64()
+}
+
+//Gwei2Wei convert gwei to wei 1gwei = 1e9wei
+func Gwei2Wei(gwei int64) *big.Int {
+	return big.NewInt(1).Mul(big.NewInt(gwei), big.NewInt(1e9))
+}

@@ -12,6 +12,7 @@ import (
 
 // ErrDepositAddressEmpty represents all deposit addresses are used
 var ErrDepositAddressEmpty = errors.New("Deposit address pool is empty")
+var ErrCointypeNotExists = errors.New("Cointype not exists")
 
 // AddrGenerator generate new deposit address
 type AddrGenerator interface {
@@ -24,6 +25,46 @@ type Addrs struct {
 	log       logrus.FieldLogger
 	used      *Store   // all used addresses
 	addresses []string // address pool for deposit
+}
+
+// AddrManager control all AddrGenerator according to coinType
+type AddrManager struct {
+	Mutex    sync.RWMutex
+	AGHolder map[string]AddrGenerator
+	AGcount  int
+}
+
+// NewAddrManager create a Manager
+func NewAddrManager() *AddrManager {
+	return &AddrManager{AGcount: 0, AGHolder: make(map[string]AddrGenerator)}
+}
+
+// PushGenerator add a AddrGenerater with coinType
+func (am *AddrManager) PushGenerator(ag AddrGenerator, coinType string) error {
+	am.Mutex.Lock()
+	defer am.Mutex.Unlock()
+	_, ok := am.AGHolder[coinType]
+	if ok {
+		return errors.New("coinType already exists")
+	}
+	am.AGHolder[coinType] = ag
+	am.AGcount++
+	return nil
+}
+
+// NewAddress return new address according to coinType
+func (am *AddrManager) NewAddress(coinType string) (string, error) {
+	am.Mutex.Lock()
+	defer am.Mutex.Unlock()
+	ag, ok := am.AGHolder[coinType]
+	if !ok {
+		return "", ErrCointypeNotExists
+	}
+	depositAddr, err := ag.NewAddress()
+	if err != nil {
+		return "", err
+	}
+	return depositAddr, nil
 }
 
 // NewAddrs creates Addrs instance, will load and verify the addresses

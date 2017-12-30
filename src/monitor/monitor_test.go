@@ -17,8 +17,14 @@ import (
 type dummyBtcAddrMgr struct {
 	Num uint64
 }
+type dummyEthAddrMgr struct {
+	Num uint64
+}
 
 func (db *dummyBtcAddrMgr) Remaining() uint64 {
+	return db.Num
+}
+func (db *dummyEthAddrMgr) Remaining() uint64 {
 	return db.Num
 }
 
@@ -103,7 +109,7 @@ func TestRunMonitor(t *testing.T) {
 	}
 
 	log, _ := testutil.NewLogger(t)
-	m := New(log, cfg, &dummyBtcAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
+	m := New(log, cfg, &dummyBtcAddrMgr{10}, &dummyEthAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
 
 	time.AfterFunc(1*time.Second, func() {
 		rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/address"))

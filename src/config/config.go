@@ -33,13 +33,17 @@ type Config struct {
 
 	// Path of BTC addresses JSON file
 	BtcAddresses string `mapstructure:"btc_addresses"`
+	// Path of ETH addresses JSON file
+	EthAddresses string `mapstructure:"eth_addresses"`
 
 	Teller Teller `mapstructure:"teller"`
 
 	SkyRPC SkyRPC `mapstructure:"sky_rpc"`
 	BtcRPC BtcRPC `mapstructure:"btc_rpc"`
+	EthRPC EthRPC `mapstructure:"eth_rpc"`
 
 	BtcScanner   BtcScanner   `mapstructure:"btc_scanner"`
+	EthScanner   EthScanner   `mapstructure:"eth_scanner"`
 	SkyExchanger SkyExchanger `mapstructure:"sky_exchanger"`
 
 	Web Web `mapstructure:"web"`
@@ -52,7 +56,7 @@ type Config struct {
 // Teller config for teller
 type Teller struct {
 	// Max number of btc addresses a skycoin address can bind
-	MaxBoundBtcAddresses int `mapstructure:"max_bound_btc_addrs"`
+	MaxBoundAddresses int `mapstructure:"max_bound_addrs"`
 }
 
 // SkyRPC config for Skycoin daemon node RPC
@@ -62,10 +66,18 @@ type SkyRPC struct {
 
 // BtcRPC config for btcrpc
 type BtcRPC struct {
-	Server string `mapstructure:"server"`
-	User   string `mapstructure:"user"`
-	Pass   string `mapstructure:"pass"`
-	Cert   string `mapstructure:"cert"`
+	Server  string `mapstructure:"server"`
+	User    string `mapstructure:"user"`
+	Pass    string `mapstructure:"pass"`
+	Cert    string `mapstructure:"cert"`
+	Enabled bool   `mapstructure:"enabled"`
+}
+
+// EthRPC config for ethrpc
+type EthRPC struct {
+	Server  string `mapstructure:"server"`
+	Port    string `mapstructure:"port"`
+	Enabled bool   `mapstructure:"enabled"`
 }
 
 // BtcScanner config for BTC scanner
@@ -76,10 +88,19 @@ type BtcScanner struct {
 	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
 }
 
+// EthScanner config for ETH scanner
+type EthScanner struct {
+	// How often to try to scan for blocks
+	ScanPeriod            time.Duration `mapstructure:"scan_period"`
+	InitialScanHeight     int64         `mapstructure:"initial_scan_height"`
+	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
+}
+
 // SkyExchanger config for skycoin sender
 type SkyExchanger struct {
 	// SKY/BTC exchange rate. Can be an int, float or rational fraction string
 	SkyBtcExchangeRate string `mapstructure:"sky_btc_exchange_rate"`
+	SkyEthExchangeRate string `mapstructure:"sky_eth_exchange_rate"`
 	// Number of decimal places to truncate SKY to
 	MaxDecimals int `mapstructure:"max_decimals"`
 	// How long to wait before rechecking transaction confirmations
@@ -166,8 +187,15 @@ func (c Config) Validate() error {
 	if c.BtcAddresses == "" {
 		oops("btc_addresses missing")
 	}
-
-	// TODO -- check btc_addresses file
+	if _, err := os.Stat(c.BtcAddresses); os.IsNotExist(err) {
+		oops("btc_addresses file does not exist")
+	}
+	if c.EthAddresses == "" {
+		oops("eth_addresses missing")
+	}
+	if _, err := os.Stat(c.EthAddresses); os.IsNotExist(err) {
+		oops("eth_addresses file does not exist")
+	}
 
 	if !c.Dummy.Sender {
 		if c.SkyRPC.Address == "" {
@@ -184,22 +212,32 @@ func (c Config) Validate() error {
 	}
 
 	if !c.Dummy.Scanner {
-		if c.BtcRPC.Server == "" {
-			oops("btc_rpc.server missing")
-		}
+		if c.BtcRPC.Enabled {
+			if c.BtcRPC.Server == "" {
+				oops("btc_rpc.server missing")
+			}
 
-		if c.BtcRPC.User == "" {
-			oops("btc_rpc.user missing")
-		}
-		if c.BtcRPC.Pass == "" {
-			oops("btc_rpc.pass missing")
-		}
-		if c.BtcRPC.Cert == "" {
-			oops("btc_rpc.cert missing")
-		}
+			if c.BtcRPC.User == "" {
+				oops("btc_rpc.user missing")
+			}
+			if c.BtcRPC.Pass == "" {
+				oops("btc_rpc.pass missing")
+			}
+			if c.BtcRPC.Cert == "" {
+				oops("btc_rpc.cert missing")
+			}
 
-		if _, err := os.Stat(c.BtcRPC.Cert); os.IsNotExist(err) {
-			oops("btc_rpc.cert file does not exist")
+			if _, err := os.Stat(c.BtcRPC.Cert); os.IsNotExist(err) {
+				oops("btc_rpc.cert file does not exist")
+			}
+		}
+		if c.EthRPC.Enabled {
+			if c.EthRPC.Server == "" {
+				oops("eth_rpc.server missing")
+			}
+			if c.EthRPC.Port == "" {
+				oops("eth_rpc.port missing")
+			}
 		}
 	}
 
@@ -209,9 +247,18 @@ func (c Config) Validate() error {
 	if c.BtcScanner.InitialScanHeight < 0 {
 		oops("btc_scanner.initial_scan_height must be >= 0")
 	}
+	if c.EthScanner.ConfirmationsRequired < 0 {
+		oops("eth_scanner.confirmations_required must be >= 0")
+	}
+	if c.EthScanner.InitialScanHeight < 0 {
+		oops("eth_scanner.initial_scan_height must be >= 0")
+	}
 
 	if _, err := mathutil.DecimalFromString(c.SkyExchanger.SkyBtcExchangeRate); err != nil {
 		oops(fmt.Sprintf("sky_exchanger.sky_btc_exchange_rate invalid: %v", err))
+	}
+	if _, err := mathutil.DecimalFromString(c.SkyExchanger.SkyEthExchangeRate); err != nil {
+		oops(fmt.Sprintf("sky_exchanger.sky_eth_exchange_rate invalid: %v", err))
 	}
 
 	if !c.Dummy.Sender {

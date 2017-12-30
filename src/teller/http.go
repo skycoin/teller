@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"net/http"
 	"strings"
 	"sync"
@@ -380,8 +381,22 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
+		if !s.cfg.Web.APIEnabled {
+			errorResponse(ctx, w, http.StatusForbidden, errors.New("API disabled"))
+			return
+		}
+
 		switch bindReq.CoinType {
 		case scanner.CoinTypeBTC:
+			if !s.cfg.BtcRPC.Enabled {
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeBTC))
+				return
+			}
+		case scanner.CoinTypeETH:
+			if !s.cfg.EthRPC.Enabled {
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeETH))
+				return
+			}
 		case "":
 			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing coin_type"))
 			return
@@ -396,14 +411,9 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		if !s.cfg.Web.APIEnabled {
-			errorResponse(ctx, w, http.StatusForbidden, errors.New("API disabled"))
-			return
-		}
-
 		log.Info("Calling service.BindAddress")
 
-		btcAddr, err := s.service.BindAddress(bindReq.SkyAddr)
+		coinAddr, err := s.service.BindAddress(bindReq.SkyAddr, bindReq.CoinType)
 		if err != nil {
 			log.WithError(err).Error("service.BindAddress failed")
 			if err != addrs.ErrDepositAddressEmpty && err != ErrMaxBoundAddresses {
@@ -413,15 +423,15 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		log = log.WithField("btcAddr", btcAddr)
+		log = log.WithField("coinAddr", coinAddr)
 		ctx = logger.WithContext(ctx, log)
 		r = r.WithContext(ctx)
 
-		log.Info("Bound sky and btc addresses")
+		log.Infof("Bound sky and %s addresses", bindReq.CoinType)
 
 		if err := httputil.JSONResponse(w, BindResponse{
-			DepositAddress: btcAddr,
-			CoinType:       scanner.CoinTypeBTC,
+			DepositAddress: coinAddr,
+			CoinType:       bindReq.CoinType,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}
@@ -502,8 +512,10 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 type ConfigResponse struct {
 	Enabled                  bool   `json:"enabled"`
 	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
-	MaxBoundBtcAddresses     int    `json:"max_bound_btc_addrs"`
+	EthConfirmationsRequired int64  `json:"eth_confirmations_required"`
+	MaxBoundAddresses        int    `json:"max_bound_addrs"`
 	SkyBtcExchangeRate       string `json:"sky_btc_exchange_rate"`
+	SkyEthExchangeRate       string `json:"sky_eth_exchange_rate"`
 	MaxDecimals              int    `json:"max_decimals"`
 }
 
@@ -535,13 +547,28 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
+		rate = s.cfg.SkyExchanger.SkyEthExchangeRate
+		dropletsPerETH, err := exchange.CalculateEthSkyValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
+		if err != nil {
+			log.WithError(err).Error("exchange.CalculateEthSkyValue failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
+		skyPerETH, err := droplet.ToString(dropletsPerETH)
+		if err != nil {
+			log.WithError(err).Error("droplet.ToString failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
 
 		if err := httputil.JSONResponse(w, ConfigResponse{
 			Enabled:                  s.cfg.Web.APIEnabled,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
+			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
 			SkyBtcExchangeRate:       skyPerBTC,
+			SkyEthExchangeRate:       skyPerETH,
 			MaxDecimals:              maxDecimals,
-			MaxBoundBtcAddresses:     s.cfg.Teller.MaxBoundBtcAddresses,
+			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}

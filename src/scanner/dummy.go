@@ -32,7 +32,7 @@ func NewDummyScanner(log logrus.FieldLogger) *DummyScanner {
 }
 
 // AddScanAddress adds an address
-func (s *DummyScanner) AddScanAddress(addr string) error {
+func (s *DummyScanner) AddScanAddress(addr, coinType string) error {
 	s.Lock()
 	defer s.Unlock()
 

@@ -12,7 +12,7 @@ import (
 
 var (
 	// ErrMaxBoundAddresses is returned when the maximum number of address to bind to a SKY address has been reached
-	ErrMaxBoundAddresses = errors.New("The maximum number of BTC addresses have been assigned to this SKY address")
+	ErrMaxBoundAddresses = errors.New("The maximum number of addresses have been assigned to this SKY address")
 )
 
 // Teller provides the HTTP and teller service
@@ -25,16 +25,16 @@ type Teller struct {
 }
 
 // New creates a Teller
-func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrGen addrs.AddrGenerator, cfg config.Config) *Teller {
+func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrManager *addrs.AddrManager, cfg config.Config) *Teller {
 	return &Teller{
 		cfg:  cfg.Teller,
 		log:  log.WithField("prefix", "teller"),
 		quit: make(chan struct{}),
 		done: make(chan struct{}),
 		httpServ: NewHTTPServer(log, cfg.Redacted(), &Service{
-			cfg:       cfg.Teller,
-			exchanger: exchanger,
-			addrGen:   addrGen,
+			cfg:         cfg.Teller,
+			exchanger:   exchanger,
+			addrManager: addrManager,
 		}),
 	}
 }
@@ -71,36 +71,32 @@ func (s *Teller) Shutdown() {
 
 // Service combines Exchanger and AddrGenerator
 type Service struct {
-	cfg       config.Teller
-	exchanger exchange.Exchanger  // exchange Teller client
-	addrGen   addrs.AddrGenerator // address generator
+	cfg         config.Teller
+	exchanger   exchange.Exchanger // exchange Teller client
+	addrManager *addrs.AddrManager // address manager
 }
 
-// BindAddress binds skycoin address with a deposit btc address
-// return btc address
-// TODO -- support multiple coin types
-func (s *Service) BindAddress(skyAddr string) (string, error) {
-	if s.cfg.MaxBoundBtcAddresses > 0 {
+// BindAddress binds skycoin address with a deposit address according to coinType
+// return deposit address
+func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
+	if s.cfg.MaxBoundAddresses > 0 {
 		num, err := s.exchanger.GetBindNum(skyAddr)
 		if err != nil {
 			return "", err
 		}
 
-		if num >= s.cfg.MaxBoundBtcAddresses {
+		if num >= s.cfg.MaxBoundAddresses {
 			return "", ErrMaxBoundAddresses
 		}
 	}
-
-	btcAddr, err := s.addrGen.NewAddress()
+	depositAddr, err := s.addrManager.NewAddress(coinType)
 	if err != nil {
 		return "", err
 	}
-
-	if err := s.exchanger.BindAddress(skyAddr, btcAddr); err != nil {
+	if err := s.exchanger.BindAddress(skyAddr, depositAddr, coinType); err != nil {
 		return "", err
 	}
-
-	return btcAddr, nil
+	return depositAddr, nil
 }
 
 // GetDepositStatuses returns deposit status of given skycoin address

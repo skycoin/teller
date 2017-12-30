@@ -18,6 +18,7 @@ import (
 	"github.com/boltdb/bolt"
 	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
 	"github.com/google/gops/agent"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
 	"github.com/skycoin/teller/src/addrs"
@@ -35,6 +36,64 @@ func main() {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+}
+
+func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.Store) (*scanner.BTCScanner, error) {
+	// create btc rpc client
+	certs, err := ioutil.ReadFile(cfg.BtcRPC.Cert)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read cfg.BtcRPC.Cert %s: %v", cfg.BtcRPC.Cert, err)
+	}
+
+	log.Info("Connecting to btcd")
+
+	btcrpc, err := btcrpcclient.New(&btcrpcclient.ConnConfig{
+		Endpoint:     "ws",
+		Host:         cfg.BtcRPC.Server,
+		User:         cfg.BtcRPC.User,
+		Pass:         cfg.BtcRPC.Pass,
+		Certificates: certs,
+	}, nil)
+	if err != nil {
+		log.WithError(err).Error("Connect btcd failed")
+		return nil, err
+	}
+
+	log.Info("Connect to btcd succeeded")
+
+	scanStore.AddSupportedCoin(scanner.CoinTypeBTC)
+
+	btcScanner, err := scanner.NewBTCScanner(log, scanStore, btcrpc, scanner.Config{
+		ScanPeriod:            cfg.BtcScanner.ScanPeriod,
+		ConfirmationsRequired: cfg.BtcScanner.ConfirmationsRequired,
+		InitialScanHeight:     cfg.BtcScanner.InitialScanHeight,
+	})
+	if err != nil {
+		log.WithError(err).Error("Open scan service failed")
+		return nil, err
+	}
+	return btcScanner, nil
+}
+
+func createEthScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.Store) (*scanner.ETHScanner, error) {
+	ethrpc, err := scanner.NewEthClient(cfg.EthRPC.Server, cfg.EthRPC.Port)
+	if err != nil {
+		log.WithError(err).Error("Connect geth failed")
+		return nil, err
+	}
+
+	scanStore.AddSupportedCoin(scanner.CoinTypeETH)
+
+	ethScanner, err := scanner.NewETHScanner(log, scanStore, ethrpc, scanner.Config{
+		ScanPeriod:            cfg.EthScanner.ScanPeriod,
+		ConfirmationsRequired: cfg.EthScanner.ConfirmationsRequired,
+		InitialScanHeight:     cfg.EthScanner.InitialScanHeight,
+	})
+	if err != nil {
+		log.WithError(err).Error("Open ethscan service failed")
+		return nil, err
+	}
+	return ethScanner, nil
 }
 
 func run() error {
@@ -112,60 +171,71 @@ func run() error {
 	}
 
 	var btcScanner *scanner.BTCScanner
+	var ethScanner *scanner.ETHScanner
 	var scanService scanner.Scanner
+	var scanEthService scanner.Scanner
 	var sendService *sender.SendService
 	var sendRPC sender.Sender
+	var btcAddrMgr *addrs.Addrs
+	var ethAddrMgr *addrs.Addrs
+
+	//create multiplexer to manage scanner
+	multiplexer := scanner.NewMultiplexer(log)
 
 	dummyMux := http.NewServeMux()
+
+	// create scan storer
+	scanStore, err := scanner.NewStore(log, db)
+	if err != nil {
+		log.WithError(err).Error("scanner.NewStore failed")
+		return err
+	}
 
 	if cfg.Dummy.Scanner {
 		log.Info("btcd disabled, running dummy scanner")
 		scanService = scanner.NewDummyScanner(log)
+		scanEthService = scanner.NewDummyScanner(log)
 		scanService.(*scanner.DummyScanner).BindHandlers(dummyMux)
 	} else {
-		// create btc rpc client
-		certs, err := ioutil.ReadFile(cfg.BtcRPC.Cert)
-		if err != nil {
-			return fmt.Errorf("Failed to read cfg.BtcRPC.Cert %s: %v", cfg.BtcRPC.Cert, err)
+		// enable btc scanner
+		if cfg.BtcRPC.Enabled {
+			btcScanner, err = createBtcScanner(rusloggger, cfg, scanStore)
+			if err != nil {
+				log.WithError(err).Error("create btc scanner failed")
+				return err
+			}
+			background("btcScanner.Run", errC, btcScanner.Run)
+
+			scanService = btcScanner
+
+			err = multiplexer.AddScanner(scanService, scanner.CoinTypeBTC)
+			if err != nil {
+				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeBTC)
+				return err
+			}
 		}
 
-		log.Info("Connecting to btcd")
+		// enable eth scanner
+		if cfg.EthRPC.Enabled {
+			ethScanner, err = createEthScanner(rusloggger, cfg, scanStore)
+			if err != nil {
+				log.WithError(err).Error("create eth scanner failed")
+				return err
+			}
 
-		btcrpc, err := btcrpcclient.New(&btcrpcclient.ConnConfig{
-			Endpoint:     "ws",
-			Host:         cfg.BtcRPC.Server,
-			User:         cfg.BtcRPC.User,
-			Pass:         cfg.BtcRPC.Pass,
-			Certificates: certs,
-		}, nil)
-		if err != nil {
-			log.WithError(err).Error("Connect btcd failed")
-			return err
+			background("ethScanner.Run", errC, ethScanner.Run)
+
+			scanEthService = ethScanner
+
+			err = multiplexer.AddScanner(scanEthService, scanner.CoinTypeETH)
+			if err != nil {
+				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeETH)
+				return err
+			}
 		}
-
-		log.Info("Connect to btcd succeeded")
-
-		// create scan service
-		scanStore, err := scanner.NewStore(log, db)
-		if err != nil {
-			log.WithError(err).Error("scanner.NewStore failed")
-			return err
-		}
-
-		btcScanner, err = scanner.NewBTCScanner(log, scanStore, btcrpc, scanner.Config{
-			ScanPeriod:            cfg.BtcScanner.ScanPeriod,
-			ConfirmationsRequired: cfg.BtcScanner.ConfirmationsRequired,
-			InitialScanHeight:     cfg.BtcScanner.InitialScanHeight,
-		})
-		if err != nil {
-			log.WithError(err).Error("Open scan service failed")
-			return err
-		}
-
-		background("btcScanner.Run", errC, btcScanner.Run)
-
-		scanService = btcScanner
 	}
+
+	background("multiplex.Run", errC, multiplexer.Multiplex)
 
 	if cfg.Dummy.Sender {
 		log.Info("skyd disabled, running dummy sender")
@@ -200,9 +270,9 @@ func run() error {
 		log.WithError(err).Error("exchange.NewStore failed")
 		return err
 	}
-
-	exchangeClient, err := exchange.NewExchange(log, exchangeStore, scanService, sendRPC, exchange.Config{
-		Rate: cfg.SkyExchanger.SkyBtcExchangeRate,
+	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, exchange.Config{
+		BtcRate:                 cfg.SkyExchanger.SkyBtcExchangeRate,
+		EthRate:                 cfg.SkyExchanger.SkyEthExchangeRate,
 		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
 		MaxDecimals:             cfg.SkyExchanger.MaxDecimals,
 	})
@@ -213,20 +283,48 @@ func run() error {
 
 	background("exchangeClient.Run", errC, exchangeClient.Run)
 
-	// create bitcoin address manager
-	f, err := ioutil.ReadFile(cfg.BtcAddresses)
-	if err != nil {
-		log.WithError(err).Error("Load deposit bitcoin address list failed")
-		return err
+	//create AddrManager
+	addrManager := addrs.NewAddrManager()
+
+	if cfg.BtcRPC.Enabled {
+		// create bitcoin address manager
+		f, err := ioutil.ReadFile(cfg.BtcAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit bitcoin address list failed")
+			return err
+		}
+
+		btcAddrMgr, err = addrs.NewBTCAddrs(log, db, bytes.NewReader(f))
+		if err != nil {
+			log.WithError(err).Error("Create bitcoin deposit address manager failed")
+			return err
+		}
+		if err := addrManager.PushGenerator(btcAddrMgr, scanner.CoinTypeBTC); err != nil {
+			log.WithError(err).Error("add btc address manager failed")
+			return err
+		}
 	}
 
-	btcAddrMgr, err := addrs.NewBTCAddrs(log, db, bytes.NewReader(f))
-	if err != nil {
-		log.WithError(err).Error("Create bitcoin deposit address manager failed")
-		return err
+	if cfg.EthRPC.Enabled {
+		// create ethcoin address manager
+		f, err := ioutil.ReadFile(cfg.EthAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit ethcoin address list failed")
+			return err
+		}
+
+		ethAddrMgr, err = addrs.NewETHAddrs(log, db, bytes.NewReader(f))
+		if err != nil {
+			log.WithError(err).Error("Create ethcoin deposit address manager failed")
+			return err
+		}
+		if err := addrManager.PushGenerator(ethAddrMgr, scanner.CoinTypeETH); err != nil {
+			log.WithError(err).Error("add eth address manager failed")
+			return err
+		}
 	}
 
-	tellerServer := teller.New(log, exchangeClient, btcAddrMgr, cfg)
+	tellerServer := teller.New(log, exchangeClient, addrManager, cfg)
 
 	// Run the service
 	background("tellerServer.Run", errC, tellerServer.Run)
@@ -235,7 +333,7 @@ func run() error {
 	monitorCfg := monitor.Config{
 		Addr: cfg.AdminPanel.Host,
 	}
-	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, exchangeClient, btcScanner)
+	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, exchangeClient, btcScanner)
 
 	background("monitorService.Run", errC, monitorService.Run)
 
@@ -263,6 +361,11 @@ func run() error {
 	if btcScanner != nil {
 		log.Info("Shutting down btcScanner")
 		btcScanner.Shutdown()
+	}
+	// close the scan service
+	if ethScanner != nil {
+		log.Info("Shutting down ethScanner")
+		ethScanner.Shutdown()
 	}
 
 	// close exchange service
