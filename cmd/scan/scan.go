@@ -448,6 +448,9 @@ func run() error {
 
 	//create btcd instance
 	client, err := NewBTCDClient(*user, *pass)
+	if err != nil {
+		return err
+	}
 	defer client.Shutdown()
 
 	for i := int(*blockN); i <= int(*blockM); i++ {
