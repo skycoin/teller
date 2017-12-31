@@ -355,7 +355,7 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		// TODO: DB queries in a loop, may need restructuring for performance
-		depositElements, err := s.getSkyBindBtcAddressesTx(tx, skyAddr)
+		depositElements, err := s.getSkyBindAddressesTx(tx, skyAddr)
 		if err != nil {
 			return err
 		}
@@ -461,7 +461,7 @@ func (s *Store) GetSkyBindAddresses(skyAddr string) ([]string, error) {
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		var err error
-		elements, err := s.getSkyBindBtcAddressesTx(tx, skyAddr)
+		elements, err := s.getSkyBindAddressesTx(tx, skyAddr)
 		for _, elem := range elements {
 			addrs = append(addrs, elem.DepositAddr)
 		}
@@ -473,8 +473,8 @@ func (s *Store) GetSkyBindAddresses(skyAddr string) ([]string, error) {
 	return addrs, nil
 }
 
-// getSkyBindBtcAddressesTx returns the addresses of the given sky address bound
-func (s *Store) getSkyBindBtcAddressesTx(tx *bolt.Tx, skyAddr string) ([]DepositElement, error) {
+// getSkyBindAddressesTx returns the addresses of the given sky address bound
+func (s *Store) getSkyBindAddressesTx(tx *bolt.Tx, skyAddr string) ([]DepositElement, error) {
 	var addrs []DepositElement
 	if err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
 		switch err.(type) {
