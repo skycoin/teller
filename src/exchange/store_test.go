@@ -189,10 +189,11 @@ func TestStoreBindAddress(t *testing.T) {
 		v := bkt.Get([]byte("ba1"))
 		require.Equal(t, "sa1", string(v))
 
-		var addrs []string
+		var addrs []DepositElement
 		err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, "sa1", &addrs)
 		require.NoError(t, err)
-		require.Equal(t, "ba1", addrs[0])
+		require.Equal(t, "ba1", addrs[0].DepositAddr)
+		require.Equal(t, scanner.CoinTypeBTC, addrs[0].CoinType)
 		return nil
 	})
 	require.NoError(t, err)

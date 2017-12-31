@@ -675,6 +675,7 @@ func (s *Exchange) GetBindNum(skyAddr string) (int, error) {
 	return len(addrs), err
 }
 
+//GetDepositStats returns deposit status
 func (s *Exchange) GetDepositStats() (stats *DepositStats, err error) {
 	tbr, tss, err := s.store.GetDepositStats()
 	if err != nil {
