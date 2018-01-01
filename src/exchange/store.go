@@ -47,12 +47,6 @@ type Storer interface {
 	GetDepositStats() (int64, int64, error)
 }
 
-//DepositElement storage for bind address
-type DepositElement struct {
-	DepositAddr string
-	CoinType    string
-}
-
 // Store storage for exchange
 type Store struct {
 	db  *bolt.DB
@@ -150,7 +144,7 @@ func (s *Store) BindAddress(skyAddr, depositAddr, coinType string) error {
 		}
 
 		// update index of skycoin address and the deposit seq
-		var addrs []DepositElement
+		var addrs []string
 		if err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
 			switch err.(type) {
 			case dbutil.ObjectNotExistErr:
@@ -159,7 +153,7 @@ func (s *Store) BindAddress(skyAddr, depositAddr, coinType string) error {
 			}
 		}
 
-		addrs = append(addrs, DepositElement{DepositAddr: depositAddr, CoinType: coinType})
+		addrs = append(addrs, depositAddr)
 		if err := dbutil.PutBucketValue(tx, SkyDepositSeqsIndexBkt, skyAddr, addrs); err != nil {
 			return err
 		}
@@ -348,6 +342,28 @@ func (s *Store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
 	return dpis, nil
 }
 
+//getDepositAddressCoinType returns coin type of deposit address
+func (s *Store) getDepositAddressCoinType(depositAddr string) (string, error) {
+	var coinType string
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		for _, ct := range scanner.GetCoinTypes() {
+			bktFullName := dbutil.ByteJoin(BindAddressBkt, ct, "_")
+			exists, err := dbutil.BucketHasKey(tx, bktFullName, depositAddr)
+			if err != nil {
+				return err
+			}
+			if exists {
+				coinType = ct
+				break
+			}
+		}
+		return nil
+	}); err != nil {
+		return "", err
+	}
+	return coinType, nil
+}
+
 // GetDepositInfoOfSkyAddress returns all deposit info that are bound
 // to the given skycoin address
 func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error) {
@@ -355,13 +371,12 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		// TODO: DB queries in a loop, may need restructuring for performance
-		depositElements, err := s.getSkyBindAddressesTx(tx, skyAddr)
+		depositAddrs, err := s.getSkyBindAddressesTx(tx, skyAddr)
 		if err != nil {
 			return err
 		}
 
-		for _, depositElement := range depositElements {
-			depositAddr := depositElement.DepositAddr
+		for _, depositAddr := range depositAddrs {
 			var txns []string
 			if err := dbutil.GetBucketObject(tx, BtcTxsBkt, depositAddr, &txns); err != nil {
 				switch err.(type) {
@@ -375,12 +390,16 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 			// has not sent a deposit to the exchange, so the status is
 			// StatusWaitDeposit.
 			if len(txns) == 0 {
+				coinType, err := s.getDepositAddressCoinType(depositAddr)
+				if err != nil {
+					return err
+				}
 				dpis = append(dpis, DepositInfo{
 					Status:         StatusWaitDeposit,
 					DepositAddress: depositAddr,
 					SkyAddress:     skyAddr,
 					UpdatedAt:      time.Now().UTC().Unix(),
-					CoinType:       depositElement.CoinType,
+					CoinType:       coinType,
 				})
 			}
 
@@ -461,10 +480,7 @@ func (s *Store) GetSkyBindAddresses(skyAddr string) ([]string, error) {
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		var err error
-		elements, err := s.getSkyBindAddressesTx(tx, skyAddr)
-		for _, elem := range elements {
-			addrs = append(addrs, elem.DepositAddr)
-		}
+		addrs, err = s.getSkyBindAddressesTx(tx, skyAddr)
 		return err
 	}); err != nil {
 		return nil, err
@@ -474,8 +490,8 @@ func (s *Store) GetSkyBindAddresses(skyAddr string) ([]string, error) {
 }
 
 // getSkyBindAddressesTx returns the addresses of the given sky address bound
-func (s *Store) getSkyBindAddressesTx(tx *bolt.Tx, skyAddr string) ([]DepositElement, error) {
-	var addrs []DepositElement
+func (s *Store) getSkyBindAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, error) {
+	var addrs []string
 	if err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
 		switch err.(type) {
 		case dbutil.ObjectNotExistErr:
