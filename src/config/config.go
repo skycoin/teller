@@ -180,10 +180,6 @@ func (c Config) Validate() error {
 		errs = append(errs, err)
 	}
 
-	if c.LogFilename == "" {
-		oops("logfile missing")
-	}
-
 	if c.BtcAddresses == "" {
 		oops("btc_addresses missing")
 	}

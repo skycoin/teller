@@ -5,6 +5,7 @@
 [![Build Status](https://travis-ci.org/skycoin/teller.svg?branch=master)](https://travis-ci.org/skycoin/teller)
 [![GoDoc](https://godoc.org/github.com/skycoin/teller?status.svg)](https://godoc.org/github.com/skycoin/teller)
 [![Go Report Card](https://goreportcard.com/badge/github.com/skycoin/teller)](https://goreportcard.com/report/github.com/skycoin/teller)
+[![Docker Pulls](https://img.shields.io/docker/pulls/skycoin/teller.svg?maxAge=604800)](https://hub.docker.com/r/skycoin/teller/)
 
 <!-- MarkdownTOC autolink="true" bracket="round" depth="5" -->
 
@@ -13,6 +14,7 @@
     - [Prerequisites](#prerequisites)
     - [Configure teller](#configure-teller)
     - [Running teller without btcd or skyd](#running-teller-without-btcd-or-skyd)
+    - [Running teller with Docker](#running-teller-witch-docker)
     - [Generate BTC addresses](#generate-btc-addresses)
     - [Generate ETH addresses](#generate-eth-addresses)
     - [Setup skycoin hot wallet](#setup-skycoin-hot-wallet)
@@ -129,6 +131,43 @@ It will still provide addresses via `/api/bind` and report status with `/api/sta
 but it will not process any real deposits or send real skycoins.
 
 See the [dummy API](#dummy) for controlling the fake deposits and sends.
+
+### Running teller with Docker
+
+Teller can be run with Docker. Update the `config.toml`, to send the logs to
+stdout, make sure the logfile key is set to an empty string and that every
+addesses listen to `0.0.0.0` instead of `127.0.0.1`:
+
+```toml
+logfile = ""
+dbfile = "/data"
+
+[web]
+http_addr = "0.0.0.0:7071"
+
+[admin_panel]
+host = "0.0.0.0:7711"
+
+[dummy]
+http_addr = "0.0.0.0:4121"
+```
+
+Then run the following command to start teller:
+
+```sh
+docker volume create teller-data
+docker run -ti --rm \
+  -p 4121:4121 \
+  -p 7071:7071 \
+  -p 7711:7711 \
+  -v $PWD/config.toml:/usr/local/teller/config.toml \
+  -v $PWD/btc_addresses.json:/usr/local/teller/btc_addresses.json \
+  -v $PWD/eth_addresses.json:/usr/local/teller/eth_addresses.json \
+  -v teller-data:/data
+  skycoin/teller
+```
+
+Access the dashboard: [http://localhost:7071](http://localhost:7071).
 
 ### Generate BTC addresses
 
@@ -266,9 +305,9 @@ Follow the instructions from the geth wiki to install geth:
 https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum
 
 ```
-Building geth requires both a Go (version 1.7 or later) and a C compiler. 
-You can install them using your favourite package manager. 
-Once the dependencies are installed, run 
+Building geth requires both a Go (version 1.7 or later) and a C compiler.
+You can install them using your favourite package manager.
+Once the dependencies are installed, run
 cd go-ethereum
 make geth
 copy geth to you system PATH, such as: cp build/bin/geth /usr/bin
@@ -298,7 +337,7 @@ Ethereum Api See https://github.com/ethereum/go-ethereum/wiki/Management-APIs
 Now, run `geth`:
 
 ```sh
-geth --datadir=xxx 
+geth --datadir=xxx
 
 as a daemon
 nohup geth --datadir=xxxx > geth.log 2>&1 &

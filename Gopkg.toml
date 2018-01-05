@@ -63,8 +63,9 @@
   version = "v0.7.1"
 
 [[constraint]]
-    name = "github.com/gz-c/tollbooth"
-    version = "v2.3.0"
+  name = "github.com/gz-c/tollbooth"
+  version = "v2.3.0"
+
 [[constraint]]
-    name = "github.com/ethereum/go-ethereum"
-    version = "1.7.3"
+  name = "github.com/ethereum/go-ethereum"
+  version = "1.7.3"
