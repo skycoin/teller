@@ -394,6 +394,11 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 				if err != nil {
 					return err
 				}
+
+				if coinType == "" {
+					s.log.WithField("depositAddr", depositAddr).Warn("No coin type found for deposit address")
+				}
+
 				dpis = append(dpis, DepositInfo{
 					Status:         StatusWaitDeposit,
 					DepositAddress: depositAddr,
