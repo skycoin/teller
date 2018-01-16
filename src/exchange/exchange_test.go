@@ -1259,7 +1259,53 @@ func TestExchangeCreateTransaction(t *testing.T) {
 }
 
 func TestExchangeGetDepositStatuses(t *testing.T) {
-	// TODO
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
+
+	log, _ := testutil.NewLogger(t)
+	store, err := NewStore(log, db)
+	require.NoError(t, err)
+	dummyScanner := newDummyScanner()
+	dummyScannerEth := newDummyScanner()
+	multiplexer := scanner.NewMultiplexer(log)
+	err = multiplexer.AddScanner(dummyScanner, scanner.CoinTypeBTC)
+	require.NoError(t, err)
+	err = multiplexer.AddScanner(dummyScannerEth, scanner.CoinTypeETH)
+	require.NoError(t, err)
+
+	s := &Exchange{
+		store:       store,
+		multiplexer: multiplexer,
+	}
+
+	require.Len(t, dummyScanner.addrs, 0)
+
+	err = s.BindAddress("a", "b", scanner.CoinTypeBTC)
+	require.NoError(t, err)
+	err = s.BindAddress("a", "e", scanner.CoinTypeETH)
+	require.NoError(t, err)
+
+	// Should be added to dummyScanner
+	require.Len(t, dummyScanner.addrs, 1)
+	require.Equal(t, "b", dummyScanner.addrs[0])
+
+	require.Len(t, dummyScannerEth.addrs, 1)
+	require.Equal(t, "e", dummyScannerEth.addrs[0])
+
+	// Should be in the store
+	depositInfos, err := s.store.GetDepositInfoOfSkyAddress("a")
+	require.NoError(t, err)
+	require.Equal(t, 2, len(depositInfos))
+	depositInfo := depositInfos[0]
+	require.Equal(t, uint64(0), depositInfo.Seq)
+	require.Equal(t, scanner.CoinTypeBTC, depositInfo.CoinType)
+	require.Equal(t, StatusWaitDeposit, depositInfo.Status)
+	require.NotEmpty(t, depositInfo.UpdatedAt)
+	depositInfo = depositInfos[1]
+	require.Equal(t, uint64(1), depositInfo.Seq)
+	require.Equal(t, scanner.CoinTypeETH, depositInfo.CoinType)
+	require.Equal(t, StatusWaitDeposit, depositInfo.Status)
+	require.NotEmpty(t, depositInfo.UpdatedAt)
 }
 
 func TestExchangeGetDepositStatusDetail(t *testing.T) {

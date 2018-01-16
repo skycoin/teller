@@ -342,6 +342,28 @@ func (s *Store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
 	return dpis, nil
 }
 
+//getDepositAddressCoinType returns coin type of deposit address
+func (s *Store) getDepositAddressCoinType(depositAddr string) (string, error) {
+	var coinType string
+	if err := s.db.View(func(tx *bolt.Tx) error {
+		for _, ct := range scanner.GetCoinTypes() {
+			bktFullName := dbutil.ByteJoin(BindAddressBkt, ct, "_")
+			exists, err := dbutil.BucketHasKey(tx, bktFullName, depositAddr)
+			if err != nil {
+				return err
+			}
+			if exists {
+				coinType = ct
+				break
+			}
+		}
+		return nil
+	}); err != nil {
+		return "", err
+	}
+	return coinType, nil
+}
+
 // GetDepositInfoOfSkyAddress returns all deposit info that are bound
 // to the given skycoin address
 func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error) {
@@ -349,7 +371,7 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		// TODO: DB queries in a loop, may need restructuring for performance
-		depositAddrs, err := s.getSkyBindBtcAddressesTx(tx, skyAddr)
+		depositAddrs, err := s.getSkyBindAddressesTx(tx, skyAddr)
 		if err != nil {
 			return err
 		}
@@ -368,11 +390,21 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 			// has not sent a deposit to the exchange, so the status is
 			// StatusWaitDeposit.
 			if len(txns) == 0 {
+				coinType, err := s.getDepositAddressCoinType(depositAddr)
+				if err != nil {
+					return err
+				}
+
+				if coinType == "" {
+					s.log.WithField("depositAddr", depositAddr).Warn("No coin type found for deposit address")
+				}
+
 				dpis = append(dpis, DepositInfo{
 					Status:         StatusWaitDeposit,
 					DepositAddress: depositAddr,
 					SkyAddress:     skyAddr,
 					UpdatedAt:      time.Now().UTC().Unix(),
+					CoinType:       coinType,
 				})
 			}
 
@@ -453,7 +485,7 @@ func (s *Store) GetSkyBindAddresses(skyAddr string) ([]string, error) {
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		var err error
-		addrs, err = s.getSkyBindBtcAddressesTx(tx, skyAddr)
+		addrs, err = s.getSkyBindAddressesTx(tx, skyAddr)
 		return err
 	}); err != nil {
 		return nil, err
@@ -462,8 +494,8 @@ func (s *Store) GetSkyBindAddresses(skyAddr string) ([]string, error) {
 	return addrs, nil
 }
 
-// getSkyBindBtcAddressesTx returns the addresses of the given sky address bound
-func (s *Store) getSkyBindBtcAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, error) {
+// getSkyBindAddressesTx returns the addresses of the given sky address bound
+func (s *Store) getSkyBindAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, error) {
 	var addrs []string
 	if err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
 		switch err.(type) {
