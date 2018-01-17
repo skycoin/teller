@@ -19,7 +19,7 @@ type Multiplexer struct {
 	sync.RWMutex
 }
 
-//NewMultiplexer create multiplexer instance
+// NewMultiplexer create multiplexer instance
 func NewMultiplexer(log logrus.FieldLogger) *Multiplexer {
 	return &Multiplexer{
 		scannerMap:   map[string]Scanner{},
@@ -31,7 +31,7 @@ func NewMultiplexer(log logrus.FieldLogger) *Multiplexer {
 	}
 }
 
-//AddScanner add scanner of coinType
+// AddScanner add scanner of coinType
 func (m *Multiplexer) AddScanner(scanner Scanner, coinType string) error {
 	if scanner == nil {
 		return errors.New("nil scanner")
@@ -59,9 +59,9 @@ func (m *Multiplexer) AddScanAddress(depositAddr, coinType string) error {
 	return scanner.AddScanAddress(depositAddr, coinType)
 }
 
-//Multiplex forward multi-scanner deposit to a shared aggregate channel, think of "Goroutine merging channel"
+// Multiplex forward multi-scanner deposit to a shared aggregate channel, think of "Goroutine merging channel"
 func (m *Multiplexer) Multiplex() error {
-	log := m.log.WithField("scanner count ", m.scannerCount)
+	log := m.log.WithField("scanner-count", m.scannerCount)
 	log.Info("Start multiplex service")
 	defer func() {
 		log.Info("Multiplex service closed")
@@ -83,7 +83,7 @@ func (m *Multiplexer) Multiplex() error {
 	return nil
 }
 
-// GetDeposits returns deposit values channel.
+// GetDeposit returns deposit values channel.
 func (m *Multiplexer) GetDeposit() <-chan DepositNote {
 	return m.outChan
 }

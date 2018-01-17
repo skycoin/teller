@@ -15,6 +15,11 @@ type RPCError struct {
 	error
 }
 
+// NewRPCError wraps an err with RPCError
+func NewRPCError(err error) RPCError {
+	return RPCError{err}
+}
+
 // RPC provides methods for sending coins
 type RPC struct {
 	walletFile string

@@ -50,6 +50,7 @@ type Exchanger interface {
 	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
 	GetBindNum(skyAddr string) (int, error)
 	GetDepositStats() (*DepositStats, error)
+	Status() error
 }
 
 // Exchange manages coin exchange between deposits and skycoin
@@ -62,6 +63,8 @@ type Exchange struct {
 	quit        chan struct{}
 	done        chan struct{}
 	depositChan chan DepositInfo
+	statusLock  sync.RWMutex
+	status      error
 }
 
 // Config exchange config struct
@@ -286,6 +289,8 @@ func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
 		di, err = s.handleDepositInfoState(di)
 		log = log.WithField("depositInfo", di)
 
+		s.setStatus(err)
+
 		switch err.(type) {
 		case sender.RPCError:
 			// Treat skycoin RPC/CLI errors as temporary.
@@ -490,6 +495,7 @@ func (s *Exchange) calculateSkyDroplets(di DepositInfo) (uint64, error) {
 	}
 	return skyAmt, nil
 }
+
 func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) {
 	log := s.log.WithField("deposit", di)
 
@@ -685,4 +691,17 @@ func (s *Exchange) GetDepositStats() (stats *DepositStats, err error) {
 		TotalBTCReceived: tbr,
 		TotalSKYSent:     tss,
 	}, nil
+}
+
+func (s *Exchange) setStatus(err error) {
+	defer s.statusLock.Unlock()
+	s.statusLock.Lock()
+	s.status = err
+}
+
+// Status returns the last return value of the processing state
+func (s *Exchange) Status() error {
+	defer s.statusLock.RUnlock()
+	s.statusLock.RLock()
+	return s.status
 }
