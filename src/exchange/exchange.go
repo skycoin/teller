@@ -1,4 +1,3 @@
-// skycoin address, and use skycoin sender to send skycoins in given rate.
 package exchange
 
 import (
@@ -20,10 +19,11 @@ import (
 
 const (
 	// SatoshisPerBTC is the number of satoshis per 1 BTC
-	// WeiPerBTC is the number of wei per 1 ETH
-	SatoshisPerBTC          int64 = 1e8
-	WeiPerETH               int64 = 1e18
-	txConfirmationCheckWait       = time.Second * 3
+	SatoshisPerBTC int64 = 1e8
+	// WeiPerETH is the number of wei per 1 ETH
+	WeiPerETH int64 = 1e18
+
+	txConfirmationCheckWait = time.Second * 3
 )
 
 var (

@@ -52,6 +52,7 @@ var (
 // HTTPServer exposes the API endpoints and static website
 type HTTPServer struct {
 	cfg           config.Config
+	exchanger     exchange.Exchanger
 	log           logrus.FieldLogger
 	service       *Service
 	httpListener  *http.Server
@@ -61,15 +62,16 @@ type HTTPServer struct {
 }
 
 // NewHTTPServer creates an HTTPServer
-func NewHTTPServer(log logrus.FieldLogger, cfg config.Config, service *Service) *HTTPServer {
+func NewHTTPServer(log logrus.FieldLogger, cfg config.Config, service *Service, exchanger exchange.Exchanger) *HTTPServer {
 	return &HTTPServer{
 		cfg: cfg.Redacted(),
 		log: log.WithFields(logrus.Fields{
 			"prefix": "teller.http",
 		}),
-		service: service,
-		quit:    make(chan struct{}),
-		done:    make(chan struct{}),
+		service:   service,
+		exchanger: exchanger,
+		quit:      make(chan struct{}),
+		done:      make(chan struct{}),
 	}
 }
 
@@ -282,7 +284,8 @@ func (s *HTTPServer) setupMux() *http.ServeMux {
 	// API Methods
 	handleAPI("/api/bind", ratelimit(httputil.LogHandler(s.log, BindHandler(s))))
 	handleAPI("/api/status", ratelimit(httputil.LogHandler(s.log, StatusHandler(s))))
-	handleAPI("/api/config", ConfigHandler(s))
+	handleAPI("/api/config", httputil.LogHandler(s.log, ConfigHandler(s)))
+	handleAPI("/api/exchange-status", httputil.LogHandler(s.log, ExchangeStatusHandler(s)))
 
 	// Static files
 	mux.Handle("/", gziphandler.GzipHandler(http.FileServer(http.Dir(s.cfg.Web.StaticDir))))
@@ -569,6 +572,39 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			SkyEthExchangeRate:       skyPerETH,
 			MaxDecimals:              maxDecimals,
 			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
+		}); err != nil {
+			log.WithError(err).Error(err)
+		}
+	}
+}
+
+// ExchangeStatusResponse http response for /api/exchange-status
+type ExchangeStatusResponse struct {
+	Status string `json:"status"`
+}
+
+// ExchangeStatusHandler returns the status of the exchanger
+// Method: GET
+// URI: /api/exchange-status
+func ExchangeStatusHandler(s *HTTPServer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
+		if !validMethod(ctx, w, r, []string{http.MethodGet}) {
+			return
+		}
+
+		statusMsg := "ok"
+		status := s.exchanger.Status()
+		if status != nil {
+			statusMsg = status.Error()
+		}
+
+		log.WithField("exchange-status", statusMsg).Info()
+
+		if err := httputil.JSONResponse(w, ExchangeStatusResponse{
+			Status: statusMsg,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}
