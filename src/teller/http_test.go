@@ -10,6 +10,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/teller/src/exchange"
+	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/testutil"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -103,13 +104,28 @@ func TestExchangeStatusHandler(t *testing.T) {
 		},
 
 		{
-			"200 status message error",
+			"200 status message error ignored, not RPCError",
 			http.MethodGet,
 			"/api/exchange-status",
 			http.StatusOK,
 			"",
 			errors.New("exchange.Status error"),
-			"exchange.Status error",
+			"",
+			cli.Balance{
+				Coins: "100.000000",
+				Hours: "100",
+			},
+			nil,
+		},
+
+		{
+			"200 status message error is RPCError",
+			http.MethodGet,
+			"/api/exchange-status",
+			http.StatusOK,
+			"",
+			sender.NewRPCError(errors.New("exchange.Status RPC error")),
+			"exchange.Status RPC error",
 			cli.Balance{
 				Coins: "100.000000",
 				Hours: "100",

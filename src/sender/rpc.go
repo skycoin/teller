@@ -94,7 +94,7 @@ func (c *RPC) GetTransaction(txid string) (*webrpc.TxnResult, error) {
 func (c *RPC) Balance() (*cli.Balance, error) {
 	bal, err := cli.CheckWalletBalance(c.rpcClient, c.walletFile)
 	if err != nil {
-		return nil, err
+		return nil, RPCError{err}
 	}
 
 	return &bal.Spendable, nil

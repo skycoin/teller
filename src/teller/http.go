@@ -27,6 +27,7 @@ import (
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
 	"github.com/skycoin/teller/src/scanner"
+	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/httputil"
 	"github.com/skycoin/teller/src/util/logger"
 )
@@ -604,8 +605,16 @@ func ExchangeStatusHandler(s *HTTPServer) http.HandlerFunc {
 
 		errorMsg := ""
 		err := s.exchanger.Status()
-		if err != nil {
+
+		// If the status is an RPCError, the most likely cause is that the
+		// wallet has an insufficient balance (other causes could be a temporary
+		// application error, or a bug in the skycoin node).
+		// Errors that are not RPCErrors are transient and common, such as
+		// exchange.ErrNotConfirmed, which will happen frequently and temporarily.
+		switch err.(type) {
+		case sender.RPCError:
 			errorMsg = err.Error()
+		default:
 		}
 
 		// Get the wallet balance, but ignore any error. If an error occurs,
