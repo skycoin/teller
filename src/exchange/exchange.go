@@ -8,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/util/droplet"
 	"github.com/skycoin/skycoin/src/visor"
@@ -51,6 +52,7 @@ type Exchanger interface {
 	GetBindNum(skyAddr string) (int, error)
 	GetDepositStats() (*DepositStats, error)
 	Status() error
+	Balance() (*cli.Balance, error)
 }
 
 // Exchange manages coin exchange between deposits and skycoin
@@ -59,6 +61,7 @@ type Exchange struct {
 	cfg         Config
 	multiplexer *scanner.Multiplexer // multiplex provides APIs for interacting with the scan service
 	sender      sender.Sender        // sender provides APIs for sending skycoin
+	client      sender.SkyClient     // client exposes some CLI/query tools. Do not use this for sending directly
 	store       Storer               // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
@@ -93,7 +96,7 @@ func (c Config) Validate() error {
 }
 
 // NewExchange creates exchange service
-func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, cfg Config) (*Exchange, error) {
+func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, client sender.SkyClient, cfg Config) (*Exchange, error) {
 	if _, err := ParseRate(cfg.BtcRate); err != nil {
 		return nil, err
 	}
@@ -107,6 +110,7 @@ func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Mult
 		log:         log.WithField("prefix", "teller.exchange"),
 		multiplexer: multiplexer,
 		sender:      sender,
+		client:      client,
 		store:       store,
 		quit:        make(chan struct{}),
 		done:        make(chan struct{}, 1),
@@ -684,16 +688,22 @@ func (s *Exchange) GetBindNum(skyAddr string) (int, error) {
 	return len(addrs), err
 }
 
-//GetDepositStats returns deposit status
-func (s *Exchange) GetDepositStats() (stats *DepositStats, err error) {
+// GetDepositStats returns deposit status
+func (s *Exchange) GetDepositStats() (*DepositStats, error) {
 	tbr, tss, err := s.store.GetDepositStats()
 	if err != nil {
 		return nil, err
 	}
+
 	return &DepositStats{
 		TotalBTCReceived: tbr,
 		TotalSKYSent:     tss,
 	}, nil
+}
+
+// Balance returns the number of coins left in the OTC wallet
+func (s *Exchange) Balance() (*cli.Balance, error) {
+	return s.client.Balance()
 }
 
 func (s *Exchange) setStatus(err error) {

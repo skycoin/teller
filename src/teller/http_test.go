@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/teller/src/exchange"
 	"github.com/skycoin/teller/src/util/testutil"
 	"github.com/stretchr/testify/mock"
@@ -48,6 +49,17 @@ func (e *fakeExchanger) Status() error {
 	return args.Error(0)
 }
 
+func (e *fakeExchanger) Balance() (*cli.Balance, error) {
+	args := e.Called()
+
+	b := args.Get(0)
+	if b == nil {
+		return nil, args.Error(1)
+	}
+
+	return b.(*cli.Balance), args.Error(1)
+}
+
 func TestExchangeStatusHandler(t *testing.T) {
 	tt := []struct {
 		name           string
@@ -57,6 +69,8 @@ func TestExchangeStatusHandler(t *testing.T) {
 		err            string
 		exchangeStatus error
 		errorMsg       string
+		balance        cli.Balance
+		balanceError   error
 	}{
 		{
 			"405",
@@ -66,6 +80,11 @@ func TestExchangeStatusHandler(t *testing.T) {
 			"Invalid request method",
 			nil,
 			"",
+			cli.Balance{
+				Coins: "100.000000",
+				Hours: "100",
+			},
+			nil,
 		},
 
 		{
@@ -76,6 +95,11 @@ func TestExchangeStatusHandler(t *testing.T) {
 			"",
 			nil,
 			"",
+			cli.Balance{
+				Coins: "100.000000",
+				Hours: "100",
+			},
+			nil,
 		},
 
 		{
@@ -86,13 +110,40 @@ func TestExchangeStatusHandler(t *testing.T) {
 			"",
 			errors.New("exchange.Status error"),
 			"exchange.Status error",
+			cli.Balance{
+				Coins: "100.000000",
+				Hours: "100",
+			},
+			nil,
+		},
+
+		{
+			"200 cli balance error",
+			http.MethodGet,
+			"/api/exchange-status",
+			http.StatusOK,
+			"",
+			nil,
+			"",
+			cli.Balance{
+				Coins: "0.000000",
+				Hours: "0",
+			},
+			errors.New("cli balance error"),
 		},
 	}
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			e := &fakeExchanger{}
+
 			e.On("Status").Return(tc.exchangeStatus)
+
+			if tc.balanceError == nil {
+				e.On("Balance").Return(&tc.balance, nil)
+			} else {
+				e.On("Balance").Return(nil, tc.balanceError)
+			}
 
 			req, err := http.NewRequest(tc.method, tc.url, nil)
 			require.NoError(t, err)
@@ -105,6 +156,7 @@ func TestExchangeStatusHandler(t *testing.T) {
 				exchanger: e,
 			}
 			handler := httpServ.setupMux()
+
 			handler.ServeHTTP(rr, req)
 
 			status := rr.Code
@@ -112,14 +164,19 @@ func TestExchangeStatusHandler(t *testing.T) {
 
 			if status != http.StatusOK {
 				require.Equal(t, tc.err, strings.TrimSpace(rr.Body.String()))
-			} else {
-				var msg ExchangeStatusResponse
-				err := json.Unmarshal(rr.Body.Bytes(), &msg)
-				require.NoError(t, err)
-				require.Equal(t, ExchangeStatusResponse{
-					Error: tc.errorMsg,
-				}, msg)
+				return
 			}
+
+			var msg ExchangeStatusResponse
+			err = json.Unmarshal(rr.Body.Bytes(), &msg)
+			require.NoError(t, err)
+			require.Equal(t, ExchangeStatusResponse{
+				Error: tc.errorMsg,
+				Balance: ExchangeStatusResponseBalance{
+					Coins: tc.balance.Coins,
+					Hours: tc.balance.Hours,
+				},
+			}, msg)
 		})
 	}
 

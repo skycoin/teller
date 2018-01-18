@@ -494,6 +494,12 @@ Return the exchanger's status.
 The exchanger's status is the last error seen while trying to send SKY, or nil if no last error was seen.
 Use this to detect if the OTC is temporarily offline or sold out.
 
+The balance of the OTC wallet is included in the response.  The wallet may still be considered "sold out" even
+if there is a balance remaining. The wallet is considered "sold out" when there are not enough coins in the wallet
+to satisfy the current purchase, so it is unlikely for the wallet to ever reach exactly 0.  For example, if there
+are 100 coins in the wallet and someone attempts to purchase 200 coins, it will be considered "sold out".
+In this case, the "error" field will be set to some message string, and the balance will say "100.000000".
+
 Example:
 
 ```sh
@@ -504,13 +510,21 @@ Response:
 
 ```json
 {
-    "error": ""
+    "error": "",
+    "balance": {
+        "coins": "100.000000",
+        "hours": "100",
+    }
 }
 ```
 
 ```json
 {
-    "error": "no unspents to spend"
+    "error": "no unspents to spend",
+    "balance": {
+        "coins": "0.000000",
+        "hours": "0",
+    }
 }
 ```
 

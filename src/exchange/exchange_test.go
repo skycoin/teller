@@ -173,7 +173,7 @@ func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 	multiplexer.AddScanner(escr, scanner.CoinTypeETH)
 	go multiplexer.Multiplex()
 
-	e, err := NewExchange(log, store, multiplexer, newDummySender(), Config{
+	e, err := NewExchange(log, store, multiplexer, newDummySender(), sender.NewDummySkyClient(), Config{
 		BtcRate:                 testSkyBtcRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 	})
@@ -225,7 +225,7 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 	multiplexer.AddScanner(escr, scanner.CoinTypeETH)
 	go multiplexer.Multiplex()
 
-	e, err := NewExchange(log, store, multiplexer, newDummySender(), Config{
+	e, err := NewExchange(log, store, multiplexer, newDummySender(), sender.NewDummySkyClient(), Config{
 		BtcRate:                 testSkyBtcRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 	})
@@ -1254,7 +1254,7 @@ func TestExchangeCreateTransaction(t *testing.T) {
 	}
 
 	log, _ := testutil.NewLogger(t)
-	s, err := NewExchange(log, nil, nil, newDummySender(), cfg)
+	s, err := NewExchange(log, nil, nil, newDummySender(), sender.NewDummySkyClient(), cfg)
 	require.NoError(t, err)
 
 	// Create transaction with no SkyAddress

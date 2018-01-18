@@ -580,7 +580,14 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 
 // ExchangeStatusResponse http response for /api/exchange-status
 type ExchangeStatusResponse struct {
-	Error string `json:"error"`
+	Error   string                        `json:"error"`
+	Balance ExchangeStatusResponseBalance `json:"balance"`
+}
+
+// ExchangeStatusResponseBalance is the balance field of ExchangeStatusResponse
+type ExchangeStatusResponseBalance struct {
+	Coins string `json:"coins"`
+	Hours string `json:"hours"`
 }
 
 // ExchangeStatusHandler returns the status of the exchanger
@@ -601,11 +608,29 @@ func ExchangeStatusHandler(s *HTTPServer) http.HandlerFunc {
 			errorMsg = err.Error()
 		}
 
-		log.WithField("exchange-status", errorMsg).Info()
+		// Get the wallet balance, but ignore any error. If an error occurs,
+		// return a balance of 0
+		bal, err := s.exchanger.Balance()
+		coins := "0.000000"
+		hours := "0"
+		if err != nil {
+			log.WithError(err).Error("s.exchange.Balance failed")
+		} else {
+			coins = bal.Coins
+			hours = bal.Hours
+		}
 
-		if err := httputil.JSONResponse(w, ExchangeStatusResponse{
+		resp := ExchangeStatusResponse{
 			Error: errorMsg,
-		}); err != nil {
+			Balance: ExchangeStatusResponseBalance{
+				Coins: coins,
+				Hours: hours,
+			},
+		}
+
+		log.WithField("resp", resp).Info()
+
+		if err := httputil.JSONResponse(w, resp); err != nil {
 			log.WithError(err).Error(err)
 		}
 	}

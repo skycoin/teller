@@ -176,6 +176,7 @@ func run() error {
 	var scanEthService scanner.Scanner
 	var sendService *sender.SendService
 	var sendRPC sender.Sender
+	var skyClient sender.SkyClient
 	var btcAddrMgr *addrs.Addrs
 	var ethAddrMgr *addrs.Addrs
 
@@ -239,16 +240,18 @@ func run() error {
 
 	if cfg.Dummy.Sender {
 		log.Info("skyd disabled, running dummy sender")
+		skyClient = sender.NewDummySkyClient()
 		sendRPC = sender.NewDummySender(log)
 		sendRPC.(*sender.DummySender).BindHandlers(dummyMux)
 	} else {
-		skyRPC, err := sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
+		var err error
+		skyClient, err = sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
 		if err != nil {
 			log.WithError(err).Error("sender.NewRPC failed")
 			return err
 		}
 
-		sendService = sender.NewService(log, skyRPC)
+		sendService = sender.NewService(log, skyClient)
 
 		background("sendService.Run", errC, sendService.Run)
 
@@ -270,7 +273,7 @@ func run() error {
 		log.WithError(err).Error("exchange.NewStore failed")
 		return err
 	}
-	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, exchange.Config{
+	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, skyClient, exchange.Config{
 		BtcRate:                 cfg.SkyExchanger.SkyBtcExchangeRate,
 		EthRate:                 cfg.SkyExchanger.SkyEthExchangeRate,
 		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
