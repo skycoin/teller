@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"fmt"
 	"math"
 	"net/http"
 	"strconv"
@@ -15,26 +16,39 @@ import (
 
 // DummyScanner implements the Scanner interface to provide simulated scanning
 type DummyScanner struct {
-	addrs    []string
-	addrsMap map[string]struct{}
-	deposits chan DepositNote
-	log      logrus.FieldLogger
+	addrs     []string
+	addrsMap  map[string]struct{}
+	deposits  chan DepositNote
+	coinTypes map[string]struct{}
+	log       logrus.FieldLogger
 	sync.RWMutex
 }
 
 // NewDummyScanner creates a DummyScanner
 func NewDummyScanner(log logrus.FieldLogger) *DummyScanner {
 	return &DummyScanner{
-		log:      log.WithField("prefix", "scanner.dummy"),
-		addrsMap: make(map[string]struct{}),
-		deposits: make(chan DepositNote, 100),
+		log:       log.WithField("prefix", "scanner.dummy"),
+		addrsMap:  make(map[string]struct{}),
+		coinTypes: make(map[string]struct{}),
+		deposits:  make(chan DepositNote, 100),
 	}
+}
+
+// RegisterCoinType marks a coinType as valid
+func (s *DummyScanner) RegisterCoinType(coinType string) {
+	s.Lock()
+	defer s.Unlock()
+	s.coinTypes[coinType] = struct{}{}
 }
 
 // AddScanAddress adds an address
 func (s *DummyScanner) AddScanAddress(addr, coinType string) error {
 	s.Lock()
 	defer s.Unlock()
+
+	if _, ok := s.coinTypes[coinType]; !ok {
+		return fmt.Errorf("Invalid coin type \"%s\"", coinType)
+	}
 
 	if _, ok := s.addrsMap[addr]; ok {
 		return NewDuplicateDepositAddressErr(addr)

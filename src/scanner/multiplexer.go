@@ -52,11 +52,25 @@ func (m *Multiplexer) AddScanner(scanner Scanner, coinType string) error {
 func (m *Multiplexer) AddScanAddress(depositAddr, coinType string) error {
 	m.RWMutex.Lock()
 	defer m.RWMutex.Unlock()
-	scanner, existsScanner := m.scannerMap[coinType]
-	if !existsScanner {
-		return errors.New("unknown cointype")
+
+	scanner, ok := m.scannerMap[coinType]
+	if !ok {
+		return fmt.Errorf("unknown cointype \"%s\"", coinType)
 	}
+
 	return scanner.AddScanAddress(depositAddr, coinType)
+}
+
+// ValidateCoinType returns an error if the coinType is invalid
+func (m *Multiplexer) ValidateCoinType(coinType string) error {
+	m.RWMutex.RLock()
+	defer m.RWMutex.RUnlock()
+
+	if _, ok := m.scannerMap[coinType]; !ok {
+		return fmt.Errorf("unknown cointype \"%s\"", coinType)
+	}
+
+	return nil
 }
 
 // Multiplex forward multi-scanner deposit to a shared aggregate channel, think of "Goroutine merging channel"
@@ -67,20 +81,38 @@ func (m *Multiplexer) Multiplex() error {
 		log.Info("Multiplex service closed")
 		close(m.done)
 	}()
+
 	var wg sync.WaitGroup
-	for _, scan := range m.scannerMap {
+	for scannerName, scan := range m.scannerMap {
 		wg.Add(1)
 		go func(scan Scanner) {
 			defer log.Info("Scan goroutine exited")
 			defer wg.Done()
-			for dv := range scan.GetDeposit() {
-				m.outChan <- dv
+			for {
+				select {
+				case dv, ok := <-scan.GetDeposit():
+					if !ok {
+						log.WithField("name", scannerName).Info("sub-scanner closed")
+					}
+					m.outChan <- dv
+				case <-m.quit:
+					return
+				}
 			}
 		}(scan)
 	}
 	wg.Wait()
 
 	return nil
+}
+
+// Shutdown shutdown the multiplexer
+func (m *Multiplexer) Shutdown() {
+	m.log.Info("Closing Multiplexer")
+	close(m.quit)
+	close(m.outChan)
+	m.log.Info("Waiting for Multiplexer to stop")
+	<-m.done
 }
 
 // GetDeposit returns deposit values channel.
@@ -91,15 +123,6 @@ func (m *Multiplexer) GetDeposit() <-chan DepositNote {
 // GetScannerCount returns scanner count.
 func (m *Multiplexer) GetScannerCount() int {
 	return m.scannerCount
-}
-
-// Shutdown shutdown the multiplexer
-func (m *Multiplexer) Shutdown() {
-	m.log.Info("Closing Multiplexer")
-	close(m.quit)
-	close(m.outChan)
-	m.log.Info("Waiting for Multiplexer to stop")
-	<-m.done
 }
 
 // GetScanner returns Scanner according to coinType

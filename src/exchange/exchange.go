@@ -57,9 +57,9 @@ type Exchanger interface {
 type Exchange struct {
 	log         logrus.FieldLogger
 	cfg         Config
-	multiplexer scanner.Scanner // multiplex provides APIs for interacting with the scan service
-	sender      sender.Sender   // sender provides APIs for sending skycoin
-	store       Storer          // deposit info storage
+	multiplexer *scanner.Multiplexer // multiplex provides APIs for interacting with the scan service
+	sender      sender.Sender        // sender provides APIs for sending skycoin
+	store       Storer               // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
 	depositChan chan DepositInfo
@@ -93,7 +93,7 @@ func (c Config) Validate() error {
 }
 
 // NewExchange creates exchange service
-func NewExchange(log logrus.FieldLogger, store Storer, multiplexer scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
+func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, cfg Config) (*Exchange, error) {
 	if _, err := ParseRate(cfg.BtcRate); err != nil {
 		return nil, err
 	}
@@ -607,11 +607,14 @@ func (s *Exchange) broadcastTransaction(tx *coin.Transaction) (*sender.Broadcast
 // to the btc/eth address, will send specific skycoin to the binded
 // skycoin address
 func (s *Exchange) BindAddress(skyAddr, depositAddr, coinType string) error {
+	if err := s.multiplexer.ValidateCoinType(coinType); err != nil {
+		return err
+	}
+
 	if err := s.store.BindAddress(skyAddr, depositAddr, coinType); err != nil {
 		return err
 	}
 
-	// add btc/etc address to scanner
 	return s.multiplexer.AddScanAddress(depositAddr, coinType)
 }
 

@@ -490,7 +490,9 @@ Content-Type: application/json
 URI: /api/exchange-status
 ```
 
-Return the exchanger's status.  Use this to detect if the OTC is temporarily offline or sold out.
+Return the exchanger's status.
+The exchanger's status is the last error seen while trying to send SKY, or nil if no last error was seen.
+Use this to detect if the OTC is temporarily offline or sold out.
 
 Example:
 
@@ -502,9 +504,16 @@ Response:
 
 ```json
 {
-    "status": "ok"
+    "error": ""
 }
 ```
+
+```json
+{
+    "error": "no unspents to spend"
+}
+```
+
 
 Possible statuses are:
 TODO

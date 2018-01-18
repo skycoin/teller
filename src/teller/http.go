@@ -580,7 +580,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 
 // ExchangeStatusResponse http response for /api/exchange-status
 type ExchangeStatusResponse struct {
-	Status string `json:"status"`
+	Error string `json:"error"`
 }
 
 // ExchangeStatusHandler returns the status of the exchanger
@@ -595,16 +595,16 @@ func ExchangeStatusHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		statusMsg := "ok"
-		status := s.exchanger.Status()
-		if status != nil {
-			statusMsg = status.Error()
+		errorMsg := ""
+		err := s.exchanger.Status()
+		if err != nil {
+			errorMsg = err.Error()
 		}
 
-		log.WithField("exchange-status", statusMsg).Info()
+		log.WithField("exchange-status", errorMsg).Info()
 
 		if err := httputil.JSONResponse(w, ExchangeStatusResponse{
-			Status: statusMsg,
+			Error: errorMsg,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}
