@@ -93,6 +93,7 @@ func (m *Multiplexer) Multiplex() error {
 				case dv, ok := <-scan.GetDeposit():
 					if !ok {
 						log.WithField("name", scannerName).Info("sub-scanner closed")
+						return
 					}
 					m.outChan <- dv
 				case <-m.quit:

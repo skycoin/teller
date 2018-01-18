@@ -201,7 +201,7 @@ func setupExchange(t *testing.T, log *logrus.Logger) (*Exchange, func(), func())
 	return e, run, shutdown
 }
 func closeMultiplexer(e *Exchange) {
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).stop()
 	mp.GetScanner(scanner.CoinTypeETH).(*dummyScanner).stop()
 	mp.Shutdown()
@@ -317,7 +317,7 @@ func TestExchangeRunSend(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
@@ -457,7 +457,7 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
@@ -516,7 +516,7 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
@@ -577,7 +577,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
@@ -656,7 +656,7 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
@@ -746,7 +746,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
@@ -1054,7 +1054,7 @@ func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// Configure database mocks
@@ -1106,7 +1106,7 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// Configure database mocks
@@ -1201,7 +1201,7 @@ func TestExchangeProcessWaitSendNoSkyAddrBound(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit

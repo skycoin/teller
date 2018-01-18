@@ -56,7 +56,7 @@ func TestExchangeStatusHandler(t *testing.T) {
 		status         int
 		err            string
 		exchangeStatus error
-		statusMsg      string
+		errorMsg       string
 	}{
 		{
 			"405",
@@ -75,7 +75,7 @@ func TestExchangeStatusHandler(t *testing.T) {
 			http.StatusOK,
 			"",
 			nil,
-			"ok",
+			"",
 		},
 
 		{
@@ -116,9 +116,9 @@ func TestExchangeStatusHandler(t *testing.T) {
 				var msg ExchangeStatusResponse
 				err := json.Unmarshal(rr.Body.Bytes(), &msg)
 				require.NoError(t, err)
-				require.Equal(t, msg, ExchangeStatusResponse{
-					Status: tc.statusMsg,
-				})
+				require.Equal(t, ExchangeStatusResponse{
+					Error: tc.errorMsg,
+				}, msg)
 			}
 		})
 	}
