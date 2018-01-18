@@ -258,34 +258,3 @@ func (s *SendService) Shutdown() {
 	close(s.quit)
 	<-s.done
 }
-
-// DummySkyClient provides stubbed sky client methods
-type DummySkyClient struct{}
-
-// NewDummySkyClient returns a new DummySkyClient
-func NewDummySkyClient() *DummySkyClient {
-	return &DummySkyClient{}
-}
-
-// CreateTransaction always fails
-func (s *DummySkyClient) CreateTransaction(dest string, amt uint64) (*coin.Transaction, error) {
-	return nil, errors.New("DummySkyClient.CreateTransaction always fails")
-}
-
-// BroadcastTransaction always fails
-func (s *DummySkyClient) BroadcastTransaction(txn *coin.Transaction) (string, error) {
-	return "", errors.New("DummySkyClient.BroadcastTransaction always fails")
-}
-
-// GetTransaction always fails
-func (s *DummySkyClient) GetTransaction(txid string) (*webrpc.TxnResult, error) {
-	return nil, errors.New("DummySkyClient.GetTransaction always fails")
-}
-
-// Balance returns a fake balance
-func (s *DummySkyClient) Balance() (*cli.Balance, error) {
-	return &cli.Balance{
-		Coins: "100.000000",
-		Hours: "100",
-	}, nil
-}

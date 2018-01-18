@@ -10,6 +10,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/util/droplet"
@@ -139,6 +140,14 @@ func (s *DummySender) IsTxConfirmed(txid string) *ConfirmResponse {
 			RspC: make(chan *ConfirmResponse, 1),
 		},
 	}
+}
+
+// Balance always returns 100 coins and 100 hours
+func (s *DummySender) Balance() (*cli.Balance, error) {
+	return &cli.Balance{
+		Coins: "100.000000",
+		Hours: "100",
+	}, nil
 }
 
 // HTTP interface

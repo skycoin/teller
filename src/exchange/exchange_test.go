@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/coin"
 
@@ -118,6 +119,13 @@ func (s *dummySender) setTxConfirmed(txid string) {
 	s.txidConfirmMap[txid] = true
 }
 
+func (s *dummySender) Balance() (*cli.Balance, error) {
+	return &cli.Balance{
+		Coins: "100.000000",
+		Hours: "100",
+	}, nil
+}
+
 type dummyScanner struct {
 	dvC   chan scanner.DepositNote
 	addrs []string
@@ -173,7 +181,7 @@ func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 	multiplexer.AddScanner(escr, scanner.CoinTypeETH)
 	go multiplexer.Multiplex()
 
-	e, err := NewExchange(log, store, multiplexer, newDummySender(), sender.NewDummySkyClient(), Config{
+	e, err := NewExchange(log, store, multiplexer, newDummySender(), Config{
 		BtcRate:                 testSkyBtcRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 	})
@@ -225,7 +233,7 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 	multiplexer.AddScanner(escr, scanner.CoinTypeETH)
 	go multiplexer.Multiplex()
 
-	e, err := NewExchange(log, store, multiplexer, newDummySender(), sender.NewDummySkyClient(), Config{
+	e, err := NewExchange(log, store, multiplexer, newDummySender(), Config{
 		BtcRate:                 testSkyBtcRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 	})
@@ -1254,7 +1262,7 @@ func TestExchangeCreateTransaction(t *testing.T) {
 	}
 
 	log, _ := testutil.NewLogger(t)
-	s, err := NewExchange(log, nil, nil, newDummySender(), sender.NewDummySkyClient(), cfg)
+	s, err := NewExchange(log, nil, nil, newDummySender(), cfg)
 	require.NoError(t, err)
 
 	// Create transaction with no SkyAddress

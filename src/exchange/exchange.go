@@ -61,7 +61,6 @@ type Exchange struct {
 	cfg         Config
 	multiplexer *scanner.Multiplexer // multiplex provides APIs for interacting with the scan service
 	sender      sender.Sender        // sender provides APIs for sending skycoin
-	client      sender.SkyClient     // client exposes some CLI/query tools. Do not use this for sending directly
 	store       Storer               // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
@@ -96,7 +95,7 @@ func (c Config) Validate() error {
 }
 
 // NewExchange creates exchange service
-func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, client sender.SkyClient, cfg Config) (*Exchange, error) {
+func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, cfg Config) (*Exchange, error) {
 	if _, err := ParseRate(cfg.BtcRate); err != nil {
 		return nil, err
 	}
@@ -110,7 +109,6 @@ func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Mult
 		log:         log.WithField("prefix", "teller.exchange"),
 		multiplexer: multiplexer,
 		sender:      sender,
-		client:      client,
 		store:       store,
 		quit:        make(chan struct{}),
 		done:        make(chan struct{}, 1),
@@ -703,7 +701,7 @@ func (s *Exchange) GetDepositStats() (*DepositStats, error) {
 
 // Balance returns the number of coins left in the OTC wallet
 func (s *Exchange) Balance() (*cli.Balance, error) {
-	return s.client.Balance()
+	return s.sender.Balance()
 }
 
 func (s *Exchange) setStatus(err error) {
