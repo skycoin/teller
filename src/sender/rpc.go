@@ -90,6 +90,16 @@ func (c *RPC) GetTransaction(txid string) (*webrpc.TxnResult, error) {
 	return txn, nil
 }
 
+// Balance returns the balance of a wallet
+func (c *RPC) Balance() (*cli.Balance, error) {
+	bal, err := cli.CheckWalletBalance(c.rpcClient, c.walletFile)
+	if err != nil {
+		return nil, RPCError{err}
+	}
+
+	return &bal.Spendable, nil
+}
+
 func validateSendAmount(amt cli.SendAmount) error {
 	// validate the recvAddr
 	if _, err := cipher.DecodeBase58Address(amt.Addr); err != nil {

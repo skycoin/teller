@@ -27,6 +27,7 @@ import (
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
 	"github.com/skycoin/teller/src/scanner"
+	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/httputil"
 	"github.com/skycoin/teller/src/util/logger"
 )
@@ -580,7 +581,14 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 
 // ExchangeStatusResponse http response for /api/exchange-status
 type ExchangeStatusResponse struct {
-	Error string `json:"error"`
+	Error   string                        `json:"error"`
+	Balance ExchangeStatusResponseBalance `json:"balance"`
+}
+
+// ExchangeStatusResponseBalance is the balance field of ExchangeStatusResponse
+type ExchangeStatusResponseBalance struct {
+	Coins string `json:"coins"`
+	Hours string `json:"hours"`
 }
 
 // ExchangeStatusHandler returns the status of the exchanger
@@ -597,15 +605,41 @@ func ExchangeStatusHandler(s *HTTPServer) http.HandlerFunc {
 
 		errorMsg := ""
 		err := s.exchanger.Status()
-		if err != nil {
+
+		// If the status is an RPCError, the most likely cause is that the
+		// wallet has an insufficient balance (other causes could be a temporary
+		// application error, or a bug in the skycoin node).
+		// Errors that are not RPCErrors are transient and common, such as
+		// exchange.ErrNotConfirmed, which will happen frequently and temporarily.
+		switch err.(type) {
+		case sender.RPCError:
 			errorMsg = err.Error()
+		default:
 		}
 
-		log.WithField("exchange-status", errorMsg).Info()
+		// Get the wallet balance, but ignore any error. If an error occurs,
+		// return a balance of 0
+		bal, err := s.exchanger.Balance()
+		coins := "0.000000"
+		hours := "0"
+		if err != nil {
+			log.WithError(err).Error("s.exchange.Balance failed")
+		} else {
+			coins = bal.Coins
+			hours = bal.Hours
+		}
 
-		if err := httputil.JSONResponse(w, ExchangeStatusResponse{
+		resp := ExchangeStatusResponse{
 			Error: errorMsg,
-		}); err != nil {
+			Balance: ExchangeStatusResponseBalance{
+				Coins: coins,
+				Hours: hours,
+			},
+		}
+
+		log.WithField("resp", resp).Info()
+
+		if err := httputil.JSONResponse(w, resp); err != nil {
 			log.WithError(err).Error(err)
 		}
 	}

@@ -8,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/coin"
 )
@@ -76,6 +77,7 @@ type SkyClient interface {
 	CreateTransaction(string, uint64) (*coin.Transaction, error)
 	BroadcastTransaction(*coin.Transaction) (string, error)
 	GetTransaction(string) (*webrpc.TxnResult, error)
+	Balance() (*cli.Balance, error)
 }
 
 // NewService creates sender instance

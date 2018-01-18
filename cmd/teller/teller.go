@@ -242,13 +242,13 @@ func run() error {
 		sendRPC = sender.NewDummySender(log)
 		sendRPC.(*sender.DummySender).BindHandlers(dummyMux)
 	} else {
-		skyRPC, err := sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
+		skyClient, err := sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
 		if err != nil {
 			log.WithError(err).Error("sender.NewRPC failed")
 			return err
 		}
 
-		sendService = sender.NewService(log, skyRPC)
+		sendService = sender.NewService(log, skyClient)
 
 		background("sendService.Run", errC, sendService.Run)
 

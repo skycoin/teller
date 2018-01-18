@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/coin"
 
@@ -116,6 +117,13 @@ func (s *dummySender) setTxConfirmed(txid string) {
 	defer s.Unlock()
 
 	s.txidConfirmMap[txid] = true
+}
+
+func (s *dummySender) Balance() (*cli.Balance, error) {
+	return &cli.Balance{
+		Coins: "100.000000",
+		Hours: "100",
+	}, nil
 }
 
 type dummyScanner struct {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/util/droplet"
 	"github.com/skycoin/skycoin/src/visor"
@@ -51,6 +52,7 @@ type Exchanger interface {
 	GetBindNum(skyAddr string) (int, error)
 	GetDepositStats() (*DepositStats, error)
 	Status() error
+	Balance() (*cli.Balance, error)
 }
 
 // Exchange manages coin exchange between deposits and skycoin
@@ -684,16 +686,22 @@ func (s *Exchange) GetBindNum(skyAddr string) (int, error) {
 	return len(addrs), err
 }
 
-//GetDepositStats returns deposit status
-func (s *Exchange) GetDepositStats() (stats *DepositStats, err error) {
+// GetDepositStats returns deposit status
+func (s *Exchange) GetDepositStats() (*DepositStats, error) {
 	tbr, tss, err := s.store.GetDepositStats()
 	if err != nil {
 		return nil, err
 	}
+
 	return &DepositStats{
 		TotalBTCReceived: tbr,
 		TotalSKYSent:     tss,
 	}, nil
+}
+
+// Balance returns the number of coins left in the OTC wallet
+func (s *Exchange) Balance() (*cli.Balance, error) {
+	return s.sender.Balance()
 }
 
 func (s *Exchange) setStatus(err error) {
