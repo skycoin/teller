@@ -194,7 +194,9 @@ func run() error {
 	if cfg.Dummy.Scanner {
 		log.Info("btcd disabled, running dummy scanner")
 		scanService = scanner.NewDummyScanner(log)
-		scanEthService = scanner.NewDummyScanner(log)
+		scanService.(*scanner.DummyScanner).RegisterCoinType(scanner.CoinTypeBTC)
+		// TODO -- refactor dummy scanning to support multiple coin types
+		// scanEthService = scanner.NewDummyScanner(log)
 		scanService.(*scanner.DummyScanner).BindHandlers(dummyMux)
 	} else {
 		// enable btc scanner
@@ -207,12 +209,6 @@ func run() error {
 			background("btcScanner.Run", errC, btcScanner.Run)
 
 			scanService = btcScanner
-
-			err = multiplexer.AddScanner(scanService, scanner.CoinTypeBTC)
-			if err != nil {
-				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeBTC)
-				return err
-			}
 		}
 
 		// enable eth scanner
@@ -227,12 +223,16 @@ func run() error {
 
 			scanEthService = ethScanner
 
-			err = multiplexer.AddScanner(scanEthService, scanner.CoinTypeETH)
-			if err != nil {
+			if err := multiplexer.AddScanner(scanEthService, scanner.CoinTypeETH); err != nil {
 				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeETH)
 				return err
 			}
 		}
+	}
+
+	if err := multiplexer.AddScanner(scanService, scanner.CoinTypeBTC); err != nil {
+		log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeBTC)
+		return err
 	}
 
 	background("multiplex.Run", errC, multiplexer.Multiplex)
@@ -356,6 +356,9 @@ func run() error {
 	// close the teller service
 	log.Info("Shutting down tellerServer")
 	tellerServer.Shutdown()
+
+	log.Info("Shutting down the multiplexer")
+	multiplexer.Shutdown()
 
 	// close the scan service
 	if btcScanner != nil {

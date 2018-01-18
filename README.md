@@ -13,8 +13,8 @@
 - [Setup project](#setup-project)
     - [Prerequisites](#prerequisites)
     - [Configure teller](#configure-teller)
-    - [Running teller without btcd or skyd](#running-teller-without-btcd-or-skyd)
-    - [Running teller with Docker](#running-teller-witch-docker)
+    - [Running teller without btcd, geth or skyd](#running-teller-without-btcd-geth-or-skyd)
+    - [Running teller with Docker](#running-teller-with-docker)
     - [Generate BTC addresses](#generate-btc-addresses)
     - [Generate ETH addresses](#generate-eth-addresses)
     - [Setup skycoin hot wallet](#setup-skycoin-hot-wallet)
@@ -23,13 +23,15 @@
     - [Setup btcd](#setup-btcd)
         - [Configure btcd](#configure-btcd)
         - [Obtain btcd RPC certificate](#obtain-btcd-rpc-certificate)
+    - [Using a reverse proxy to expose teller](#using-a-reverse-proxy-to-expose-teller)
     - [Setup geth](#setup-geth)
         - [Configure geth](#configure-geth)
-    - [Using a reverse proxy to expose teller](#using-a-reverse-proxy-to-expose-teller)
+    - [you can using a reverse proxy to expose geth rpc port such as Using a reverse proxy to expose teller](#you-can-using-a-reverse-proxy-to-expose-geth-rpc-port-such-as-using-a-reverse-proxy-to-expose-teller)
 - [API](#api)
     - [Bind](#bind)
     - [Status](#status)
     - [Config](#config)
+    - [Exchange Status](#exchange-status)
     - [Dummy](#dummy)
         - [Scanner](#scanner)
             - [Deposit](#deposit)
@@ -479,6 +481,42 @@ Response:
     "sky_eth_exchange_rate": "30.000000"
 }
 ```
+
+### Exchange Status
+
+```sh
+Method: GET
+Content-Type: application/json
+URI: /api/exchange-status
+```
+
+Return the exchanger's status.
+The exchanger's status is the last error seen while trying to send SKY, or nil if no last error was seen.
+Use this to detect if the OTC is temporarily offline or sold out.
+
+Example:
+
+```sh
+curl http://localhost:7071/api/exchange-status
+```
+
+Response:
+
+```json
+{
+    "error": ""
+}
+```
+
+```json
+{
+    "error": "no unspents to spend"
+}
+```
+
+
+Possible statuses are:
+TODO
 
 ### Dummy
 
