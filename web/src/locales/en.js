@@ -35,6 +35,7 @@ export default {
   },
   distribution: {
     rate: 'Current OTC rate: {rate} SKY/BTC',
+    inventory: 'Current inventory: {coins} SKY available',
     title: 'Skycoin OTC',
     heading: 'Skycoin OTC',
     headingEnded: 'Skycoin OTC is currently closed',

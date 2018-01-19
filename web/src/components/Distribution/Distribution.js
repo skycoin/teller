@@ -66,7 +66,15 @@ class Distribution extends React.Component {
     return checkExchangeStatus()
     .then(status => {
       if (status.error != "") {
-        this.setState({ disabledReason: "coinsSoldOut", enabled: false });
+        this.setState({
+          disabledReason: "coinsSoldOut",
+          balance: status.balance,
+          enabled: false
+        });
+      } else {
+        this.setState({
+          balance: status.balance
+        });
       }
     });
   }
@@ -143,6 +151,7 @@ class Distribution extends React.Component {
         this.setState({
           statusLoading: false,
         });
+        return this.checkExchangeState();
       });
   }
 
@@ -207,6 +216,14 @@ class Distribution extends React.Component {
                     id="distribution.rate"
                     values={{
                       rate: +this.state.sky_btc_exchange_rate,
+                    }}
+                  />
+                </Text>
+                <Text heavy color="black" fontSize={[2, 3]} mb={[4, 6]} as="div">
+                  <FormattedMessage
+                    id="distribution.inventory"
+                    values={{
+                      coins: this.state.balance && this.state.balance.coins,
                     }}
                   />
                 </Text>
