@@ -2,12 +2,12 @@ package sender
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
 	"sync"
-	"errors"
 
 	"github.com/sirupsen/logrus"
 
@@ -45,8 +45,8 @@ type DummySender struct {
 	secKey        cipher.SecKey
 	log           logrus.FieldLogger
 	sync.RWMutex
-	coins         uint64
-	hours         uint64
+	coins uint64
+	hours uint64
 }
 
 // NewDummySender creates a DummySender
