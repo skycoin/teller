@@ -61,6 +61,7 @@ export default {
     btcAddress: 'BTC address',
     errors: {
       noSkyAddress: 'Please enter your SKY address.',
+      coinsSoldOut: 'Skycoin OTC is currently sold out, check back later.',
     },
     statuses: {
       waiting_deposit: '[tx-{id} {updated}] Waiting for BTC deposit.',
