@@ -35,6 +35,7 @@ export default {
   },
   distribution: {
     rate: 'Current OTC rate: {rate} SKY/BTC',
+    inventory: 'Current inventory: {coins} SKY available',
     title: 'Skycoin OTC',
     heading: 'Skycoin OTC',
     headingEnded: 'Skycoin OTC is currently closed',
@@ -61,6 +62,7 @@ export default {
     btcAddress: 'BTC address',
     errors: {
       noSkyAddress: 'Please enter your SKY address.',
+      coinsSoldOut: 'Skycoin OTC is currently sold out, check back later.',
     },
     statuses: {
       waiting_deposit: '[tx-{id} {updated}] Waiting for BTC deposit.',

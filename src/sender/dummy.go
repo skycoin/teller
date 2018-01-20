@@ -2,6 +2,7 @@ package sender
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -44,6 +45,8 @@ type DummySender struct {
 	secKey        cipher.SecKey
 	log           logrus.FieldLogger
 	sync.RWMutex
+	coins uint64
+	hours uint64
 }
 
 // NewDummySender creates a DummySender
@@ -54,11 +57,17 @@ func NewDummySender(log logrus.FieldLogger) *DummySender {
 		broadcastTxns: make(map[string]*DummyTransaction),
 		secKey:        sec,
 		log:           log.WithField("prefix", "sender.dummy"),
+		coins:         100000000,
+		hours:         100,
 	}
 }
 
 // CreateTransaction creates a fake skycoin transaction
 func (s *DummySender) CreateTransaction(addr string, coins uint64) (*coin.Transaction, error) {
+	if coins > s.coins {
+		return nil, NewRPCError(errors.New("CreateTransaction not enough coins"))
+	}
+
 	c, err := droplet.ToString(coins)
 	if err != nil {
 		s.log.WithError(err).Error("droplet.ToString failed")
@@ -117,6 +126,10 @@ func (s *DummySender) BroadcastTransaction(txn *coin.Transaction) *BroadcastTxRe
 
 	s.seq++
 
+	for _, output := range txn.Out {
+		s.coins -= output.Coins
+	}
+
 	return &BroadcastTxResponse{
 		Txid: txn.TxIDHex(),
 		Req:  req,
@@ -142,11 +155,17 @@ func (s *DummySender) IsTxConfirmed(txid string) *ConfirmResponse {
 	}
 }
 
-// Balance always returns 100 coins and 100 hours
 func (s *DummySender) Balance() (*cli.Balance, error) {
+
+	coinStr, err := droplet.ToString(s.coins)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return &cli.Balance{
-		Coins: "100.000000",
-		Hours: "100",
+		Coins: coinStr,
+		Hours: fmt.Sprintf("%d", s.hours),
 	}, nil
 }
 
