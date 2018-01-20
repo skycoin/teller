@@ -27,6 +27,7 @@ import (
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
 	"github.com/skycoin/teller/src/scanner"
+	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/httputil"
 	"github.com/skycoin/teller/src/util/logger"
 )
@@ -52,6 +53,7 @@ var (
 // HTTPServer exposes the API endpoints and static website
 type HTTPServer struct {
 	cfg           config.Config
+	exchanger     exchange.Exchanger
 	log           logrus.FieldLogger
 	service       *Service
 	httpListener  *http.Server
@@ -61,15 +63,16 @@ type HTTPServer struct {
 }
 
 // NewHTTPServer creates an HTTPServer
-func NewHTTPServer(log logrus.FieldLogger, cfg config.Config, service *Service) *HTTPServer {
+func NewHTTPServer(log logrus.FieldLogger, cfg config.Config, service *Service, exchanger exchange.Exchanger) *HTTPServer {
 	return &HTTPServer{
 		cfg: cfg.Redacted(),
 		log: log.WithFields(logrus.Fields{
 			"prefix": "teller.http",
 		}),
-		service: service,
-		quit:    make(chan struct{}),
-		done:    make(chan struct{}),
+		service:   service,
+		exchanger: exchanger,
+		quit:      make(chan struct{}),
+		done:      make(chan struct{}),
 	}
 }
 
@@ -282,7 +285,8 @@ func (s *HTTPServer) setupMux() *http.ServeMux {
 	// API Methods
 	handleAPI("/api/bind", ratelimit(httputil.LogHandler(s.log, BindHandler(s))))
 	handleAPI("/api/status", ratelimit(httputil.LogHandler(s.log, StatusHandler(s))))
-	handleAPI("/api/config", ConfigHandler(s))
+	handleAPI("/api/config", httputil.LogHandler(s.log, ConfigHandler(s)))
+	handleAPI("/api/exchange-status", httputil.LogHandler(s.log, ExchangeStatusHandler(s)))
 
 	// Static files
 	mux.Handle("/", gziphandler.GzipHandler(http.FileServer(http.Dir(s.cfg.Web.StaticDir))))
@@ -570,6 +574,72 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			MaxDecimals:              maxDecimals,
 			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
 		}); err != nil {
+			log.WithError(err).Error(err)
+		}
+	}
+}
+
+// ExchangeStatusResponse http response for /api/exchange-status
+type ExchangeStatusResponse struct {
+	Error   string                        `json:"error"`
+	Balance ExchangeStatusResponseBalance `json:"balance"`
+}
+
+// ExchangeStatusResponseBalance is the balance field of ExchangeStatusResponse
+type ExchangeStatusResponseBalance struct {
+	Coins string `json:"coins"`
+	Hours string `json:"hours"`
+}
+
+// ExchangeStatusHandler returns the status of the exchanger
+// Method: GET
+// URI: /api/exchange-status
+func ExchangeStatusHandler(s *HTTPServer) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
+		if !validMethod(ctx, w, r, []string{http.MethodGet}) {
+			return
+		}
+
+		errorMsg := ""
+		err := s.exchanger.Status()
+
+		// If the status is an RPCError, the most likely cause is that the
+		// wallet has an insufficient balance (other causes could be a temporary
+		// application error, or a bug in the skycoin node).
+		// Errors that are not RPCErrors are transient and common, such as
+		// exchange.ErrNotConfirmed, which will happen frequently and temporarily.
+		switch err.(type) {
+		case sender.RPCError:
+			errorMsg = err.Error()
+		default:
+		}
+
+		// Get the wallet balance, but ignore any error. If an error occurs,
+		// return a balance of 0
+		bal, err := s.exchanger.Balance()
+		coins := "0.000000"
+		hours := "0"
+		if err != nil {
+			log.WithError(err).Error("s.exchange.Balance failed")
+		} else {
+			coins = bal.Coins
+			hours = bal.Hours
+		}
+
+		resp := ExchangeStatusResponse{
+			Error: errorMsg,
+			Balance: ExchangeStatusResponseBalance{
+				Coins: coins,
+				Hours: hours,
+			},
+		}
+
+		log.WithField("resp", resp).Info()
+
+		if err := httputil.JSONResponse(w, resp); err != nil {
 			log.WithError(err).Error(err)
 		}
 	}

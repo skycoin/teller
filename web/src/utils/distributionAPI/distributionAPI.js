@@ -31,3 +31,8 @@ export const getAddress = skyAddress =>
     .catch((error) => {
       throw new Error(error.response.data || 'An unknown error occurred.');
     });
+
+export const checkExchangeStatus = () =>
+  axios.get('/api/exchange-status')
+    .then(response => response.data)
+    .catch((error) => { throw new Error(error.response.data); });

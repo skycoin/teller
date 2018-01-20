@@ -1,4 +1,3 @@
-// skycoin address, and use skycoin sender to send skycoins in given rate.
 package exchange
 
 import (
@@ -9,6 +8,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/util/droplet"
 	"github.com/skycoin/skycoin/src/visor"
@@ -20,10 +20,11 @@ import (
 
 const (
 	// SatoshisPerBTC is the number of satoshis per 1 BTC
-	// WeiPerBTC is the number of wei per 1 ETH
-	SatoshisPerBTC          int64 = 1e8
-	WeiPerETH               int64 = 1e18
-	txConfirmationCheckWait       = time.Second * 3
+	SatoshisPerBTC int64 = 1e8
+	// WeiPerETH is the number of wei per 1 ETH
+	WeiPerETH int64 = 1e18
+
+	txConfirmationCheckWait = time.Second * 3
 )
 
 var (
@@ -50,18 +51,22 @@ type Exchanger interface {
 	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
 	GetBindNum(skyAddr string) (int, error)
 	GetDepositStats() (*DepositStats, error)
+	Status() error
+	Balance() (*cli.Balance, error)
 }
 
 // Exchange manages coin exchange between deposits and skycoin
 type Exchange struct {
 	log         logrus.FieldLogger
 	cfg         Config
-	multiplexer scanner.Scanner // multiplex provides APIs for interacting with the scan service
-	sender      sender.Sender   // sender provides APIs for sending skycoin
-	store       Storer          // deposit info storage
+	multiplexer *scanner.Multiplexer // multiplex provides APIs for interacting with the scan service
+	sender      sender.Sender        // sender provides APIs for sending skycoin
+	store       Storer               // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
 	depositChan chan DepositInfo
+	statusLock  sync.RWMutex
+	status      error
 }
 
 // Config exchange config struct
@@ -90,7 +95,7 @@ func (c Config) Validate() error {
 }
 
 // NewExchange creates exchange service
-func NewExchange(log logrus.FieldLogger, store Storer, multiplexer scanner.Scanner, sender sender.Sender, cfg Config) (*Exchange, error) {
+func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, cfg Config) (*Exchange, error) {
 	if _, err := ParseRate(cfg.BtcRate); err != nil {
 		return nil, err
 	}
@@ -285,6 +290,8 @@ func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
 		var err error
 		di, err = s.handleDepositInfoState(di)
 		log = log.WithField("depositInfo", di)
+
+		s.setStatus(err)
 
 		switch err.(type) {
 		case sender.RPCError:
@@ -490,6 +497,7 @@ func (s *Exchange) calculateSkyDroplets(di DepositInfo) (uint64, error) {
 	}
 	return skyAmt, nil
 }
+
 func (s *Exchange) createTransaction(di DepositInfo) (*coin.Transaction, error) {
 	log := s.log.WithField("deposit", di)
 
@@ -601,11 +609,14 @@ func (s *Exchange) broadcastTransaction(tx *coin.Transaction) (*sender.Broadcast
 // to the btc/eth address, will send specific skycoin to the binded
 // skycoin address
 func (s *Exchange) BindAddress(skyAddr, depositAddr, coinType string) error {
+	if err := s.multiplexer.ValidateCoinType(coinType); err != nil {
+		return err
+	}
+
 	if err := s.store.BindAddress(skyAddr, depositAddr, coinType); err != nil {
 		return err
 	}
 
-	// add btc/etc address to scanner
 	return s.multiplexer.AddScanAddress(depositAddr, coinType)
 }
 
@@ -675,14 +686,33 @@ func (s *Exchange) GetBindNum(skyAddr string) (int, error) {
 	return len(addrs), err
 }
 
-//GetDepositStats returns deposit status
-func (s *Exchange) GetDepositStats() (stats *DepositStats, err error) {
+// GetDepositStats returns deposit status
+func (s *Exchange) GetDepositStats() (*DepositStats, error) {
 	tbr, tss, err := s.store.GetDepositStats()
 	if err != nil {
 		return nil, err
 	}
+
 	return &DepositStats{
 		TotalBTCReceived: tbr,
 		TotalSKYSent:     tss,
 	}, nil
+}
+
+// Balance returns the number of coins left in the OTC wallet
+func (s *Exchange) Balance() (*cli.Balance, error) {
+	return s.sender.Balance()
+}
+
+func (s *Exchange) setStatus(err error) {
+	defer s.statusLock.Unlock()
+	s.statusLock.Lock()
+	s.status = err
+}
+
+// Status returns the last return value of the processing state
+func (s *Exchange) Status() error {
+	defer s.statusLock.RUnlock()
+	s.statusLock.RLock()
+	return s.status
 }

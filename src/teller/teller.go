@@ -35,7 +35,7 @@ func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrManager *addr
 			cfg:         cfg.Teller,
 			exchanger:   exchanger,
 			addrManager: addrManager,
-		}),
+		}, exchanger),
 	}
 }
 

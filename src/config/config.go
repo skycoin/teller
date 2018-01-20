@@ -308,6 +308,10 @@ func setDefaults() {
 
 	// BtcRPC
 	viper.SetDefault("btc_rpc.server", "127.0.0.1:8334")
+	viper.SetDefault("btc_rpc.enabled", true)
+
+	// EthRPC
+	viper.SetDefault("eth_rpc.enabled", false)
 
 	// BtcScanner
 	viper.SetDefault("btc_scanner.scan_period", time.Second*20)

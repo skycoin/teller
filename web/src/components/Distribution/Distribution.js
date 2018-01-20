@@ -20,7 +20,7 @@ import Modal, { styles } from 'components/Modal';
 import Text from 'components/Text';
 import media from '../../utils/media';
 
-import { checkStatus, getAddress, getConfig } from '../../utils/distributionAPI';
+import { checkStatus, getAddress, getConfig, checkExchangeStatus } from '../../utils/distributionAPI';
 
 const Wrapper = styled.div`
   background-color: ${COLORS.gray[1]};
@@ -55,14 +55,32 @@ class Distribution extends React.Component {
     this.getAddress = this.getAddress.bind(this);
     this.checkStatus = this.checkStatus.bind(this);
     this.closeModals = this.closeModals.bind(this);
+    this.checkExchangeStatus = this.checkExchangeStatus.bind(this);
   }
 
   componentDidMount() {
-    this.getConfig();
+    this.getConfig().then(() => this.checkExchangeStatus());
+  }
+
+  checkExchangeStatus() {
+    return checkExchangeStatus()
+    .then(status => {
+      if (status.error != "") {
+        this.setState({
+          disabledReason: "coinsSoldOut",
+          balance: status.balance,
+          enabled: false
+        });
+      } else {
+        this.setState({
+          balance: status.balance
+        });
+      }
+    });
   }
 
   getConfig() {
-    getConfig().then(config => this.setState({ ...config }));
+    return getConfig().then(config => this.setState({ ...config }));
   }
 
   getAddress() {
@@ -133,6 +151,7 @@ class Distribution extends React.Component {
         this.setState({
           statusLoading: false,
         });
+        return this.checkExchangeState();
       });
   }
 
@@ -180,7 +199,9 @@ class Distribution extends React.Component {
           <Container>
             {!this.state.enabled ? <Flex column>
               <Heading heavy as="h2" fontSize={[5, 6]} color="black" mb={[4, 6]}>
-                <FormattedMessage id="distribution.headingEnded" />
+                {(this.state.disabledReason === "coinsSoldOut") ?
+                 <FormattedMessage id="distribution.errors.coinsSoldOut" /> :
+                 <FormattedMessage id="distribution.headingEnded" />}
               </Heading>
               <Text heavy color="black" fontSize={[2, 3]} as="div">
                 <FormattedHTMLMessage id="distribution.ended" />
@@ -195,6 +216,14 @@ class Distribution extends React.Component {
                     id="distribution.rate"
                     values={{
                       rate: +this.state.sky_btc_exchange_rate,
+                    }}
+                  />
+                </Text>
+                <Text heavy color="black" fontSize={[2, 3]} mb={[4, 6]} as="div">
+                  <FormattedMessage
+                    id="distribution.inventory"
+                    values={{
+                      coins: this.state.balance && this.state.balance.coins,
                     }}
                   />
                 </Text>

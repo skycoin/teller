@@ -23,7 +23,7 @@ pass = "" # REQUIRED
 cert = "" # REQUIRED
 
 [eth_rpc]
-# enabled = true
+# enabled = false
 server = "" # REQUIRED
 port = "" # REQUIRED
 

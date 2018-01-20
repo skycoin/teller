@@ -35,6 +35,7 @@ export default {
   },
   distribution: {
     rate: 'Current OTC rate: {rate} SKY/BTC',
+    inventory: 'Current inventory: {coins} SKY available',
     title: '天空币OTC',
     heading: '天空币OTC',
     headingEnded: '天空币暂时关门',
@@ -61,6 +62,7 @@ export default {
     btcAddress: '比特币地址',
     errors: {
       noSkyAddress: '请输入您的天空币地址',
+      coinsSoldOut: 'Skycoin OTC is currently sold out, check back later.',
     },
     statuses: {
       done: '交易 {id}: 天空币已经发送并确认(更新于{updated}).',

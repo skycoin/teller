@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -15,6 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/coin"
 
@@ -117,6 +119,13 @@ func (s *dummySender) setTxConfirmed(txid string) {
 	s.txidConfirmMap[txid] = true
 }
 
+func (s *dummySender) Balance() (*cli.Balance, error) {
+	return &cli.Balance{
+		Coins: "100.000000",
+		Hours: "100",
+	}, nil
+}
+
 type dummyScanner struct {
 	dvC   chan scanner.DepositNote
 	addrs []string
@@ -150,12 +159,15 @@ func (scan *dummyScanner) stop() {
 }
 
 const (
-	testSkyBtcRate  string = "100" // 100 SKY per BTC
-	testMaxDecimals        = 0
-	testSkyAddr            = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
-	testSkyAddr2           = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
-	dbScanTimeout          = time.Second * 3
-	dbCheckWaitTime        = time.Millisecond * 300
+	testSkyBtcRate      string = "100" // 100 SKY per BTC
+	testMaxDecimals            = 0
+	testSkyAddr                = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
+	testSkyAddr2               = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
+	dbScanTimeout              = time.Second * 3
+	statusCheckTimeout         = time.Second * 3
+	statusCheckInterval        = time.Millisecond * 10
+	statusCheckNilWait         = time.Second
+	dbCheckWaitTime            = time.Millisecond * 300
 )
 
 func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
@@ -197,7 +209,7 @@ func setupExchange(t *testing.T, log *logrus.Logger) (*Exchange, func(), func())
 	return e, run, shutdown
 }
 func closeMultiplexer(e *Exchange) {
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).stop()
 	mp.GetScanner(scanner.CoinTypeETH).(*dummyScanner).stop()
 	mp.Shutdown()
@@ -242,6 +254,35 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 	return e, shutdown, hook
 }
 
+func checkExchangerStatus(t *testing.T, e Exchanger, expectedErr error) {
+	// When the expected error is nil, we can only wait a period of time to
+	// hope that an error did not appear
+	if expectedErr == nil {
+		time.Sleep(statusCheckNilWait)
+		require.NoError(t, e.Status())
+		return
+	}
+
+	// When the expected error is not nil, we can wait to see if the error
+	// appears, and check that the error matches
+	timeoutTicker := time.After(statusCheckTimeout)
+loop:
+	for {
+		select {
+		case <-time.Tick(statusCheckInterval):
+			err := e.Status()
+			if err == nil {
+				continue loop
+			}
+			require.Equal(t, expectedErr, err)
+			break loop
+		case <-timeoutTicker:
+			t.Fatal("Deposit status checking timed out")
+			return
+		}
+	}
+}
+
 func TestExchangeRunShutdown(t *testing.T) {
 	// Tests a simple start and stop, with no scanner activity
 	e, shutdown, _ := runExchange(t)
@@ -284,7 +325,7 @@ func TestExchangeRunSend(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
@@ -367,6 +408,8 @@ func TestExchangeRunSend(t *testing.T) {
 		t.Fatal("Waiting for confirmed deposit timed out")
 	}
 
+	checkExchangerStatus(t, e, nil)
+
 	// Check DepositInfo
 	di, err = e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 	require.NoError(t, err)
@@ -408,7 +451,8 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	// Force sender to return a broadcast tx error so that the deposit stays at StatusWaitSend
-	e.sender.(*dummySender).broadcastTransactionErr = errors.New("fake broadcast transaction error")
+	broadcastTransactionErr := errors.New("fake broadcast transaction error")
+	e.sender.(*dummySender).broadcastTransactionErr = broadcastTransactionErr
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
@@ -421,13 +465,16 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
 	err = <-dn.ErrC
 	require.NoError(t, err)
+
+	// Wait for the deposit status error to update
+	checkExchangerStatus(t, e, fmt.Errorf("Send skycoin failed: %v", broadcastTransactionErr))
 
 	// Check the DepositInfo in the database
 	// Sky should not be sent
@@ -463,7 +510,8 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 	require.NoError(t, err)
 
 	// Force sender to return a create tx error so that the deposit stays at StatusWaitSend
-	e.sender.(*dummySender).createTransactionErr = errors.New("fake create transaction error")
+	createTransactionErr := errors.New("fake create transaction error")
+	e.sender.(*dummySender).createTransactionErr = createTransactionErr
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
@@ -476,13 +524,16 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
 	err = <-dn.ErrC
 	require.NoError(t, err)
+
+	// Wait for the deposit status error to update
+	checkExchangerStatus(t, e, createTransactionErr)
 
 	// Check the DepositInfo in the database
 	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
@@ -500,6 +551,8 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 		DepositValue:   dn.Deposit.Value,
 		Deposit:        dn.Deposit,
 	}, di)
+
+	require.Error(t, e.Status())
 }
 
 func TestExchangeTxConfirmFailure(t *testing.T) {
@@ -518,7 +571,8 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
 	// Force sender to return a confirm error so that the deposit stays at StatusWaitConfirm
-	e.sender.(*dummySender).confirmErr = errors.New("fake confirm error")
+	confirmErr := errors.New("fake confirm error")
+	e.sender.(*dummySender).confirmErr = confirmErr
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
@@ -531,13 +585,16 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
 	err = <-dn.ErrC
 	require.NoError(t, err)
+
+	// Wait for the deposit status error to update
+	checkExchangerStatus(t, e, confirmErr)
 
 	// Wait for StatusWaitSend deposit in the database
 	done := make(chan struct{})
@@ -607,7 +664,7 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
@@ -617,7 +674,6 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 
 	// Second loop calls processWaitSendDeposit
 	// It sends the coins, then confirms them
-
 	expectedDeposit := DepositInfo{
 		Seq:            1,
 		CoinType:       scanner.CoinTypeBTC,
@@ -698,7 +754,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
@@ -1006,7 +1062,7 @@ func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// Configure database mocks
@@ -1058,7 +1114,7 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// Configure database mocks
@@ -1153,7 +1209,7 @@ func TestExchangeProcessWaitSendNoSkyAddrBound(t *testing.T) {
 		},
 		ErrC: make(chan error, 1),
 	}
-	mp := e.multiplexer.(*scanner.Multiplexer)
+	mp := e.multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit

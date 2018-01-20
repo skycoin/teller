@@ -15,6 +15,11 @@ type RPCError struct {
 	error
 }
 
+// NewRPCError wraps an err with RPCError
+func NewRPCError(err error) RPCError {
+	return RPCError{err}
+}
+
 // RPC provides methods for sending coins
 type RPC struct {
 	walletFile string
@@ -83,6 +88,16 @@ func (c *RPC) GetTransaction(txid string) (*webrpc.TxnResult, error) {
 	}
 
 	return txn, nil
+}
+
+// Balance returns the balance of a wallet
+func (c *RPC) Balance() (*cli.Balance, error) {
+	bal, err := cli.CheckWalletBalance(c.rpcClient, c.walletFile)
+	if err != nil {
+		return nil, RPCError{err}
+	}
+
+	return &bal.Spendable, nil
 }
 
 func validateSendAmount(amt cli.SendAmount) error {
