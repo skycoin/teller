@@ -157,14 +157,14 @@ func (s *DummySender) IsTxConfirmed(txid string) *ConfirmResponse {
 
 func (s *DummySender) Balance() (*cli.Balance, error) {
 
-	coin_str, err := droplet.ToString(s.coins)
+	coinStr, err := droplet.ToString(s.coins)
 
 	if err != nil {
 		return nil, err
 	}
 
 	return &cli.Balance{
-		Coins: coin_str,
+		Coins: coinStr,
 		Hours: fmt.Sprintf("%d", s.hours),
 	}, nil
 }
