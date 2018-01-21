@@ -1,6 +1,7 @@
 package mathutil
 
 import (
+	"errors"
 	"math/big"
 
 	"github.com/shopspring/decimal"
@@ -42,4 +43,18 @@ func Wei2Gwei(wei *big.Int) int64 {
 //Gwei2Wei convert gwei to wei 1gwei = 1e9wei
 func Gwei2Wei(gwei int64) *big.Int {
 	return big.NewInt(1).Mul(big.NewInt(gwei), big.NewInt(1e9))
+}
+
+// ParseRate parses an exchange rate string and validates it
+func ParseRate(rate string) (decimal.Decimal, error) {
+	r, err := DecimalFromString(rate)
+	if err != nil {
+		return decimal.Decimal{}, err
+	}
+
+	if r.LessThanOrEqual(decimal.New(0, 0)) {
+		return decimal.Decimal{}, errors.New("rate must be greater than zero")
+	}
+
+	return r, nil
 }

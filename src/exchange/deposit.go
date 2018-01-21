@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/skycoin/teller/src/scanner"
+	"github.com/skycoin/teller/src/util/mathutil"
 )
 
 // Status deposit Status
@@ -73,6 +74,7 @@ type DepositInfo struct {
 	Deposit scanner.Deposit
 }
 
+// DepositStats records overall statistics about deposits
 type DepositStats struct {
 	TotalBTCReceived int64 `json:"total_btc_received"`
 	TotalSKYSent     int64 `json:"total_sky_sent"`
@@ -100,7 +102,7 @@ func (di DepositInfo) ValidateForStatus() error {
 		if di.DepositValue == 0 {
 			return errors.New("DepositValue is zero")
 		}
-		if _, err := ParseRate(di.ConversionRate); err != nil {
+		if _, err := mathutil.ParseRate(di.ConversionRate); err != nil {
 			return err
 		}
 

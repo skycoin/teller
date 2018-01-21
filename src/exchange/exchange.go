@@ -11,8 +11,8 @@ import (
 	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/util/droplet"
-	"github.com/skycoin/skycoin/src/visor"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/mathutil"
@@ -58,7 +58,7 @@ type Exchanger interface {
 // Exchange manages coin exchange between deposits and skycoin
 type Exchange struct {
 	log         logrus.FieldLogger
-	cfg         Config
+	cfg         config.SkyExchanger
 	multiplexer *scanner.Multiplexer // multiplex provides APIs for interacting with the scan service
 	sender      sender.Sender        // sender provides APIs for sending skycoin
 	store       Storer               // deposit info storage
@@ -69,34 +69,9 @@ type Exchange struct {
 	status      error
 }
 
-// Config exchange config struct
-type Config struct {
-	BtcRate                 string // SKY/BTC rate, decimal string
-	EthRate                 string // SKY/ETH rate, decimal string
-	TxConfirmationCheckWait time.Duration
-	MaxDecimals             int
-}
-
-// Validate returns an error if the configuration is invalid
-func (c Config) Validate() error {
-	if _, err := ParseRate(c.BtcRate); err != nil {
-		return err
-	}
-
-	if c.MaxDecimals < 0 {
-		return errors.New("MaxDecimals can't be negative")
-	}
-
-	if uint64(c.MaxDecimals) > visor.MaxDropletPrecision {
-		return fmt.Errorf("MaxDecimals is larger than visor.MaxDropletPrecision=%d", visor.MaxDropletPrecision)
-	}
-
-	return nil
-}
-
 // NewExchange creates exchange service
-func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, cfg Config) (*Exchange, error) {
-	if _, err := ParseRate(cfg.BtcRate); err != nil {
+func NewExchange(log logrus.FieldLogger, store Storer, multiplexer *scanner.Multiplexer, sender sender.Sender, cfg config.SkyExchanger) (*Exchange, error) {
+	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
@@ -125,60 +100,62 @@ func (s *Exchange) Run() error {
 		s.done <- struct{}{}
 	}()
 
-	// Load StatusWaitSend deposits for processing later
-	waitSendDeposits, err := s.store.GetDepositInfoArray(func(di DepositInfo) bool {
-		return di.Status == StatusWaitSend
-	})
-
-	if err != nil {
-		err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
-		log.WithError(err).Error(err)
-		return err
-	}
-
-	// Load StatusWaitConfirm deposits for processing later
-	waitConfirmDeposits, err := s.store.GetDepositInfoArray(func(di DepositInfo) bool {
-		return di.Status == StatusWaitConfirm
-	})
-
-	if err != nil {
-		err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
-		log.WithError(err).Error(err)
-		return err
-	}
-
 	var wg sync.WaitGroup
 
-	// This loop processes StatusWaitSend deposits.
-	// Only one deposit is processed at a time; it will not send more coins
-	// until it receives confirmation of the previous send.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	if s.cfg.SendEnabled {
+		// Load StatusWaitSend deposits for processing later
+		waitSendDeposits, err := s.store.GetDepositInfoArray(func(di DepositInfo) bool {
+			return di.Status == StatusWaitSend
+		})
 
-		log := log.WithField("goroutine", "sendSky")
-		for {
-			select {
-			case <-s.quit:
-				log.Info("exchange.Exchange send loop quit")
-				return
-			case d := <-s.depositChan:
-				log := log.WithField("depositInfo", d)
-				if err := s.processWaitSendDeposit(d); err != nil {
-					log.WithError(err).Error("processWaitSendDeposit failed. This deposit will not be reprocessed until teller is restarted.")
+		if err != nil {
+			err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
+			log.WithError(err).Error(err)
+			return err
+		}
+
+		// Load StatusWaitConfirm deposits for processing later
+		waitConfirmDeposits, err := s.store.GetDepositInfoArray(func(di DepositInfo) bool {
+			return di.Status == StatusWaitConfirm
+		})
+
+		if err != nil {
+			err = fmt.Errorf("GetDepositInfoArray failed: %v", err)
+			log.WithError(err).Error(err)
+			return err
+		}
+
+		// This loop processes StatusWaitSend deposits.
+		// Only one deposit is processed at a time; it will not send more coins
+		// until it receives confirmation of the previous send.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			log := log.WithField("goroutine", "sendSky")
+			for {
+				select {
+				case <-s.quit:
+					log.Info("exchange.Exchange send loop quit")
+					return
+				case d := <-s.depositChan:
+					log := log.WithField("depositInfo", d)
+					if err := s.processWaitSendDeposit(d); err != nil {
+						log.WithError(err).Error("processWaitSendDeposit failed. This deposit will not be reprocessed until teller is restarted.")
+					}
 				}
 			}
+		}()
+
+		// Queue the saved StatusWaitConfirm deposits
+		for _, di := range waitConfirmDeposits {
+			s.depositChan <- di
 		}
-	}()
 
-	// Queue the saved StatusWaitConfirm deposits
-	for _, di := range waitConfirmDeposits {
-		s.depositChan <- di
-	}
-
-	// Queue the saved StatusWaitSend deposits
-	for _, di := range waitSendDeposits {
-		s.depositChan <- di
+		// Queue the saved StatusWaitSend deposits
+		for _, di := range waitSendDeposits {
+			s.depositChan <- di
+		}
 	}
 
 	// This loop processes incoming deposits from the scanner and saves a
@@ -214,7 +191,9 @@ func (s *Exchange) Run() error {
 				dv.ErrC <- err
 			} else {
 				dv.ErrC <- nil
-				s.depositChan <- d
+				if s.cfg.SendEnabled {
+					s.depositChan <- d
+				}
 			}
 		}
 	}()
@@ -237,10 +216,10 @@ func (s *Exchange) getRate(coinType string) (string, error) {
 	switch coinType {
 	case scanner.CoinTypeBTC:
 		s.log.Info("Received bitcoin deposit")
-		return s.cfg.BtcRate, nil
+		return s.cfg.SkyBtcExchangeRate, nil
 	case scanner.CoinTypeETH:
 		s.log.Info("Received ethcoin deposit")
-		return s.cfg.EthRate, nil
+		return s.cfg.SkyEthExchangeRate, nil
 	default:
 		s.log.WithError(scanner.ErrUnsupportedCoinType).Error()
 		return "", scanner.ErrUnsupportedCoinType
