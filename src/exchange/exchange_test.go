@@ -20,6 +20,7 @@ import (
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/coin"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/testutil"
@@ -159,15 +160,17 @@ func (scan *dummyScanner) stop() {
 }
 
 const (
-	testSkyBtcRate      string = "100" // 100 SKY per BTC
-	testMaxDecimals            = 0
-	testSkyAddr                = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
-	testSkyAddr2               = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
-	dbScanTimeout              = time.Second * 3
-	statusCheckTimeout         = time.Second * 3
-	statusCheckInterval        = time.Millisecond * 10
-	statusCheckNilWait         = time.Second
-	dbCheckWaitTime            = time.Millisecond * 300
+	testSkyBtcRate      = "100" // 100 SKY per BTC
+	testSkyEthRate      = "10"  // 10 SKY per ETH
+	testMaxDecimals     = 0
+	testSkyAddr         = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
+	testSkyAddr2        = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
+	testWalletFile      = "test.wlt"
+	dbScanTimeout       = time.Second * 3
+	statusCheckTimeout  = time.Second * 3
+	statusCheckInterval = time.Millisecond * 10
+	statusCheckNilWait  = time.Second
+	dbCheckWaitTime     = time.Millisecond * 300
 )
 
 func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
@@ -181,9 +184,12 @@ func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 	multiplexer.AddScanner(escr, scanner.CoinTypeETH)
 	go multiplexer.Multiplex()
 
-	e, err := NewExchange(log, store, multiplexer, newDummySender(), Config{
-		BtcRate:                 testSkyBtcRate,
+	e, err := NewExchange(log, store, multiplexer, newDummySender(), config.SkyExchanger{
+		SkyBtcExchangeRate:      testSkyBtcRate,
+		SkyEthExchangeRate:      testSkyEthRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
+		Wallet:                  testWalletFile,
+		SendEnabled:             true,
 	})
 	require.NoError(t, err)
 	return e
@@ -233,9 +239,12 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 	multiplexer.AddScanner(escr, scanner.CoinTypeETH)
 	go multiplexer.Multiplex()
 
-	e, err := NewExchange(log, store, multiplexer, newDummySender(), Config{
-		BtcRate:                 testSkyBtcRate,
+	e, err := NewExchange(log, store, multiplexer, newDummySender(), config.SkyExchanger{
+		SkyBtcExchangeRate:      testSkyBtcRate,
+		SkyEthExchangeRate:      testSkyEthRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
+		Wallet:                  testWalletFile,
+		SendEnabled:             true,
 	})
 	require.NoError(t, err)
 
@@ -901,7 +910,7 @@ func testExchangeRunProcessDepositBacklog(t *testing.T, dis []DepositInfo, confi
 		expectedDis[i].Status = StatusDone
 
 		if expectedDis[i].SkySent == 0 {
-			amt, err := CalculateBtcSkyValue(di.DepositValue, e.cfg.BtcRate, testMaxDecimals)
+			amt, err := CalculateBtcSkyValue(di.DepositValue, e.cfg.SkyBtcExchangeRate, testMaxDecimals)
 			require.NoError(t, err)
 			expectedDis[i].SkySent = amt
 		}
@@ -1257,8 +1266,11 @@ func TestExchangeBindAddress(t *testing.T) {
 }
 
 func TestExchangeCreateTransaction(t *testing.T) {
-	cfg := Config{
-		BtcRate: "10",
+	cfg := config.SkyExchanger{
+		SkyBtcExchangeRate: "10",
+		SkyEthExchangeRate: "1",
+		Wallet:             testWalletFile,
+		SendEnabled:        true,
 	}
 
 	log, _ := testutil.NewLogger(t)
@@ -1293,9 +1305,9 @@ func TestExchangeCreateTransaction(t *testing.T) {
 		DepositValue:   1e8,
 		ConversionRate: "100",
 	}
-	// Make sure DepositInfo.ConversionRate != s.Config.BtcRate, to confirm
-	// that the DepositInfo's ConversionRate is used instead of Config.BtcRate
-	require.NotEqual(t, s.cfg.BtcRate, di.ConversionRate)
+	// Make sure DepositInfo.ConversionRate != s.cfg.SkyBtcExchangeRate, to confirm
+	// that the DepositInfo's ConversionRate is used instead of cfg.SkyBtcExchangeRate
+	require.NotEqual(t, s.cfg.SkyBtcExchangeRate, di.ConversionRate)
 
 	tx, err := s.createTransaction(di)
 	require.NoError(t, err)

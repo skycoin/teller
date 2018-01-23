@@ -92,6 +92,7 @@ Description of the config file:
 * `btc_addresses` [string]: Filepath of the btc_addresses.json file. See [generate BTC addresses](#generate-btc-addresses).
 * `eth_addresses` [string]: Filepath of the eth_addresses.json file. See [generate ETH addresses](#generate-eth-addresses).
 * `teller.max_bound_addrs` [int]: Maximum number addresses allowed to bind per skycoin address.
+* `teller.bind_enabled` [bool]: Disable this to prevent binding of new addresses
 * `sky_rpc.address` [string]: Host address of the skycoin node. See [setup skycoin node](#setup-skycoin-node).
 * `btc_rpc.server` [string]: Host address of the btcd node.
 * `btc_rpc.user` [string]: btcd RPC username.
@@ -111,8 +112,8 @@ Description of the config file:
 * `sky_exchanger.sky_eth_exchange_rate` [string]: How much SKY to send per ETH. This can be written as an integer, float, or a rational fraction.
 * `sky_exchanger.wallet` [string]: Filepath of the skycoin hot wallet. See [setup skycoin hot wallet](#setup-skycoin-hot-wallet).
 * `sky_exchanger.tx_confirmation_check_wait` [duration]: How often to check for a sent skycoin transaction's confirmation.
+* `sky_exchanger.send_enabled` [bool]: Disable this to prevent sending of coins (all other processing functions normally, e.g.. deposits are received)
 * `web.behind_proxy` [bool]: Set true if running behind a proxy.
-* `web.api_enabled` [bool]: Set true to enable the teller API. Disable it if you want to expose the frontend homepage, but not allow people to access the teller service.
 * `web.static_dir` [string]: Location of static web assets.
 * `web.throttle_max` [int]: Maximum number of API requests allowed per `web.throttle_duration`.
 * `web.throttle_duration` [int]: Duration of throttling, pairs with `web.throttle_max`.
@@ -371,6 +372,8 @@ multiple BTC/ETH addresses. The default maximum number of bound addresses is 5.
 Coin type specifies which coin deposit address type to generate.
 Options are: BTC/ETH [TODO: support more coin types].
 
+Returns `403 Forbidden` if `teller.bind_enabled` is `false`.
+
 Example:
 
 ```sh
@@ -461,6 +464,8 @@ URI: /api/config
 ```
 
 Returns teller configuration.
+
+If `"enabled"` is `false`, `/api/bind` will return `403 Forbidden`. `/api/status` will still work.
 
 Example:
 

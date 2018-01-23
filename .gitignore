@@ -4,3 +4,4 @@
 *.out
 cert-cache
 *.ignore.*
+*.wlt

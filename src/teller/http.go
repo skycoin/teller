@@ -385,11 +385,6 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		if !s.cfg.Web.APIEnabled {
-			errorResponse(ctx, w, http.StatusForbidden, errors.New("API disabled"))
-			return
-		}
-
 		switch bindReq.CoinType {
 		case scanner.CoinTypeBTC:
 			if !s.cfg.BtcRPC.Enabled {
@@ -420,10 +415,17 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		coinAddr, err := s.service.BindAddress(bindReq.SkyAddr, bindReq.CoinType)
 		if err != nil {
 			log.WithError(err).Error("service.BindAddress failed")
-			if err != addrs.ErrDepositAddressEmpty && err != ErrMaxBoundAddresses {
-				err = errInternalServerError
+			switch err {
+			case ErrBindDisabled:
+				errorResponse(ctx, w, http.StatusForbidden, err)
+			default:
+				switch err {
+				case addrs.ErrDepositAddressEmpty, ErrMaxBoundAddresses:
+				default:
+					err = errInternalServerError
+				}
+				errorResponse(ctx, w, http.StatusInternalServerError, err)
 			}
-			errorResponse(ctx, w, http.StatusInternalServerError, err)
 			return
 		}
 
@@ -478,11 +480,6 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 		log.Info()
 
 		if !verifySkycoinAddress(ctx, w, skyAddr) {
-			return
-		}
-
-		if !s.cfg.Web.APIEnabled {
-			errorResponse(ctx, w, http.StatusForbidden, errors.New("API disabled"))
 			return
 		}
 
@@ -566,7 +563,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 		}
 
 		if err := httputil.JSONResponse(w, ConfigResponse{
-			Enabled:                  s.cfg.Web.APIEnabled,
+			Enabled:                  s.cfg.Teller.BindEnabled,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
 			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
 			SkyBtcExchangeRate:       skyPerBTC,

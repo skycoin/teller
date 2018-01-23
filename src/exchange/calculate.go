@@ -23,7 +23,7 @@ func CalculateBtcSkyValue(satoshis int64, skyPerBTC string, maxDecimals int) (ui
 		return 0, errors.New("maxDecimals can't be negative")
 	}
 
-	rate, err := ParseRate(skyPerBTC)
+	rate, err := mathutil.ParseRate(skyPerBTC)
 	if err != nil {
 		return 0, err
 	}
@@ -58,7 +58,7 @@ func CalculateEthSkyValue(wei *big.Int, skyPerETH string, maxDecimals int) (uint
 	if maxDecimals < 0 {
 		return 0, errors.New("maxDecimals can't be negative")
 	}
-	rate, err := ParseRate(skyPerETH)
+	rate, err := mathutil.ParseRate(skyPerETH)
 	if err != nil {
 		return 0, err
 	}
@@ -81,18 +81,4 @@ func CalculateEthSkyValue(wei *big.Int, skyPerETH string, maxDecimals int) (uint
 	}
 
 	return uint64(amt), nil
-}
-
-// ParseRate parses an exchange rate string and validates it
-func ParseRate(rate string) (decimal.Decimal, error) {
-	r, err := mathutil.DecimalFromString(rate)
-	if err != nil {
-		return decimal.Decimal{}, err
-	}
-
-	if r.LessThanOrEqual(decimal.New(0, 0)) {
-		return decimal.Decimal{}, errors.New("rate must be greater than zero")
-	}
-
-	return r, nil
 }
