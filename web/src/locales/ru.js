@@ -43,7 +43,8 @@ export default {
       <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the
       <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a>
       to learn when the next event begins.`,
-    instructions: `
+    instructions: `<p>You can check the current market value for <a href="https://coinmarketcap.com/currencies/skycoin/">Skycoin at CoinMarketCap</a>.</p>
+
 <p>Что необходимо для участия в распространении:</p>
 
 <ul>
