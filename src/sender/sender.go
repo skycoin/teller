@@ -3,6 +3,7 @@ package sender
 import (
 	"errors"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/coin"
 )
 
@@ -18,6 +19,7 @@ type Sender interface {
 	CreateTransaction(string, uint64) (*coin.Transaction, error)
 	BroadcastTransaction(*coin.Transaction) *BroadcastTxResponse
 	IsTxConfirmed(string) *ConfirmResponse
+	Balance() (*cli.Balance, error)
 }
 
 // RetrySender provids helper function to send coins with Send service
@@ -64,4 +66,9 @@ func (s *RetrySender) IsTxConfirmed(txid string) *ConfirmResponse {
 	}()
 
 	return <-rspC
+}
+
+// Balance returns the remaining balance of the sender
+func (s *RetrySender) Balance() (*cli.Balance, error) {
+	return s.s.SkyClient.Balance()
 }

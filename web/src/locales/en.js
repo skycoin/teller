@@ -35,13 +35,15 @@ export default {
   },
   distribution: {
     rate: 'Current OTC rate: {rate} SKY/BTC',
+    inventory: 'Current inventory: {coins} SKY available',
     title: 'Skycoin OTC',
     heading: 'Skycoin OTC',
     headingEnded: 'Skycoin OTC is currently closed',
     ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>,
       <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the
       <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a>.`,
-    instructions: `
+    instructions: `<p>You can check the current market value for <a href="https://coinmarketcap.com/currencies/skycoin/">Skycoin at CoinMarketCap</a>.</p>
+
 <p>To use the Skycoin OTC:</p>
 
 <ul>
@@ -61,6 +63,7 @@ export default {
     btcAddress: 'BTC address',
     errors: {
       noSkyAddress: 'Please enter your SKY address.',
+      coinsSoldOut: 'Skycoin OTC is currently sold out, check back later.',
     },
     statuses: {
       waiting_deposit: '[tx-{id} {updated}] Waiting for BTC deposit.',

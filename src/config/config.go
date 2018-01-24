@@ -33,13 +33,17 @@ type Config struct {
 
 	// Path of BTC addresses JSON file
 	BtcAddresses string `mapstructure:"btc_addresses"`
+	// Path of ETH addresses JSON file
+	EthAddresses string `mapstructure:"eth_addresses"`
 
 	Teller Teller `mapstructure:"teller"`
 
 	SkyRPC SkyRPC `mapstructure:"sky_rpc"`
 	BtcRPC BtcRPC `mapstructure:"btc_rpc"`
+	EthRPC EthRPC `mapstructure:"eth_rpc"`
 
 	BtcScanner   BtcScanner   `mapstructure:"btc_scanner"`
+	EthScanner   EthScanner   `mapstructure:"eth_scanner"`
 	SkyExchanger SkyExchanger `mapstructure:"sky_exchanger"`
 
 	Web Web `mapstructure:"web"`
@@ -52,7 +56,9 @@ type Config struct {
 // Teller config for teller
 type Teller struct {
 	// Max number of btc addresses a skycoin address can bind
-	MaxBoundBtcAddresses int `mapstructure:"max_bound_btc_addrs"`
+	MaxBoundAddresses int `mapstructure:"max_bound_addrs"`
+	// Allow address binding
+	BindEnabled bool `mapstructure:"bind_enabled"`
 }
 
 // SkyRPC config for Skycoin daemon node RPC
@@ -62,10 +68,18 @@ type SkyRPC struct {
 
 // BtcRPC config for btcrpc
 type BtcRPC struct {
-	Server string `mapstructure:"server"`
-	User   string `mapstructure:"user"`
-	Pass   string `mapstructure:"pass"`
-	Cert   string `mapstructure:"cert"`
+	Server  string `mapstructure:"server"`
+	User    string `mapstructure:"user"`
+	Pass    string `mapstructure:"pass"`
+	Cert    string `mapstructure:"cert"`
+	Enabled bool   `mapstructure:"enabled"`
+}
+
+// EthRPC config for ethrpc
+type EthRPC struct {
+	Server  string `mapstructure:"server"`
+	Port    string `mapstructure:"port"`
+	Enabled bool   `mapstructure:"enabled"`
 }
 
 // BtcScanner config for BTC scanner
@@ -76,16 +90,83 @@ type BtcScanner struct {
 	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
 }
 
+// EthScanner config for ETH scanner
+type EthScanner struct {
+	// How often to try to scan for blocks
+	ScanPeriod            time.Duration `mapstructure:"scan_period"`
+	InitialScanHeight     int64         `mapstructure:"initial_scan_height"`
+	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
+}
+
 // SkyExchanger config for skycoin sender
 type SkyExchanger struct {
 	// SKY/BTC exchange rate. Can be an int, float or rational fraction string
 	SkyBtcExchangeRate string `mapstructure:"sky_btc_exchange_rate"`
+	SkyEthExchangeRate string `mapstructure:"sky_eth_exchange_rate"`
 	// Number of decimal places to truncate SKY to
 	MaxDecimals int `mapstructure:"max_decimals"`
 	// How long to wait before rechecking transaction confirmations
 	TxConfirmationCheckWait time.Duration `mapstructure:"tx_confirmation_check_wait"`
 	// Path of hot Skycoin wallet file on disk
 	Wallet string `mapstructure:"wallet"`
+	// Allow sending of coins (deposits will still be received and recorded)
+	SendEnabled bool `mapstructure:"send_enabled"`
+}
+
+// Validate validates the SkyExchanger config
+func (c SkyExchanger) Validate() error {
+	if errs := c.validate(); len(errs) != 0 {
+		return errs[0]
+	}
+
+	if errs := c.validateWallet(); len(errs) != 0 {
+		return errs[0]
+	}
+
+	return nil
+}
+
+func (c SkyExchanger) validate() []error {
+	var errs []error
+
+	if _, err := mathutil.ParseRate(c.SkyBtcExchangeRate); err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.sky_btc_exchange_rate invalid: %v", err))
+	}
+
+	if _, err := mathutil.ParseRate(c.SkyEthExchangeRate); err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.sky_eth_exchange_rate invalid: %v", err))
+	}
+
+	if c.MaxDecimals < 0 {
+		errs = append(errs, errors.New("sky_exchanger.max_decimals can't be negative"))
+	}
+
+	if uint64(c.MaxDecimals) > visor.MaxDropletPrecision {
+		errs = append(errs, fmt.Errorf("sky_exchanger.max_decimals is larger than visor.MaxDropletPrecision=%d", visor.MaxDropletPrecision))
+	}
+
+	return errs
+}
+
+func (c SkyExchanger) validateWallet() []error {
+	var errs []error
+
+	if c.Wallet == "" {
+		errs = append(errs, errors.New("sky_exchanger.wallet missing"))
+	}
+
+	if _, err := os.Stat(c.Wallet); os.IsNotExist(err) {
+		errs = append(errs, fmt.Errorf("sky_exchanger.wallet file %s does not exist", c.Wallet))
+	}
+
+	w, err := wallet.Load(c.Wallet)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.wallet file %s failed to load: %v", c.Wallet, err))
+	} else if err := w.Validate(); err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.wallet file %s is invalid: %v", c.Wallet, err))
+	}
+
+	return errs
 }
 
 // Web config for the teller HTTP interface
@@ -99,7 +180,6 @@ type Web struct {
 	ThrottleMax      int64         `mapstructure:"throttle_max"` // Maximum number of requests per duration
 	ThrottleDuration time.Duration `mapstructure:"throttle_duration"`
 	BehindProxy      bool          `mapstructure:"behind_proxy"`
-	APIEnabled       bool          `mapstructure:"api_enabled"`
 }
 
 // Validate validates Web config
@@ -159,15 +239,18 @@ func (c Config) Validate() error {
 		errs = append(errs, err)
 	}
 
-	if c.LogFilename == "" {
-		oops("logfile missing")
-	}
-
 	if c.BtcAddresses == "" {
 		oops("btc_addresses missing")
 	}
-
-	// TODO -- check btc_addresses file
+	if _, err := os.Stat(c.BtcAddresses); os.IsNotExist(err) {
+		oops("btc_addresses file does not exist")
+	}
+	if c.EthAddresses == "" {
+		oops("eth_addresses missing")
+	}
+	if _, err := os.Stat(c.EthAddresses); os.IsNotExist(err) {
+		oops("eth_addresses file does not exist")
+	}
 
 	if !c.Dummy.Sender {
 		if c.SkyRPC.Address == "" {
@@ -184,22 +267,32 @@ func (c Config) Validate() error {
 	}
 
 	if !c.Dummy.Scanner {
-		if c.BtcRPC.Server == "" {
-			oops("btc_rpc.server missing")
-		}
+		if c.BtcRPC.Enabled {
+			if c.BtcRPC.Server == "" {
+				oops("btc_rpc.server missing")
+			}
 
-		if c.BtcRPC.User == "" {
-			oops("btc_rpc.user missing")
-		}
-		if c.BtcRPC.Pass == "" {
-			oops("btc_rpc.pass missing")
-		}
-		if c.BtcRPC.Cert == "" {
-			oops("btc_rpc.cert missing")
-		}
+			if c.BtcRPC.User == "" {
+				oops("btc_rpc.user missing")
+			}
+			if c.BtcRPC.Pass == "" {
+				oops("btc_rpc.pass missing")
+			}
+			if c.BtcRPC.Cert == "" {
+				oops("btc_rpc.cert missing")
+			}
 
-		if _, err := os.Stat(c.BtcRPC.Cert); os.IsNotExist(err) {
-			oops("btc_rpc.cert file does not exist")
+			if _, err := os.Stat(c.BtcRPC.Cert); os.IsNotExist(err) {
+				oops("btc_rpc.cert file does not exist")
+			}
+		}
+		if c.EthRPC.Enabled {
+			if c.EthRPC.Server == "" {
+				oops("eth_rpc.server missing")
+			}
+			if c.EthRPC.Port == "" {
+				oops("eth_rpc.port missing")
+			}
 		}
 	}
 
@@ -209,34 +302,23 @@ func (c Config) Validate() error {
 	if c.BtcScanner.InitialScanHeight < 0 {
 		oops("btc_scanner.initial_scan_height must be >= 0")
 	}
+	if c.EthScanner.ConfirmationsRequired < 0 {
+		oops("eth_scanner.confirmations_required must be >= 0")
+	}
+	if c.EthScanner.InitialScanHeight < 0 {
+		oops("eth_scanner.initial_scan_height must be >= 0")
+	}
 
-	if _, err := mathutil.DecimalFromString(c.SkyExchanger.SkyBtcExchangeRate); err != nil {
-		oops(fmt.Sprintf("sky_exchanger.sky_btc_exchange_rate invalid: %v", err))
+	exchangeErrs := c.SkyExchanger.validate()
+	for _, err := range exchangeErrs {
+		oops(err.Error())
 	}
 
 	if !c.Dummy.Sender {
-		if c.SkyExchanger.Wallet == "" {
-			oops("sky_exchanger.wallet missing")
+		exchangeErrs := c.SkyExchanger.validateWallet()
+		for _, err := range exchangeErrs {
+			oops(err.Error())
 		}
-
-		if _, err := os.Stat(c.SkyExchanger.Wallet); os.IsNotExist(err) {
-			oops(fmt.Sprintf("sky_exchanger.wallet file %s does not exist", c.SkyExchanger.Wallet))
-		}
-
-		w, err := wallet.Load(c.SkyExchanger.Wallet)
-		if err != nil {
-			oops(fmt.Sprintf("sky_exchanger.wallet file %s failed to load: %v", c.SkyExchanger.Wallet, err))
-		} else if err := w.Validate(); err != nil {
-			oops(fmt.Sprintf("sky_exchanger.wallet file %s is invalid: %v", c.SkyExchanger.Wallet, err))
-		}
-	}
-
-	if c.SkyExchanger.MaxDecimals < 0 {
-		oops("sky_exchanger.max_decimals can't be negative")
-	}
-
-	if uint64(c.SkyExchanger.MaxDecimals) > visor.MaxDropletPrecision {
-		oops(fmt.Sprintf("sky_exchanger.max_decimals is larger than visor.MaxDropletPrecision=%d", visor.MaxDropletPrecision))
 	}
 
 	if err := c.Web.Validate(); err != nil {
@@ -265,6 +347,10 @@ func setDefaults() {
 
 	// BtcRPC
 	viper.SetDefault("btc_rpc.server", "127.0.0.1:8334")
+	viper.SetDefault("btc_rpc.enabled", true)
+
+	// EthRPC
+	viper.SetDefault("eth_rpc.enabled", false)
 
 	// BtcScanner
 	viper.SetDefault("btc_scanner.scan_period", time.Second*20)
@@ -274,13 +360,14 @@ func setDefaults() {
 	// SkyExchanger
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)
 	viper.SetDefault("sky_exchanger.max_decimals", 3)
+	viper.SetDefault("web.bind_enabled", true)
+	viper.SetDefault("web.send_enabled", true)
 
 	// Web
 	viper.SetDefault("web.http_addr", "127.0.0.1:7071")
 	viper.SetDefault("web.static_dir", "./web/build")
 	viper.SetDefault("web.throttle_max", int64(60))
 	viper.SetDefault("web.throttle_duration", time.Minute)
-	viper.SetDefault("web.api_enabled", true)
 
 	// AdminPanel
 	viper.SetDefault("admin_panel.host", "127.0.0.1:7711")

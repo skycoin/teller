@@ -2,6 +2,7 @@ package exchange
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -15,9 +16,11 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/coin"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/testutil"
@@ -117,6 +120,13 @@ func (s *dummySender) setTxConfirmed(txid string) {
 	s.txidConfirmMap[txid] = true
 }
 
+func (s *dummySender) Balance() (*cli.Balance, error) {
+	return &cli.Balance{
+		Coins: "100.000000",
+		Hours: "100",
+	}, nil
+}
+
 type dummyScanner struct {
 	dvC   chan scanner.DepositNote
 	addrs []string
@@ -128,7 +138,7 @@ func newDummyScanner() *dummyScanner {
 	}
 }
 
-func (scan *dummyScanner) AddScanAddress(btcAddr string) error {
+func (scan *dummyScanner) AddScanAddress(btcAddr, coinType string) error {
 	scan.addrs = append(scan.addrs, btcAddr)
 	return nil
 }
@@ -150,21 +160,36 @@ func (scan *dummyScanner) stop() {
 }
 
 const (
-	testSkyBtcRate  string = "100" // 100 SKY per BTC
-	testMaxDecimals        = 0
-	testSkyAddr            = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
-	testSkyAddr2           = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
-	dbScanTimeout          = time.Second * 3
-	dbCheckWaitTime        = time.Millisecond * 300
+	testSkyBtcRate      = "100" // 100 SKY per BTC
+	testSkyEthRate      = "10"  // 10 SKY per ETH
+	testMaxDecimals     = 0
+	testSkyAddr         = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
+	testSkyAddr2        = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
+	testWalletFile      = "test.wlt"
+	dbScanTimeout       = time.Second * 3
+	statusCheckTimeout  = time.Second * 3
+	statusCheckInterval = time.Millisecond * 10
+	statusCheckNilWait  = time.Second
+	dbCheckWaitTime     = time.Millisecond * 300
 )
 
 func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
 
-	e, err := NewExchange(log, store, newDummyScanner(), newDummySender(), Config{
-		Rate: testSkyBtcRate,
+	bscr := newDummyScanner()
+	escr := newDummyScanner()
+	multiplexer := scanner.NewMultiplexer(log)
+	multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
+	multiplexer.AddScanner(escr, scanner.CoinTypeETH)
+	go multiplexer.Multiplex()
+
+	e, err := NewExchange(log, store, multiplexer, newDummySender(), config.SkyExchanger{
+		SkyBtcExchangeRate:      testSkyBtcRate,
+		SkyEthExchangeRate:      testSkyEthRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
+		Wallet:                  testWalletFile,
+		SendEnabled:             true,
 	})
 	require.NoError(t, err)
 	return e
@@ -189,6 +214,12 @@ func setupExchange(t *testing.T, log *logrus.Logger) (*Exchange, func(), func())
 
 	return e, run, shutdown
 }
+func closeMultiplexer(e *Exchange) {
+	mp := e.multiplexer
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).stop()
+	mp.GetScanner(scanner.CoinTypeETH).(*dummyScanner).stop()
+	mp.Shutdown()
+}
 
 func runExchange(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 	log, hook := testutil.NewLogger(t)
@@ -201,9 +232,19 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 	store := &MockStore{}
 	log, hook := testutil.NewLogger(t)
 
-	e, err := NewExchange(log, store, newDummyScanner(), newDummySender(), Config{
-		Rate: testSkyBtcRate,
+	bscr := newDummyScanner()
+	escr := newDummyScanner()
+	multiplexer := scanner.NewMultiplexer(log)
+	multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
+	multiplexer.AddScanner(escr, scanner.CoinTypeETH)
+	go multiplexer.Multiplex()
+
+	e, err := NewExchange(log, store, multiplexer, newDummySender(), config.SkyExchanger{
+		SkyBtcExchangeRate:      testSkyBtcRate,
+		SkyEthExchangeRate:      testSkyEthRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
+		Wallet:                  testWalletFile,
+		SendEnabled:             true,
 	})
 	require.NoError(t, err)
 
@@ -222,11 +263,41 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 	return e, shutdown, hook
 }
 
+func checkExchangerStatus(t *testing.T, e Exchanger, expectedErr error) {
+	// When the expected error is nil, we can only wait a period of time to
+	// hope that an error did not appear
+	if expectedErr == nil {
+		time.Sleep(statusCheckNilWait)
+		require.NoError(t, e.Status())
+		return
+	}
+
+	// When the expected error is not nil, we can wait to see if the error
+	// appears, and check that the error matches
+	timeoutTicker := time.After(statusCheckTimeout)
+loop:
+	for {
+		select {
+		case <-time.Tick(statusCheckInterval):
+			err := e.Status()
+			if err == nil {
+				continue loop
+			}
+			require.Equal(t, expectedErr, err)
+			break loop
+		case <-timeoutTicker:
+			t.Fatal("Deposit status checking timed out")
+			return
+		}
+	}
+}
+
 func TestExchangeRunShutdown(t *testing.T) {
 	// Tests a simple start and stop, with no scanner activity
 	e, shutdown, _ := runExchange(t)
 	defer shutdown()
 	defer e.Shutdown()
+	closeMultiplexer(e)
 }
 
 func TestExchangeRunScannerClosed(t *testing.T) {
@@ -234,7 +305,7 @@ func TestExchangeRunScannerClosed(t *testing.T) {
 	e, shutdown, _ := runExchange(t)
 	defer shutdown()
 	defer e.Shutdown()
-	e.scanner.(*dummyScanner).stop()
+	closeMultiplexer(e)
 }
 
 func TestExchangeRunSend(t *testing.T) {
@@ -244,7 +315,7 @@ func TestExchangeRunSend(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	var value int64 = 1e8
@@ -254,15 +325,17 @@ func TestExchangeRunSend(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			Address: btcAddr,
-			Value:   value,
-			Height:  20,
-			Tx:      "foo-tx",
-			N:       2,
+			CoinType: scanner.CoinTypeBTC,
+			Address:  btcAddr,
+			Value:    value,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        2,
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.scanner.(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
@@ -304,6 +377,7 @@ func TestExchangeRunSend(t *testing.T) {
 
 	expectedDeposit := DepositInfo{
 		Seq:            1,
+		CoinType:       scanner.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		Status:         StatusWaitConfirm,
 		SkyAddress:     skyAddr,
@@ -343,6 +417,8 @@ func TestExchangeRunSend(t *testing.T) {
 		t.Fatal("Waiting for confirmed deposit timed out")
 	}
 
+	checkExchangerStatus(t, e, nil)
+
 	// Check DepositInfo
 	di, err = e.store.(*Store).getDepositInfo(dn.Deposit.ID())
 	require.NoError(t, err)
@@ -351,6 +427,7 @@ func TestExchangeRunSend(t *testing.T) {
 
 	expectedDeposit = DepositInfo{
 		Seq:            1,
+		CoinType:       scanner.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		Status:         StatusDone,
 		SkyAddress:     skyAddr,
@@ -364,6 +441,7 @@ func TestExchangeRunSend(t *testing.T) {
 	}
 
 	require.Equal(t, expectedDeposit, di)
+	closeMultiplexer(e)
 }
 
 func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
@@ -378,28 +456,34 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	// Force sender to return a broadcast tx error so that the deposit stays at StatusWaitSend
-	e.sender.(*dummySender).broadcastTransactionErr = errors.New("fake broadcast transaction error")
+	broadcastTransactionErr := errors.New("fake broadcast transaction error")
+	e.sender.(*dummySender).broadcastTransactionErr = broadcastTransactionErr
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			Address: btcAddr,
-			Value:   1e8,
-			Height:  20,
-			Tx:      "foo-tx",
-			N:       2,
+			CoinType: scanner.CoinTypeBTC,
+			Address:  btcAddr,
+			Value:    1e8,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        2,
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.scanner.(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
 	err = <-dn.ErrC
 	require.NoError(t, err)
+
+	// Wait for the deposit status error to update
+	checkExchangerStatus(t, e, fmt.Errorf("Send skycoin failed: %v", broadcastTransactionErr))
 
 	// Check the DepositInfo in the database
 	// Sky should not be sent
@@ -408,6 +492,7 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 	require.NotEmpty(t, di.UpdatedAt)
 	require.Equal(t, DepositInfo{
 		Seq:            1,
+		CoinType:       scanner.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		SkyAddress:     skyAddr,
 		DepositAddress: btcAddr,
@@ -430,28 +515,34 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	// Force sender to return a create tx error so that the deposit stays at StatusWaitSend
-	e.sender.(*dummySender).createTransactionErr = errors.New("fake create transaction error")
+	createTransactionErr := errors.New("fake create transaction error")
+	e.sender.(*dummySender).createTransactionErr = createTransactionErr
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			Address: btcAddr,
-			Value:   1e8,
-			Height:  20,
-			Tx:      "foo-tx",
-			N:       2,
+			CoinType: scanner.CoinTypeBTC,
+			Address:  btcAddr,
+			Value:    1e8,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        2,
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.scanner.(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
 	err = <-dn.ErrC
 	require.NoError(t, err)
+
+	// Wait for the deposit status error to update
+	checkExchangerStatus(t, e, createTransactionErr)
 
 	// Check the DepositInfo in the database
 	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
@@ -459,6 +550,7 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 	require.NotEmpty(t, di.UpdatedAt)
 	require.Equal(t, DepositInfo{
 		Seq:            1,
+		CoinType:       scanner.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		SkyAddress:     skyAddr,
 		DepositAddress: btcAddr,
@@ -468,6 +560,8 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 		DepositValue:   dn.Deposit.Value,
 		Deposit:        dn.Deposit,
 	}, di)
+
+	require.Error(t, e.Status())
 }
 
 func TestExchangeTxConfirmFailure(t *testing.T) {
@@ -477,7 +571,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	var value int64 = 1e8
@@ -486,24 +580,30 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 	txid := e.sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
 	// Force sender to return a confirm error so that the deposit stays at StatusWaitConfirm
-	e.sender.(*dummySender).confirmErr = errors.New("fake confirm error")
+	confirmErr := errors.New("fake confirm error")
+	e.sender.(*dummySender).confirmErr = confirmErr
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			Address: btcAddr,
-			Value:   value,
-			Height:  20,
-			Tx:      "foo-tx",
-			N:       2,
+			CoinType: scanner.CoinTypeBTC,
+			Address:  btcAddr,
+			Value:    value,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        2,
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.scanner.(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
 	err = <-dn.ErrC
 	require.NoError(t, err)
+
+	// Wait for the deposit status error to update
+	checkExchangerStatus(t, e, confirmErr)
 
 	// Wait for StatusWaitSend deposit in the database
 	done := make(chan struct{})
@@ -533,6 +633,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 	require.NotEmpty(t, di.UpdatedAt)
 	require.Equal(t, DepositInfo{
 		Seq:            1,
+		CoinType:       scanner.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		SkyAddress:     skyAddr,
 		DepositAddress: btcAddr,
@@ -553,7 +654,7 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	var value int64 = 1e8
@@ -563,15 +664,17 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			Address: btcAddr,
-			Value:   value,
-			Height:  20,
-			Tx:      "foo-tx",
-			N:       2,
+			CoinType: scanner.CoinTypeBTC,
+			Address:  btcAddr,
+			Value:    value,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        2,
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.scanner.(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
@@ -580,9 +683,9 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 
 	// Second loop calls processWaitSendDeposit
 	// It sends the coins, then confirms them
-
 	expectedDeposit := DepositInfo{
 		Seq:            1,
+		CoinType:       scanner.CoinTypeBTC,
 		Status:         StatusWaitConfirm,
 		SkyAddress:     skyAddr,
 		DepositAddress: dn.Deposit.Address,
@@ -646,20 +749,22 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	err := e.store.BindAddress(skyAddr, btcAddr)
+	err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			Address: btcAddr,
-			Value:   1, // The amount is so low that no SKY can be sent
-			Height:  20,
-			Tx:      "foo-tx",
-			N:       2,
+			CoinType: scanner.CoinTypeBTC,
+			Address:  btcAddr,
+			Value:    1, // The amount is so low that no SKY can be sent
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        2,
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.scanner.(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
@@ -671,6 +776,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 
 	expectedDeposit := DepositInfo{
 		Seq:            1,
+		CoinType:       scanner.CoinTypeBTC,
 		Status:         StatusDone,
 		SkyAddress:     skyAddr,
 		DepositAddress: dn.Deposit.Address,
@@ -804,7 +910,7 @@ func testExchangeRunProcessDepositBacklog(t *testing.T, dis []DepositInfo, confi
 		expectedDis[i].Status = StatusDone
 
 		if expectedDis[i].SkySent == 0 {
-			amt, err := CalculateBtcSkyValue(di.DepositValue, e.cfg.Rate, testMaxDecimals)
+			amt, err := CalculateBtcSkyValue(di.DepositValue, e.cfg.SkyBtcExchangeRate, testMaxDecimals)
 			require.NoError(t, err)
 			expectedDis[i].SkySent = amt
 		}
@@ -841,11 +947,12 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
-				Address: "foo-btc-addr-1",
-				Value:   depositValue,
-				Height:  20,
-				Tx:      "foo-tx-1",
-				N:       1,
+				CoinType: scanner.CoinTypeBTC,
+				Address:  "foo-btc-addr-1",
+				Value:    depositValue,
+				Height:   20,
+				Tx:       "foo-tx-1",
+				N:        1,
 			},
 		},
 		{
@@ -859,11 +966,12 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
-				Address: "foo-btc-addr-2",
-				Value:   depositValue,
-				Height:  20,
-				Tx:      "foo-tx-2",
-				N:       2,
+				CoinType: scanner.CoinTypeBTC,
+				Address:  "foo-btc-addr-2",
+				Value:    depositValue,
+				Height:   20,
+				Tx:       "foo-tx-2",
+				N:        2,
 			},
 		},
 	}
@@ -889,6 +997,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 	dis := []DepositInfo{
 		{
 			Seq:            1,
+			CoinType:       scanner.CoinTypeBTC,
 			Status:         StatusWaitSend,
 			SkyAddress:     testSkyAddr,
 			DepositAddress: "foo-btc-addr-1",
@@ -897,15 +1006,17 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
-				Address: "foo-btc-addr-1",
-				Value:   depositValue,
-				Height:  20,
-				Tx:      "foo-tx-1",
-				N:       1,
+				CoinType: scanner.CoinTypeBTC,
+				Address:  "foo-btc-addr-1",
+				Value:    depositValue,
+				Height:   20,
+				Tx:       "foo-tx-1",
+				N:        1,
 			},
 		},
 		{
 			Seq:            2,
+			CoinType:       scanner.CoinTypeBTC,
 			Status:         StatusWaitSend,
 			SkyAddress:     testSkyAddr2,
 			DepositAddress: "foo-btc-addr-2",
@@ -914,17 +1025,18 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
-				Address: "foo-btc-addr-2",
-				Value:   depositValue,
-				Height:  20,
-				Tx:      "foo-tx-2",
-				N:       2,
+				CoinType: scanner.CoinTypeBTC,
+				Address:  "foo-btc-addr-2",
+				Value:    depositValue,
+				Height:   20,
+				Tx:       "foo-tx-2",
+				N:        2,
 			},
 		},
 	}
 
 	testExchangeRunProcessDepositBacklog(t, dis, func(e *Exchange, di DepositInfo) {
-		err := e.store.BindAddress(di.SkyAddress, di.DepositAddress)
+		err := e.store.BindAddress(di.SkyAddress, di.DepositAddress, di.CoinType)
 		require.NoError(t, err)
 
 		skySent, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, testMaxDecimals)
@@ -939,21 +1051,28 @@ func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 	// Tests that we log a message and continue if saveIncomingDeposit fails
 	e, shutdown, hook := runExchangeMockStore(t)
 	defer shutdown()
-	defer e.Shutdown()
+	didShutdown := false
+	defer func() {
+		if !didShutdown {
+			e.Shutdown()
+		}
+	}()
 
 	btcAddr := "foo-btc-addr"
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			Address: btcAddr,
-			Value:   1e8,
-			Height:  20,
-			Tx:      "foo-tx",
-			N:       2,
+			CoinType: scanner.CoinTypeBTC,
+			Address:  btcAddr,
+			Value:    1e8,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        2,
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.scanner.(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// Configure database mocks
 
@@ -995,15 +1114,17 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			Address: btcAddr,
-			Value:   1e8,
-			Height:  20,
-			Tx:      "foo-tx",
-			N:       2,
+			CoinType: scanner.CoinTypeBTC,
+			Address:  btcAddr,
+			Value:    1e8,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        2,
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.scanner.(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// Configure database mocks
 
@@ -1018,6 +1139,7 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 	// GetOrCreateDepositInfo returns a valid DepositInfo
 	di := DepositInfo{
 		Seq:            1,
+		CoinType:       scanner.CoinTypeBTC,
 		Status:         StatusWaitSend,
 		SkyAddress:     skyAddr,
 		DepositAddress: btcAddr,
@@ -1087,15 +1209,17 @@ func TestExchangeProcessWaitSendNoSkyAddrBound(t *testing.T) {
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			Address: btcAddr,
-			Value:   1e8,
-			Height:  20,
-			Tx:      "foo-tx",
-			N:       2,
+			CoinType: scanner.CoinTypeBTC,
+			Address:  btcAddr,
+			Value:    1e8,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        2,
 		},
 		ErrC: make(chan error, 1),
 	}
-	e.scanner.(*dummyScanner).addDeposit(dn)
+	mp := e.multiplexer
+	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// nil is written to ErrC after this method finishes
@@ -1117,31 +1241,36 @@ func TestExchangeBindAddress(t *testing.T) {
 	log, _ := testutil.NewLogger(t)
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
-	scanner := newDummyScanner()
+	dummyScanner := newDummyScanner()
+	multiplexer := scanner.NewMultiplexer(log)
+	multiplexer.AddScanner(dummyScanner, scanner.CoinTypeBTC)
 
 	s := &Exchange{
-		store:   store,
-		scanner: scanner,
+		store:       store,
+		multiplexer: multiplexer,
 	}
 
-	require.Len(t, scanner.addrs, 0)
+	require.Len(t, dummyScanner.addrs, 0)
 
-	err = s.BindAddress("a", "b")
+	err = s.BindAddress("a", "b", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
-	// Should be added to scanner
-	require.Len(t, scanner.addrs, 1)
-	require.Equal(t, "b", scanner.addrs[0])
+	// Should be added to dummyScanner
+	require.Len(t, dummyScanner.addrs, 1)
+	require.Equal(t, "b", dummyScanner.addrs[0])
 
 	// Should be in the store
-	skyAddr, err := s.store.GetBindAddress("b")
+	skyAddr, err := s.store.GetBindAddress("b", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 	require.Equal(t, "a", skyAddr)
 }
 
 func TestExchangeCreateTransaction(t *testing.T) {
-	cfg := Config{
-		Rate: "10",
+	cfg := config.SkyExchanger{
+		SkyBtcExchangeRate: "10",
+		SkyEthExchangeRate: "1",
+		Wallet:             testWalletFile,
+		SendEnabled:        true,
 	}
 
 	log, _ := testutil.NewLogger(t)
@@ -1150,6 +1279,7 @@ func TestExchangeCreateTransaction(t *testing.T) {
 
 	// Create transaction with no SkyAddress
 	di := DepositInfo{
+		CoinType:       scanner.CoinTypeBTC,
 		SkyAddress:     "",
 		DepositValue:   1e8,
 		ConversionRate: "100",
@@ -1160,6 +1290,7 @@ func TestExchangeCreateTransaction(t *testing.T) {
 
 	// Create transaction with no coins sent, due to a very low DepositValue
 	di = DepositInfo{
+		CoinType:       scanner.CoinTypeBTC,
 		SkyAddress:     "2GgFvqoyk9RjwVzj8tqfcXVXB4orBwoc9qv",
 		DepositValue:   1,
 		ConversionRate: "100",
@@ -1169,13 +1300,14 @@ func TestExchangeCreateTransaction(t *testing.T) {
 
 	// Create valid transaction
 	di = DepositInfo{
+		CoinType:       scanner.CoinTypeBTC,
 		SkyAddress:     "2GgFvqoyk9RjwVzj8tqfcXVXB4orBwoc9qv",
 		DepositValue:   1e8,
 		ConversionRate: "100",
 	}
-	// Make sure DepositInfo.ConversionRate != s.Config.Rate, to confirm
-	// that the DepositInfo's ConversionRate is used instead of Config.Rate
-	require.NotEqual(t, s.cfg.Rate, di.ConversionRate)
+	// Make sure DepositInfo.ConversionRate != s.cfg.SkyBtcExchangeRate, to confirm
+	// that the DepositInfo's ConversionRate is used instead of cfg.SkyBtcExchangeRate
+	require.NotEqual(t, s.cfg.SkyBtcExchangeRate, di.ConversionRate)
 
 	tx, err := s.createTransaction(di)
 	require.NoError(t, err)
@@ -1195,7 +1327,53 @@ func TestExchangeCreateTransaction(t *testing.T) {
 }
 
 func TestExchangeGetDepositStatuses(t *testing.T) {
-	// TODO
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
+
+	log, _ := testutil.NewLogger(t)
+	store, err := NewStore(log, db)
+	require.NoError(t, err)
+	dummyScanner := newDummyScanner()
+	dummyScannerEth := newDummyScanner()
+	multiplexer := scanner.NewMultiplexer(log)
+	err = multiplexer.AddScanner(dummyScanner, scanner.CoinTypeBTC)
+	require.NoError(t, err)
+	err = multiplexer.AddScanner(dummyScannerEth, scanner.CoinTypeETH)
+	require.NoError(t, err)
+
+	s := &Exchange{
+		store:       store,
+		multiplexer: multiplexer,
+	}
+
+	require.Len(t, dummyScanner.addrs, 0)
+
+	err = s.BindAddress("a", "b", scanner.CoinTypeBTC)
+	require.NoError(t, err)
+	err = s.BindAddress("a", "e", scanner.CoinTypeETH)
+	require.NoError(t, err)
+
+	// Should be added to dummyScanner
+	require.Len(t, dummyScanner.addrs, 1)
+	require.Equal(t, "b", dummyScanner.addrs[0])
+
+	require.Len(t, dummyScannerEth.addrs, 1)
+	require.Equal(t, "e", dummyScannerEth.addrs[0])
+
+	// Should be in the store
+	depositInfos, err := s.store.GetDepositInfoOfSkyAddress("a")
+	require.NoError(t, err)
+	require.Equal(t, 2, len(depositInfos))
+	depositInfo := depositInfos[0]
+	require.Equal(t, uint64(0), depositInfo.Seq)
+	require.Equal(t, scanner.CoinTypeBTC, depositInfo.CoinType)
+	require.Equal(t, StatusWaitDeposit, depositInfo.Status)
+	require.NotEmpty(t, depositInfo.UpdatedAt)
+	depositInfo = depositInfos[1]
+	require.Equal(t, uint64(1), depositInfo.Seq)
+	require.Equal(t, scanner.CoinTypeETH, depositInfo.CoinType)
+	require.Equal(t, StatusWaitDeposit, depositInfo.Status)
+	require.NotEmpty(t, depositInfo.UpdatedAt)
 }
 
 func TestExchangeGetDepositStatusDetail(t *testing.T) {
@@ -1210,15 +1388,19 @@ func TestExchangeGetBindNum(t *testing.T) {
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
 
+	bscr := newDummyScanner()
+	multiplexer := scanner.NewMultiplexer(log)
+	multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
 	s := &Exchange{
-		store: store,
+		store:       store,
+		multiplexer: multiplexer,
 	}
 
 	num, err := s.GetBindNum("a")
 	require.Equal(t, num, 0)
 	require.NoError(t, err)
 
-	err = s.store.BindAddress("a", "b")
+	err = s.store.BindAddress("a", "b", scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
 	num, err = s.GetBindNum("a")
