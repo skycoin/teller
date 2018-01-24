@@ -57,6 +57,8 @@ type Config struct {
 type Teller struct {
 	// Max number of btc addresses a skycoin address can bind
 	MaxBoundAddresses int `mapstructure:"max_bound_addrs"`
+	// Allow address binding
+	BindEnabled bool `mapstructure:"bind_enabled"`
 }
 
 // SkyRPC config for Skycoin daemon node RPC
@@ -107,6 +109,64 @@ type SkyExchanger struct {
 	TxConfirmationCheckWait time.Duration `mapstructure:"tx_confirmation_check_wait"`
 	// Path of hot Skycoin wallet file on disk
 	Wallet string `mapstructure:"wallet"`
+	// Allow sending of coins (deposits will still be received and recorded)
+	SendEnabled bool `mapstructure:"send_enabled"`
+}
+
+// Validate validates the SkyExchanger config
+func (c SkyExchanger) Validate() error {
+	if errs := c.validate(); len(errs) != 0 {
+		return errs[0]
+	}
+
+	if errs := c.validateWallet(); len(errs) != 0 {
+		return errs[0]
+	}
+
+	return nil
+}
+
+func (c SkyExchanger) validate() []error {
+	var errs []error
+
+	if _, err := mathutil.ParseRate(c.SkyBtcExchangeRate); err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.sky_btc_exchange_rate invalid: %v", err))
+	}
+
+	if _, err := mathutil.ParseRate(c.SkyEthExchangeRate); err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.sky_eth_exchange_rate invalid: %v", err))
+	}
+
+	if c.MaxDecimals < 0 {
+		errs = append(errs, errors.New("sky_exchanger.max_decimals can't be negative"))
+	}
+
+	if uint64(c.MaxDecimals) > visor.MaxDropletPrecision {
+		errs = append(errs, fmt.Errorf("sky_exchanger.max_decimals is larger than visor.MaxDropletPrecision=%d", visor.MaxDropletPrecision))
+	}
+
+	return errs
+}
+
+func (c SkyExchanger) validateWallet() []error {
+	var errs []error
+
+	if c.Wallet == "" {
+		errs = append(errs, errors.New("sky_exchanger.wallet missing"))
+	}
+
+	if _, err := os.Stat(c.Wallet); os.IsNotExist(err) {
+		errs = append(errs, fmt.Errorf("sky_exchanger.wallet file %s does not exist", c.Wallet))
+	}
+
+	w, err := wallet.Load(c.Wallet)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.wallet file %s failed to load: %v", c.Wallet, err))
+	} else if err := w.Validate(); err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.wallet file %s is invalid: %v", c.Wallet, err))
+	}
+
+	return errs
 }
 
 // Web config for the teller HTTP interface
@@ -120,7 +180,6 @@ type Web struct {
 	ThrottleMax      int64         `mapstructure:"throttle_max"` // Maximum number of requests per duration
 	ThrottleDuration time.Duration `mapstructure:"throttle_duration"`
 	BehindProxy      bool          `mapstructure:"behind_proxy"`
-	APIEnabled       bool          `mapstructure:"api_enabled"`
 }
 
 // Validate validates Web config
@@ -250,36 +309,16 @@ func (c Config) Validate() error {
 		oops("eth_scanner.initial_scan_height must be >= 0")
 	}
 
-	if _, err := mathutil.DecimalFromString(c.SkyExchanger.SkyBtcExchangeRate); err != nil {
-		oops(fmt.Sprintf("sky_exchanger.sky_btc_exchange_rate invalid: %v", err))
-	}
-	if _, err := mathutil.DecimalFromString(c.SkyExchanger.SkyEthExchangeRate); err != nil {
-		oops(fmt.Sprintf("sky_exchanger.sky_eth_exchange_rate invalid: %v", err))
+	exchangeErrs := c.SkyExchanger.validate()
+	for _, err := range exchangeErrs {
+		oops(err.Error())
 	}
 
 	if !c.Dummy.Sender {
-		if c.SkyExchanger.Wallet == "" {
-			oops("sky_exchanger.wallet missing")
+		exchangeErrs := c.SkyExchanger.validateWallet()
+		for _, err := range exchangeErrs {
+			oops(err.Error())
 		}
-
-		if _, err := os.Stat(c.SkyExchanger.Wallet); os.IsNotExist(err) {
-			oops(fmt.Sprintf("sky_exchanger.wallet file %s does not exist", c.SkyExchanger.Wallet))
-		}
-
-		w, err := wallet.Load(c.SkyExchanger.Wallet)
-		if err != nil {
-			oops(fmt.Sprintf("sky_exchanger.wallet file %s failed to load: %v", c.SkyExchanger.Wallet, err))
-		} else if err := w.Validate(); err != nil {
-			oops(fmt.Sprintf("sky_exchanger.wallet file %s is invalid: %v", c.SkyExchanger.Wallet, err))
-		}
-	}
-
-	if c.SkyExchanger.MaxDecimals < 0 {
-		oops("sky_exchanger.max_decimals can't be negative")
-	}
-
-	if uint64(c.SkyExchanger.MaxDecimals) > visor.MaxDropletPrecision {
-		oops(fmt.Sprintf("sky_exchanger.max_decimals is larger than visor.MaxDropletPrecision=%d", visor.MaxDropletPrecision))
 	}
 
 	if err := c.Web.Validate(); err != nil {
@@ -321,13 +360,14 @@ func setDefaults() {
 	// SkyExchanger
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)
 	viper.SetDefault("sky_exchanger.max_decimals", 3)
+	viper.SetDefault("web.bind_enabled", true)
+	viper.SetDefault("web.send_enabled", true)
 
 	// Web
 	viper.SetDefault("web.http_addr", "127.0.0.1:7071")
 	viper.SetDefault("web.static_dir", "./web/build")
 	viper.SetDefault("web.throttle_max", int64(60))
 	viper.SetDefault("web.throttle_duration", time.Minute)
-	viper.SetDefault("web.api_enabled", true)
 
 	// AdminPanel
 	viper.SetDefault("admin_panel.host", "127.0.0.1:7711")

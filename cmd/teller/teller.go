@@ -270,12 +270,7 @@ func run() error {
 		log.WithError(err).Error("exchange.NewStore failed")
 		return err
 	}
-	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, exchange.Config{
-		BtcRate:                 cfg.SkyExchanger.SkyBtcExchangeRate,
-		EthRate:                 cfg.SkyExchanger.SkyEthExchangeRate,
-		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
-		MaxDecimals:             cfg.SkyExchanger.MaxDecimals,
-	})
+	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, cfg.SkyExchanger)
 	if err != nil {
 		log.WithError(err).Error("exchange.NewExchange failed")
 		return err
