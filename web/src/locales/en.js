@@ -39,8 +39,8 @@ export default {
     title: 'Skycoin OTC',
     heading: 'Skycoin OTC',
     headingEnded: 'Skycoin OTC is currently closed',
-    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>,
-      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the
+    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>
+      or follow the
       <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a>.`,
     instructions: `<p>You can check the current market value for <a href="https://coinmarketcap.com/currencies/skycoin/">Skycoin at CoinMarketCap</a>.</p>
 
