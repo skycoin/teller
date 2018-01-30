@@ -30,7 +30,7 @@ var (
 	// deposit values index list bucket
 	dvIndexListKey = "dv_index_list"
 
-	// unsupported coin type
+	// ErrUnsupportedCoinType unsupported coin type
 	ErrUnsupportedCoinType = errors.New("unsupported coin type")
 )
 

@@ -155,6 +155,7 @@ func (s *DummySender) IsTxConfirmed(txid string) *ConfirmResponse {
 	}
 }
 
+// Balance returns the remaining balance
 func (s *DummySender) Balance() (*cli.Balance, error) {
 
 	coinStr, err := droplet.ToString(s.coins)

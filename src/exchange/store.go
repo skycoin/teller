@@ -513,6 +513,7 @@ func (s *Store) getSkyBindAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, er
 	return addrs, nil
 }
 
+// GetDepositStats returns BTC received and SKY sent
 func (s *Store) GetDepositStats() (int64, int64, error) {
 	var totalBTCReceived int64
 	var totalSKYSent int64

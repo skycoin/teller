@@ -47,11 +47,11 @@ func NewBlockFromBlockReadable(value []byte) (*types.Block, error) {
 	var br BlockReadable
 	if err := json.Unmarshal(value, &br); err != nil {
 		return nil, err
-	} else {
-		anBlock := types.NewBlockWithHeader(br.Header)
-		newBlock := anBlock.WithBody(br.Transactions, br.Uncles)
-		return newBlock, nil
 	}
+
+	anBlock := types.NewBlockWithHeader(br.Header)
+	newBlock := anBlock.WithBody(br.Transactions, br.Uncles)
+	return newBlock, nil
 }
 
 func openDummyEthDB(t *testing.T) *bolt.DB {

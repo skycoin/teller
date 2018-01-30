@@ -53,6 +53,7 @@ const (
 	serverIdleTimeout  = time.Second * 120
 )
 
+// Deposit records information about a BTC deposit
 type Deposit struct {
 	Address string // deposit address
 	Value   int64  // deposit amount. For BTC, measured in satoshis.
@@ -61,6 +62,7 @@ type Deposit struct {
 	N       uint32 // the index of vout in the tx [BTC]
 }
 
+// BlockStore holds fake block data
 type BlockStore struct {
 	sync.RWMutex
 	BestBlockHeight int32
