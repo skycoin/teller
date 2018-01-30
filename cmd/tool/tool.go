@@ -46,7 +46,11 @@ The commands are:
 `, filepath.Base(os.Args[0]), filepath.Base(os.Args[0]))
 
 func main() {
-	u, _ := user.Current()
+	u, err := user.Current()
+	if err != nil {
+		log.Println("user.Current failed:", err)
+		return
+	}
 	dbFile := flag.String("db", filepath.Join(u.HomeDir, ".teller-skycoin/teller.db"), "db file path")
 	btcAddrFile := flag.String("btcfile", "../teller/btc_addresses.json", "btc addresses json file")
 	useJSON := flag.Bool("json", false, "Print newbtcaddress output as json")
@@ -63,7 +67,6 @@ func main() {
 	cmd := args[0]
 
 	var db *bolt.DB
-	var err error
 	switch cmd {
 	case scanBlockCmdName:
 		if _, err := os.Stat(*dbFile); os.IsNotExist(err) {
