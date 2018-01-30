@@ -113,7 +113,7 @@ func (s *DummySender) BroadcastTransaction(txn *coin.Transaction) *BroadcastTxRe
 
 	if _, ok := s.broadcastTxns[txn.TxIDHex()]; ok {
 		return &BroadcastTxResponse{
-			Err: fmt.Errorf("Transaction %s was already broadcast"),
+			Err: fmt.Errorf("Transaction %s was already broadcast", txn.TxIDHex()),
 			Req: req,
 		}
 	}
