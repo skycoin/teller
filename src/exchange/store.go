@@ -500,7 +500,6 @@ func (s *Store) getSkyBindAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, er
 	if err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
 		switch err.(type) {
 		case dbutil.ObjectNotExistErr:
-			err = nil
 		default:
 			return nil, err
 		}

@@ -135,7 +135,6 @@ func (s *Store) getScanAddressesTx(tx *bolt.Tx, coinType string) ([]string, erro
 	if err := dbutil.GetBucketObject(tx, scanBktFullName, depositAddressesKey, &addrs); err != nil {
 		switch err.(type) {
 		case dbutil.ObjectNotExistErr:
-			err = nil
 		default:
 			return nil, err
 		}

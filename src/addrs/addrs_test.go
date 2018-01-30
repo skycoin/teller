@@ -103,6 +103,7 @@ func TestNewAddress(t *testing.T) {
 	}
 
 	used, err = btca1.used.IsUsed(addr)
+	require.NoError(t, err)
 	require.True(t, used)
 
 	// run out all addresses
@@ -165,6 +166,7 @@ func TestNewEthAddress(t *testing.T) {
 	}
 
 	used, err = etha1.used.IsUsed(addr)
+	require.NoError(t, err)
 	require.True(t, used)
 
 	// run out all addresses

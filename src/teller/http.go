@@ -86,7 +86,7 @@ func (s *HTTPServer) Run() error {
 	var mux http.Handler = s.setupMux()
 
 	allowedHosts := []string{} // empty array means all hosts allowed
-	sslHost := ""
+	var sslHost string
 	if s.cfg.Web.AutoTLSHost == "" {
 		// Note: if AutoTLSHost is not set, but HTTPSAddr is set, then
 		// http will redirect to the HTTPSAddr listening IP, which would be
