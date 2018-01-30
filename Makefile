@@ -12,7 +12,7 @@ test: ## Run tests
 
 lint: ## Run linters. Use make install-linters first.
 	vendorcheck ./...
-	gometalinter --deadline=2m --disable-all -E goimports -E unparam --tests --vendor ./...
+	gometalinter --deadline=2m --disable-all -E gofmt -E goimports -E unparam --tests --vendor ./...
 
 lint-fast: ## Run linters. Use make install-linters first. Skips slow linters.
 	vendorcheck ./...
@@ -38,6 +38,9 @@ format:  # Formats the code. Must have goimports installed (use make install-lin
 	goimports -w -local github.com/skycoin/teller ./src
 	goimports -w -local github.com/skycoin/skycoin ./cmd
 	goimports -w -local github.com/skycoin/skycoin ./src
+	# This performs code simplifications
+	gofmt -s -w ./cmd
+	gofmt -s -w ./cmd
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'

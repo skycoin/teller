@@ -8,12 +8,14 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/skycoin/skycoin/src/api/cli"
+
 	"github.com/skycoin/teller/src/exchange"
 	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/testutil"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
 )
 
 type fakeExchanger struct {

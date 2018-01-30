@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/skycoin/teller/src/util/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/util/testutil"
 )
 
 var (

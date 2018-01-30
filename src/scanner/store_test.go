@@ -248,15 +248,15 @@ func TestPutBktValue(t *testing.T) {
 	}
 
 	dvs := []Deposit{
-		Deposit{
+		{
 			Tx: "t1",
 			N:  1,
 		},
-		Deposit{
+		{
 			Tx: "t2",
 			N:  2,
 		},
-		Deposit{
+		{
 			Tx: "t3",
 			N:  3,
 		},
@@ -334,15 +334,15 @@ func TestGetBktValue(t *testing.T) {
 	}
 
 	dvs := []Deposit{
-		Deposit{
+		{
 			Tx: "t1",
 			N:  1,
 		},
-		Deposit{
+		{
 			Tx: "t2",
 			N:  2,
 		},
-		Deposit{
+		{
 			Tx: "t3",
 			N:  3,
 		},

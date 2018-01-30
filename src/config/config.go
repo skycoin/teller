@@ -13,6 +13,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/visor"
 	"github.com/skycoin/skycoin/src/wallet"
+
 	"github.com/skycoin/teller/src/util/mathutil"
 )
 

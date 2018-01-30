@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/skycoin/teller/src/util/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/util/testutil"
 )
 
 func TestNewETHAddrsAllValid(t *testing.T) {
