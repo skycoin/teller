@@ -67,7 +67,7 @@ func testAddEthScanAddresses(t *testing.T, m *Multiplexer) int64 {
 }
 
 func testAddBtcScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*BTCScanner, func()) {
-	scr, shutdown := setupScanner(t, db)
+	scr, shutdown := setupBtcScanner(t, db)
 	err := m.AddScanner(scr, CoinTypeBTC)
 	require.NoError(t, err)
 	count := m.GetScannerCount()
@@ -98,7 +98,7 @@ func testAddEthScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*ETHScanner, 
 func TestMultiplexerOnlyBtc(t *testing.T) {
 	//init btc db
 	btcDB := openDummyBtcDB(t)
-	defer btcDB.Close()
+	defer testutil.CheckError(t, btcDB.Close)
 
 	//create logger
 	log, _ := testutil.NewLogger(t)
@@ -111,7 +111,7 @@ func TestMultiplexerOnlyBtc(t *testing.T) {
 
 	nDeposits := testAddBtcScanAddresses(t, m)
 
-	go m.Multiplex()
+	go testutil.CheckError(t, m.Multiplex)
 
 	done := make(chan struct{})
 	go func() {
@@ -141,16 +141,15 @@ func TestMultiplexerOnlyBtc(t *testing.T) {
 	err := scr.Run()
 	require.NoError(t, err)
 	<-done
-
 }
 
 func TestMultiplexerForAll(t *testing.T) {
 	//init btc db
 	btcDB := openDummyBtcDB(t)
-	defer btcDB.Close()
+	defer testutil.CheckError(t, btcDB.Close)
 
 	ethDB := openDummyEthDB(t)
-	defer ethDB.Close()
+	defer testutil.CheckError(t, ethDB.Close)
 
 	//create logger
 	log, _ := testutil.NewLogger(t)
@@ -171,7 +170,10 @@ func TestMultiplexerForAll(t *testing.T) {
 	nDepositsBtc := testAddBtcScanAddresses(t, m)
 	nDepositsEth := testAddEthScanAddresses(t, m)
 
-	go m.Multiplex()
+	go func() {
+		err := m.Multiplex()
+		require.NoError(t, err)
+	}()
 
 	done := make(chan struct{})
 	go func() {
@@ -199,7 +201,10 @@ func TestMultiplexerForAll(t *testing.T) {
 		scr.Shutdown()
 		m.Shutdown()
 	})
-	go ethscr.Run()
+	go func() {
+		err := ethscr.Run()
+		require.NoError(t, err)
+	}()
 	err := scr.Run()
 	require.NoError(t, err)
 	<-done

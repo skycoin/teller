@@ -27,9 +27,6 @@ var (
 	// deposit address bucket
 	depositAddressesKey = "deposit_addresses"
 
-	// deposit values index list bucket
-	dvIndexListKey = "dv_index_list"
-
 	// ErrUnsupportedCoinType unsupported coin type
 	ErrUnsupportedCoinType = errors.New("unsupported coin type")
 )
@@ -100,16 +97,11 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 
 //AddSupportedCoin create scaninfo bucket and callback for specified coin
 func (s *Store) AddSupportedCoin(coinType string) error {
-	if err := s.db.Update(func(tx *bolt.Tx) error {
+	return s.db.Update(func(tx *bolt.Tx) error {
 		scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, coinType, "_")
-		if _, err := tx.CreateBucketIfNotExists(scanBktFullName); err != nil {
-			return err
-		}
-		return nil
-	}); err != nil {
+		_, err := tx.CreateBucketIfNotExists(scanBktFullName)
 		return err
-	}
-	return nil
+	})
 }
 
 // GetScanAddresses returns all scan addresses
@@ -294,7 +286,7 @@ func scanSpecifiedBlock(block *CommonBlock, coinType string, depositAddrs []stri
 					dv = append(dv, Deposit{
 						CoinType: coinType,
 						Address:  a,
-						Value:    int64(amt),
+						Value:    amt,
 						Height:   block.Height,
 						Tx:       tx.Txid,
 						N:        v.N,

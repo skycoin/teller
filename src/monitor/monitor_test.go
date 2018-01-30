@@ -66,7 +66,7 @@ func (dps dummyDepositStatusGetter) GetDepositStats() (*exchange.DepositStats, e
 }
 
 type dummyScanAddrs struct {
-	addrs []string
+	// addrs []string
 }
 
 func (ds dummyScanAddrs) GetScanAddresses() ([]string, error) {
@@ -113,13 +113,14 @@ func TestRunMonitor(t *testing.T) {
 
 	time.AfterFunc(1*time.Second, func() {
 		rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/address"))
-		require.Nil(t, err)
-		require.Equal(t, 200, rsp.StatusCode)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rsp.StatusCode)
+
 		var addrUsage addressUsage
 		err = json.NewDecoder(rsp.Body).Decode(&addrUsage)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.Equal(t, uint64(10), addrUsage.RestAddrNum)
-		rsp.Body.Close()
+		testutil.CheckError(t, rsp.Body.Close)
 
 		var tt = []struct {
 			name        string
@@ -162,12 +163,15 @@ func TestRunMonitor(t *testing.T) {
 		for _, tc := range tt {
 			t.Run(tc.name, func(t *testing.T) {
 				rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/deposit_status?status=%s", tc.status))
-				require.Nil(t, err)
-				defer rsp.Body.Close()
+				require.NoError(t, err)
+				defer testutil.CheckError(t, rsp.Body.Close)
 				require.Equal(t, tc.expectCode, rsp.StatusCode)
-				if rsp.StatusCode == 200 {
+
+				if rsp.StatusCode == http.StatusOK {
 					var st []exchange.DepositStatusDetail
-					require.Nil(t, json.NewDecoder(rsp.Body).Decode(&st))
+					err := json.NewDecoder(rsp.Body).Decode(&st)
+					require.NoError(t, err)
+
 					dss := make([]exchange.DepositInfo, 0, len(st))
 					for _, s := range st {
 						dss = append(dss, exchange.DepositInfo{

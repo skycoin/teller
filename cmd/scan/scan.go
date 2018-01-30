@@ -213,12 +213,7 @@ func addBTCAddress(addr string, file string) error {
 		addrs = append(addrs, newAddr)
 	}
 
-	err = saveWallet(file, addrs)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return saveWallet(file, addrs)
 }
 
 func newBTCDClient(username, pass string) (*rpcclient.Client, error) {
@@ -474,7 +469,7 @@ func run() error {
 
 	}
 
-	if *bUpdateMin == true {
+	if *bUpdateMin {
 		addrs, err = updateMin(addrs, client)
 		if err != nil {
 			return err

@@ -81,12 +81,6 @@ func (ds *dummySkyClient) changeConfirmStatus(v bool) {
 	ds.txConfirmed = v
 }
 
-func (ds *dummySkyClient) changeCreateTxErr(err error) {
-	ds.Lock()
-	defer ds.Unlock()
-	ds.createTxErr = err
-}
-
 func (ds *dummySkyClient) changeBroadcastTxErr(err error) {
 	ds.Lock()
 	defer ds.Unlock()
@@ -112,7 +106,8 @@ func TestSenderBroadcastTransaction(t *testing.T) {
 	dsc.changeBroadcastTxTxid("1111")
 	s := NewService(log, dsc)
 	go func() {
-		s.Run()
+		err := s.Run()
+		require.NoError(t, err)
 	}()
 
 	addr := "KNtZkX2mw1UFuemv6FmEQxxhWCTWTm2Thk"

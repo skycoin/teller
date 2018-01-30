@@ -31,7 +31,6 @@ type ETHScanner struct {
 
 // NewETHScanner creates scanner instance
 func NewETHScanner(log logrus.FieldLogger, store Storer, eth EthRPCClient, cfg Config) (*ETHScanner, error) {
-
 	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.eth"), cfg)
 
 	return &ETHScanner{
@@ -173,7 +172,7 @@ func ethBlock2CommonBlock(block *types.Block) (*CommonBlock, error) {
 		realaddr := strings.ToLower(to.String())
 		cv := CommonVout{}
 		cv.N = uint32(i)
-		cv.Value = int64(amt)
+		cv.Value = amt
 		cv.Addresses = []string{realaddr}
 		cbTx.Vout = append(cbTx.Vout, cv)
 		cb.RawTx = append(cb.RawTx, cbTx)
@@ -181,13 +180,13 @@ func ethBlock2CommonBlock(block *types.Block) (*CommonBlock, error) {
 	return &cb, nil
 }
 
-//EthClient is self-defined struct for implement EthRPCClient interface
-//because origin rpc.Client has't required interface
+// EthClient is self-defined struct for implement EthRPCClient interface
+// because origin rpc.Client has't required interface
 type EthClient struct {
 	c *rpc.Client
 }
 
-//NewEthClient create ethereum rpc client
+// NewEthClient create ethereum rpc client
 func NewEthClient(server, port string) (*EthClient, error) {
 	ethrpc, err := rpc.Dial("http://" + server + ":" + port)
 	if err != nil {
@@ -197,7 +196,7 @@ func NewEthClient(server, port string) (*EthClient, error) {
 	return &ec, nil
 }
 
-//GetBlockCount returns ethereum block count
+// GetBlockCount returns ethereum block count
 func (ec *EthClient) GetBlockCount() (int64, error) {
 	var bn string
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -210,15 +209,15 @@ func (ec *EthClient) GetBlockCount() (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return int64(blockNum), nil
+	return blockNum, nil
 }
 
-//Shutdown close rpc connection
+// Shutdown close rpc connection
 func (ec *EthClient) Shutdown() {
 	ec.c.Close()
 }
 
-//GetBlockVerboseTx returns ethereum block data
+// GetBlockVerboseTx returns ethereum block data
 func (ec *EthClient) GetBlockVerboseTx(seq uint64) (*types.Block, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

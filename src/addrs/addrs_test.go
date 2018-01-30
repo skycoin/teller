@@ -194,8 +194,10 @@ func TestAddrManager(t *testing.T) {
 
 	addrManager := NewAddrManager()
 	//add generator to addrManager
-	addrManager.PushGenerator(btcGen, typeB)
-	addrManager.PushGenerator(ethGen, typeE)
+	err := addrManager.PushGenerator(btcGen, typeB)
+	require.NoError(t, err)
+	err = addrManager.PushGenerator(ethGen, typeE)
+	require.NoError(t, err)
 
 	addrMap := make(map[string]struct{})
 	for _, a := range btcAddresses {
@@ -210,7 +212,7 @@ func TestAddrManager(t *testing.T) {
 		require.True(t, ok)
 	}
 	//the address pool of typeB is empty
-	_, err := addrManager.NewAddress(typeB)
+	_, err = addrManager.NewAddress(typeB)
 	require.Equal(t, ErrDepositAddressEmpty, err)
 
 	//set typeE address into map

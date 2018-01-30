@@ -8,9 +8,8 @@ import (
 )
 
 const (
-	checkHeadDepositPeriod = time.Second * 5
-	blockScanPeriod        = time.Second * 5
-	depositBufferSize      = 100
+	blockScanPeriod   = time.Second * 5
+	depositBufferSize = 100
 )
 
 // CommonScanner defines the interface a scanner should implement
@@ -41,20 +40,20 @@ type BaseScanner struct {
 	done            chan struct{}
 }
 
-//CommonVout common transaction output info
+// CommonVout common transaction output info
 type CommonVout struct {
 	Value     int64
 	N         uint32
 	Addresses []string
 }
 
-//CommonTx common transaction info
+// CommonTx common transaction info
 type CommonTx struct {
 	Txid string
 	Vout []CommonVout
 }
 
-//CommonBlock interface argument, other coin's block must convert to this type
+// CommonBlock interface argument, other coin's block must convert to this type
 type CommonBlock struct {
 	Height   int64
 	Hash     string
@@ -62,7 +61,7 @@ type CommonBlock struct {
 	RawTx    []CommonTx
 }
 
-//NewBaseScanner creates base scanner instance
+// NewBaseScanner creates base scanner instance
 func NewBaseScanner(store Storer, log logrus.FieldLogger, cfg Config) *BaseScanner {
 	if cfg.ScanPeriod == 0 {
 		cfg.ScanPeriod = blockScanPeriod
@@ -186,9 +185,9 @@ func (s *BaseScanner) Run(
 	scanBlock func(*CommonBlock) (int, error),
 ) error {
 	log := s.log.WithField("config", s.Cfg)
-	log.Info("Start bitcoin blockchain scan service")
+	log.Info("Start blockchain scan service")
 	defer func() {
-		log.Info("Bitcoin blockchain scan service closed")
+		log.Info("Blockchain scan service closed")
 		close(s.done)
 	}()
 
@@ -210,7 +209,6 @@ func (s *BaseScanner) Run(
 	initialBlock, err := getBlockAtHeight(s.Cfg.InitialScanHeight)
 	if err != nil {
 		log.WithError(err).Error("getBlockAtHeight failed")
-
 		return err
 	}
 
@@ -220,7 +218,7 @@ func (s *BaseScanner) Run(
 		"initialHeight": initHeight,
 	}).Info("Begin scanning blockchain")
 
-	// This loop scans for a new BTC block every ScanPeriod.
+	// This loop scans for a new block every ScanPeriod.
 	// When a new block is found, it compares the block against our scanning
 	// deposit addresses. If a matching deposit is found, it saves it to the DB.
 	log.Info("Launching scan goroutine")
