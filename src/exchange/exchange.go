@@ -305,8 +305,6 @@ func (s *Exchange) processWaitSendDeposit(di DepositInfo) error {
 			return nil
 		}
 	}
-
-	return nil
 }
 
 func (s *Exchange) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {

@@ -85,14 +85,14 @@ func (m *Multiplexer) Multiplex() error {
 	var wg sync.WaitGroup
 	for scannerName, scan := range m.scannerMap {
 		wg.Add(1)
-		go func(scan Scanner) {
+		go func(name string, scan Scanner) {
 			defer log.Info("Scan goroutine exited")
 			defer wg.Done()
 			for {
 				select {
 				case dv, ok := <-scan.GetDeposit():
 					if !ok {
-						log.WithField("name", scannerName).Info("sub-scanner closed")
+						log.WithField("name", name).Info("sub-scanner closed")
 						return
 					}
 					m.outChan <- dv
@@ -100,7 +100,7 @@ func (m *Multiplexer) Multiplex() error {
 					return
 				}
 			}
-		}(scan)
+		}(scannerName, scan)
 	}
 	wg.Wait()
 

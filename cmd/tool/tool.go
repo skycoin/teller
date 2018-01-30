@@ -24,14 +24,14 @@ import (
 	"github.com/skycoin/skycoin/src/cipher"
 )
 
+const (
+	scanBlockCmdName = "scanblock"
+)
+
 // btc address json struct
 type addressJSON struct {
 	BtcAddresses []string `json:"btc_addresses"`
 }
-
-var (
-	scanMetaBkt = []byte("scan_meta")
-)
 
 var usage = fmt.Sprintf(`%s is a teller helper tool:
 Usage:
@@ -46,7 +46,11 @@ The commands are:
 `, filepath.Base(os.Args[0]), filepath.Base(os.Args[0]))
 
 func main() {
-	u, _ := user.Current()
+	u, err := user.Current()
+	if err != nil {
+		log.Println("user.Current failed:", err)
+		return
+	}
 	dbFile := flag.String("db", filepath.Join(u.HomeDir, ".teller-skycoin/teller.db"), "db file path")
 	btcAddrFile := flag.String("btcfile", "../teller/btc_addresses.json", "btc addresses json file")
 	useJSON := flag.Bool("json", false, "Print newbtcaddress output as json")
@@ -63,9 +67,8 @@ func main() {
 	cmd := args[0]
 
 	var db *bolt.DB
-	var err error
 	switch cmd {
-	case "scanblock":
+	case scanBlockCmdName:
 		if _, err := os.Stat(*dbFile); os.IsNotExist(err) {
 			fmt.Println(*dbFile, "does not exist")
 			return
@@ -73,10 +76,14 @@ func main() {
 
 		db, err = bolt.Open(*dbFile, 0700, nil)
 		if err != nil {
-			log.Printf("Open db failed: %v\n", err)
+			log.Println("Open db failed:", err)
 			return
 		}
-		defer db.Close()
+		defer func() {
+			if err := db.Close(); err != nil {
+				log.Println("Close db failed:", err)
+			}
+		}()
 	default:
 	}
 
@@ -94,7 +101,7 @@ func main() {
 			fmt.Println("usage: getbtcaddress")
 		case "newbtcaddress":
 			fmt.Println("usage: [-json] newbtcaddress seed num. -json will print as json.")
-		case "scanblock":
+		case scanBlockCmdName:
 			fmt.Println("usage: server user pass cert_path height")
 		case "newkeys":
 			fmt.Println("usage: newkeys")
@@ -134,7 +141,10 @@ func main() {
 			fmt.Println("MarshalIndent btc addresses failed:", err)
 			return
 		}
-		ioutil.WriteFile(*btcAddrFile, v, 0700)
+		if err := ioutil.WriteFile(*btcAddrFile, v, 0700); err != nil {
+			fmt.Println("ioutil.WriteFile failed:", err)
+			return
+		}
 	case "getbtcaddress":
 		v, err := ioutil.ReadFile(*btcAddrFile)
 		if err != nil {
@@ -184,7 +194,7 @@ func main() {
 		}
 
 		return
-	case "scanblock":
+	case scanBlockCmdName:
 		if len(args) != 6 {
 			fmt.Println("Invalid arguments")
 			fmt.Println(usage)

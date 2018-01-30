@@ -14,9 +14,9 @@ import (
 type Status int8
 
 const (
-	// StatusWaitDeposit deposit has not occured
+	// StatusWaitDeposit deposit has not occurred
 	StatusWaitDeposit Status = iota
-	// StatusWaitSend deposit received, but send has not occured
+	// StatusWaitSend deposit received, but send has not occurred
 	StatusWaitSend
 	// StatusWaitConfirm coins sent, but not confirmed yet
 	StatusWaitConfirm
@@ -67,7 +67,7 @@ type DepositInfo struct {
 	ConversionRate string // SKY per other coin, as a decimal string (allows integers, floats, fractions)
 	DepositValue   int64  // Deposit amount. Should be measured in the smallest unit possible (e.g. satoshis for BTC)
 	SkySent        uint64 // SKY sent, measured in droplets
-	Error          string // An error that occured during processing
+	Error          string // An error that occurred during processing
 	// The original Deposit is saved for the records, in case there is a mistake.
 	// Do not use this data directly.  All necessary data is copied to the top level
 	// of DepositInfo (e.g. DepositID, DepositAddress, DepositValue, CoinType).
@@ -154,9 +154,5 @@ func isValidBtcTx(btcTx string) bool {
 	}
 
 	_, err := strconv.ParseInt(pts[1], 10, 64)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 }

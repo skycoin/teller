@@ -180,9 +180,12 @@ func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 	bscr := newDummyScanner()
 	escr := newDummyScanner()
 	multiplexer := scanner.NewMultiplexer(log)
-	multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
-	multiplexer.AddScanner(escr, scanner.CoinTypeETH)
-	go multiplexer.Multiplex()
+	err = multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
+	require.NoError(t, err)
+	err = multiplexer.AddScanner(escr, scanner.CoinTypeETH)
+	require.NoError(t, err)
+
+	go testutil.CheckError(t, multiplexer.Multiplex)
 
 	e, err := NewExchange(log, store, multiplexer, newDummySender(), config.SkyExchanger{
 		SkyBtcExchangeRate:      testSkyBtcRate,
@@ -235,9 +238,12 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 	bscr := newDummyScanner()
 	escr := newDummyScanner()
 	multiplexer := scanner.NewMultiplexer(log)
-	multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
-	multiplexer.AddScanner(escr, scanner.CoinTypeETH)
-	go multiplexer.Multiplex()
+	err := multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
+	require.NoError(t, err)
+	err = multiplexer.AddScanner(escr, scanner.CoinTypeETH)
+	require.NoError(t, err)
+
+	go testutil.CheckError(t, multiplexer.Multiplex)
 
 	e, err := NewExchange(log, store, multiplexer, newDummySender(), config.SkyExchanger{
 		SkyBtcExchangeRate:      testSkyBtcRate,
@@ -349,16 +355,13 @@ func TestExchangeRunSend(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for {
-			select {
-			case <-time.After(dbCheckWaitTime):
-				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
-				log.Printf("loop getDepositInfo %v %v\n", di, err)
-				require.NoError(t, err)
+		for range time.Tick(dbCheckWaitTime) {
+			di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
+			log.Printf("loop getDepositInfo %v %v\n", di, err)
+			require.NoError(t, err)
 
-				if di.Status == StatusWaitConfirm {
-					return
-				}
+			if di.Status == StatusWaitConfirm {
+				return
 			}
 		}
 	}()
@@ -399,14 +402,12 @@ func TestExchangeRunSend(t *testing.T) {
 	done = make(chan struct{})
 	go func() {
 		defer close(done)
-		for {
-			select {
-			case <-time.After(dbCheckWaitTime):
-				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
-				require.NoError(t, err)
-				if di.Status == StatusDone {
-					return
-				}
+		for range time.Tick(dbCheckWaitTime) {
+			di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
+			require.NoError(t, err)
+
+			if di.Status == StatusDone {
+				return
 			}
 		}
 	}()
@@ -609,15 +610,13 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for {
-			select {
-			case <-time.After(dbCheckWaitTime):
-				// Check the DepositInfo in the database
-				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
-				require.NoError(t, err)
-				if di.Status == StatusWaitConfirm {
-					return
-				}
+		for range time.Tick(dbCheckWaitTime) {
+			// Check the DepositInfo in the database
+			di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
+			require.NoError(t, err)
+
+			if di.Status == StatusWaitConfirm {
+				return
 			}
 		}
 	}()
@@ -701,23 +700,21 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for {
-			select {
-			case <-time.After(dbCheckWaitTime):
-				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
-				require.NoError(t, err)
-				if di.Status != expectedDeposit.Status {
-					continue
-				}
+		for range time.Tick(dbCheckWaitTime) {
+			di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
+			require.NoError(t, err)
 
-				require.NotEmpty(t, di.UpdatedAt)
-
-				ed := expectedDeposit
-				ed.UpdatedAt = di.UpdatedAt
-
-				require.Equal(t, ed, di)
-				return
+			if di.Status != expectedDeposit.Status {
+				continue
 			}
+
+			require.NotEmpty(t, di.UpdatedAt)
+
+			ed := expectedDeposit
+			ed.UpdatedAt = di.UpdatedAt
+
+			require.Equal(t, ed, di)
+			return
 		}
 	}()
 
@@ -793,23 +790,21 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for {
-			select {
-			case <-time.After(dbCheckWaitTime):
-				di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
-				require.NoError(t, err)
-				if di.Status != expectedDeposit.Status {
-					continue
-				}
+		for range time.Tick(dbCheckWaitTime) {
+			di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
+			require.NoError(t, err)
 
-				require.NotEmpty(t, di.UpdatedAt)
-
-				ed := expectedDeposit
-				ed.UpdatedAt = di.UpdatedAt
-
-				require.Equal(t, ed, di)
-				return
+			if di.Status != expectedDeposit.Status {
+				continue
 			}
+
+			require.NotEmpty(t, di.UpdatedAt)
+
+			ed := expectedDeposit
+			ed.UpdatedAt = di.UpdatedAt
+
+			require.Equal(t, ed, di)
+			return
 		}
 	}()
 
@@ -1163,13 +1158,10 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		for {
-			select {
-			case <-time.After(dbCheckWaitTime):
-				for _, e := range hook.AllEntries() {
-					if strings.Contains(e.Message, "processWaitSendDeposit failed") {
-						return
-					}
+		for range time.Tick(dbCheckWaitTime) {
+			for _, e := range hook.AllEntries() {
+				if strings.Contains(e.Message, "processWaitSendDeposit failed") {
+					return
 				}
 			}
 		}
@@ -1243,7 +1235,8 @@ func TestExchangeBindAddress(t *testing.T) {
 	require.NoError(t, err)
 	dummyScanner := newDummyScanner()
 	multiplexer := scanner.NewMultiplexer(log)
-	multiplexer.AddScanner(dummyScanner, scanner.CoinTypeBTC)
+	err = multiplexer.AddScanner(dummyScanner, scanner.CoinTypeBTC)
+	require.NoError(t, err)
 
 	s := &Exchange{
 		store:       store,
@@ -1390,7 +1383,8 @@ func TestExchangeGetBindNum(t *testing.T) {
 
 	bscr := newDummyScanner()
 	multiplexer := scanner.NewMultiplexer(log)
-	multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
+	err = multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
+	require.NoError(t, err)
 	s := &Exchange{
 		store:       store,
 		multiplexer: multiplexer,

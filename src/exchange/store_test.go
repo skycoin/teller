@@ -594,6 +594,7 @@ func TestStoreGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 	differentRate := "112233"
 	require.NotEqual(t, differentRate, di.ConversionRate)
 	existsDi, err := s.GetOrCreateDepositInfo(dv, differentRate)
+	require.NoError(t, err)
 
 	// di.Deposit won't be changed
 	require.Equal(t, di, existsDi)

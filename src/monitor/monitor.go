@@ -189,7 +189,10 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 				httputil.ErrResponse(w, http.StatusInternalServerError)
 				return
 			}
-			httputil.JSONResponse(w, dpis)
+			if err := httputil.JSONResponse(w, dpis); err != nil {
+				log.WithError(err).Error("Write json response failed")
+				return
+			}
 			return
 		}
 
@@ -210,7 +213,10 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 				return
 			}
 
-			httputil.JSONResponse(w, dpis)
+			if err := httputil.JSONResponse(w, dpis); err != nil {
+				log.WithError(err).Error("Write json response failed")
+				return
+			}
 		}
 	}
 }

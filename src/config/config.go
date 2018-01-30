@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strings"
@@ -13,11 +14,8 @@ import (
 
 	"github.com/skycoin/skycoin/src/visor"
 	"github.com/skycoin/skycoin/src/wallet"
-	"github.com/skycoin/teller/src/util/mathutil"
-)
 
-const (
-	defaultAdminPanelHost = "127.0.0.1:7711"
+	"github.com/skycoin/teller/src/util/mathutil"
 )
 
 // Config represents the configuration root
@@ -262,7 +260,9 @@ func (c Config) Validate() error {
 		if err != nil {
 			oops(fmt.Sprintf("sky_rpc.address connect failed: %v", err))
 		} else {
-			conn.Close()
+			if err := conn.Close(); err != nil {
+				log.Printf("Failed to close test connection to sky_rpc.address: %v", err)
+			}
 		}
 	}
 

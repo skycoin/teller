@@ -500,7 +500,6 @@ func (s *Store) getSkyBindAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, er
 	if err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
 		switch err.(type) {
 		case dbutil.ObjectNotExistErr:
-			err = nil
 		default:
 			return nil, err
 		}
@@ -513,6 +512,7 @@ func (s *Store) getSkyBindAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, er
 	return addrs, nil
 }
 
+// GetDepositStats returns BTC received and SKY sent
 func (s *Store) GetDepositStats() (int64, int64, error) {
 	var totalBTCReceived int64
 	var totalSKYSent int64

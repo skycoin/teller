@@ -38,7 +38,7 @@ func main() {
 	}
 }
 
-func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.Store) (*scanner.BTCScanner, error) {
+func createBtcScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.BTCScanner, error) {
 	// create btc rpc client
 	certs, err := ioutil.ReadFile(cfg.BtcRPC.Cert)
 	if err != nil {
@@ -61,7 +61,11 @@ func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.
 
 	log.Info("Connect to btcd succeeded")
 
-	scanStore.AddSupportedCoin(scanner.CoinTypeBTC)
+	err = scanStore.AddSupportedCoin(scanner.CoinTypeBTC)
+	if err != nil {
+		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeBTC) failed")
+		return nil, err
+	}
 
 	btcScanner, err := scanner.NewBTCScanner(log, scanStore, btcrpc, scanner.Config{
 		ScanPeriod:            cfg.BtcScanner.ScanPeriod,
@@ -75,14 +79,18 @@ func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.
 	return btcScanner, nil
 }
 
-func createEthScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.Store) (*scanner.ETHScanner, error) {
+func createEthScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.ETHScanner, error) {
 	ethrpc, err := scanner.NewEthClient(cfg.EthRPC.Server, cfg.EthRPC.Port)
 	if err != nil {
 		log.WithError(err).Error("Connect geth failed")
 		return nil, err
 	}
 
-	scanStore.AddSupportedCoin(scanner.CoinTypeETH)
+	err = scanStore.AddSupportedCoin(scanner.CoinTypeETH)
+	if err != nil {
+		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeETH) failed")
+		return nil, err
+	}
 
 	ethScanner, err := scanner.NewETHScanner(log, scanStore, ethrpc, scanner.Config{
 		ScanPeriod:            cfg.EthScanner.ScanPeriod,
