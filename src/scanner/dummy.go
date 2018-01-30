@@ -9,9 +9,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/skycoin/src/cipher"
+	"github.com/MDLlife/MDL/src/cipher"
 
-	"github.com/skycoin/teller/src/util/httputil"
+	"github.com/MDLlife/teller/src/util/httputil"
 )
 
 // DummyScanner implements the Scanner interface to provide simulated scanning

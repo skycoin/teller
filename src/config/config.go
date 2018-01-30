@@ -11,9 +11,9 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/skycoin/skycoin/src/visor"
-	"github.com/skycoin/skycoin/src/wallet"
-	"github.com/skycoin/teller/src/util/mathutil"
+	"github.com/MDLlife/MDL/src/visor"
+	"github.com/MDLlife/MDL/src/wallet"
+	"github.com/MDLlife/teller/src/util/mathutil"
 )
 
 const (

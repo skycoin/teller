@@ -8,7 +8,7 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/util/dbutil"
+	"github.com/MDLlife/teller/src/util/dbutil"
 )
 
 // CoinTypeBTC is BTC coin type

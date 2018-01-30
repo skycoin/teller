@@ -11,12 +11,12 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/skycoin/src/api/cli"
-	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/coin"
-	"github.com/skycoin/skycoin/src/util/droplet"
+	"github.com/MDLlife/MDL/src/api/cli"
+	"github.com/MDLlife/MDL/src/cipher"
+	"github.com/MDLlife/MDL/src/coin"
+	"github.com/MDLlife/MDL/src/util/droplet"
 
-	"github.com/skycoin/teller/src/util/httputil"
+	"github.com/MDLlife/teller/src/util/httputil"
 )
 
 const seed = "survey tank about rely harbor client penalty antenna labor target jaguar bind"

@@ -5,9 +5,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/addrs"
-	"github.com/skycoin/teller/src/config"
-	"github.com/skycoin/teller/src/exchange"
+	"github.com/MDLlife/teller/src/addrs"
+	"github.com/MDLlife/teller/src/config"
+	"github.com/MDLlife/teller/src/exchange"
 )
 
 var (

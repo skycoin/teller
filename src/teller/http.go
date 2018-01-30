@@ -20,16 +20,16 @@ import (
 	"github.com/unrolled/secure"
 	"golang.org/x/crypto/acme/autocert"
 
-	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/util/droplet"
+	"github.com/MDLlife/MDL/src/cipher"
+	"github.com/MDLlife/MDL/src/util/droplet"
 
-	"github.com/skycoin/teller/src/addrs"
-	"github.com/skycoin/teller/src/config"
-	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/scanner"
-	"github.com/skycoin/teller/src/sender"
-	"github.com/skycoin/teller/src/util/httputil"
-	"github.com/skycoin/teller/src/util/logger"
+	"github.com/MDLlife/teller/src/addrs"
+	"github.com/MDLlife/teller/src/config"
+	"github.com/MDLlife/teller/src/exchange"
+	"github.com/MDLlife/teller/src/scanner"
+	"github.com/MDLlife/teller/src/sender"
+	"github.com/MDLlife/teller/src/util/httputil"
+	"github.com/MDLlife/teller/src/util/logger"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/skycoin/teller/src/scanner"
-	"github.com/skycoin/teller/src/util/mathutil"
+	"github.com/MDLlife/teller/src/scanner"
+	"github.com/MDLlife/teller/src/util/mathutil"
 )
 
 // Status deposit Status

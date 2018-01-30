@@ -10,9 +10,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/util/httputil"
-	"github.com/skycoin/teller/src/util/logger"
+	"github.com/MDLlife/teller/src/exchange"
+	"github.com/MDLlife/teller/src/util/httputil"
+	"github.com/MDLlife/teller/src/util/logger"
 )
 
 const (

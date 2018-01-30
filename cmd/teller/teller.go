@@ -21,14 +21,14 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
-	"github.com/skycoin/teller/src/addrs"
-	"github.com/skycoin/teller/src/config"
-	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/monitor"
-	"github.com/skycoin/teller/src/scanner"
-	"github.com/skycoin/teller/src/sender"
-	"github.com/skycoin/teller/src/teller"
-	"github.com/skycoin/teller/src/util/logger"
+	"github.com/MDLlife/teller/src/addrs"
+	"github.com/MDLlife/teller/src/config"
+	"github.com/MDLlife/teller/src/exchange"
+	"github.com/MDLlife/teller/src/monitor"
+	"github.com/MDLlife/teller/src/scanner"
+	"github.com/MDLlife/teller/src/sender"
+	"github.com/MDLlife/teller/src/teller"
+	"github.com/MDLlife/teller/src/util/logger"
 )
 
 func main() {

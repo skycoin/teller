@@ -3,8 +3,8 @@ package sender
 import (
 	"errors"
 
-	"github.com/skycoin/skycoin/src/api/cli"
-	"github.com/skycoin/skycoin/src/coin"
+	"github.com/MDLlife/MDL/src/api/cli"
+	"github.com/MDLlife/MDL/src/coin"
 )
 
 var (

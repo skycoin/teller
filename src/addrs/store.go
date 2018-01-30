@@ -5,7 +5,7 @@ import (
 
 	"github.com/boltdb/bolt"
 
-	"github.com/skycoin/teller/src/util/dbutil"
+	"github.com/MDLlife/teller/src/util/dbutil"
 )
 
 // Store saves used addresses in a bucket

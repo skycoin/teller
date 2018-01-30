@@ -9,7 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/util/logger"
+	"github.com/MDLlife/teller/src/util/logger"
 )
 
 // ErrResponse write error message and code
