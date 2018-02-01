@@ -119,6 +119,13 @@ func (di DepositInfo) ValidateForStatus() error {
 		if _, err := mathutil.ParseRate(di.ConversionRate); err != nil {
 			return err
 		}
+		switch di.BuyMethod {
+		case BuyMethodDirect, BuyMethodPassthrough:
+		case "":
+			return errors.New("BuyMethod missing")
+		default:
+			return errors.New("BuyMethod invalid")
+		}
 
 		return nil
 	}
@@ -144,6 +151,9 @@ func (di DepositInfo) ValidateForStatus() error {
 		return checkWaitSend()
 
 	case StatusWaitSend:
+		return checkWaitSend()
+
+	case StatusWaitDecide:
 		return checkWaitSend()
 
 	case StatusWaitDeposit, StatusUnknown:

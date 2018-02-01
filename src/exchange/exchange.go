@@ -165,7 +165,7 @@ func (e *Exchange) Run() error {
 		e.log.WithError(err).Error("Terminating early")
 	}
 
-	wg.Done()
+	wg.Wait()
 
 	return err
 }

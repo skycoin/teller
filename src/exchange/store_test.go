@@ -16,13 +16,19 @@ type MockStore struct {
 	mock.Mock
 }
 
-func (m *MockStore) GetBindAddress(btcAddr, coinType string) (string, error) {
+func (m *MockStore) GetBindAddress(btcAddr, coinType string) (*BoundAddress, error) {
 	args := m.Called(btcAddr, coinType)
-	return args.String(0), args.Error(1)
+
+	ba := args.Get(0)
+	if ba == nil {
+		return nil, args.Error(1)
+	}
+
+	return ba.(*BoundAddress), args.Error(1)
 }
 
-func (m *MockStore) BindAddress(skyAddr, btcAddr, coinType string) error {
-	args := m.Called(skyAddr, btcAddr, coinType)
+func (m *MockStore) BindAddress(skyAddr, btcAddr, coinType, buyMethod string) error {
+	args := m.Called(skyAddr, btcAddr, coinType, buyMethod)
 	return args.Error(0)
 }
 
@@ -63,7 +69,7 @@ func (m *MockStore) UpdateDepositInfoCallback(btcTx string, f func(DepositInfo) 
 	return args.Get(0).(DepositInfo), args.Error(1)
 }
 
-func (m *MockStore) GetSkyBindAddresses(skyAddr string) ([]string, error) {
+func (m *MockStore) GetSkyBindAddresses(skyAddr string) ([]BoundAddress, error) {
 	args := m.Called(skyAddr)
 
 	btcAddrs := args.Get(0)
@@ -71,7 +77,7 @@ func (m *MockStore) GetSkyBindAddresses(skyAddr string) ([]string, error) {
 		return nil, args.Error(1)
 	}
 
-	return btcAddrs.([]string), args.Error(1)
+	return btcAddrs.([]BoundAddress), args.Error(1)
 }
 
 func (m *MockStore) GetDepositStats() (int64, int64, error) {
@@ -97,8 +103,8 @@ func TestStoreNewStore(t *testing.T) {
 	err := s.db.View(func(tx *bolt.Tx) error {
 		require.NotNil(t, tx.Bucket(ExchangeMetaBkt))
 		require.NotNil(t, tx.Bucket(DepositInfoBkt))
-		require.NotNil(t, tx.Bucket(dbutil.ByteJoin(BindAddressBkt, scanner.CoinTypeBTC, "_")))
-		require.NotNil(t, tx.Bucket(dbutil.ByteJoin(BindAddressBkt, scanner.CoinTypeETH, "_")))
+		require.NotNil(t, tx.Bucket(MustGetBindAddressBkt(scanner.CoinTypeBTC)))
+		require.NotNil(t, tx.Bucket(MustGetBindAddressBkt(scanner.CoinTypeETH)))
 		require.NotNil(t, tx.Bucket(SkyDepositSeqsIndexBkt))
 		require.NotNil(t, tx.Bucket(BtcTxsBkt))
 		return nil
@@ -117,6 +123,7 @@ func TestStoreAddDepositInfo(t *testing.T) {
 		DepositValue:   1e6,
 		ConversionRate: testSkyBtcRate,
 		Status:         StatusWaitSend,
+		BuyMethod:      BuyMethodDirect,
 	})
 	require.NoError(t, err)
 	require.Equal(t, di.Seq, uint64(1))
@@ -153,6 +160,7 @@ func TestStoreAddDepositInfo(t *testing.T) {
 		DepositValue:   1e6,
 		ConversionRate: testSkyBtcRate,
 		Status:         StatusWaitSend,
+		BuyMethod:      BuyMethodDirect,
 	})
 	require.NoError(t, err)
 
@@ -179,26 +187,38 @@ func TestStoreBindAddress(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	err := s.BindAddress("sa1", "ba1", scanner.CoinTypeBTC)
+	err := s.BindAddress("sa1", "ba1", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
 
 	// check bucket
 	err = s.db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(dbutil.ByteJoin(BindAddressBkt, scanner.CoinTypeBTC, "_"))
-		require.NotNil(t, bkt)
-		v := bkt.Get([]byte("ba1"))
-		require.Equal(t, "sa1", string(v))
-
-		var addrs []string
-		err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, "sa1", &addrs)
+		bktName := MustGetBindAddressBkt(scanner.CoinTypeBTC)
+		var ba BoundAddress
+		err := dbutil.GetBucketObject(tx, bktName, "ba1", &ba)
 		require.NoError(t, err)
-		require.Equal(t, "ba1", addrs[0])
+		require.Equal(t, BoundAddress{
+			SkyAddress: "sa1",
+			Address:    "ba1",
+			CoinType:   scanner.CoinTypeBTC,
+			BuyMethod:  BuyMethodDirect,
+		}, ba)
+
+		var addrs []BoundAddress
+		err = dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, "sa1", &addrs)
+		require.NoError(t, err)
+		require.Equal(t, BoundAddress{
+			SkyAddress: "sa1",
+			Address:    "ba1",
+			CoinType:   scanner.CoinTypeBTC,
+			BuyMethod:  BuyMethodDirect,
+		}, addrs[0])
+
 		return nil
 	})
 	require.NoError(t, err)
 
 	// A sky address can have multiple addresses bound to it
-	err = s.BindAddress("sa1", "ba2", scanner.CoinTypeBTC)
+	err = s.BindAddress("sa1", "ba2", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
 }
 
@@ -206,14 +226,14 @@ func TestStoreBindAddressTwiceFails(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	err := s.BindAddress("a", "b", scanner.CoinTypeBTC)
+	err := s.BindAddress("a", "b", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
 
-	err = s.BindAddress("a", "b", scanner.CoinTypeBTC)
+	err = s.BindAddress("a", "b", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.Error(t, err)
 	require.Equal(t, ErrAddressAlreadyBound, err)
 
-	err = s.BindAddress("c", "b", scanner.CoinTypeBTC)
+	err = s.BindAddress("c", "b", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.Error(t, err)
 	require.Equal(t, ErrAddressAlreadyBound, err)
 }
@@ -223,11 +243,11 @@ func TestStoreGetBindAddress(t *testing.T) {
 	defer shutdown()
 
 	// init the bind address bucket
-	err := s.BindAddress("skyaddr1", "btcaddr1", scanner.CoinTypeBTC)
+	err := s.BindAddress("skyaddr1", "btcaddr1", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
-	err = s.BindAddress("skyaddr2", "btcaddr2", scanner.CoinTypeBTC)
+	err = s.BindAddress("skyaddr2", "btcaddr2", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
-	err = s.BindAddress("skyaddr2", "btcaddr3", scanner.CoinTypeBTC)
+	err = s.BindAddress("skyaddr2", "btcaddr3", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
 
 	var testCases = []struct {
@@ -272,9 +292,15 @@ func TestStoreGetBindAddress(t *testing.T) {
 			addr, err := s.GetBindAddress(tc.btcAddr, scanner.CoinTypeBTC)
 			require.NoError(t, err)
 			if tc.ok {
-				require.Equal(t, tc.expectSkyAddr, addr)
+				require.NotNil(t, addr)
+				require.Equal(t, BoundAddress{
+					SkyAddress: tc.expectSkyAddr,
+					Address:    tc.btcAddr,
+					CoinType:   scanner.CoinTypeBTC,
+					BuyMethod:  BuyMethodDirect,
+				}, *addr)
 			} else {
-				require.Empty(t, addr)
+				require.Nil(t, addr)
 			}
 		})
 	}
@@ -293,6 +319,7 @@ func TestStoreGetDepositInfo(t *testing.T) {
 		ConversionRate: testSkyBtcRate,
 		SkySent:        100e8,
 		Status:         StatusDone,
+		BuyMethod:      BuyMethodDirect,
 	})
 	require.NoError(t, err)
 
@@ -315,6 +342,7 @@ func TestStoreUpdateDepositInfo(t *testing.T) {
 		DepositValue:   1e6,
 		ConversionRate: testSkyBtcRate,
 		Status:         StatusWaitSend,
+		BuyMethod:      BuyMethodDirect,
 	})
 	require.NoError(t, err)
 
@@ -325,6 +353,7 @@ func TestStoreUpdateDepositInfo(t *testing.T) {
 		DepositValue:   1e6,
 		ConversionRate: testSkyBtcRate,
 		Status:         StatusWaitSend,
+		BuyMethod:      BuyMethodDirect,
 	})
 	require.NoError(t, err)
 
@@ -386,7 +415,7 @@ func TestStoreGetDepositInfoOfSkyAddress(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
 
-	err := s.BindAddress("skyaddr1", "btcaddr1", scanner.CoinTypeBTC)
+	err := s.BindAddress("skyaddr1", "btcaddr1", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
 
 	dpis, err := s.GetDepositInfoOfSkyAddress("skyaddr1")
@@ -394,7 +423,7 @@ func TestStoreGetDepositInfoOfSkyAddress(t *testing.T) {
 	require.Len(t, dpis, 1)
 	require.Equal(t, dpis[0].DepositAddress, "btcaddr1")
 
-	err = s.BindAddress("skyaddr1", "btcaddr2", scanner.CoinTypeBTC)
+	err = s.BindAddress("skyaddr1", "btcaddr2", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
 
 	dpis, err = s.GetDepositInfoOfSkyAddress("skyaddr1")
@@ -411,14 +440,15 @@ func TestStoreGetDepositInfoOfSkyAddress(t *testing.T) {
 		DepositValue:   100e8,
 		ConversionRate: testSkyBtcRate,
 		Status:         StatusWaitSend,
+		BuyMethod:      BuyMethodDirect,
 	}
 	di3, err = s.addDepositInfo(di3)
 	require.Equal(t, di3.Seq, uint64(1))
 	require.NoError(t, err)
 
-	err = s.BindAddress("skyaddr3", "btcaddr3", scanner.CoinTypeBTC)
+	err = s.BindAddress("skyaddr3", "btcaddr3", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
-	err = s.BindAddress("skyaddr3", "btcaddr4", scanner.CoinTypeBTC)
+	err = s.BindAddress("skyaddr3", "btcaddr4", scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
 
 	di4 := DepositInfo{
@@ -428,6 +458,7 @@ func TestStoreGetDepositInfoOfSkyAddress(t *testing.T) {
 		DepositValue:   1000e8,
 		ConversionRate: testSkyBtcRate,
 		Status:         StatusWaitSend,
+		BuyMethod:      BuyMethodDirect,
 	}
 	di4, err = s.addDepositInfo(di4)
 	require.NoError(t, err)
@@ -457,6 +488,7 @@ func TestStoreGetDepositInfoArray(t *testing.T) {
 			DepositValue:   1e6,
 			ConversionRate: testSkyBtcRate,
 			Status:         StatusWaitSend,
+			BuyMethod:      BuyMethodDirect,
 		},
 		{
 			DepositID:      "t2:1",
@@ -466,6 +498,7 @@ func TestStoreGetDepositInfoArray(t *testing.T) {
 			Txid:           "txid-2",
 			ConversionRate: testSkyBtcRate,
 			SkySent:        100e8,
+			BuyMethod:      BuyMethodDirect,
 			Status:         StatusWaitConfirm,
 		},
 	}
@@ -554,6 +587,7 @@ func TestStoreGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 		DepositID:      "foo-tx:1",
 		SkyAddress:     "foo-sky-addr",
 		DepositValue:   1e6,
+		BuyMethod:      BuyMethodDirect,
 		ConversionRate: testSkyBtcRate,
 		Deposit: scanner.Deposit{
 			CoinType: scanner.CoinTypeBTC,
@@ -625,21 +659,36 @@ func TestStoreGetSkyBindAddresses(t *testing.T) {
 	require.Nil(t, addrs)
 
 	btcAddr1 := "btcaddr1"
-	err = s.BindAddress(skyAddr, btcAddr1, scanner.CoinTypeBTC)
+	err = s.BindAddress(skyAddr, btcAddr1, scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
 
 	addrs, err = s.GetSkyBindAddresses(skyAddr)
 	require.NoError(t, err)
 	require.Len(t, addrs, 1)
-	require.Equal(t, addrs[0], btcAddr1)
+	require.Equal(t, addrs[0], BoundAddress{
+		Address:    btcAddr1,
+		SkyAddress: skyAddr,
+		BuyMethod:  BuyMethodDirect,
+		CoinType:   scanner.CoinTypeBTC,
+	})
 
 	btcAddr2 := "btcaddr2"
-	err = s.BindAddress(skyAddr, btcAddr2, scanner.CoinTypeBTC)
+	err = s.BindAddress(skyAddr, btcAddr2, scanner.CoinTypeBTC, BuyMethodDirect)
 	require.NoError(t, err)
 
 	addrs, err = s.GetSkyBindAddresses(skyAddr)
 	require.NoError(t, err)
 	require.Len(t, addrs, 2)
-	require.Equal(t, addrs[0], btcAddr1)
-	require.Equal(t, addrs[1], btcAddr2)
+	require.Equal(t, addrs[0], BoundAddress{
+		Address:    btcAddr1,
+		SkyAddress: skyAddr,
+		BuyMethod:  BuyMethodDirect,
+		CoinType:   scanner.CoinTypeBTC,
+	})
+	require.Equal(t, addrs[1], BoundAddress{
+		Address:    btcAddr2,
+		SkyAddress: skyAddr,
+		BuyMethod:  BuyMethodDirect,
+		CoinType:   scanner.CoinTypeBTC,
+	})
 }

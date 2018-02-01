@@ -64,7 +64,7 @@ func (p *DirectBuy) Run() error {
 		p.runUpdateStatus()
 	}()
 
-	wg.Done()
+	wg.Wait()
 
 	return nil
 }
