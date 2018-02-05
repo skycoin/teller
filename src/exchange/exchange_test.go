@@ -173,6 +173,16 @@ const (
 	dbCheckWaitTime     = time.Millisecond * 300
 )
 
+var (
+	defaultCfg = config.SkyExchanger{
+		SkyBtcExchangeRate:      testSkyBtcRate,
+		SkyEthExchangeRate:      testSkyEthRate,
+		TxConfirmationCheckWait: time.Millisecond * 100,
+		Wallet:                  testWalletFile,
+		SendEnabled:             true,
+	}
+)
+
 func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
@@ -187,15 +197,7 @@ func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 
 	go testutil.CheckError(t, multiplexer.Multiplex)
 
-	cfg := config.SkyExchanger{
-		SkyBtcExchangeRate:      testSkyBtcRate,
-		SkyEthExchangeRate:      testSkyEthRate,
-		TxConfirmationCheckWait: time.Millisecond * 100,
-		Wallet:                  testWalletFile,
-		SendEnabled:             true,
-	}
-
-	e, err := NewDirectExchange(log, cfg, store, multiplexer, newDummySender())
+	e, err := NewDirectExchange(log, defaultCfg, store, multiplexer, newDummySender())
 	require.NoError(t, err)
 	return e
 }
@@ -248,15 +250,7 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 
 	go testutil.CheckError(t, multiplexer.Multiplex)
 
-	cfg := config.SkyExchanger{
-		SkyBtcExchangeRate:      testSkyBtcRate,
-		SkyEthExchangeRate:      testSkyEthRate,
-		TxConfirmationCheckWait: time.Millisecond * 100,
-		Wallet:                  testWalletFile,
-		SendEnabled:             true,
-	}
-
-	e, err := NewDirectExchange(log, cfg, store, multiplexer, newDummySender())
+	e, err := NewDirectExchange(log, defaultCfg, store, multiplexer, newDummySender())
 	require.NoError(t, err)
 
 	done := make(chan struct{})
@@ -917,6 +911,7 @@ func testExchangeRunProcessDepositBacklog(t *testing.T, dis []DepositInfo, confi
 		expectedDis[i].Status = StatusDone
 
 		if expectedDis[i].SkySent == 0 {
+			t.Logf("di.DepositValue=%d e.cfg.SkyBtcExchangeRate=%s", di.DepositValue, e.cfg.SkyBtcExchangeRate)
 			amt, err := CalculateBtcSkyValue(di.DepositValue, e.cfg.SkyBtcExchangeRate, testMaxDecimals)
 			require.NoError(t, err)
 			expectedDis[i].SkySent = amt
@@ -1090,7 +1085,7 @@ func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 	// GetDepositInfoArray is called twice on startup
 	e.store.(*MockStore).On("GetDepositInfoArray", mock.MatchedBy(func(filt DepositFilter) bool {
 		return true
-	})).Return(nil, nil).Twice()
+	})).Return(nil, nil).Times(3)
 
 	// Return error on GetOrCreateDepositInfo
 	createDepositErr := errors.New("GetOrCreateDepositInfo failed")
@@ -1142,7 +1137,7 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 	// GetDepositInfoArray is called twice on startup
 	e.store.(*MockStore).On("GetDepositInfoArray", mock.MatchedBy(func(filt DepositFilter) bool {
 		return true
-	})).Return(nil, nil).Twice()
+	})).Return(nil, nil).Times(3)
 
 	// GetBindAddress returns a bound address
 	e.store.(*MockStore).On("GetBindAddress", btcAddr).Return(skyAddr, nil)
@@ -1177,7 +1172,7 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 		defer close(done)
 		for range time.Tick(dbCheckWaitTime) {
 			for _, e := range hook.AllEntries() {
-				if strings.Contains(e.Message, "processWaitSendDeposit failed") {
+				if strings.Contains(e.Message, "runUpdateStatus failed") {
 					return
 				}
 			}
@@ -1195,11 +1190,11 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 
 	foundMsg := false
 	for _, e := range hook.AllEntries() {
-		if !strings.Contains(e.Message, "processWaitSendDeposit failed") {
+		if !strings.Contains(e.Message, "runUpdateStatus failed") {
 			continue
 		}
 		foundMsg = true
-		require.Equal(t, e.Message, "processWaitSendDeposit failed. This deposit will not be reprocessed until teller is restarted.")
+		require.Equal(t, "runUpdateStatus failed. This deposit will not be reprocessed until teller is restarted.", e.Message)
 		loggedDepositInfo, ok := e.Data["depositInfo"].(DepositInfo)
 		require.True(t, ok)
 		require.Equal(t, di, loggedDepositInfo)
@@ -1244,13 +1239,6 @@ func TestExchangeProcessWaitSendNoSkyAddrBound(t *testing.T) {
 }
 
 func TestExchangeBindAddress(t *testing.T) {
-	cfg := config.SkyExchanger{
-		SkyBtcExchangeRate: "10",
-		SkyEthExchangeRate: "1",
-		Wallet:             testWalletFile,
-		SendEnabled:        true,
-	}
-
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
@@ -1262,7 +1250,7 @@ func TestExchangeBindAddress(t *testing.T) {
 	err = multiplexer.AddScanner(dummyScanner, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
-	s, err := NewDirectExchange(log, cfg, store, multiplexer, nil)
+	s, err := NewDirectExchange(log, defaultCfg, store, multiplexer, nil)
 	require.NoError(t, err)
 
 	require.Len(t, dummyScanner.addrs, 0)
@@ -1277,16 +1265,17 @@ func TestExchangeBindAddress(t *testing.T) {
 	// Should be in the store
 	skyAddr, err := s.store.GetBindAddress("b", scanner.CoinTypeBTC)
 	require.NoError(t, err)
-	require.Equal(t, "a", skyAddr)
+	require.Equal(t, &BoundAddress{
+		SkyAddress: "a",
+		Address:    "b",
+		CoinType:   scanner.CoinTypeBTC,
+		BuyMethod:  BuyMethodDirect,
+	}, skyAddr)
 }
 
 func TestExchangeCreateTransaction(t *testing.T) {
-	cfg := config.SkyExchanger{
-		SkyBtcExchangeRate: "10",
-		SkyEthExchangeRate: "1",
-		Wallet:             testWalletFile,
-		SendEnabled:        true,
-	}
+	cfg := defaultCfg
+	cfg.SkyBtcExchangeRate = "111"
 
 	log, _ := testutil.NewLogger(t)
 	s, err := NewDirectExchange(log, cfg, nil, nil, newDummySender())
@@ -1342,13 +1331,6 @@ func TestExchangeCreateTransaction(t *testing.T) {
 }
 
 func TestExchangeGetDepositStatuses(t *testing.T) {
-	cfg := config.SkyExchanger{
-		SkyBtcExchangeRate: "10",
-		SkyEthExchangeRate: "1",
-		Wallet:             testWalletFile,
-		SendEnabled:        true,
-	}
-
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
@@ -1363,7 +1345,7 @@ func TestExchangeGetDepositStatuses(t *testing.T) {
 	err = multiplexer.AddScanner(dummyScannerEth, scanner.CoinTypeETH)
 	require.NoError(t, err)
 
-	s, err := NewDirectExchange(log, cfg, store, multiplexer, nil)
+	s, err := NewDirectExchange(log, defaultCfg, store, multiplexer, nil)
 	require.NoError(t, err)
 
 	require.Len(t, dummyScanner.addrs, 0)
@@ -1401,13 +1383,6 @@ func TestExchangeGetDepositStatusDetail(t *testing.T) {
 }
 
 func TestExchangeGetBindNum(t *testing.T) {
-	cfg := config.SkyExchanger{
-		SkyBtcExchangeRate: "10",
-		SkyEthExchangeRate: "1",
-		Wallet:             testWalletFile,
-		SendEnabled:        true,
-	}
-
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
@@ -1420,7 +1395,7 @@ func TestExchangeGetBindNum(t *testing.T) {
 	err = multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 
-	s, err := NewDirectExchange(log, cfg, store, multiplexer, nil)
+	s, err := NewDirectExchange(log, defaultCfg, store, multiplexer, nil)
 	require.NoError(t, err)
 
 	num, err := s.GetBindNum("a")

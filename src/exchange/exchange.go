@@ -107,6 +107,7 @@ func NewDirectExchange(log logrus.FieldLogger, cfg config.SkyExchanger, store St
 	return &Exchange{
 		log:       log.WithField("prefix", "teller.exchange.exchange"),
 		store:     store,
+		cfg:       cfg,
 		buyMethod: BuyMethodDirect,
 		quit:      make(chan struct{}),
 		done:      make(chan struct{}),

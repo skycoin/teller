@@ -411,34 +411,6 @@ func (s *Store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
 	return dpis, nil
 }
 
-// getDepositAddressCoinType returns coin type of deposit address
-// TODO -- remove? unused?
-func (s *Store) getDepositAddressCoinType(depositAddr string) (string, error) {
-	var coinType string
-	if err := s.db.View(func(tx *bolt.Tx) error {
-		for _, ct := range scanner.GetCoinTypes() {
-			bktFullName, err := GetBindAddressBkt(ct)
-			if err != nil {
-				return err
-			}
-
-			exists, err := dbutil.BucketHasKey(tx, bktFullName, depositAddr)
-			if err != nil {
-				return err
-			}
-
-			if exists {
-				coinType = ct
-				break
-			}
-		}
-		return nil
-	}); err != nil {
-		return "", err
-	}
-	return coinType, nil
-}
-
 // GetDepositInfoOfSkyAddress returns all deposit info that are bound
 // to the given skycoin address
 func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error) {
