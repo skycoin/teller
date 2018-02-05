@@ -26,15 +26,24 @@ const (
 	StatusUnknown
 	// StatusWaitDecide initial deposit receive state
 	StatusWaitDecide
+	// StatusWaitBuy wait to buy from 3rd party exchange
+	StatusWaitBuy
+	// StatusWaitExecuteOrder waiting for order to execute on 3rd party exchange
+	StatusWaitExecuteOrder
+
+	// PassthroughC2CX for deposits using passthrough to c2cx.com
+	PassthroughC2CX = "c2cx"
 )
 
 var statusString = []string{
-	StatusWaitDeposit: "waiting_deposit",
-	StatusWaitSend:    "waiting_send",
-	StatusWaitConfirm: "waiting_confirm",
-	StatusDone:        "done",
-	StatusUnknown:     "unknown",
-	StatusWaitDecide:  "waiting_decide",
+	StatusWaitDeposit:      "waiting_deposit",
+	StatusWaitSend:         "waiting_send",
+	StatusWaitConfirm:      "waiting_confirm",
+	StatusDone:             "done",
+	StatusUnknown:          "unknown",
+	StatusWaitDecide:       "waiting_decide",
+	StatusWaitBuy:          "waiting_buy",
+	StatusWaitExecuteOrder: "waiting_execute_order",
 }
 
 func (s Status) String() string {
@@ -54,6 +63,10 @@ func NewStatusFromStr(st string) Status {
 		return StatusDone
 	case statusString[StatusWaitDecide]:
 		return StatusWaitDecide
+	case statusString[StatusWaitBuy]:
+		return StatusWaitBuy
+	case statusString[StatusWaitExecuteOrder]:
+		return StatusWaitExecuteOrder
 	default:
 		return StatusUnknown
 	}
@@ -69,23 +82,36 @@ type BoundAddress struct {
 
 // DepositInfo records the deposit info
 type DepositInfo struct {
-	Seq            uint64
-	UpdatedAt      int64
-	Status         Status // TODO -- migrate to string statuses?
-	CoinType       string
-	SkyAddress     string
-	BuyMethod      string
-	DepositAddress string
-	DepositID      string
-	Txid           string
-	ConversionRate string // SKY per other coin, as a decimal string (allows integers, floats, fractions)
-	DepositValue   int64  // Deposit amount. Should be measured in the smallest unit possible (e.g. satoshis for BTC)
-	SkySent        uint64 // SKY sent, measured in droplets
-	Error          string // An error that occurred during processing
+	Seq                  uint64
+	UpdatedAt            int64
+	Status               Status // TODO -- migrate to string statuses?
+	CoinType             string
+	SkyAddress           string
+	BuyMethod            string
+	DepositAddress       string
+	DepositID            string
+	Txid                 string
+	ConversionRate       string // SKY per other coin, as a decimal string (allows integers, floats, fractions)
+	DepositValue         int64  // Deposit amount. Should be measured in the smallest unit possible (e.g. satoshis for BTC)
+	SkySent              uint64 // SKY sent, measured in droplets
+	PassthroughName      string // Name of the 3rd party exchange bought from [passthrough only]
+	PassthroughSkyBought uint64 // Amount of sky bought from 3rd party exchange [passthrough only]
+	PassthroughBuyPrice  string // Average buy price of sky bought from 3rd party exchange [passthrough only]
+	PassthroughOrders    []PassthroughOrder
+	Error                string // An error that occurred during processing
 	// The original Deposit is saved for the records, in case there is a mistake.
 	// Do not use this data directly.  All necessary data is copied to the top level
 	// of DepositInfo (e.g. DepositID, DepositAddress, DepositValue, CoinType).
 	Deposit scanner.Deposit
+}
+
+// PassthroughOrder contains information about an order placed on an exchange for passthrough
+type PassthroughOrder struct { // nolint: golint
+	ID        string
+	Amount    string
+	Price     string
+	Timestamp string
+	CoinType  string
 }
 
 // DepositStats records overall statistics about deposits

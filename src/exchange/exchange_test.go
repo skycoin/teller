@@ -1242,7 +1242,7 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 		defer close(done)
 		for range time.Tick(dbCheckWaitTime) {
 			for _, e := range hook.AllEntries() {
-				if strings.Contains(e.Message, "runUpdateStatus failed") {
+				if strings.Contains(e.Message, "updateStatus failed") {
 					return
 				}
 			}
@@ -1260,11 +1260,11 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 
 	foundMsg := false
 	for _, e := range hook.AllEntries() {
-		if !strings.Contains(e.Message, "runUpdateStatus failed") {
+		if !strings.Contains(e.Message, "updateStatus failed") {
 			continue
 		}
 		foundMsg = true
-		require.Equal(t, "runUpdateStatus failed. This deposit will not be reprocessed until teller is restarted.", e.Message)
+		require.Equal(t, "updateStatus failed. This deposit will not be reprocessed until teller is restarted.", e.Message)
 		loggedDepositInfo, ok := e.Data["depositInfo"].(DepositInfo)
 		require.True(t, ok)
 		require.Equal(t, di, loggedDepositInfo)

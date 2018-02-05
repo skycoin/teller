@@ -254,7 +254,7 @@ func (s *Send) processWaitSendDeposit(di DepositInfo) error {
 }
 
 func (s *Send) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
-	log := s.log.WithField("deposit", di)
+	log := s.log.WithField("depositInfo", di)
 
 	if err := di.ValidateForStatus(); err != nil {
 		log.WithError(err).Error("handleDepositInfoState's DepositInfo is invalid")
