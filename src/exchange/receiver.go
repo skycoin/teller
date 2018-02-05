@@ -30,7 +30,7 @@ func init() {
 // Receiver is a component that reads deposits from a scanner.Scanner and records them
 type Receiver interface {
 	Deposits() <-chan DepositInfo
-	BindAddress(skyAddr, depositAddr, coinType, buyMethod string) error
+	BindAddress(skyAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error)
 }
 
 // ReceiveRunner is a Receiver than can be run
@@ -204,18 +204,23 @@ func getRate(cfg config.SkyExchanger, coinType string) (string, error) {
 // add the btc/eth address to scan service, when detect deposit coin
 // to the btc/eth address, will send specific skycoin to the binded
 // skycoin address
-func (r *Receive) BindAddress(skyAddr, depositAddr, coinType, buyMethod string) error {
+func (r *Receive) BindAddress(skyAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error) {
 	if err := ValidateBuyMethod(buyMethod); err != nil {
-		return err
+		return nil, err
 	}
 
 	if err := r.multiplexer.ValidateCoinType(coinType); err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := r.store.BindAddress(skyAddr, depositAddr, coinType, buyMethod); err != nil {
-		return err
+	boundAddr, err := r.store.BindAddress(skyAddr, depositAddr, coinType, buyMethod)
+	if err != nil {
+		return nil, err
 	}
 
-	return r.multiplexer.AddScanAddress(depositAddr, coinType)
+	if err := r.multiplexer.AddScanAddress(depositAddr, coinType); err != nil {
+		return nil, err
+	}
+
+	return boundAddr, nil
 }

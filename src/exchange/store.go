@@ -73,7 +73,7 @@ func init() {
 // Storer interface for exchange storage
 type Storer interface {
 	GetBindAddress(depositAddr, coinType string) (*BoundAddress, error)
-	BindAddress(skyAddr, depositAddr, coinType, buyMethod string) error
+	BindAddress(skyAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error)
 	GetOrCreateDepositInfo(scanner.Deposit, string) (DepositInfo, error)
 	GetDepositInfoArray(DepositFilter) ([]DepositInfo, error)
 	GetDepositInfoOfSkyAddress(string) ([]DepositInfo, error)
@@ -169,7 +169,7 @@ func (s *Store) getBindAddressTx(tx *bolt.Tx, depositAddr, coinType string) (*Bo
 }
 
 // BindAddress binds a skycoin address to a deposit address
-func (s *Store) BindAddress(skyAddr, depositAddr, coinType, buyMethod string) error {
+func (s *Store) BindAddress(skyAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error) {
 	log := s.log.WithField("skyAddr", skyAddr)
 	log = log.WithField("depositAddr", depositAddr)
 	log = log.WithField("coinType", coinType)
@@ -177,10 +177,17 @@ func (s *Store) BindAddress(skyAddr, depositAddr, coinType, buyMethod string) er
 
 	bindBktFullName, err := GetBindAddressBkt(coinType)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return s.db.Update(func(tx *bolt.Tx) error {
+	boundAddr := BoundAddress{
+		SkyAddress: skyAddr,
+		Address:    depositAddr,
+		CoinType:   coinType,
+		BuyMethod:  buyMethod,
+	}
+
+	if err := s.db.Update(func(tx *bolt.Tx) error {
 		existingSkyAddr, err := s.getBindAddressTx(tx, depositAddr, coinType)
 		if err != nil {
 			return err
@@ -202,13 +209,6 @@ func (s *Store) BindAddress(skyAddr, depositAddr, coinType, buyMethod string) er
 			}
 		}
 
-		boundAddr := BoundAddress{
-			SkyAddress: skyAddr,
-			Address:    depositAddr,
-			CoinType:   coinType,
-			BuyMethod:  buyMethod,
-		}
-
 		addrs = append(addrs, boundAddr)
 
 		if err := dbutil.PutBucketValue(tx, SkyDepositSeqsIndexBkt, skyAddr, addrs); err != nil {
@@ -216,7 +216,11 @@ func (s *Store) BindAddress(skyAddr, depositAddr, coinType, buyMethod string) er
 		}
 
 		return dbutil.PutBucketValue(tx, bindBktFullName, depositAddr, boundAddr)
-	})
+	}); err != nil {
+		return nil, err
+	}
+
+	return &boundAddr, nil
 }
 
 // GetOrCreateDepositInfo creates a DepositInfo unless one exists with the DepositInfo.DepositID key,

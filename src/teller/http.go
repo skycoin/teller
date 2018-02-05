@@ -335,6 +335,7 @@ func (s *HTTPServer) Shutdown() {
 type BindResponse struct {
 	DepositAddress string `json:"deposit_address,omitempty"`
 	CoinType       string `json:"coin_type,omitempty"`
+	BuyMethod      string `json:"buy_method"`
 }
 
 type bindRequest struct {
@@ -415,7 +416,7 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 
 		log.Info("Calling service.BindAddress")
 
-		coinAddr, err := s.service.BindAddress(bindReq.SkyAddr, bindReq.CoinType)
+		boundAddr, err := s.service.BindAddress(bindReq.SkyAddr, bindReq.CoinType)
 		if err != nil {
 			log.WithError(err).Error("service.BindAddress failed")
 			switch err {
@@ -432,12 +433,13 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		log = log.WithField("coinAddr", coinAddr)
+		log = log.WithField("boundAddr", boundAddr)
 		log.Infof("Bound sky and %s addresses", bindReq.CoinType)
 
 		if err := httputil.JSONResponse(w, BindResponse{
-			DepositAddress: coinAddr,
-			CoinType:       bindReq.CoinType,
+			DepositAddress: boundAddr.Address,
+			CoinType:       boundAddr.CoinType,
+			BuyMethod:      boundAddr.BuyMethod,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}

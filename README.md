@@ -372,6 +372,10 @@ multiple BTC/ETH addresses. The default maximum number of bound addresses is 5.
 Coin type specifies which coin deposit address type to generate.
 Options are: BTC/ETH [TODO: support more coin types].
 
+"buy_method" in the response, indicates the purchasing mode.
+"direct" buy method is a fixed-price purchase directly from the wallet.
+"passthrough" but method is a variable-price purchase through an exchange.
+
 Returns `403 Forbidden` if `teller.bind_enabled` is `false`.
 
 Example:
@@ -386,6 +390,7 @@ Response:
 {
     "deposit_address": "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp",
     "coin_type": "BTC",
+    "buy_method": "direct"
 }
 ```
 ETH example:

@@ -24,7 +24,13 @@ type fakeExchanger struct {
 
 func (e *fakeExchanger) BindAddress(skyAddr, depositAddr, coinType string) error {
 	args := e.Called(skyAddr, depositAddr, coinType)
-	return args.Error(0)
+
+	ba := args.Get(0)
+	if ba == nil {
+		return nil, args.Error(1)
+	}
+
+	return ba.(*BoundAddress), args.Error(1)
 }
 
 func (e *fakeExchanger) GetDepositStatuses(skyAddr string) ([]exchange.DepositStatus, error) {

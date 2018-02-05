@@ -60,7 +60,7 @@ type Runner interface {
 
 // Exchanger provides APIs to interact with the exchange service
 type Exchanger interface {
-	BindAddress(skyAddr, depositAddr, coinType string) error
+	BindAddress(skyAddr, depositAddr, coinType string) (*BoundAddress, error)
 	GetDepositStatuses(skyAddr string) ([]DepositStatus, error)
 	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
 	GetBindNum(skyAddr string) (int, error)
@@ -279,6 +279,6 @@ func (e *Exchange) Status() error {
 // add the btc/eth address to scan service, when detect deposit coin
 // to the btc/eth address, will send specific skycoin to the binded
 // skycoin address
-func (e *Exchange) BindAddress(skyAddr, depositAddr, coinType string) error {
+func (e *Exchange) BindAddress(skyAddr, depositAddr, coinType string) (*BoundAddress, error) {
 	return e.Receiver.BindAddress(skyAddr, depositAddr, coinType, e.buyMethod)
 }
