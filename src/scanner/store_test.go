@@ -33,7 +33,7 @@ func TestNewStore(t *testing.T) {
 	require.NoError(t, err)
 
 	err = s.db.View(func(tx *bolt.Tx) error {
-		scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, CoinTypeBTC, "_")
+		scanBktFullName := MustGetScanMetaBkt(CoinTypeBTC)
 		bkt := tx.Bucket(scanBktFullName)
 		require.NotNil(t, bkt)
 
@@ -77,7 +77,7 @@ func TestGetDepositAddresses(t *testing.T) {
 	// check db
 	err = s.db.View(func(tx *bolt.Tx) error {
 		var as []string
-		scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, CoinTypeBTC, "_")
+		scanBktFullName := MustGetScanMetaBkt(CoinTypeBTC)
 		err := dbutil.GetBucketObject(tx, scanBktFullName, depositAddressesKey, &as)
 		require.NoError(t, err)
 
@@ -135,7 +135,7 @@ func TestAddDepositAddress(t *testing.T) {
 			require.NoError(t, err)
 
 			err = db.Update(func(tx *bolt.Tx) error {
-				scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, CoinTypeBTC, "_")
+				scanBktFullName := MustGetScanMetaBkt(CoinTypeBTC)
 				return dbutil.PutBucketValue(tx, scanBktFullName, depositAddressesKey, tc.initAddrs)
 			})
 			require.NoError(t, err)

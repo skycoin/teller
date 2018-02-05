@@ -161,7 +161,7 @@ func run() error {
 	}
 
 	errC := make(chan error, 20)
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	background := func(name string, errC chan<- error, f func() error) {
 		log.Infof("Backgrounding task %s", name)
@@ -278,9 +278,9 @@ func run() error {
 		log.WithError(err).Error("exchange.NewStore failed")
 		return err
 	}
-	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, cfg.SkyExchanger)
+	exchangeClient, err := exchange.NewDirectExchange(log, cfg.SkyExchanger, exchangeStore, multiplexer, sendRPC)
 	if err != nil {
-		log.WithError(err).Error("exchange.NewExchange failed")
+		log.WithError(err).Error("exchange.NewDirectExchange failed")
 		return err
 	}
 

@@ -80,32 +80,28 @@ type Service struct {
 
 // BindAddress binds skycoin address with a deposit address according to coinType
 // return deposit address
-func (s *Service) BindAddress(skyAddr, coinType string) (string, error) {
+func (s *Service) BindAddress(skyAddr, coinType string) (*exchange.BoundAddress, error) {
 	if !s.cfg.BindEnabled {
-		return "", ErrBindDisabled
+		return nil, ErrBindDisabled
 	}
 
 	if s.cfg.MaxBoundAddresses > 0 {
 		num, err := s.exchanger.GetBindNum(skyAddr)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		if num >= s.cfg.MaxBoundAddresses {
-			return "", ErrMaxBoundAddresses
+			return nil, ErrMaxBoundAddresses
 		}
 	}
 
 	depositAddr, err := s.addrManager.NewAddress(coinType)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	if err := s.exchanger.BindAddress(skyAddr, depositAddr, coinType); err != nil {
-		return "", err
-	}
-
-	return depositAddr, nil
+	return s.exchanger.BindAddress(skyAddr, depositAddr, coinType)
 }
 
 // GetDepositStatuses returns deposit status of given skycoin address

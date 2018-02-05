@@ -11,16 +11,14 @@ import (
 	"github.com/skycoin/teller/src/util/dbutil"
 )
 
-// CoinTypeBTC is BTC coin type
-const CoinTypeBTC = "BTC"
-
-// CoinTypeETH is ETH coin type
-const CoinTypeETH = "ETH"
+const (
+	// CoinTypeBTC is BTC coin type
+	CoinTypeBTC = "BTC"
+	// CoinTypeETH is ETH coin type
+	CoinTypeETH = "ETH"
+)
 
 var (
-	// scan meta info bucket
-	scanMetaBktPrefix = []byte("scan_meta")
-
 	// DepositBkt maps a BTC transaction to a Deposit
 	DepositBkt = []byte("deposit_value")
 
@@ -30,6 +28,45 @@ var (
 	// ErrUnsupportedCoinType unsupported coin type
 	ErrUnsupportedCoinType = errors.New("unsupported coin type")
 )
+
+const scanMetaBktPrefix = "scan_meta"
+
+// GetScanMetaBkt return the name of the scan_meta bucket for a given coin type
+func GetScanMetaBkt(coinType string) ([]byte, error) {
+	var suffix string
+	switch coinType {
+	case CoinTypeBTC:
+		suffix = "btc"
+	case CoinTypeETH:
+		suffix = "eth"
+	default:
+		return nil, ErrUnsupportedCoinType
+	}
+
+	bktName := fmt.Sprintf("%s_%s", scanMetaBktPrefix, suffix)
+
+	return []byte(bktName), nil
+}
+
+// MustGetScanMetaBkt panics if GetScanMetaBkt returns an error
+func MustGetScanMetaBkt(coinType string) []byte {
+	name, err := GetScanMetaBkt(coinType)
+	if err != nil {
+		panic(err)
+	}
+	return name
+}
+
+func init() {
+	// Check that GetScanMetaBkt handles all possible coin types
+	// TODO -- do similar init checks for other switches over coinType
+	for _, ct := range GetCoinTypes() {
+		name := MustGetScanMetaBkt(ct)
+		if len(name) == 0 {
+			panic(fmt.Sprintf("GetScanMetaBkt(%s) returned empty", ct))
+		}
+	}
+}
 
 // DepositsEmptyErr is returned if there are no deposit values
 type DepositsEmptyErr struct{}
@@ -98,8 +135,12 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 //AddSupportedCoin create scaninfo bucket and callback for specified coin
 func (s *Store) AddSupportedCoin(coinType string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
-		scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, coinType, "_")
-		_, err := tx.CreateBucketIfNotExists(scanBktFullName)
+		scanBktFullName, err := GetScanMetaBkt(coinType)
+		if err != nil {
+			return err
+		}
+
+		_, err = tx.CreateBucketIfNotExists(scanBktFullName)
 		return err
 	})
 }
@@ -123,7 +164,11 @@ func (s *Store) GetScanAddresses(coinType string) ([]string, error) {
 func (s *Store) getScanAddressesTx(tx *bolt.Tx, coinType string) ([]string, error) {
 	var addrs []string
 
-	scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, coinType, "_")
+	scanBktFullName, err := GetScanMetaBkt(coinType)
+	if err != nil {
+		return nil, err
+	}
+
 	if err := dbutil.GetBucketObject(tx, scanBktFullName, depositAddressesKey, &addrs); err != nil {
 		switch err.(type) {
 		case dbutil.ObjectNotExistErr:
@@ -155,7 +200,11 @@ func (s *Store) AddScanAddress(addr, coinType string) error {
 
 		addrs = append(addrs, addr)
 
-		scanBktFullName := dbutil.ByteJoin(scanMetaBktPrefix, coinType, "_")
+		scanBktFullName, err := GetScanMetaBkt(coinType)
+		if err != nil {
+			return err
+		}
+
 		return dbutil.PutBucketValue(tx, scanBktFullName, depositAddressesKey, addrs)
 	})
 }

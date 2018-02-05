@@ -16,7 +16,7 @@ type Status int8
 const (
 	// StatusWaitDeposit deposit has not occurred
 	StatusWaitDeposit Status = iota
-	// StatusWaitSend deposit received, but send has not occurred
+	// StatusWaitSend deposit is ready for send
 	StatusWaitSend
 	// StatusWaitConfirm coins sent, but not confirmed yet
 	StatusWaitConfirm
@@ -24,6 +24,8 @@ const (
 	StatusDone
 	// StatusUnknown fallback value
 	StatusUnknown
+	// StatusWaitDecide initial deposit receive state
+	StatusWaitDecide
 )
 
 var statusString = []string{
@@ -32,6 +34,7 @@ var statusString = []string{
 	StatusWaitConfirm: "waiting_confirm",
 	StatusDone:        "done",
 	StatusUnknown:     "unknown",
+	StatusWaitDecide:  "waiting_decide",
 }
 
 func (s Status) String() string {
@@ -49,18 +52,29 @@ func NewStatusFromStr(st string) Status {
 		return StatusWaitConfirm
 	case statusString[StatusDone]:
 		return StatusDone
+	case statusString[StatusWaitDecide]:
+		return StatusWaitDecide
 	default:
 		return StatusUnknown
 	}
+}
+
+// BoundAddress records information about an address binding
+type BoundAddress struct {
+	SkyAddress string
+	Address    string
+	CoinType   string
+	BuyMethod  string
 }
 
 // DepositInfo records the deposit info
 type DepositInfo struct {
 	Seq            uint64
 	UpdatedAt      int64
-	Status         Status
+	Status         Status // TODO -- migrate to string statuses?
 	CoinType       string
 	SkyAddress     string
+	BuyMethod      string
 	DepositAddress string
 	DepositID      string
 	Txid           string
@@ -105,6 +119,13 @@ func (di DepositInfo) ValidateForStatus() error {
 		if _, err := mathutil.ParseRate(di.ConversionRate); err != nil {
 			return err
 		}
+		switch di.BuyMethod {
+		case BuyMethodDirect, BuyMethodPassthrough:
+		case "":
+			return errors.New("BuyMethod missing")
+		default:
+			return errors.New("BuyMethod invalid")
+		}
 
 		return nil
 	}
@@ -130,6 +151,9 @@ func (di DepositInfo) ValidateForStatus() error {
 		return checkWaitSend()
 
 	case StatusWaitSend:
+		return checkWaitSend()
+
+	case StatusWaitDecide:
 		return checkWaitSend()
 
 	case StatusWaitDeposit, StatusUnknown:
