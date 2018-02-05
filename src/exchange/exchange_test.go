@@ -1053,6 +1053,74 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 	})
 }
 
+func TestExchangeProcessWaitDecideDeposits(t *testing.T) {
+	// Tests that StatusWaitDecide deposits found in the db are processed
+	// on exchange startup
+
+	var depositValue int64 = 1e8
+	s := newDummySender()
+	skySent, err := CalculateBtcSkyValue(depositValue, testSkyBtcRate, testMaxDecimals)
+	require.NoError(t, err)
+	txid1 := s.predictTxid(t, testSkyAddr, skySent)
+	txid2 := s.predictTxid(t, testSkyAddr2, skySent)
+
+	// Add StatusWaitDecide deposits
+	// They should all be confirmed after shutdown
+	dis := []DepositInfo{
+		{
+			Seq:            1,
+			CoinType:       scanner.CoinTypeBTC,
+			Status:         StatusWaitDecide,
+			SkyAddress:     testSkyAddr,
+			DepositAddress: "foo-btc-addr-1",
+			DepositID:      "foo-tx-1:1",
+			Txid:           txid1,
+			ConversionRate: testSkyBtcRate,
+			DepositValue:   depositValue,
+			BuyMethod:      BuyMethodDirect,
+			Deposit: scanner.Deposit{
+				CoinType: scanner.CoinTypeBTC,
+				Address:  "foo-btc-addr-1",
+				Value:    depositValue,
+				Height:   20,
+				Tx:       "foo-tx-1",
+				N:        1,
+			},
+		},
+		{
+			Seq:            2,
+			CoinType:       scanner.CoinTypeBTC,
+			Status:         StatusWaitDecide,
+			SkyAddress:     testSkyAddr2,
+			DepositAddress: "foo-btc-addr-2",
+			DepositID:      "foo-tx-2:2",
+			Txid:           txid2,
+			ConversionRate: testSkyBtcRate,
+			DepositValue:   depositValue,
+			BuyMethod:      BuyMethodDirect,
+			Deposit: scanner.Deposit{
+				CoinType: scanner.CoinTypeBTC,
+				Address:  "foo-btc-addr-2",
+				Value:    depositValue,
+				Height:   20,
+				Tx:       "foo-tx-2",
+				N:        2,
+			},
+		},
+	}
+
+	testExchangeRunProcessDepositBacklog(t, dis, func(e *Exchange, di DepositInfo) {
+		err := e.store.BindAddress(di.SkyAddress, di.DepositAddress, di.CoinType, di.BuyMethod)
+		require.NoError(t, err)
+
+		skySent, err := CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, testMaxDecimals)
+		require.NoError(t, err)
+
+		txid := e.Sender.(*Send).sender.(*dummySender).predictTxid(t, di.SkyAddress, skySent)
+		e.Sender.(*Send).sender.(*dummySender).setTxConfirmed(txid)
+	})
+}
+
 func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 	// Tests that we log a message and continue if saveIncomingDeposit fails
 	e, shutdown, hook := runExchangeMockStore(t)
