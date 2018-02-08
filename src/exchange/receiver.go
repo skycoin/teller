@@ -205,7 +205,7 @@ func getRate(cfg config.SkyExchanger, coinType string) (string, error) {
 // to the btc/eth address, will send specific skycoin to the binded
 // skycoin address
 func (r *Receive) BindAddress(skyAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error) {
-	if err := ValidateBuyMethod(buyMethod); err != nil {
+	if err := config.ValidateBuyMethod(buyMethod); err != nil {
 		return nil, err
 	}
 

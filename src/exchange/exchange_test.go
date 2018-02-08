@@ -175,6 +175,7 @@ const (
 
 var (
 	defaultCfg = config.SkyExchanger{
+		BuyMethod:               config.BuyMethodDirect,
 		SkyBtcExchangeRate:      testSkyBtcRate,
 		SkyEthExchangeRate:      testSkyEthRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
@@ -386,7 +387,7 @@ func TestExchangeRunSend(t *testing.T) {
 		DepositID:      dn.Deposit.ID(),
 		Txid:           txid,
 		SkySent:        100e6,
-		BuyMethod:      BuyMethodDirect,
+		BuyMethod:      config.BuyMethodDirect,
 		ConversionRate: testSkyBtcRate,
 		DepositValue:   dn.Deposit.Value,
 		Deposit:        dn.Deposit,
@@ -435,7 +436,7 @@ func TestExchangeRunSend(t *testing.T) {
 		DepositID:      dn.Deposit.ID(),
 		Txid:           txid,
 		SkySent:        100e6,
-		BuyMethod:      BuyMethodDirect,
+		BuyMethod:      config.BuyMethodDirect,
 		ConversionRate: testSkyBtcRate,
 		DepositValue:   dn.Deposit.Value,
 		Deposit:        dn.Deposit,
@@ -498,7 +499,7 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 		DepositAddress: btcAddr,
 		DepositID:      dn.Deposit.ID(),
 		Status:         StatusWaitSend,
-		BuyMethod:      BuyMethodDirect,
+		BuyMethod:      config.BuyMethodDirect,
 		ConversionRate: testSkyBtcRate,
 		DepositValue:   dn.Deposit.Value,
 		Deposit:        dn.Deposit,
@@ -557,7 +558,7 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 		DepositID:      dn.Deposit.ID(),
 		Status:         StatusWaitSend,
 		ConversionRate: testSkyBtcRate,
-		BuyMethod:      BuyMethodDirect,
+		BuyMethod:      config.BuyMethodDirect,
 		DepositValue:   dn.Deposit.Value,
 		Deposit:        dn.Deposit,
 	}, di)
@@ -639,7 +640,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 		Txid:           txid,
 		SkySent:        100e6,
 		DepositValue:   dn.Deposit.Value,
-		BuyMethod:      BuyMethodDirect,
+		BuyMethod:      config.BuyMethodDirect,
 		Status:         StatusWaitConfirm,
 		ConversionRate: testSkyBtcRate,
 		Deposit:        dn.Deposit,
@@ -690,7 +691,7 @@ func TestExchangeQuitBeforeConfirm(t *testing.T) {
 		DepositID:      dn.Deposit.ID(),
 		Txid:           txid,
 		SkySent:        100e6,
-		BuyMethod:      BuyMethodDirect,
+		BuyMethod:      config.BuyMethodDirect,
 		DepositValue:   dn.Deposit.Value,
 		ConversionRate: testSkyBtcRate,
 		Deposit:        dn.Deposit,
@@ -780,7 +781,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 		Txid:           "",
 		SkySent:        0,
 		ConversionRate: testSkyBtcRate,
-		BuyMethod:      BuyMethodDirect,
+		BuyMethod:      config.BuyMethodDirect,
 		DepositValue:   dn.Deposit.Value,
 		Deposit:        dn.Deposit,
 		Error:          ErrEmptySendAmount.Error(),
@@ -941,7 +942,7 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 			Txid:           txid1,
 			SkySent:        skySent,
 			ConversionRate: testSkyBtcRate,
-			BuyMethod:      BuyMethodDirect,
+			BuyMethod:      config.BuyMethodDirect,
 			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
 				CoinType: scanner.CoinTypeBTC,
@@ -961,7 +962,7 @@ func TestExchangeProcessUnconfirmedTx(t *testing.T) {
 			Txid:           txid2,
 			SkySent:        skySent,
 			ConversionRate: testSkyBtcRate,
-			BuyMethod:      BuyMethodDirect,
+			BuyMethod:      config.BuyMethodDirect,
 			DepositValue:   depositValue,
 			Deposit: scanner.Deposit{
 				CoinType: scanner.CoinTypeBTC,
@@ -1003,7 +1004,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 			Txid:           txid1,
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
-			BuyMethod:      BuyMethodDirect,
+			BuyMethod:      config.BuyMethodDirect,
 			Deposit: scanner.Deposit{
 				CoinType: scanner.CoinTypeBTC,
 				Address:  "foo-btc-addr-1",
@@ -1023,7 +1024,7 @@ func TestExchangeProcessWaitSendDeposits(t *testing.T) {
 			Txid:           txid2,
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
-			BuyMethod:      BuyMethodDirect,
+			BuyMethod:      config.BuyMethodDirect,
 			Deposit: scanner.Deposit{
 				CoinType: scanner.CoinTypeBTC,
 				Address:  "foo-btc-addr-2",
@@ -1075,7 +1076,7 @@ func TestExchangeProcessWaitDecideDeposits(t *testing.T) {
 			Txid:           txid1,
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
-			BuyMethod:      BuyMethodDirect,
+			BuyMethod:      config.BuyMethodDirect,
 			Deposit: scanner.Deposit{
 				CoinType: scanner.CoinTypeBTC,
 				Address:  "foo-btc-addr-1",
@@ -1095,7 +1096,7 @@ func TestExchangeProcessWaitDecideDeposits(t *testing.T) {
 			Txid:           txid2,
 			ConversionRate: testSkyBtcRate,
 			DepositValue:   depositValue,
-			BuyMethod:      BuyMethodDirect,
+			BuyMethod:      config.BuyMethodDirect,
 			Deposit: scanner.Deposit{
 				CoinType: scanner.CoinTypeBTC,
 				Address:  "foo-btc-addr-2",
@@ -1220,7 +1221,7 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 		SkyAddress:     skyAddr,
 		DepositAddress: btcAddr,
 		DepositID:      dn.Deposit.ID(),
-		BuyMethod:      BuyMethodDirect,
+		BuyMethod:      config.BuyMethodDirect,
 		ConversionRate: testSkyBtcRate,
 		Deposit:        dn.Deposit,
 	}
@@ -1341,7 +1342,7 @@ func TestExchangeBindAddress(t *testing.T) {
 		SkyAddress: "a",
 		Address:    "b",
 		CoinType:   scanner.CoinTypeBTC,
-		BuyMethod:  BuyMethodDirect,
+		BuyMethod:  config.BuyMethodDirect,
 	}, skyAddr)
 }
 
