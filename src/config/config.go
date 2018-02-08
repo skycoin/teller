@@ -388,10 +388,11 @@ func setDefaults() {
 	// SkyExchanger
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)
 	viper.SetDefault("sky_exchanger.max_decimals", 3)
-	viper.SetDefault("web.bind_enabled", true)
-	viper.SetDefault("web.send_enabled", true)
+	viper.SetDefault("sky_exchanger.buy_method", BuyMethodDirect)
 
 	// Web
+	viper.SetDefault("web.bind_enabled", true)
+	viper.SetDefault("web.send_enabled", true)
 	viper.SetDefault("web.http_addr", "127.0.0.1:7071")
 	viper.SetDefault("web.static_dir", "./web/build")
 	viper.SetDefault("web.throttle_max", int64(60))

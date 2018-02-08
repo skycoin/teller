@@ -113,6 +113,7 @@ Description of the config file:
 * `sky_exchanger.wallet` [string]: Filepath of the skycoin hot wallet. See [setup skycoin hot wallet](#setup-skycoin-hot-wallet).
 * `sky_exchanger.tx_confirmation_check_wait` [duration]: How often to check for a sent skycoin transaction's confirmation.
 * `sky_exchanger.send_enabled` [bool]: Disable this to prevent sending of coins (all other processing functions normally, e.g.. deposits are received)
+* `sky_exchanger.buy_method` [string]: Options are "direct" or "passthrough". "direct" will send directly from the wallet. "passthrough" will purchase from an exchange before sending from the wallet.
 * `web.behind_proxy` [bool]: Set true if running behind a proxy.
 * `web.static_dir` [string]: Location of static web assets.
 * `web.throttle_max` [int]: Maximum number of API requests allowed per `web.throttle_duration`.
