@@ -278,15 +278,32 @@ func run() error {
 		log.WithError(err).Error("exchange.NewStore failed")
 		return err
 	}
-	exchangeClient, err := exchange.NewDirectExchange(log, cfg.SkyExchanger, exchangeStore, multiplexer, sendRPC)
-	if err != nil {
-		log.WithError(err).Error("exchange.NewDirectExchange failed")
-		return err
+
+	var exchangeClient *exchange.Exchange
+
+	switch cfg.SkyExchanger.BuyMethod {
+	case config.BuyMethodDirect:
+		var err error
+		exchangeClient, err = exchange.NewDirectExchange(log, cfg.SkyExchanger, exchangeStore, multiplexer, sendRPC)
+		if err != nil {
+			log.WithError(err).Error("exchange.NewDirectExchange failed")
+			return err
+		}
+	case config.BuyMethodPassthrough:
+		var err error
+		exchangeClient, err = exchange.NewPassthroughExchange(log, cfg.SkyExchanger, exchangeStore, multiplexer, sendRPC)
+		if err != nil {
+			log.WithError(err).Error("exchange.NewPassthroughExchange failed")
+			return err
+		}
+	default:
+		log.WithError(config.ErrInvalidBuyMethod).Error()
+		return config.ErrInvalidBuyMethod
 	}
 
 	background("exchangeClient.Run", errC, exchangeClient.Run)
 
-	//create AddrManager
+	// create AddrManager
 	addrManager := addrs.NewAddrManager()
 
 	if cfg.BtcRPC.Enabled {

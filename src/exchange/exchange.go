@@ -16,11 +16,6 @@ import (
 
 const (
 	txConfirmationCheckWait = time.Second * 3
-
-	// BuyMethodDirect is used when buying directly from the local hot wallet
-	BuyMethodDirect = "direct"
-	// BuyMethodPassthrough is used when coins are first bought from an exchange before sending from the local hot wallet
-	BuyMethodPassthrough = "passthrough"
 )
 
 var (
@@ -35,19 +30,7 @@ var (
 	ErrDepositStatusInvalid = errors.New("Deposit status cannot be handled")
 	// ErrNoBoundAddress is returned if no skycoin address is bound to a deposit's address
 	ErrNoBoundAddress = errors.New("Deposit has no bound skycoin address")
-	// ErrInvalidBuyMethod is returned if BindAddress is called with an invalid buy method
-	ErrInvalidBuyMethod = errors.New("Invalid buy method")
 )
-
-// ValidateBuyMethod returns an error if a buy method string is invalid
-func ValidateBuyMethod(m string) error {
-	switch m {
-	case BuyMethodDirect, BuyMethodPassthrough:
-		return nil
-	default:
-		return ErrInvalidBuyMethod
-	}
-}
 
 // DepositFilter filters deposits
 type DepositFilter func(di DepositInfo) bool
@@ -71,12 +54,11 @@ type Exchanger interface {
 
 // Exchange encompasses an entire coin<>skycoin deposit-process-send flow
 type Exchange struct {
-	log       logrus.FieldLogger
-	store     Storer
-	cfg       config.SkyExchanger
-	buyMethod string
-	quit      chan struct{}
-	done      chan struct{}
+	log   logrus.FieldLogger
+	store Storer
+	cfg   config.SkyExchanger
+	quit  chan struct{}
+	done  chan struct{}
 
 	Receiver  ReceiveRunner
 	Processor ProcessRunner
@@ -87,6 +69,10 @@ type Exchange struct {
 func NewDirectExchange(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, multiplexer *scanner.Multiplexer, coinSender sender.Sender) (*Exchange, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
+	}
+
+	if cfg.BuyMethod != config.BuyMethodDirect {
+		return nil, config.ErrInvalidBuyMethod
 	}
 
 	receiver, err := NewReceive(log, cfg, store, multiplexer)
@@ -108,7 +94,44 @@ func NewDirectExchange(log logrus.FieldLogger, cfg config.SkyExchanger, store St
 		log:       log.WithField("prefix", "teller.exchange.exchange"),
 		store:     store,
 		cfg:       cfg,
-		buyMethod: BuyMethodDirect,
+		quit:      make(chan struct{}),
+		done:      make(chan struct{}),
+		Receiver:  receiver,
+		Processor: processor,
+		Sender:    sender,
+	}, nil
+}
+
+// NewPassthroughExchange creates an Exchange which performs "passthrough buy",
+// i.e. it purchases coins from an exchange before sending from a local skycoin wallet
+func NewPassthroughExchange(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, multiplexer *scanner.Multiplexer, coinSender sender.Sender) (*Exchange, error) {
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	if cfg.BuyMethod != config.BuyMethodPassthrough {
+		return nil, config.ErrInvalidBuyMethod
+	}
+
+	receiver, err := NewReceive(log, cfg, store, multiplexer)
+	if err != nil {
+		return nil, err
+	}
+
+	processor, err := NewPassthrough(log, cfg, store, receiver)
+	if err != nil {
+		return nil, err
+	}
+
+	sender, err := NewSend(log, cfg, store, coinSender, processor)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Exchange{
+		log:       log.WithField("prefix", "teller.exchange.exchange"),
+		store:     store,
+		cfg:       cfg,
 		quit:      make(chan struct{}),
 		done:      make(chan struct{}),
 		Receiver:  receiver,
@@ -280,5 +303,5 @@ func (e *Exchange) Status() error {
 // to the btc/eth address, will send specific skycoin to the binded
 // skycoin address
 func (e *Exchange) BindAddress(skyAddr, depositAddr, coinType string) (*BoundAddress, error) {
-	return e.Receiver.BindAddress(skyAddr, depositAddr, coinType, e.buyMethod)
+	return e.Receiver.BindAddress(skyAddr, depositAddr, coinType, e.cfg.BuyMethod)
 }

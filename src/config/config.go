@@ -18,6 +18,28 @@ import (
 	"github.com/skycoin/teller/src/util/mathutil"
 )
 
+const (
+	// BuyMethodDirect is used when buying directly from the local hot wallet
+	BuyMethodDirect = "direct"
+	// BuyMethodPassthrough is used when coins are first bought from an exchange before sending from the local hot wallet
+	BuyMethodPassthrough = "passthrough"
+)
+
+var (
+	// ErrInvalidBuyMethod is returned if BindAddress is called with an invalid buy method
+	ErrInvalidBuyMethod = errors.New("Invalid buy method")
+)
+
+// ValidateBuyMethod returns an error if a buy method string is invalid
+func ValidateBuyMethod(m string) error {
+	switch m {
+	case BuyMethodDirect, BuyMethodPassthrough:
+		return nil
+	default:
+		return ErrInvalidBuyMethod
+	}
+}
+
 // Config represents the configuration root
 type Config struct {
 	// Enable debug logging
@@ -109,6 +131,8 @@ type SkyExchanger struct {
 	Wallet string `mapstructure:"wallet"`
 	// Allow sending of coins (deposits will still be received and recorded)
 	SendEnabled bool `mapstructure:"send_enabled"`
+	// Method of purchasing coins ("direct buy" or "passthrough"
+	BuyMethod string `mapstructure:"buy_method"`
 }
 
 // Validate validates the SkyExchanger config
@@ -141,6 +165,10 @@ func (c SkyExchanger) validate() []error {
 
 	if uint64(c.MaxDecimals) > visor.MaxDropletPrecision {
 		errs = append(errs, fmt.Errorf("sky_exchanger.max_decimals is larger than visor.MaxDropletPrecision=%d", visor.MaxDropletPrecision))
+	}
+
+	if err := ValidateBuyMethod(c.BuyMethod); err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.buy_method must be \"%s\" or \"%s\"", BuyMethodDirect, BuyMethodPassthrough))
 	}
 
 	return errs
@@ -360,10 +388,11 @@ func setDefaults() {
 	// SkyExchanger
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)
 	viper.SetDefault("sky_exchanger.max_decimals", 3)
-	viper.SetDefault("web.bind_enabled", true)
-	viper.SetDefault("web.send_enabled", true)
+	viper.SetDefault("sky_exchanger.buy_method", BuyMethodDirect)
 
 	// Web
+	viper.SetDefault("web.bind_enabled", true)
+	viper.SetDefault("web.send_enabled", true)
 	viper.SetDefault("web.http_addr", "127.0.0.1:7071")
 	viper.SetDefault("web.static_dir", "./web/build")
 	viper.SetDefault("web.throttle_max", int64(60))
