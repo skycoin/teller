@@ -4,6 +4,7 @@
 
 debug = true
 profile = false
+enabled = true
 # logfile = "./teller.log"  # logfile can be an absolute path or relative to the working directory
 # dbfile = "teller.db"  # dbfile is saved inside ~/.teller-skycoin, do not include a path
 btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
@@ -14,7 +15,7 @@ eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses f
 # bind_enabled = true # Disable this to prevent binding of new addresses
 
 [sky_rpc]
-# address = "127.0.0.1:6430"
+address = "127.0.0.1:8330"
 
 [btc_rpc]
 # enabled = true
@@ -24,18 +25,18 @@ pass = "" # REQUIRED
 cert = "" # REQUIRED
 
 [eth_rpc]
-# enabled = false
-server = "" # REQUIRED
-port = "" # REQUIRED
+enabled = true
+server = "127.0.0.1" # REQUIRED
+port = "8545" # REQUIRED
 
 [btc_scanner]
 # scan_period = "20s"
 # initial_scan_height = 492478
 # confirmations_required = 1
 [eth_scanner]
-# scan_period = "5s"
-# initial_scan_height =4654259
-# confirmations_required = 1
+scan_period = "5s"
+initial_scan_height =5095117
+confirmations_required = 1
 
 [sky_exchanger]
 sky_btc_exchange_rate = "500" # REQUIRED: SKY/BTC exchange rate as a string, can be an int, float or a rational fraction
@@ -57,7 +58,7 @@ tls_cert = ""
 tls_key = ""
 
 [admin_panel]
-# host = "127.0.0.1:7711"
+host = "127.0.0.1:7711"
 
 
 [dummy]
@@ -65,4 +66,4 @@ tls_key = ""
 # and viewing and confirmed skycoin transactions
 sender = true
 scanner = true
-# http_addr = "127.0.0.1:4121"
+http_addr = "127.0.0.1:4121"
