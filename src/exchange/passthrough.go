@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/skycoin/exchange-api/exchange"
 
 	"github.com/skycoin/teller/src/config"
 )
@@ -16,15 +17,16 @@ const (
 // Passthrough implements a Processor. For each deposit, it buys a corresponding amount
 // from c2cx.com, then tells the sender to send the amount bought.
 type Passthrough struct {
-	log        logrus.FieldLogger
-	cfg        config.SkyExchanger
-	receiver   Receiver
-	store      Storer
-	deposits   chan DepositInfo
-	quit       chan struct{}
-	done       chan struct{}
-	statusLock sync.RWMutex
-	status     error
+	log            logrus.FieldLogger
+	cfg            config.SkyExchanger
+	receiver       Receiver
+	store          Storer
+	deposits       chan DepositInfo
+	quit           chan struct{}
+	done           chan struct{}
+	statusLock     sync.RWMutex
+	status         error
+	exchangeClient exchange.Client
 }
 
 // NewPassthrough creates Passthrough
@@ -41,6 +43,7 @@ func NewPassthrough(log logrus.FieldLogger, cfg config.SkyExchanger, store Store
 		deposits: make(chan DepositInfo, 100),
 		quit:     make(chan struct{}),
 		done:     make(chan struct{}),
+		// TODO: create exchangeClient from some cfg item
 	}, nil
 }
 
