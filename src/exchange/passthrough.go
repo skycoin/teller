@@ -4,10 +4,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/exchange-api/exchange"
 
 	"github.com/skycoin/teller/src/config"
+	"github.com/skycoin/teller/src/scanner"
 )
 
 const (
@@ -198,7 +200,26 @@ func (p *Passthrough) handleDepositInfoState(di DepositInfo) (DepositInfo, error
 /* BEGIN PSEUDOCODE FOR EXCHANGE PURCHASE LOGIC */
 
 // checkBalance checks that enough coins are held on the exchange
-func checkBalance(di DepositInfo) error {
+func (p *Passthrough) checkBalance(di DepositInfo) error {
+	quantity, err := p.exchangeClient.GetBalance()
+
+	if err != nil {
+		return err
+	}
+
+	switch di.CoinType {
+	case scanner.CoinTypeBTC:
+		quantity = quantity.Mul(decimal.New(SatoshisPerBTC, 0))
+	case scanner.CoinTypeETH:
+		quantity = quantity.Mul(decimal.New(WeiPerETH, 0))
+	default:
+		return scanner.ErrUnsupportedCoinType
+	}
+
+	if quantity.LessThan(decimal.New(di.DepositValue, 0)) {
+		return ErrLowExchangeBalance
+	}
+
 	return nil
 }
 
@@ -246,7 +267,7 @@ func (p *Passthrough) fillOrder(di DepositInfo) (DepositInfo, error) {
 	// TODO -- determine fatal/retry cases
 	// TODO -- API wrapper around exchange-api
 
-	if err := checkBalance(di); err != nil {
+	if err := p.checkBalance(di); err != nil {
 		return di, err
 	}
 
