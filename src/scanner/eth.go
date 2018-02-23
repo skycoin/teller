@@ -31,7 +31,7 @@ type ETHScanner struct {
 
 // NewETHScanner creates scanner instance
 func NewETHScanner(log logrus.FieldLogger, store Storer, eth EthRPCClient, cfg Config) (*ETHScanner, error) {
-	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.eth"), cfg)
+	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.eth"), CoinTypeETH, cfg)
 
 	return &ETHScanner{
 		ethClient: eth,
@@ -112,7 +112,11 @@ func (s *ETHScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 	for {
 		nextBlock, err := s.getNextBlock(uint64(block.Height))
 		if err != nil {
-			log.WithError(err).Error("getNextBlock failed")
+			if err.Error() == ErrEmptyBlock.Error() {
+				log.WithError(err).Debug("getNextBlock empty")
+			} else {
+				log.WithError(err).Error("getNextBlock failed")
+			}
 		}
 		if nextBlock == nil {
 			log.Debug("No new block yet")
@@ -152,6 +156,9 @@ func (s *ETHScanner) GetDeposit() <-chan DepositNote {
 
 // ethBlock2CommonBlock convert ethereum block to common block
 func ethBlock2CommonBlock(block *types.Block) (*CommonBlock, error) {
+	if block == nil {
+		return nil, ErrEmptyBlock
+	}
 	cb := CommonBlock{}
 	cb.Hash = block.Hash().String()
 	cb.Height = int64(block.NumberU64())
