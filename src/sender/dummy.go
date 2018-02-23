@@ -113,7 +113,7 @@ func (s *DummySender) BroadcastTransaction(txn *coin.Transaction) *BroadcastTxRe
 
 	if _, ok := s.broadcastTxns[txn.TxIDHex()]; ok {
 		return &BroadcastTxResponse{
-			Err: fmt.Errorf("Transaction %s was already broadcast"),
+			Err: fmt.Errorf("Transaction %s was already broadcast", txn.TxIDHex()),
 			Req: req,
 		}
 	}
@@ -155,6 +155,7 @@ func (s *DummySender) IsTxConfirmed(txid string) *ConfirmResponse {
 	}
 }
 
+// Balance returns the remaining balance
 func (s *DummySender) Balance() (*cli.Balance, error) {
 
 	coinStr, err := droplet.ToString(s.coins)

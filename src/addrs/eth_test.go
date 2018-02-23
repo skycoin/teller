@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/skycoin/teller/src/util/testutil"
 	"github.com/stretchr/testify/require"
+
+	"github.com/skycoin/teller/src/util/testutil"
 )
 
 func TestNewETHAddrsAllValid(t *testing.T) {
@@ -15,7 +16,7 @@ func TestNewETHAddrsAllValid(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJson := `{
+	addressesJSON := `{
     "eth_addresses": [
 		"0xc0a51efd9c319dd60d93105ab317eb362017ecb9",
 		"0x3f9f942b8bd4f69432c053eef77cd84fd46b8d76",
@@ -24,7 +25,7 @@ func TestNewETHAddrsAllValid(t *testing.T) {
     ]
 }`
 
-	ethAddrMgr, err := NewETHAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	ethAddrMgr, err := NewETHAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
 
 	require.Nil(t, err)
 	require.NotNil(t, ethAddrMgr)
@@ -36,7 +37,7 @@ func TestNewEthAddrsContainsInvalid(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJson := `{
+	addressesJSON := `{
     "eth_addresses": [
 		"0xc0a51efd9c319dd60d93105ab317eb362017ecb9",
 		"0x3f9f942b8bd4f69432c053eef77cd84fd46b8d76",
@@ -48,7 +49,7 @@ func TestNewEthAddrsContainsInvalid(t *testing.T) {
 
 	expectedErr := errors.New("Invalid deposit address `bad`: Invalid address length")
 
-	ethAddrMgr, err := NewETHAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	ethAddrMgr, err := NewETHAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
@@ -61,7 +62,7 @@ func TestNewEthAddrsContainsDuplicated(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJson := `{
+	addressesJSON := `{
       "eth_addresses": [
 		"0xc0a51efd9c319dd60d93105ab317eb362017ecb9",
 		"0x3f9f942b8bd4f69432c053eef77cd84fd46b8d76",
@@ -72,7 +73,7 @@ func TestNewEthAddrsContainsDuplicated(t *testing.T) {
 
 	expectedErr := errors.New("Duplicate deposit address `0xc0a51efd9c319dd60d93105ab317eb362017ecb9`")
 
-	ethAddrMgr, err := NewETHAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	ethAddrMgr, err := NewETHAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
@@ -85,13 +86,13 @@ func TestNewETHAddrsContainsNull(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJson := `{
+	addressesJSON := `{
       "eth_addresses": []
 }`
 
 	expectedErr := errors.New("No ETH addresses")
 
-	ethAddrMgr, err := NewETHAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	ethAddrMgr, err := NewETHAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
@@ -104,11 +105,11 @@ func TestNewETHAddrsBadFormat(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJson := ``
+	addressesJSON := ``
 
 	expectedErr := errors.New("Decode loaded address json failed: EOF")
 
-	ethAddrMgr, err := NewETHAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	ethAddrMgr, err := NewETHAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)

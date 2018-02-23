@@ -6,16 +6,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/scanner"
+	"github.com/skycoin/teller/src/util/mathutil"
 )
 
 // Status deposit Status
 type Status int8
 
 const (
-	// StatusWaitDeposit deposit has not occured
+	// StatusWaitDeposit deposit has not occurred
 	StatusWaitDeposit Status = iota
-	// StatusWaitSend deposit received, but send has not occured
+	// StatusWaitSend deposit is ready for send
 	StatusWaitSend
 	// StatusWaitConfirm coins sent, but not confirmed yet
 	StatusWaitConfirm
@@ -23,14 +25,23 @@ const (
 	StatusDone
 	// StatusUnknown fallback value
 	StatusUnknown
+	// StatusWaitDecide initial deposit receive state
+	StatusWaitDecide
+	// StatusWaitPassthrough wait to buy from 3rd party exchange
+	StatusWaitPassthrough
+
+	// PassthroughExchangeC2CX for deposits using passthrough to c2cx.com
+	PassthroughExchangeC2CX = "c2cx"
 )
 
 var statusString = []string{
-	StatusWaitDeposit: "waiting_deposit",
-	StatusWaitSend:    "waiting_send",
-	StatusWaitConfirm: "waiting_confirm",
-	StatusDone:        "done",
-	StatusUnknown:     "unknown",
+	StatusWaitDeposit:     "waiting_deposit",
+	StatusWaitSend:        "waiting_send",
+	StatusWaitConfirm:     "waiting_confirm",
+	StatusDone:            "done",
+	StatusUnknown:         "unknown",
+	StatusWaitDecide:      "waiting_decide",
+	StatusWaitPassthrough: "waiting_passthrough",
 }
 
 func (s Status) String() string {
@@ -48,31 +59,63 @@ func NewStatusFromStr(st string) Status {
 		return StatusWaitConfirm
 	case statusString[StatusDone]:
 		return StatusDone
+	case statusString[StatusWaitDecide]:
+		return StatusWaitDecide
+	case statusString[StatusWaitPassthrough]:
+		return StatusWaitPassthrough
 	default:
 		return StatusUnknown
 	}
+}
+
+// BoundAddress records information about an address binding
+type BoundAddress struct {
+	SkyAddress string
+	Address    string
+	CoinType   string
+	BuyMethod  string
 }
 
 // DepositInfo records the deposit info
 type DepositInfo struct {
 	Seq            uint64
 	UpdatedAt      int64
-	Status         Status
+	Status         Status // TODO -- migrate to string statuses?
 	CoinType       string
 	SkyAddress     string
+	BuyMethod      string
 	DepositAddress string
 	DepositID      string
 	Txid           string
 	ConversionRate string // SKY per other coin, as a decimal string (allows integers, floats, fractions)
 	DepositValue   int64  // Deposit amount. Should be measured in the smallest unit possible (e.g. satoshis for BTC)
 	SkySent        uint64 // SKY sent, measured in droplets
-	Error          string // An error that occured during processing
+	Passthrough    PassthroughData
+	Error          string // An error that occurred during processing
 	// The original Deposit is saved for the records, in case there is a mistake.
 	// Do not use this data directly.  All necessary data is copied to the top level
 	// of DepositInfo (e.g. DepositID, DepositAddress, DepositValue, CoinType).
 	Deposit scanner.Deposit
 }
 
+// PassthroughData encapsulates data used for OTC passthrough
+type PassthroughData struct {
+	ExchangeName      string
+	SkyBought         uint64
+	DepositValueSpent int64
+	Orders            []PassthroughOrder
+}
+
+// PassthroughOrder contains information about an order placed on an exchange for passthrough
+type PassthroughOrder struct {
+	ID        string
+	Amount    string
+	Price     string
+	Timestamp string
+	CoinType  string
+}
+
+// DepositStats records overall statistics about deposits
 type DepositStats struct {
 	TotalBTCReceived int64 `json:"total_btc_received"`
 	TotalSKYSent     int64 `json:"total_sky_sent"`
@@ -100,8 +143,15 @@ func (di DepositInfo) ValidateForStatus() error {
 		if di.DepositValue == 0 {
 			return errors.New("DepositValue is zero")
 		}
-		if _, err := ParseRate(di.ConversionRate); err != nil {
+		if _, err := mathutil.ParseRate(di.ConversionRate); err != nil {
 			return err
+		}
+		switch di.BuyMethod {
+		case config.BuyMethodDirect, config.BuyMethodPassthrough:
+		case "":
+			return errors.New("BuyMethod missing")
+		default:
+			return errors.New("BuyMethod invalid")
 		}
 
 		return nil
@@ -130,6 +180,9 @@ func (di DepositInfo) ValidateForStatus() error {
 	case StatusWaitSend:
 		return checkWaitSend()
 
+	case StatusWaitDecide:
+		return checkWaitSend()
+
 	case StatusWaitDeposit, StatusUnknown:
 		fallthrough
 	default:
@@ -152,9 +205,5 @@ func isValidBtcTx(btcTx string) bool {
 	}
 
 	_, err := strconv.ParseInt(pts[1], 10, 64)
-	if err != nil {
-		return false
-	}
-
-	return true
+	return err == nil
 }

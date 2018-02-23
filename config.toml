@@ -11,6 +11,7 @@ eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses f
 
 [teller]
 # max_bound_addrs = 5 # 0 means unlimited
+# bind_enabled = true # Disable this to prevent binding of new addresses
 
 [sky_rpc]
 # address = "127.0.0.1:6430"
@@ -42,10 +43,11 @@ sky_eth_exchange_rate = "100" # REQUIRED: SKY/ETH exchange rate as a string, can
 wallet = "example.wlt" # REQUIRED: path to local hot wallet file
 # max_decimals = 3  # Number of decimal places to truncate SKY to
 # tx_confirmation_check_wait = "5s"
+# send_enabled = true # Disable this to disable sending of coins (all other processing functions normally)
+# buy_method = "direct" # Options are "direct" or "passthrough"
 
 [web]
 # behind_proxy = false  # This must be set to true when behind a proxy for ratelimiting to work
-# api_enabled = true
 http_addr = "127.0.0.1:7071"
 # static_dir = "./web/build"
 # throttle_max = 60

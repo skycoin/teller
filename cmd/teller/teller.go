@@ -38,7 +38,7 @@ func main() {
 	}
 }
 
-func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.Store) (*scanner.BTCScanner, error) {
+func createBtcScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.BTCScanner, error) {
 	// create btc rpc client
 	certs, err := ioutil.ReadFile(cfg.BtcRPC.Cert)
 	if err != nil {
@@ -61,7 +61,11 @@ func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.
 
 	log.Info("Connect to btcd succeeded")
 
-	scanStore.AddSupportedCoin(scanner.CoinTypeBTC)
+	err = scanStore.AddSupportedCoin(scanner.CoinTypeBTC)
+	if err != nil {
+		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeBTC) failed")
+		return nil, err
+	}
 
 	btcScanner, err := scanner.NewBTCScanner(log, scanStore, btcrpc, scanner.Config{
 		ScanPeriod:            cfg.BtcScanner.ScanPeriod,
@@ -75,14 +79,18 @@ func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.
 	return btcScanner, nil
 }
 
-func createEthScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.Store) (*scanner.ETHScanner, error) {
+func createEthScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.ETHScanner, error) {
 	ethrpc, err := scanner.NewEthClient(cfg.EthRPC.Server, cfg.EthRPC.Port)
 	if err != nil {
 		log.WithError(err).Error("Connect geth failed")
 		return nil, err
 	}
 
-	scanStore.AddSupportedCoin(scanner.CoinTypeETH)
+	err = scanStore.AddSupportedCoin(scanner.CoinTypeETH)
+	if err != nil {
+		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeETH) failed")
+		return nil, err
+	}
 
 	ethScanner, err := scanner.NewETHScanner(log, scanStore, ethrpc, scanner.Config{
 		ScanPeriod:            cfg.EthScanner.ScanPeriod,
@@ -153,7 +161,7 @@ func run() error {
 	}
 
 	errC := make(chan error, 20)
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	background := func(name string, errC chan<- error, f func() error) {
 		log.Infof("Backgrounding task %s", name)
@@ -270,20 +278,32 @@ func run() error {
 		log.WithError(err).Error("exchange.NewStore failed")
 		return err
 	}
-	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, exchange.Config{
-		BtcRate:                 cfg.SkyExchanger.SkyBtcExchangeRate,
-		EthRate:                 cfg.SkyExchanger.SkyEthExchangeRate,
-		TxConfirmationCheckWait: cfg.SkyExchanger.TxConfirmationCheckWait,
-		MaxDecimals:             cfg.SkyExchanger.MaxDecimals,
-	})
-	if err != nil {
-		log.WithError(err).Error("exchange.NewExchange failed")
-		return err
+
+	var exchangeClient *exchange.Exchange
+
+	switch cfg.SkyExchanger.BuyMethod {
+	case config.BuyMethodDirect:
+		var err error
+		exchangeClient, err = exchange.NewDirectExchange(log, cfg.SkyExchanger, exchangeStore, multiplexer, sendRPC)
+		if err != nil {
+			log.WithError(err).Error("exchange.NewDirectExchange failed")
+			return err
+		}
+	case config.BuyMethodPassthrough:
+		var err error
+		exchangeClient, err = exchange.NewPassthroughExchange(log, cfg.SkyExchanger, exchangeStore, multiplexer, sendRPC)
+		if err != nil {
+			log.WithError(err).Error("exchange.NewPassthroughExchange failed")
+			return err
+		}
+	default:
+		log.WithError(config.ErrInvalidBuyMethod).Error()
+		return config.ErrInvalidBuyMethod
 	}
 
 	background("exchangeClient.Run", errC, exchangeClient.Run)
 
-	//create AddrManager
+	// create AddrManager
 	addrManager := addrs.NewAddrManager()
 
 	if cfg.BtcRPC.Enabled {

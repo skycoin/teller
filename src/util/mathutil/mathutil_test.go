@@ -11,7 +11,6 @@ import (
 )
 
 func TestDecimalFromString(t *testing.T) {
-
 	cases := []struct {
 		s      string
 		result decimal.Decimal
@@ -51,11 +50,11 @@ func TestDecimalFromString(t *testing.T) {
 		})
 	}
 }
+
 func TestWei2Gwei(t *testing.T) {
 	cases := []struct {
 		wei  *big.Int
 		gwei int64
-		err  error
 	}{
 		{
 			wei:  big.NewInt(0),

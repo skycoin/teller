@@ -39,10 +39,11 @@ export default {
     title: '天空币OTC',
     heading: '天空币OTC',
     headingEnded: '天空币暂时关门',
-    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>,
-      <a href="https://skycoin.slack.com">Skycoin Slack</a> or follow the
+    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>
+       or follow the
       <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a>.`,
-    instructions: `
+    instructions: `<p>You can check the current market value for <a href="https://coinmarketcap.com/currencies/skycoin/">Skycoin at CoinMarketCap</a>.</p>
+
 <p>参加天空币分发活动:</p>
 
 <ul>
