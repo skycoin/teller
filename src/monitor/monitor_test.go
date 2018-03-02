@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/scanner"
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/exchange"
+	"github.com/MDLlife/teller/src/scanner"
+	"github.com/MDLlife/teller/src/util/testutil"
 )
 
 type dummyBtcAddrMgr struct {

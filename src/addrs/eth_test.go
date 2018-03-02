@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/util/testutil"
 	"github.com/stretchr/testify/require"
 )
 

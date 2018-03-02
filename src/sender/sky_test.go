@@ -14,7 +14,7 @@ import (
 	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/visor"
 
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/util/testutil"
 )
 
 type dummySkyClient struct {

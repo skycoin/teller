@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/skycoin/skycoin/src/api/cli"
-	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/sender"
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/exchange"
+	"github.com/MDLlife/teller/src/sender"
+	"github.com/MDLlife/teller/src/util/testutil"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )

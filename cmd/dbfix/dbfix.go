@@ -12,7 +12,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/cipher"
 
-	"github.com/skycoin/teller/src/exchange"
+	"github.com/MDLlife/teller/src/exchange"
 )
 
 const usage = `dbfix <dbfile>
