@@ -42,9 +42,6 @@ const (
 	defaultBestBlockHeight = 492478
 	defaultBestBlockHash   = "00000000000000000c4ac9ec73ff6a465532c22fd9b2a7c0015a5e13128cb9ed"
 
-	// http API
-	shutdownTimeout = time.Second * 5
-
 	// https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
 	// The timeout configuration is necessary for public servers, or else
 	// connections will be used up
@@ -53,6 +50,7 @@ const (
 	serverIdleTimeout  = time.Second * 120
 )
 
+// Deposit records information about a BTC deposit
 type Deposit struct {
 	Address string // deposit address
 	Value   int64  // deposit amount. For BTC, measured in satoshis.
@@ -61,6 +59,7 @@ type Deposit struct {
 	N       uint32 // the index of vout in the tx [BTC]
 }
 
+// BlockStore holds fake block data
 type BlockStore struct {
 	sync.RWMutex
 	BestBlockHeight int32
@@ -125,7 +124,9 @@ func genCertPair(certFile, keyFile string) error {
 		return err
 	}
 	if err = ioutil.WriteFile(keyFile, key, 0600); err != nil {
-		os.Remove(certFile)
+		if err := os.Remove(certFile); err != nil {
+			fmt.Println("Failed to remove certFile:", err)
+		}
 		return err
 	}
 
@@ -160,7 +161,7 @@ func createNewBlock(previousHash string, previousHeight int64, deposits []Deposi
 		// Create a new script which pays to the provided address.
 		pkScript := []byte(deposit.Address)
 
-		txn.AddTxOut(wire.NewTxOut(int64(satoshi), pkScript))
+		txn.AddTxOut(wire.NewTxOut(satoshi, pkScript))
 
 		n = deposit.N + 1
 	}
@@ -205,7 +206,7 @@ func createNewEmptyBlock(previousHash string, previousHeight int64) (*btcutil.Bl
 }
 
 func createNewBlockWithTx(previousHash string, previousHeight int64, deposits []Deposit) (*btcutil.Block, error) {
-	if deposits == nil || len(deposits) == 0 {
+	if len(deposits) == 0 {
 		return createNewEmptyBlock(previousHash, previousHeight)
 	}
 
@@ -247,7 +248,7 @@ func handleGetBlock(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (i
 
 func handleGetBlockHash(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
 	c := cmd.(*btcjson.GetBlockHashCmd)
-	if hash, ok := defaultBlockStore.BlockHashes[int64(c.Index)]; ok {
+	if hash, ok := defaultBlockStore.BlockHashes[c.Index]; ok {
 		return hash, nil
 	}
 
@@ -371,7 +372,9 @@ func handleNextDeposit(s *rpcServer, cmd interface{}, closeChan <-chan struct{})
 func (s *rpcServer) WebsocketHandler(conn *websocket.Conn, remoteAddr string) {
 	// Clear the read deadline that was set before the websocket hijacked
 	// the connection.
-	conn.SetReadDeadline(timeZeroVal)
+	if err := conn.SetReadDeadline(timeZeroVal); err != nil {
+		fmt.Println("conn.SetReadDeadline failed:", err)
+	}
 
 	// Create a new websocket client to handle the new websocket connection
 	// and wait for it to shutdown.  Once it has shutdown (and hence
@@ -379,7 +382,9 @@ func (s *rpcServer) WebsocketHandler(conn *websocket.Conn, remoteAddr string) {
 	client, err := newWebsocketClient(s, conn, remoteAddr)
 	if err != nil {
 		fmt.Printf("Failed to serve client %s: %v\n", remoteAddr, err)
-		conn.Close()
+		if err := conn.Close(); err != nil {
+			fmt.Println("Failed to close connection:", err)
+		}
 		return
 	}
 	client.Start()
@@ -609,7 +614,10 @@ func (s *rpcServer) jsonRPCRead(w http.ResponseWriter, r *http.Request) {
 
 	// Read and close the JSON-RPC request body from the caller.
 	body, err := ioutil.ReadAll(r.Body)
-	r.Body.Close()
+	if err := r.Body.Close(); err != nil {
+		fmt.Println("Failed to close response body:", err)
+	}
+
 	if err != nil {
 		errCode := http.StatusBadRequest
 		http.Error(w, fmt.Sprintf("%d error reading JSON message: %v",
@@ -626,7 +634,7 @@ func (s *rpcServer) jsonRPCRead(w http.ResponseWriter, r *http.Request) {
 	hj, ok := w.(http.Hijacker)
 	if !ok {
 		errMsg := "webserver doesn't support hijacking"
-		fmt.Printf(errMsg)
+		fmt.Print(errMsg)
 		errCode := http.StatusInternalServerError
 		http.Error(w, strconv.Itoa(errCode)+" "+errMsg, errCode)
 		return
@@ -638,9 +646,19 @@ func (s *rpcServer) jsonRPCRead(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, strconv.Itoa(errCode)+" "+err.Error(), errCode)
 		return
 	}
-	defer conn.Close()
-	defer buf.Flush()
-	conn.SetReadDeadline(timeZeroVal)
+	defer func() {
+		if err := conn.Close(); err != nil {
+			fmt.Println("conn.Close failed:", err)
+		}
+	}()
+	defer func() {
+		if err := buf.Flush(); err != nil {
+			fmt.Println("buf.Flush failed:", err)
+		}
+	}()
+	if err := conn.SetReadDeadline(timeZeroVal); err != nil {
+		fmt.Println("conn.SetReadDeadline failed:", err)
+	}
 
 	// Attempt to parse the raw body into a JSON-RPC request.
 	var responseID interface{}
@@ -768,12 +786,15 @@ func (s *rpcServer) Start() {
 	s.listeners = listeners
 
 	for _, listener := range listeners {
+		s.wg.Add(1)
 		go func(listener net.Listener) {
-			s.wg.Add(1)
+			defer s.wg.Done()
 			fmt.Printf("RPC server listening on %s\n", listener.Addr())
-			httpServer.Serve(listener)
+			if err := httpServer.Serve(listener); err != nil {
+				fmt.Println("httpServer.Serve failed:", err)
+				return
+			}
 			fmt.Printf("RPC listener done for %s\n", listener.Addr())
-			s.wg.Done()
 		}(listener)
 	}
 }
@@ -915,7 +936,7 @@ type wsClient struct {
 
 	// verboseTxUpdates specifies whether a client has requested verbose
 	// information about all new transactions.
-	verboseTxUpdates bool
+	// verboseTxUpdates bool
 
 	// addrRequests is a set of addresses the caller has requested to be
 	// notified about.  It is maintained here so all requests can be removed
@@ -929,10 +950,10 @@ type wsClient struct {
 
 	// Networking infrastructure.
 	serviceRequestSem semaphore
-	ntfnChan          chan []byte
-	sendChan          chan wsResponse
-	quit              chan struct{}
-	wg                sync.WaitGroup
+	// ntfnChan          chan []byte
+	sendChan chan wsResponse
+	quit     chan struct{}
+	wg       sync.WaitGroup
 }
 
 // newWebsocketClient returns a new websocket client given the notification
@@ -1173,7 +1194,9 @@ func (c *wsClient) Disconnect() {
 
 	fmt.Printf("Disconnecting websocket client %s\n", c.addr)
 	close(c.quit)
-	c.conn.Close()
+	if err := c.conn.Close(); err != nil {
+		fmt.Println("Failed to close connection:", err)
+	}
 	c.disconnected = true
 }
 
@@ -1230,7 +1253,11 @@ func httpHandleNextDeposit(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var deposits []Deposit
 	err := decoder.Decode(&deposits)
-	defer r.Body.Close()
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			fmt.Println("Failed to close response body:", err)
+		}
+	}()
 
 	if err != nil {
 		errCode := http.StatusBadRequest
@@ -1310,7 +1337,9 @@ func run() error {
 
 	defer func() {
 		apiServer.stop()
-		server.Stop()
+		if err := server.Stop(); err != nil {
+			fmt.Println("server.Stop failed:", err)
+		}
 		fmt.Printf("Shutdown complete")
 	}()
 

@@ -51,6 +51,7 @@ func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg C
 	}, nil
 }
 
+// Run begins the BTCScanner
 func (s *BTCScanner) Run() error {
 	return s.Base.Run(s.GetBlockCount, s.getBlockAtHeight, s.waitForNextBlock, s.scanBlock)
 }

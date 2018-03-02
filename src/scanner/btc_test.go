@@ -28,11 +28,6 @@ var (
 	errNoBlockHash = errors.New("no block hash found for height")
 )
 
-type scannedBlock struct {
-	Hash   string
-	Height int32
-}
-
 type dummyBtcrpcclient struct {
 	db                           *bolt.DB
 	blockHashes                  map[int64]string
@@ -42,7 +37,7 @@ type dummyBtcrpcclient struct {
 	blockVerboseTxErrorCallCount int
 	blockVerboseTxCallCount      int
 
-	// used for testScannerBlockNextHashAppears
+	// used for testBtcScannerBlockNextHashAppears
 	blockNextHashMissingOnceAt int64
 	hasSetMissingHash          bool
 }
@@ -130,7 +125,7 @@ func (dbc *dummyBtcrpcclient) GetBlockHash(height int64) (*chainhash.Hash, error
 	return chainhash.NewHashFromStr(hash)
 }
 
-func setupScannerWithDB(t *testing.T, btcDB *bolt.DB, db *bolt.DB) *BTCScanner {
+func setupBtcScannerWithDB(t *testing.T, btcDB *bolt.DB, db *bolt.DB) *BTCScanner {
 	log, _ := testutil.NewLogger(t)
 
 	// Blocks 235205 through 235214 are stored in btc.db
@@ -145,7 +140,8 @@ func setupScannerWithDB(t *testing.T, btcDB *bolt.DB, db *bolt.DB) *BTCScanner {
 	rpc.blockCount = 235214
 
 	store, err := NewStore(log, db)
-	store.AddSupportedCoin(CoinTypeBTC)
+	require.NoError(t, err)
+	err = store.AddSupportedCoin(CoinTypeBTC)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -160,15 +156,15 @@ func setupScannerWithDB(t *testing.T, btcDB *bolt.DB, db *bolt.DB) *BTCScanner {
 	return scr
 }
 
-func setupScanner(t *testing.T, btcDB *bolt.DB) (*BTCScanner, func()) {
+func setupBtcScanner(t *testing.T, btcDB *bolt.DB) (*BTCScanner, func()) {
 	db, shutdown := testutil.PrepareDB(t)
 
-	scr := setupScannerWithDB(t, btcDB, db)
+	scr := setupBtcScannerWithDB(t, btcDB, db)
 
 	return scr, shutdown
 }
 
-func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int64) {
+func testBtcScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int64) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
@@ -221,7 +217,7 @@ func testScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int64)
 	<-done
 }
 
-func testScannerRun(t *testing.T, scr *BTCScanner) {
+func testBtcScannerRun(t *testing.T, scr *BTCScanner) {
 	var nDeposits int64
 
 	// This address has 0 deposits
@@ -249,38 +245,38 @@ func testScannerRun(t *testing.T, scr *BTCScanner) {
 	// to test what happens when the buffer is full
 	require.True(t, int64(scr.Base.(*BaseScanner).Cfg.DepositBufferSize) < nDeposits)
 
-	testScannerRunProcessedLoop(t, scr, nDeposits)
+	testBtcScannerRunProcessedLoop(t, scr, nDeposits)
 }
 
-func testScannerRunProcessDeposits(t *testing.T, btcDB *bolt.DB) {
+func testBtcScannerRunProcessDeposits(t *testing.T, btcDB *bolt.DB) {
 	// Tests that the scanner will scan multiple blocks sequentially, finding
 	// all relevant deposits and adding them to the depositC channel.
 	// All deposits on the depositC channel will be successfully processed
 	// by the channel reader, and the scanner will mark these deposits as
 	// "processed".
-	scr, shutdown := setupScanner(t, btcDB)
+	scr, shutdown := setupBtcScanner(t, btcDB)
 	defer shutdown()
 
-	testScannerRun(t, scr)
+	testBtcScannerRun(t, scr)
 }
 
-func testScannerGetBlockCountErrorRetry(t *testing.T, btcDB *bolt.DB) {
+func testBtcScannerGetBlockCountErrorRetry(t *testing.T, btcDB *bolt.DB) {
 	// Test that if the scanner scan loop encounters an error when calling
 	// GetBlockCount(), the loop continues to work fine
-	// This test is that same as testScannerRunProcessDeposits,
+	// This test is that same as testBtcScannerRunProcessDeposits,
 	// except that the dummyBtcrpcclient is configured to return an error
 	// from GetBlockCount() one time
-	scr, shutdown := setupScanner(t, btcDB)
+	scr, shutdown := setupBtcScanner(t, btcDB)
 	defer shutdown()
 
 	scr.btcClient.(*dummyBtcrpcclient).blockCountError = errors.New("block count error")
 
-	testScannerRun(t, scr)
+	testBtcScannerRun(t, scr)
 }
 
-func testScannerConfirmationsRequired(t *testing.T, btcDB *bolt.DB) {
+func testBtcScannerConfirmationsRequired(t *testing.T, btcDB *bolt.DB) {
 	// Test that the scanner uses Base.Cfg.ConfirmationsRequired correctly
-	scr, shutdown := setupScanner(t, btcDB)
+	scr, shutdown := setupBtcScanner(t, btcDB)
 	defer shutdown()
 
 	// Scanning starts at block 23505, set the blockCount height to 2
@@ -312,36 +308,36 @@ func testScannerConfirmationsRequired(t *testing.T, btcDB *bolt.DB) {
 	// to test what happens when the buffer is full
 	require.True(t, int64(scr.Base.(*BaseScanner).Cfg.DepositBufferSize) < nDeposits)
 
-	testScannerRunProcessedLoop(t, scr, nDeposits)
+	testBtcScannerRunProcessedLoop(t, scr, nDeposits)
 }
 
-func testScannerScanBlockFailureRetry(t *testing.T, btcDB *bolt.DB) {
+func testBtcScannerScanBlockFailureRetry(t *testing.T, btcDB *bolt.DB) {
 	// Test that when scanBlock() fails, it logs "Scan block failed"
 	// and retries scan of the same block after ScanPeriod elapses.
-	scr, shutdown := setupScanner(t, btcDB)
+	scr, shutdown := setupBtcScanner(t, btcDB)
 	defer shutdown()
 
 	// Return an error on the 2nd call to GetBlockVerboseTx
 	scr.btcClient.(*dummyBtcrpcclient).blockVerboseTxError = errors.New("get block verbose tx error")
 	scr.btcClient.(*dummyBtcrpcclient).blockVerboseTxErrorCallCount = 2
 
-	testScannerRun(t, scr)
+	testBtcScannerRun(t, scr)
 }
 
-func testScannerBlockNextHashAppears(t *testing.T, btcDB *bolt.DB) {
+func testBtcScannerBlockNextHashAppears(t *testing.T, btcDB *bolt.DB) {
 	// Test that when a block has no NextHash, the scanner waits until it has
 	// one, then resumes normally
-	scr, shutdown := setupScanner(t, btcDB)
+	scr, shutdown := setupBtcScanner(t, btcDB)
 	defer shutdown()
 
 	// The block at height 235208 will lack a NextHash one time
 	// The scanner will continue and process everything normally
 	scr.btcClient.(*dummyBtcrpcclient).blockNextHashMissingOnceAt = 235208
 
-	testScannerRun(t, scr)
+	testBtcScannerRun(t, scr)
 }
 
-func testScannerDuplicateDepositScans(t *testing.T, btcDB *bolt.DB) {
+func testBtcScannerDuplicateDepositScans(t *testing.T, btcDB *bolt.DB) {
 	// Test that rescanning the same blocks doesn't send extra deposits
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
@@ -351,22 +347,22 @@ func testScannerDuplicateDepositScans(t *testing.T, btcDB *bolt.DB) {
 	// This address has:
 	// 1 deposit, in block 235206
 	// 1 deposit, in block 235207
-	scr := setupScannerWithDB(t, btcDB, db)
+	scr := setupBtcScannerWithDB(t, btcDB, db)
 	err := scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA", CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
-	testScannerRunProcessedLoop(t, scr, nDeposits)
+	testBtcScannerRunProcessedLoop(t, scr, nDeposits)
 
 	// Scanning again will have no new deposits
-	scr = setupScannerWithDB(t, btcDB, db)
-	testScannerRunProcessedLoop(t, scr, 0)
+	scr = setupBtcScannerWithDB(t, btcDB, db)
+	testBtcScannerRunProcessedLoop(t, scr, 0)
 }
 
-func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
+func testBtcScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 	// Test that pending unprocessed deposits from the db are loaded when
 	// then scanner starts.
-	scr, shutdown := setupScanner(t, btcDB)
+	scr, shutdown := setupBtcScanner(t, btcDB)
 	defer shutdown()
 
 	// NOTE: This data is fake, but the addresses and Txid are valid
@@ -416,12 +412,12 @@ func testScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 
 	// Don't add any watch addresses,
 	// only process the unprocessed deposits from the backlog
-	testScannerRunProcessedLoop(t, scr, int64(len(unprocessedDeposits)))
+	testBtcScannerRunProcessedLoop(t, scr, int64(len(unprocessedDeposits)))
 }
 
-func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
+func testBtcScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 	// Test that when processDeposit() fails, the deposit is NOT marked as processed
-	scr, shutdown := setupScanner(t, btcDB)
+	scr, shutdown := setupBtcScanner(t, btcDB)
 	defer shutdown()
 
 	var nDeposits int64
@@ -491,10 +487,10 @@ func testScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 	<-done
 }
 
-func testScannerInitialGetBlockHashError(t *testing.T, btcDB *bolt.DB) {
+func testBtcScannerInitialGetBlockHashError(t *testing.T, btcDB *bolt.DB) {
 	// Test that scanner.Run() returns an error if the initial GetBlockHash
 	// based upon scanner.Base.Cfg.InitialScanHeight fails
-	scr, shutdown := setupScanner(t, btcDB)
+	scr, shutdown := setupBtcScanner(t, btcDB)
 	defer shutdown()
 
 	// Empty the mock blockHashes map
@@ -505,72 +501,72 @@ func testScannerInitialGetBlockHashError(t *testing.T, btcDB *bolt.DB) {
 	require.Equal(t, errNoBlockHash, err)
 }
 
-func TestScanner(t *testing.T) {
+func TestBtcScanner(t *testing.T) {
 	btcDB := openDummyBtcDB(t)
-	defer btcDB.Close()
+	defer testutil.CheckError(t, btcDB.Close)
 	t.Run("group", func(t *testing.T) {
 
 		t.Run("RunProcessDeposits", func(t *testing.T) {
 			if parallel {
 				t.Parallel()
 			}
-			testScannerRunProcessDeposits(t, btcDB)
+			testBtcScannerRunProcessDeposits(t, btcDB)
 		})
 
 		t.Run("GetBlockCountErrorRetry", func(t *testing.T) {
 			if parallel {
 				t.Parallel()
 			}
-			testScannerGetBlockCountErrorRetry(t, btcDB)
+			testBtcScannerGetBlockCountErrorRetry(t, btcDB)
 		})
 
 		t.Run("InitialGetBlockHashError", func(t *testing.T) {
 			if parallel {
 				t.Parallel()
 			}
-			testScannerInitialGetBlockHashError(t, btcDB)
+			testBtcScannerInitialGetBlockHashError(t, btcDB)
 		})
 
 		t.Run("ProcessDepositError", func(t *testing.T) {
 			if parallel {
 				t.Parallel()
 			}
-			testScannerProcessDepositError(t, btcDB)
+			testBtcScannerProcessDepositError(t, btcDB)
 		})
 
 		t.Run("ConfirmationsRequired", func(t *testing.T) {
 			if parallel {
 				t.Parallel()
 			}
-			testScannerConfirmationsRequired(t, btcDB)
+			testBtcScannerConfirmationsRequired(t, btcDB)
 		})
 
 		t.Run("ScanBlockFailureRetry", func(t *testing.T) {
 			if parallel {
 				t.Parallel()
 			}
-			testScannerScanBlockFailureRetry(t, btcDB)
+			testBtcScannerScanBlockFailureRetry(t, btcDB)
 		})
 
 		t.Run("LoadUnprocessedDeposits", func(t *testing.T) {
 			if parallel {
 				t.Parallel()
 			}
-			testScannerLoadUnprocessedDeposits(t, btcDB)
+			testBtcScannerLoadUnprocessedDeposits(t, btcDB)
 		})
 
 		t.Run("DuplicateDepositScans", func(t *testing.T) {
 			if parallel {
 				t.Parallel()
 			}
-			testScannerDuplicateDepositScans(t, btcDB)
+			testBtcScannerDuplicateDepositScans(t, btcDB)
 		})
 
 		t.Run("BlockNextHashAppears", func(t *testing.T) {
 			if parallel {
 				t.Parallel()
 			}
-			testScannerBlockNextHashAppears(t, btcDB)
+			testBtcScannerBlockNextHashAppears(t, btcDB)
 		})
 	})
 }

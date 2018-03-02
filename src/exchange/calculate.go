@@ -11,6 +11,13 @@ import (
 	"github.com/MDLlife/teller/src/util/mathutil"
 )
 
+const (
+	// SatoshisPerBTC is the number of satoshis per 1 BTC
+	SatoshisPerBTC int64 = 1e8
+	// WeiPerETH is the number of wei per 1 ETH
+	WeiPerETH int64 = 1e18
+)
+
 // CalculateBtcSkyValue returns the amount of SKY (in droplets) to give for an
 // amount of BTC (in satoshis).
 // Rate is measured in SKY per BTC. It should be a decimal string.

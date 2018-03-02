@@ -16,7 +16,7 @@ func TestNewBTCAddrsAllValid(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJson := `{
+	addressesJSON := `{
     "btc_addresses": [
         "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
         "14FG8vQnmK6B7YbLSr6uC5wfGY78JFNCYg",
@@ -26,7 +26,7 @@ func TestNewBTCAddrsAllValid(t *testing.T) {
     ]
 }`
 
-	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
 
 	require.Nil(t, err)
 	require.NotNil(t, btcAddrMgr)
@@ -38,7 +38,7 @@ func TestNewBtcAddrsContainsInvalid(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJson := `{
+	addressesJSON := `{
     "btc_addresses": [
         "14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
         "1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy",
@@ -49,7 +49,7 @@ func TestNewBtcAddrsContainsInvalid(t *testing.T) {
 
 	expectedErr := errors.New("Invalid deposit address `bad`: Invalid address length")
 
-	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
@@ -62,7 +62,7 @@ func TestNewBtcAddrsContainsDuplicated(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJson := `{
+	addressesJSON := `{
       "btc_addresses": [
         "14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj",
         "1JNonvXRyZvZ4ZJ9PE8voyo67UQN1TpoGy",
@@ -73,7 +73,7 @@ func TestNewBtcAddrsContainsDuplicated(t *testing.T) {
 
 	expectedErr := errors.New("Duplicate deposit address `14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj`")
 
-	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
@@ -86,13 +86,13 @@ func TestNewBTCAddrsContainsNull(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJson := `{
+	addressesJSON := `{
       "btc_addresses": []
 }`
 
 	expectedErr := errors.New("No BTC addresses")
 
-	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
@@ -105,11 +105,11 @@ func TestNewBTCAddrsBadFormat(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJson := ``
+	addressesJSON := ``
 
 	expectedErr := errors.New("Decode loaded address json failed: EOF")
 
-	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJson)))
+	btcAddrMgr, err := NewBTCAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
