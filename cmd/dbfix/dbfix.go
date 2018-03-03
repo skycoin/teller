@@ -10,9 +10,10 @@ import (
 
 	"github.com/boltdb/bolt"
 
-	"github.com/skycoin/skycoin/src/cipher"
+	"github.com/MDLlife/MDL/src/cipher"
 
 	"github.com/MDLlife/teller/src/exchange"
+	"github.com/MDLlife/teller/src/scanner"
 )
 
 const usage = `dbfix <dbfile>

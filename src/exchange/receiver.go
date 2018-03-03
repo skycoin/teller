@@ -6,8 +6,8 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/config"
-	"github.com/skycoin/teller/src/scanner"
+	"github.com/MDLlife/teller/src/config"
+	"github.com/MDLlife/teller/src/scanner"
 )
 
 func init() {

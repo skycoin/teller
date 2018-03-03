@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/skycoin/src/api/cli"
+	"github.com/MDLlife/MDL/src/api/cli"
 
 	"github.com/MDLlife/teller/src/exchange"
 	"github.com/MDLlife/teller/src/sender"

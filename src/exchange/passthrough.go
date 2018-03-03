@@ -6,7 +6,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/config"
+	"github.com/MDLlife/teller/src/config"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/config"
+	"github.com/MDLlife/teller/src/config"
 )
 
 // Processor is a component that processes deposits from a Receiver and sends them to a Sender
