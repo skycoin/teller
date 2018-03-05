@@ -22,8 +22,8 @@ type fakeExchanger struct {
 	mock.Mock
 }
 
-func (e *fakeExchanger) BindAddress(skyAddr, depositAddr, coinType string) (*exchange.BoundAddress, error) {
-	args := e.Called(skyAddr, depositAddr, coinType)
+func (e *fakeExchanger) BindAddress(mdlAddr, depositAddr, coinType string) (*exchange.BoundAddress, error) {
+	args := e.Called(mdlAddr, depositAddr, coinType)
 
 	ba := args.Get(0)
 	if ba == nil {
@@ -33,8 +33,8 @@ func (e *fakeExchanger) BindAddress(skyAddr, depositAddr, coinType string) (*exc
 	return ba.(*exchange.BoundAddress), args.Error(1)
 }
 
-func (e *fakeExchanger) GetDepositStatuses(skyAddr string) ([]exchange.DepositStatus, error) {
-	args := e.Called(skyAddr)
+func (e *fakeExchanger) GetDepositStatuses(mdlAddr string) ([]exchange.DepositStatus, error) {
+	args := e.Called(mdlAddr)
 	return args.Get(0).([]exchange.DepositStatus), args.Error(1)
 }
 
@@ -43,8 +43,8 @@ func (e *fakeExchanger) GetDepositStatusDetail(flt exchange.DepositFilter) ([]ex
 	return args.Get(0).([]exchange.DepositStatusDetail), args.Error(1)
 }
 
-func (e *fakeExchanger) GetBindNum(skyAddr string) (int, error) {
-	args := e.Called(skyAddr)
+func (e *fakeExchanger) GetBindNum(mdlAddr string) (int, error) {
+	args := e.Called(mdlAddr)
 	return args.Int(0), args.Error(1)
 }
 

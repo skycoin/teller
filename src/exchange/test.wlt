@@ -1,6 +1,6 @@
 {
     "meta": {
-        "coin": "skycoin",
+        "coin": "mdl",
         "filename": "test.wlt",
         "label": "test-teller",
         "lastSeed": "popopopopo",

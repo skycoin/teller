@@ -12,9 +12,9 @@ import (
 
 func init() {
 	// Assert that getRate() handles all coin types
-	cfg := config.SkyExchanger{
-		SkyBtcExchangeRate: "1",
-		SkyEthExchangeRate: "2",
+	cfg := config.MDLExchanger{
+		MDLBtcExchangeRate: "1",
+		MDLEthExchangeRate: "2",
 	}
 	for _, ct := range scanner.GetCoinTypes() {
 		rate, err := getRate(cfg, ct)
@@ -30,7 +30,7 @@ func init() {
 // Receiver is a component that reads deposits from a scanner.Scanner and records them
 type Receiver interface {
 	Deposits() <-chan DepositInfo
-	BindAddress(skyAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error)
+	BindAddress(mdlAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error)
 }
 
 // ReceiveRunner is a Receiver than can be run
@@ -43,7 +43,7 @@ type ReceiveRunner interface {
 // with the configured rate recorded at instantiation time [TODO: move that functionality to Processor?]
 type Receive struct {
 	log         logrus.FieldLogger
-	cfg         config.SkyExchanger
+	cfg         config.MDLExchanger
 	multiplexer *scanner.Multiplexer
 	store       Storer
 	deposits    chan DepositInfo
@@ -52,7 +52,7 @@ type Receive struct {
 }
 
 // NewReceive creates a Receive
-func NewReceive(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, multiplexer *scanner.Multiplexer) (*Receive, error) {
+func NewReceive(log logrus.FieldLogger, cfg config.MDLExchanger, store Storer, multiplexer *scanner.Multiplexer) (*Receive, error) {
 	// TODO -- split up config into relevant parts?
 	// The Receive component needs exchange rates
 	if err := cfg.Validate(); err != nil {
@@ -189,22 +189,22 @@ func (r *Receive) getRate(coinType string) (string, error) {
 }
 
 // getRate returns conversion rate according to coin type
-func getRate(cfg config.SkyExchanger, coinType string) (string, error) {
+func getRate(cfg config.MDLExchanger, coinType string) (string, error) {
 	switch coinType {
 	case scanner.CoinTypeBTC:
-		return cfg.SkyBtcExchangeRate, nil
+		return cfg.MDLBtcExchangeRate, nil
 	case scanner.CoinTypeETH:
-		return cfg.SkyEthExchangeRate, nil
+		return cfg.MDLEthExchangeRate, nil
 	default:
 		return "", scanner.ErrUnsupportedCoinType
 	}
 }
 
-// BindAddress binds deposit address with skycoin address, and
+// BindAddress binds deposit address with mdl address, and
 // add the btc/eth address to scan service, when detect deposit coin
-// to the btc/eth address, will send specific skycoin to the binded
-// skycoin address
-func (r *Receive) BindAddress(skyAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error) {
+// to the btc/eth address, will send specific mdl to the binded
+// mdl address
+func (r *Receive) BindAddress(mdlAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error) {
 	if err := config.ValidateBuyMethod(buyMethod); err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func (r *Receive) BindAddress(skyAddr, depositAddr, coinType, buyMethod string) 
 		return nil, err
 	}
 
-	boundAddr, err := r.store.BindAddress(skyAddr, depositAddr, coinType, buyMethod)
+	boundAddr, err := r.store.BindAddress(mdlAddr, depositAddr, coinType, buyMethod)
 	if err != nil {
 		return nil, err
 	}

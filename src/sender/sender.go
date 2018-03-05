@@ -14,7 +14,7 @@ var (
 	ErrClosed = errors.New("Send service closed")
 )
 
-// Sender provids apis for sending skycoin
+// Sender provids apis for sending mdl
 type Sender interface {
 	CreateTransaction(string, uint64) (*coin.Transaction, error)
 	BroadcastTransaction(*coin.Transaction) *BroadcastTxResponse
@@ -37,7 +37,7 @@ func NewRetrySender(s *SendService) *RetrySender {
 
 // CreateTransaction creates a transaction offline
 func (s *RetrySender) CreateTransaction(recvAddr string, coins uint64) (*coin.Transaction, error) {
-	return s.s.SkyClient.CreateTransaction(recvAddr, coins)
+	return s.s.MDLClient.CreateTransaction(recvAddr, coins)
 }
 
 // BroadcastTransaction sends a transaction in a goroutine
@@ -70,5 +70,5 @@ func (s *RetrySender) IsTxConfirmed(txid string) *ConfirmResponse {
 
 // Balance returns the remaining balance of the sender
 func (s *RetrySender) Balance() (*cli.Balance, error) {
-	return s.s.SkyClient.Balance()
+	return s.s.MDLClient.Balance()
 }

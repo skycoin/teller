@@ -1,12 +1,12 @@
 # teller build binaries
-# reference https://github.com/skycoin/teller
+# reference https://github.com/mdllife/teller
 FROM golang:1.9-alpine AS build-go
 
 RUN apk add --no-cache gcc musl-dev linux-headers
 
-COPY . $GOPATH/src/github.com/skycoin/teller
+COPY . $GOPATH/src/github.com/mdllife/teller
 
-RUN cd $GOPATH/src/github.com/skycoin/teller && \
+RUN cd $GOPATH/src/github.com/mdllife/teller && \
   CGO_ENABLED=1 GOOS=linux go install -ldflags "-s" -installsuffix cgo ./cmd/...
 
 

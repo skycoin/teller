@@ -33,9 +33,9 @@ type SendRunner interface {
 // Send reads deposits from a Processor and sends coins
 type Send struct {
 	log         logrus.FieldLogger
-	cfg         config.SkyExchanger
+	cfg         config.MDLExchanger
 	processor   Processor
-	sender      sender.Sender // sender provides APIs for sending skycoin
+	sender      sender.Sender // sender provides APIs for sending mdl
 	store       Storer        // deposit info storage
 	quit        chan struct{}
 	done        chan struct{}
@@ -45,7 +45,7 @@ type Send struct {
 }
 
 // NewSend creates exchange service
-func NewSend(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, sender sender.Sender, processor Processor) (*Send, error) {
+func NewSend(log logrus.FieldLogger, cfg config.MDLExchanger, store Storer, sender sender.Sender, processor Processor) (*Send, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -220,11 +220,11 @@ func (s *Send) processWaitSendDeposit(di DepositInfo) error {
 
 		switch err.(type) {
 		case sender.RPCError:
-			// Treat skycoin RPC/CLI errors as temporary.
+			// Treat mdl RPC/CLI errors as temporary.
 			// Some RPC/CLI errors are hypothetically permanent,
 			// but most likely it is an insufficient wallet balance or
-			// the skycoin node is unavailable.
-			// A permanent error suggests a bug in skycoin or teller so can be fixed.
+			// the mdl node is unavailable.
+			// A permanent error suggests a bug in mdl or teller so can be fixed.
 			log.WithError(err).Error("handleDepositInfoState failed")
 			select {
 			case <-time.After(s.cfg.TxConfirmationCheckWait):
@@ -263,8 +263,8 @@ func (s *Send) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 
 	switch di.Status {
 	case StatusWaitSend:
-		// Prepare skycoin transaction
-		skyTx, err := s.createTransaction(di)
+		// Prepare mdl transaction
+		mdlTx, err := s.createTransaction(di)
 
 		if err != nil {
 			log.WithError(err).Error("createTransaction failed")
@@ -290,19 +290,19 @@ func (s *Send) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 			return di, err
 		}
 
-		// Find the coins from the skyTx
-		// The skyTx contains one output sent to the destination address,
+		// Find the coins from the mdlTx
+		// The mdlTx contains one output sent to the destination address,
 		// so this check is safe.
 		// It is verified earlier by verifyCreatedTransaction
-		var skySent uint64
-		for _, o := range skyTx.Out {
-			if o.Address.String() == di.SkyAddress {
-				skySent = o.Coins
+		var mdlSent uint64
+		for _, o := range mdlTx.Out {
+			if o.Address.String() == di.MDLAddress {
+				mdlSent = o.Coins
 				break
 			}
 		}
 
-		if skySent == 0 {
+		if mdlSent == 0 {
 			err := errors.New("No output to destination address found in transaction")
 			log.WithError(err).Error(err)
 			return di, err
@@ -313,14 +313,14 @@ func (s *Send) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 		// If the db save fails, no coins had been sent
 		di, err = s.store.UpdateDepositInfoCallback(di.DepositID, func(di DepositInfo) DepositInfo {
 			di.Status = StatusWaitConfirm
-			di.Txid = skyTx.TxIDHex()
-			di.SkySent = skySent
+			di.Txid = mdlTx.TxIDHex()
+			di.MDLSent = mdlSent
 			return di
 		}, func(di DepositInfo) error {
 			// NOTE: broadcastTransaction retries indefinitely on error
-			// If the skycoin node is not reachable, this will block,
+			// If the mdl node is not reachable, this will block,
 			// which will also block the database since it's in a transaction
-			rsp, err := s.broadcastTransaction(skyTx)
+			rsp, err := s.broadcastTransaction(mdlTx)
 			if err != nil {
 				log.WithError(err).Error("broadcastTransaction failed")
 				return err
@@ -328,8 +328,8 @@ func (s *Send) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 
 			// Invariant assertion: do not return this as an error, since
 			// coins have been sent. This should never occur.
-			if rsp.Txid != skyTx.TxIDHex() {
-				log.Error("CRITICAL ERROR: BroadcastTxResponse.Txid != skyTx.TxIDHex()")
+			if rsp.Txid != mdlTx.TxIDHex() {
+				log.Error("CRITICAL ERROR: BroadcastTxResponse.Txid != mdlTx.TxIDHex()")
 			}
 
 			return nil
@@ -396,69 +396,69 @@ func (s *Send) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 	}
 }
 
-func (s *Send) calculateSkyDroplets(di DepositInfo) (uint64, error) {
+func (s *Send) calculateMDLDroplets(di DepositInfo) (uint64, error) {
 	log := s.log
 	var err error
-	var skyAmt uint64
+	var mdlAmt uint64
 	switch di.CoinType {
 	case scanner.CoinTypeBTC:
-		skyAmt, err = CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
+		mdlAmt, err = CalculateBtcMDLValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
 		if err != nil {
-			log.WithError(err).Error("CalculateBtcSkyValue failed")
+			log.WithError(err).Error("CalculateBtcMDLValue failed")
 			return 0, err
 		}
 	case scanner.CoinTypeETH:
 		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
-		skyAmt, err = CalculateEthSkyValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
+		mdlAmt, err = CalculateEthMDLValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
 		if err != nil {
-			log.WithError(err).Error("CalculateEthSkyValue failed")
+			log.WithError(err).Error("CalculateEthMDLValue failed")
 			return 0, err
 		}
 	default:
 		log.WithError(scanner.ErrUnsupportedCoinType).Error()
 		return 0, scanner.ErrUnsupportedCoinType
 	}
-	return skyAmt, nil
+	return mdlAmt, nil
 }
 
 func (s *Send) createTransaction(di DepositInfo) (*coin.Transaction, error) {
 	log := s.log.WithField("deposit", di)
 
-	// This should never occur, the DepositInfo is saved with a SkyAddress
+	// This should never occur, the DepositInfo is saved with a MDLAddress
 	// during GetOrCreateDepositInfo().
-	if di.SkyAddress == "" {
+	if di.MDLAddress == "" {
 		err := ErrNoBoundAddress
 		log.WithError(err).Error(err)
 		return nil, err
 	}
 
-	log = log.WithField("skyAddr", di.SkyAddress)
-	log = log.WithField("skyRate", di.ConversionRate)
+	log = log.WithField("mdlAddr", di.MDLAddress)
+	log = log.WithField("mdlRate", di.ConversionRate)
 	log = log.WithField("maxDecimals", s.cfg.MaxDecimals)
 
-	skyAmt, err := s.calculateSkyDroplets(di)
+	mdlAmt, err := s.calculateMDLDroplets(di)
 	if err != nil {
-		log.WithError(err).Error("calculateSkyDroplets failed")
+		log.WithError(err).Error("calculateMDLDroplets failed")
 		return nil, err
 	}
-	skyAmtCoins, err := droplet.ToString(skyAmt)
+	mdlAmtCoins, err := droplet.ToString(mdlAmt)
 	if err != nil {
 		log.WithError(err).Error("droplet.ToString failed")
 		return nil, err
 	}
 
-	log = log.WithField("sendAmtDroplets", skyAmt)
-	log = log.WithField("sendAmtCoins", skyAmtCoins)
+	log = log.WithField("sendAmtDroplets", mdlAmt)
+	log = log.WithField("sendAmtCoins", mdlAmtCoins)
 
-	log.Info("Creating skycoin transaction")
+	log.Info("Creating mdl transaction")
 
-	if skyAmt == 0 {
+	if mdlAmt == 0 {
 		err := ErrEmptySendAmount
 		log.WithError(err).Error(err)
 		return nil, err
 	}
 
-	tx, err := s.sender.CreateTransaction(di.SkyAddress, skyAmt)
+	tx, err := s.sender.CreateTransaction(di.MDLAddress, mdlAmt)
 	if err != nil {
 		log.WithError(err).Error("sender.CreateTransaction failed")
 		return nil, err
@@ -466,7 +466,7 @@ func (s *Send) createTransaction(di DepositInfo) (*coin.Transaction, error) {
 
 	log = log.WithField("transactionOutput", tx.Out)
 
-	if err := verifyCreatedTransaction(tx, di, skyAmt); err != nil {
+	if err := verifyCreatedTransaction(tx, di, mdlAmt); err != nil {
 		log.WithError(err).Error("verifyCreatedTransaction failed")
 		return nil, err
 	}
@@ -474,28 +474,28 @@ func (s *Send) createTransaction(di DepositInfo) (*coin.Transaction, error) {
 	return tx, nil
 }
 
-func verifyCreatedTransaction(tx *coin.Transaction, di DepositInfo, skyAmt uint64) error {
+func verifyCreatedTransaction(tx *coin.Transaction, di DepositInfo, mdlAmt uint64) error {
 	// Check invariant assertions:
 	// The transaction should contain one output to the destination address.
 	// It may or may not have a change output.
 	count := 0
 
 	for _, o := range tx.Out {
-		if o.Address.String() != di.SkyAddress {
+		if o.Address.String() != di.MDLAddress {
 			continue
 		}
 
 		count++
 
-		if o.Coins != skyAmt {
+		if o.Coins != mdlAmt {
 			return errors.New("CreateTransaction transaction coins are different")
 		}
 	}
 
 	if count == 0 {
-		return fmt.Errorf("CreateTransaction transaction has no output to address %s", di.SkyAddress)
+		return fmt.Errorf("CreateTransaction transaction has no output to address %s", di.MDLAddress)
 	} else if count > 1 {
-		return fmt.Errorf("CreateTransaction transaction has multiple outputs to address %s", di.SkyAddress)
+		return fmt.Errorf("CreateTransaction transaction has multiple outputs to address %s", di.MDLAddress)
 	}
 
 	return nil
@@ -504,7 +504,7 @@ func verifyCreatedTransaction(tx *coin.Transaction, di DepositInfo, skyAmt uint6
 func (s *Send) broadcastTransaction(tx *coin.Transaction) (*sender.BroadcastTxResponse, error) {
 	log := s.log.WithField("txid", tx.TxIDHex())
 
-	log.Info("Broadcasting skycoin transaction")
+	log.Info("Broadcasting mdl transaction")
 
 	rsp := s.sender.BroadcastTransaction(tx)
 
@@ -517,12 +517,12 @@ func (s *Send) broadcastTransaction(tx *coin.Transaction) (*sender.BroadcastTxRe
 	}
 
 	if rsp.Err != nil {
-		err := fmt.Errorf("Send skycoin failed: %v", rsp.Err)
+		err := fmt.Errorf("Send mdl failed: %v", rsp.Err)
 		log.WithError(err).Error(err)
 		return nil, err
 	}
 
-	log.Info("Sent skycoin")
+	log.Info("Sent mdl")
 
 	return rsp, nil
 }

@@ -70,7 +70,7 @@ func NewStatusFromStr(st string) Status {
 
 // BoundAddress records information about an address binding
 type BoundAddress struct {
-	SkyAddress string
+	MDLAddress string
 	Address    string
 	CoinType   string
 	BuyMethod  string
@@ -82,14 +82,14 @@ type DepositInfo struct {
 	UpdatedAt      int64
 	Status         Status // TODO -- migrate to string statuses?
 	CoinType       string
-	SkyAddress     string
+	MDLAddress     string
 	BuyMethod      string
 	DepositAddress string
 	DepositID      string
 	Txid           string
-	ConversionRate string // SKY per other coin, as a decimal string (allows integers, floats, fractions)
+	ConversionRate string // MDL per other coin, as a decimal string (allows integers, floats, fractions)
 	DepositValue   int64  // Deposit amount. Should be measured in the smallest unit possible (e.g. satoshis for BTC)
-	SkySent        uint64 // SKY sent, measured in droplets
+	MDLSent        uint64 // MDL sent, measured in droplets
 	Passthrough    PassthroughData
 	Error          string // An error that occurred during processing
 	// The original Deposit is saved for the records, in case there is a mistake.
@@ -101,7 +101,7 @@ type DepositInfo struct {
 // PassthroughData encapsulates data used for OTC passthrough
 type PassthroughData struct {
 	ExchangeName      string
-	SkyBought         uint64
+	MDLBought         uint64
 	DepositValueSpent int64
 	Orders            []PassthroughOrder
 }
@@ -118,7 +118,7 @@ type PassthroughOrder struct {
 // DepositStats records overall statistics about deposits
 type DepositStats struct {
 	TotalBTCReceived int64 `json:"total_btc_received"`
-	TotalSKYSent     int64 `json:"total_sky_sent"`
+	TotalMDLSent     int64 `json:"total_mdl_sent"`
 }
 
 // ValidateForStatus does a consistency check of the data based upon the Status value
@@ -128,8 +128,8 @@ func (di DepositInfo) ValidateForStatus() error {
 		if di.Seq == 0 {
 			return errors.New("Seq missing")
 		}
-		if di.SkyAddress == "" {
-			return errors.New("SkyAddress missing")
+		if di.MDLAddress == "" {
+			return errors.New("MDLAddress missing")
 		}
 		if di.DepositAddress == "" {
 			return errors.New("DepositAddress missing")
@@ -162,8 +162,8 @@ func (di DepositInfo) ValidateForStatus() error {
 		if di.Error != ErrEmptySendAmount.Error() && di.Txid == "" {
 			return errors.New("Txid missing")
 		}
-		// Don't check SkySent == 0, it is possible to have StatusDone with
-		// no sky sent, this happens if we received a very tiny deposit.
+		// Don't check MDLSent == 0, it is possible to have StatusDone with
+		// no mdl sent, this happens if we received a very tiny deposit.
 		// In that case, the DepositInfo status is switched to StatusDone
 		// without doing StatusWaitConfirm
 		return checkWaitSend()
@@ -172,8 +172,8 @@ func (di DepositInfo) ValidateForStatus() error {
 		if di.Txid == "" {
 			return errors.New("Txid missing")
 		}
-		if di.SkySent == 0 {
-			return errors.New("SkySent is zero")
+		if di.MDLSent == 0 {
+			return errors.New("MDLSent is zero")
 		}
 		return checkWaitSend()
 

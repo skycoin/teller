@@ -1,5 +1,5 @@
-// Skycoin teller, which provides service of monitoring the bitcoin deposite
-// and sending skycoin coins
+// MDL teller, which provides service of monitoring the bitcoin deposite
+// and sending mdl coins
 package main
 
 import (
@@ -246,17 +246,17 @@ func run() error {
 	background("multiplex.Run", errC, multiplexer.Multiplex)
 
 	if cfg.Dummy.Sender {
-		log.Info("skyd disabled, running dummy sender")
+		log.Info("mdld disabled, running dummy sender")
 		sendRPC = sender.NewDummySender(log)
 		sendRPC.(*sender.DummySender).BindHandlers(dummyMux)
 	} else {
-		skyClient, err := sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
+		mdlClient, err := sender.NewRPC(cfg.MDLExchanger.Wallet, cfg.MDLRPC.Address)
 		if err != nil {
 			log.WithError(err).Error("sender.NewRPC failed")
 			return err
 		}
 
-		sendService = sender.NewService(log, skyClient)
+		sendService = sender.NewService(log, mdlClient)
 
 		background("sendService.Run", errC, sendService.Run)
 
@@ -281,17 +281,17 @@ func run() error {
 
 	var exchangeClient *exchange.Exchange
 
-	switch cfg.SkyExchanger.BuyMethod {
+	switch cfg.MDLExchanger.BuyMethod {
 	case config.BuyMethodDirect:
 		var err error
-		exchangeClient, err = exchange.NewDirectExchange(log, cfg.SkyExchanger, exchangeStore, multiplexer, sendRPC)
+		exchangeClient, err = exchange.NewDirectExchange(log, cfg.MDLExchanger, exchangeStore, multiplexer, sendRPC)
 		if err != nil {
 			log.WithError(err).Error("exchange.NewDirectExchange failed")
 			return err
 		}
 	case config.BuyMethodPassthrough:
 		var err error
-		exchangeClient, err = exchange.NewPassthroughExchange(log, cfg.SkyExchanger, exchangeStore, multiplexer, sendRPC)
+		exchangeClient, err = exchange.NewPassthroughExchange(log, cfg.MDLExchanger, exchangeStore, multiplexer, sendRPC)
 		if err != nil {
 			log.WithError(err).Error("exchange.NewPassthroughExchange failed")
 			return err
@@ -395,7 +395,7 @@ func run() error {
 	log.Info("Shutting down exchangeClient")
 	exchangeClient.Shutdown()
 
-	// close the skycoin send service
+	// close the mdl send service
 	if sendService != nil {
 		log.Info("Shutting down sendService")
 		sendService.Shutdown()

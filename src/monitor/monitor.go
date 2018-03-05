@@ -221,7 +221,7 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 	}
 }
 
-// stats returns all deposit stats, including total BTC received and total SKY sent.
+// stats returns all deposit stats, including total BTC received and total MDL sent.
 // Method: GET
 // URI: /api/stats
 func (m *Monitor) statsHandler() http.HandlerFunc {

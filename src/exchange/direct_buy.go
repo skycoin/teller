@@ -22,7 +22,7 @@ type ProcessRunner interface {
 // DirectBuy implements a Processor. All deposits are sent directly to the sender for processing.
 type DirectBuy struct {
 	log      logrus.FieldLogger
-	cfg      config.SkyExchanger
+	cfg      config.MDLExchanger
 	receiver Receiver
 	store    Storer
 	deposits chan DepositInfo
@@ -31,7 +31,7 @@ type DirectBuy struct {
 }
 
 // NewDirectBuy creates DirectBuy
-func NewDirectBuy(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, receiver Receiver) (*DirectBuy, error) {
+func NewDirectBuy(log logrus.FieldLogger, cfg config.MDLExchanger, store Storer, receiver Receiver) (*DirectBuy, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
