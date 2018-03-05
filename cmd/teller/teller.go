@@ -1,5 +1,5 @@
-// Skycoin teller, which provides service of monitoring the bitcoin deposite
-// and sending skycoin coins
+// MDL teller, which provides service of monitoring the bitcoin deposite
+// and sending mdl coins
 package main
 
 import (
@@ -21,14 +21,14 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
-	"github.com/skycoin/teller/src/addrs"
-	"github.com/skycoin/teller/src/config"
-	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/monitor"
-	"github.com/skycoin/teller/src/scanner"
-	"github.com/skycoin/teller/src/sender"
-	"github.com/skycoin/teller/src/teller"
-	"github.com/skycoin/teller/src/util/logger"
+	"github.com/MDLlife/teller/src/addrs"
+	"github.com/MDLlife/teller/src/config"
+	"github.com/MDLlife/teller/src/exchange"
+	"github.com/MDLlife/teller/src/monitor"
+	"github.com/MDLlife/teller/src/scanner"
+	"github.com/MDLlife/teller/src/sender"
+	"github.com/MDLlife/teller/src/teller"
+	"github.com/MDLlife/teller/src/util/logger"
 )
 
 func main() {
@@ -110,7 +110,7 @@ func run() error {
 		fmt.Println("Failed to get user's home directory:", err)
 		return err
 	}
-	defaultAppDir := filepath.Join(cur.HomeDir, ".teller-skycoin")
+	defaultAppDir := filepath.Join(cur.HomeDir, ".teller-mdl")
 
 	appDirOpt := pflag.StringP("dir", "d", defaultAppDir, "application data directory")
 	configNameOpt := pflag.StringP("config", "c", "config", "name of configuration file")
@@ -246,17 +246,17 @@ func run() error {
 	background("multiplex.Run", errC, multiplexer.Multiplex)
 
 	if cfg.Dummy.Sender {
-		log.Info("skyd disabled, running dummy sender")
+		log.Info("mdld disabled, running dummy sender")
 		sendRPC = sender.NewDummySender(log)
 		sendRPC.(*sender.DummySender).BindHandlers(dummyMux)
 	} else {
-		skyClient, err := sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
+		mdlClient, err := sender.NewRPC(cfg.MDLExchanger.Wallet, cfg.MDLRPC.Address)
 		if err != nil {
 			log.WithError(err).Error("sender.NewRPC failed")
 			return err
 		}
 
-		sendService = sender.NewService(log, skyClient)
+		sendService = sender.NewService(log, mdlClient)
 
 		background("sendService.Run", errC, sendService.Run)
 
@@ -281,17 +281,17 @@ func run() error {
 
 	var exchangeClient *exchange.Exchange
 
-	switch cfg.SkyExchanger.BuyMethod {
+	switch cfg.MDLExchanger.BuyMethod {
 	case config.BuyMethodDirect:
 		var err error
-		exchangeClient, err = exchange.NewDirectExchange(log, cfg.SkyExchanger, exchangeStore, multiplexer, sendRPC)
+		exchangeClient, err = exchange.NewDirectExchange(log, cfg.MDLExchanger, exchangeStore, multiplexer, sendRPC)
 		if err != nil {
 			log.WithError(err).Error("exchange.NewDirectExchange failed")
 			return err
 		}
 	case config.BuyMethodPassthrough:
 		var err error
-		exchangeClient, err = exchange.NewPassthroughExchange(log, cfg.SkyExchanger, exchangeStore, multiplexer, sendRPC)
+		exchangeClient, err = exchange.NewPassthroughExchange(log, cfg.MDLExchanger, exchangeStore, multiplexer, sendRPC)
 		if err != nil {
 			log.WithError(err).Error("exchange.NewPassthroughExchange failed")
 			return err
@@ -395,7 +395,7 @@ func run() error {
 	log.Info("Shutting down exchangeClient")
 	exchangeClient.Shutdown()
 
-	// close the skycoin send service
+	// close the mdl send service
 	if sendService != nil {
 		log.Info("Shutting down sendService")
 		sendService.Shutdown()

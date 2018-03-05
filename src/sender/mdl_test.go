@@ -8,16 +8,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/skycoin/src/api/cli"
-	"github.com/skycoin/skycoin/src/api/webrpc"
-	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/coin"
-	"github.com/skycoin/skycoin/src/visor"
+	"github.com/MDLlife/MDL/src/api/cli"
+	"github.com/MDLlife/MDL/src/api/webrpc"
+	"github.com/MDLlife/MDL/src/cipher"
+	"github.com/MDLlife/MDL/src/coin"
+	"github.com/MDLlife/MDL/src/visor"
 
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/util/testutil"
 )
 
-type dummySkyClient struct {
+type dummyMDLClient struct {
 	sync.Mutex
 	broadcastTxTxid string
 	broadcastTxErr  error
@@ -26,15 +26,15 @@ type dummySkyClient struct {
 	getTxErr        error
 }
 
-func newDummySkyClient() *dummySkyClient {
-	return &dummySkyClient{}
+func newDummyMDLClient() *dummyMDLClient {
+	return &dummyMDLClient{}
 }
 
-func (ds *dummySkyClient) BroadcastTransaction(tx *coin.Transaction) (string, error) {
+func (ds *dummyMDLClient) BroadcastTransaction(tx *coin.Transaction) (string, error) {
 	return ds.broadcastTxTxid, ds.broadcastTxErr
 }
 
-func (ds *dummySkyClient) CreateTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
+func (ds *dummyMDLClient) CreateTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
 	if ds.createTxErr != nil {
 		return nil, ds.createTxErr
 	}
@@ -42,7 +42,7 @@ func (ds *dummySkyClient) CreateTransaction(destAddr string, coins uint64) (*coi
 	return ds.createTransaction(destAddr, coins)
 }
 
-func (ds *dummySkyClient) createTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
+func (ds *dummyMDLClient) createTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
 	addr, err := cipher.DecodeBase58Address(destAddr)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func (ds *dummySkyClient) createTransaction(destAddr string, coins uint64) (*coi
 	}, nil
 }
 
-func (ds *dummySkyClient) GetTransaction(txid string) (*webrpc.TxnResult, error) {
+func (ds *dummyMDLClient) GetTransaction(txid string) (*webrpc.TxnResult, error) {
 	ds.Lock()
 	defer ds.Unlock()
 	txjson := webrpc.TxnResult{
@@ -68,32 +68,32 @@ func (ds *dummySkyClient) GetTransaction(txid string) (*webrpc.TxnResult, error)
 	return &txjson, ds.getTxErr
 }
 
-func (ds *dummySkyClient) Balance() (*cli.Balance, error) {
+func (ds *dummyMDLClient) Balance() (*cli.Balance, error) {
 	return &cli.Balance{
 		Coins: "100.000000",
 		Hours: "100",
 	}, nil
 }
 
-func (ds *dummySkyClient) changeConfirmStatus(v bool) {
+func (ds *dummyMDLClient) changeConfirmStatus(v bool) {
 	ds.Lock()
 	defer ds.Unlock()
 	ds.txConfirmed = v
 }
 
-func (ds *dummySkyClient) changeBroadcastTxErr(err error) {
+func (ds *dummyMDLClient) changeBroadcastTxErr(err error) {
 	ds.Lock()
 	defer ds.Unlock()
 	ds.broadcastTxErr = err
 }
 
-func (ds *dummySkyClient) changeBroadcastTxTxid(txid string) { // nolint: unparam
+func (ds *dummyMDLClient) changeBroadcastTxTxid(txid string) { // nolint: unparam
 	ds.Lock()
 	defer ds.Unlock()
 	ds.broadcastTxTxid = txid
 }
 
-func (ds *dummySkyClient) changeGetTxErr(err error) {
+func (ds *dummyMDLClient) changeGetTxErr(err error) {
 	ds.Lock()
 	defer ds.Unlock()
 	ds.getTxErr = err
@@ -101,7 +101,7 @@ func (ds *dummySkyClient) changeGetTxErr(err error) {
 
 func TestSenderBroadcastTransaction(t *testing.T) {
 	log, _ := testutil.NewLogger(t)
-	dsc := newDummySkyClient()
+	dsc := newDummyMDLClient()
 
 	dsc.changeBroadcastTxTxid("1111")
 	s := NewService(log, dsc)

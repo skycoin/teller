@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/scanner"
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/exchange"
+	"github.com/MDLlife/teller/src/scanner"
+	"github.com/MDLlife/teller/src/util/testutil"
 )
 
 type dummyBtcAddrMgr struct {
@@ -39,7 +39,7 @@ func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositF
 			ds = append(ds, exchange.DepositStatusDetail{
 				Seq:            dpi.Seq,
 				DepositAddress: dpi.DepositAddress,
-				SkyAddress:     dpi.SkyAddress,
+				MDLAddress:     dpi.MDLAddress,
 				Status:         dpi.Status.String(),
 				UpdatedAt:      dpi.UpdatedAt,
 				Txid:           dpi.Txid,
@@ -52,16 +52,16 @@ func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositF
 
 func (dps dummyDepositStatusGetter) GetDepositStats() (*exchange.DepositStats, error) {
 	var totalBTCReceived int64
-	var totalSKYSent int64
+	var totalMDLSent int64
 	for _, dpi := range dps.dpis {
 		if dpi.CoinType == scanner.CoinTypeBTC {
 			totalBTCReceived += dpi.DepositValue
 		}
-		totalSKYSent += int64(dpi.SkySent)
+		totalMDLSent += int64(dpi.MDLSent)
 	}
 	return &exchange.DepositStats{
 		TotalBTCReceived: totalBTCReceived,
-		TotalSKYSent:     totalSKYSent,
+		TotalMDLSent:     totalMDLSent,
 	}, nil
 }
 
@@ -77,27 +77,27 @@ func TestRunMonitor(t *testing.T) {
 	dpis := []exchange.DepositInfo{
 		{
 			DepositAddress: "b1",
-			SkyAddress:     "s1",
+			MDLAddress:     "s1",
 			Status:         exchange.StatusWaitDeposit,
 		},
 		{
 			DepositAddress: "b2",
-			SkyAddress:     "s2",
+			MDLAddress:     "s2",
 			Status:         exchange.StatusWaitSend,
 		},
 		{
 			DepositAddress: "b3",
-			SkyAddress:     "s3",
+			MDLAddress:     "s3",
 			Status:         exchange.StatusWaitConfirm,
 		},
 		{
 			DepositAddress: "b4",
-			SkyAddress:     "s4",
+			MDLAddress:     "s4",
 			Status:         exchange.StatusDone,
 		},
 		{
 			DepositAddress: "b5",
-			SkyAddress:     "s6",
+			MDLAddress:     "s6",
 			Status:         exchange.StatusDone,
 		},
 	}
@@ -179,7 +179,7 @@ func TestRunMonitor(t *testing.T) {
 							UpdatedAt:      s.UpdatedAt,
 							Status:         exchange.NewStatusFromStr(s.Status),
 							DepositAddress: s.DepositAddress,
-							SkyAddress:     s.SkyAddress,
+							MDLAddress:     s.MDLAddress,
 							Txid:           s.Txid,
 						})
 					}

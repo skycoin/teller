@@ -10,7 +10,7 @@ import (
 	logrus_test "github.com/sirupsen/logrus/hooks/test"
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/teller/src/util/logger"
+	"github.com/MDLlife/teller/src/util/logger"
 )
 
 // PrepareDB initializes a temporary bolt.DB

@@ -11,8 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/teller/src/util/dbutil"
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/util/dbutil"
+	"github.com/MDLlife/teller/src/util/testutil"
 )
 
 var (

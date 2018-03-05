@@ -10,9 +10,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/util/httputil"
-	"github.com/skycoin/teller/src/util/logger"
+	"github.com/MDLlife/teller/src/exchange"
+	"github.com/MDLlife/teller/src/util/httputil"
+	"github.com/MDLlife/teller/src/util/logger"
 )
 
 const (
@@ -221,7 +221,7 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 	}
 }
 
-// stats returns all deposit stats, including total BTC received and total SKY sent.
+// stats returns all deposit stats, including total BTC received and total MDL sent.
 // Method: GET
 // URI: /api/stats
 func (m *Monitor) statsHandler() http.HandlerFunc {

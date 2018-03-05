@@ -7,7 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/util/testutil"
 )
 
 func testNewBtcAddrManager(t *testing.T, db *bolt.DB, log *logrus.Logger) (*Addrs, []string) {

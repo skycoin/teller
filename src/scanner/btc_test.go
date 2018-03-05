@@ -12,8 +12,8 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/teller/src/util/dbutil"
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/util/dbutil"
+	"github.com/MDLlife/teller/src/util/testutil"
 )
 
 const (

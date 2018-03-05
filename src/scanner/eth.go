@@ -19,7 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/util/mathutil"
+	"github.com/MDLlife/teller/src/util/mathutil"
 )
 
 // ETHScanner blockchain scanner to check if there're deposit coins

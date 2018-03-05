@@ -11,12 +11,12 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/skycoin/src/api/cli"
-	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/coin"
-	"github.com/skycoin/skycoin/src/util/droplet"
+	"github.com/MDLlife/MDL/src/api/cli"
+	"github.com/MDLlife/MDL/src/cipher"
+	"github.com/MDLlife/MDL/src/coin"
+	"github.com/MDLlife/MDL/src/util/droplet"
 
-	"github.com/skycoin/teller/src/util/httputil"
+	"github.com/MDLlife/teller/src/util/httputil"
 )
 
 const seed = "survey tank about rely harbor client penalty antenna labor target jaguar bind"
@@ -38,7 +38,7 @@ type DummyTransaction struct {
 }
 
 // DummySender implements the Exchanger interface in order to simulate
-// SKY sendouts
+// MDL sendouts
 type DummySender struct {
 	broadcastTxns map[string]*DummyTransaction
 	seq           int64
@@ -62,7 +62,7 @@ func NewDummySender(log logrus.FieldLogger) *DummySender {
 	}
 }
 
-// CreateTransaction creates a fake skycoin transaction
+// CreateTransaction creates a fake mdl transaction
 func (s *DummySender) CreateTransaction(addr string, coins uint64) (*coin.Transaction, error) {
 	if coins > s.coins {
 		return nil, NewRPCError(errors.New("CreateTransaction not enough coins"))
@@ -99,7 +99,7 @@ func (s *DummySender) CreateTransaction(addr string, coins uint64) (*coin.Transa
 	return txn, nil
 }
 
-// BroadcastTransaction broadcasts a fake skycoin transaction
+// BroadcastTransaction broadcasts a fake mdl transaction
 func (s *DummySender) BroadcastTransaction(txn *coin.Transaction) *BroadcastTxResponse {
 	s.log.WithField("txid", txn.TxIDHex()).Info("BroadcastTransaction")
 
@@ -136,7 +136,7 @@ func (s *DummySender) BroadcastTransaction(txn *coin.Transaction) *BroadcastTxRe
 	}
 }
 
-// IsTxConfirmed reports whether a fake skycoin transaction has been confirmed
+// IsTxConfirmed reports whether a fake mdl transaction has been confirmed
 func (s *DummySender) IsTxConfirmed(txid string) *ConfirmResponse {
 	s.log.WithField("txid", txid).Info("IsTxConfirmed")
 

@@ -5,7 +5,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/teller/src/config"
+	"github.com/MDLlife/teller/src/config"
 )
 
 // Processor is a component that processes deposits from a Receiver and sends them to a Sender
@@ -22,7 +22,7 @@ type ProcessRunner interface {
 // DirectBuy implements a Processor. All deposits are sent directly to the sender for processing.
 type DirectBuy struct {
 	log      logrus.FieldLogger
-	cfg      config.SkyExchanger
+	cfg      config.MDLExchanger
 	receiver Receiver
 	store    Storer
 	deposits chan DepositInfo
@@ -31,7 +31,7 @@ type DirectBuy struct {
 }
 
 // NewDirectBuy creates DirectBuy
-func NewDirectBuy(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, receiver Receiver) (*DirectBuy, error) {
+func NewDirectBuy(log logrus.FieldLogger, cfg config.MDLExchanger, store Storer, receiver Receiver) (*DirectBuy, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
