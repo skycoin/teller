@@ -110,7 +110,7 @@ func run() error {
 		fmt.Println("Failed to get user's home directory:", err)
 		return err
 	}
-	defaultAppDir := filepath.Join(cur.HomeDir, ".teller-skycoin")
+	defaultAppDir := filepath.Join(cur.HomeDir, ".teller-mdl")
 
 	appDirOpt := pflag.StringP("dir", "d", defaultAppDir, "application data directory")
 	configNameOpt := pflag.StringP("config", "c", "config", "name of configuration file")

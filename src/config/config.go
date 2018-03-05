@@ -47,7 +47,7 @@ type Config struct {
 	Profile bool `mapstructure:"profile"`
 	// Where log is saved
 	LogFilename string `mapstructure:"logfile"`
-	// Where database is saved, inside the ~/.teller-skycoin data directory
+	// Where database is saved, inside the ~/.teller-mdl data directory
 	DBFilename string `mapstructure:"dbfile"`
 
 	// Path of BTC addresses JSON file

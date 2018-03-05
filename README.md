@@ -124,8 +124,8 @@ Description of the config file:
 * `web.tls_cert` [string]: Filepath to TLS certificate. Cannot be used with `web.auto_tls_host`.
 * `web.tls_key` [string]: Filepath to TLS key. Cannot be used with `web.auto_tls_host`.
 * `admin_panel.host` [string] Host address of the admin panel.
-* `dummy.sender` [bool]: Use a fake MDL sender (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
-* `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
+* `dummy.sender` [bool]: Use a fake MDL sender (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-mdl)).
+* `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-mdl)).
 * `dummy.http_addr` [bool]: Host address for the dummy scanner and sender API.
 
 ### Running teller without btcd, geth or skyd
