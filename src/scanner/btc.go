@@ -216,7 +216,7 @@ func (s *BTCScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 	for {
 		nextBlock, err := s.getNextBlock(block)
 		if err != nil {
-			if err.Error() == ErrEmptyBlock.Error() {
+			if err == ErrEmptyBlock {
 				log.WithError(err).Debug("getNextBlock empty")
 			} else {
 				log.WithError(err).Error("getNextBlock failed")
