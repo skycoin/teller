@@ -1,7 +1,6 @@
 package dbutil
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 
@@ -154,9 +153,4 @@ func ForEach(tx *bolt.Tx, bktName []byte, f func(k, v []byte) error) error {
 	}
 
 	return bkt.ForEach(f)
-}
-
-//ByteJoin Join byte array and string with seq, return byte array
-func ByteJoin(tupledata []byte, suffix, sep string) []byte {
-	return bytes.Join([][]byte{tupledata, []byte(suffix)}, []byte(sep))
 }

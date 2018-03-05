@@ -86,7 +86,7 @@ func (s *HTTPServer) Run() error {
 	var mux http.Handler = s.setupMux()
 
 	allowedHosts := []string{} // empty array means all hosts allowed
-	sslHost := ""
+	var sslHost string
 	if s.cfg.Web.AutoTLSHost == "" {
 		// Note: if AutoTLSHost is not set, but HTTPSAddr is set, then
 		// http will redirect to the HTTPSAddr listening IP, which would be
@@ -335,6 +335,7 @@ func (s *HTTPServer) Shutdown() {
 type BindResponse struct {
 	DepositAddress string `json:"deposit_address,omitempty"`
 	CoinType       string `json:"coin_type,omitempty"`
+	BuyMethod      string `json:"buy_method"`
 }
 
 type bindRequest struct {
@@ -371,14 +372,17 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			errorResponse(ctx, w, http.StatusBadRequest, err)
 			return
 		}
-		defer r.Body.Close()
+		defer func(log logrus.FieldLogger) {
+			if err := r.Body.Close(); err != nil {
+				log.WithError(err).Warn("Failed to closed request body")
+			}
+		}(log)
 
 		// Remove extraneous whitespace
 		bindReq.SkyAddr = strings.Trim(bindReq.SkyAddr, "\n\t ")
 
 		log = log.WithField("bindReq", bindReq)
 		ctx = logger.WithContext(ctx, log)
-		r = r.WithContext(ctx)
 
 		if bindReq.SkyAddr == "" {
 			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing skyaddr"))
@@ -412,7 +416,7 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 
 		log.Info("Calling service.BindAddress")
 
-		coinAddr, err := s.service.BindAddress(bindReq.SkyAddr, bindReq.CoinType)
+		boundAddr, err := s.service.BindAddress(bindReq.SkyAddr, bindReq.CoinType)
 		if err != nil {
 			log.WithError(err).Error("service.BindAddress failed")
 			switch err {
@@ -429,15 +433,13 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		log = log.WithField("coinAddr", coinAddr)
-		ctx = logger.WithContext(ctx, log)
-		r = r.WithContext(ctx)
-
+		log = log.WithField("boundAddr", boundAddr)
 		log.Infof("Bound sky and %s addresses", bindReq.CoinType)
 
 		if err := httputil.JSONResponse(w, BindResponse{
-			DepositAddress: coinAddr,
-			CoinType:       bindReq.CoinType,
+			DepositAddress: boundAddr.Address,
+			CoinType:       boundAddr.CoinType,
+			BuyMethod:      boundAddr.BuyMethod,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}
@@ -475,7 +477,6 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 
 		log = log.WithField("skyAddr", skyAddr)
 		ctx = logger.WithContext(ctx, log)
-		r = r.WithContext(ctx)
 
 		log.Info()
 
@@ -496,9 +497,6 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 			"depositStatuses":    depositStatuses,
 			"depositStatusesLen": len(depositStatuses),
 		})
-		ctx = logger.WithContext(ctx, log)
-		r = r.WithContext(ctx)
-
 		log.Info("Got depositStatuses")
 
 		if err := httputil.JSONResponse(w, StatusResponse{

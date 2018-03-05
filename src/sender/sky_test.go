@@ -8,13 +8,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/skycoin/src/api/cli"
-	"github.com/skycoin/skycoin/src/api/webrpc"
-	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/coin"
-	"github.com/skycoin/skycoin/src/visor"
+	"github.com/MDLlife/MDL/src/api/cli"
+	"github.com/MDLlife/MDL/src/api/webrpc"
+	"github.com/MDLlife/MDL/src/cipher"
+	"github.com/MDLlife/MDL/src/coin"
+	"github.com/MDLlife/MDL/src/visor"
 
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/util/testutil"
 )
 
 type dummySkyClient struct {
@@ -81,12 +81,6 @@ func (ds *dummySkyClient) changeConfirmStatus(v bool) {
 	ds.txConfirmed = v
 }
 
-func (ds *dummySkyClient) changeCreateTxErr(err error) {
-	ds.Lock()
-	defer ds.Unlock()
-	ds.createTxErr = err
-}
-
 func (ds *dummySkyClient) changeBroadcastTxErr(err error) {
 	ds.Lock()
 	defer ds.Unlock()
@@ -112,7 +106,8 @@ func TestSenderBroadcastTransaction(t *testing.T) {
 	dsc.changeBroadcastTxTxid("1111")
 	s := NewService(log, dsc)
 	go func() {
-		s.Run()
+		err := s.Run()
+		require.NoError(t, err)
 	}()
 
 	addr := "KNtZkX2mw1UFuemv6FmEQxxhWCTWTm2Thk"

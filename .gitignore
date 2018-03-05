@@ -5,3 +5,5 @@
 cert-cache
 *.ignore.*
 *.wlt
+cover.out
+coverage.html

@@ -10,9 +10,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// ErrDepositAddressEmpty represents all deposit addresses are used
-var ErrDepositAddressEmpty = errors.New("Deposit address pool is empty")
-var ErrCointypeNotExists = errors.New("Cointype not exists")
+var (
+	// ErrDepositAddressEmpty represents all deposit addresses are used
+	ErrDepositAddressEmpty = errors.New("Deposit address pool is empty")
+	// ErrCoinTypeNotExists is returned when an unrecognized coin type is used
+	ErrCoinTypeNotExists = errors.New("Invalid coin type")
+)
 
 // AddrGenerator generate new deposit address
 type AddrGenerator interface {
@@ -58,7 +61,7 @@ func (am *AddrManager) NewAddress(coinType string) (string, error) {
 	defer am.Mutex.Unlock()
 	ag, ok := am.AGHolder[coinType]
 	if !ok {
-		return "", ErrCointypeNotExists
+		return "", ErrCoinTypeNotExists
 	}
 	depositAddr, err := ag.NewAddress()
 	if err != nil {

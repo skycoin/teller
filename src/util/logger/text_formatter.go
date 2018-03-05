@@ -22,12 +22,12 @@ import (
 )
 
 const (
-	nocolor = 0
-	red     = 31
-	green   = 32
-	yellow  = 33
-	blue    = 36
-	gray    = 37
+	// nocolor = 0
+	red = 31
+	// green   = 32
+	yellow = 33
+	blue   = 36
+	gray   = 37
 
 	defaultTimestampFormat = time.RFC3339
 )
@@ -130,7 +130,7 @@ func (f *TextFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 		}
 	}
 
-	b.WriteByte('\n')
+	b.WriteByte('\n') // nolint: gas
 	return b.Bytes(), nil
 }
 
@@ -150,15 +150,15 @@ func (f *TextFormatter) printColored(b *bytes.Buffer, entry *logrus.Entry, keys 
 	levelText := strings.ToUpper(entry.Level.String())[0:4]
 
 	if f.DisableTimestamp {
-		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m %-44s ", levelColor, levelText, entry.Message)
+		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m %-44s ", levelColor, levelText, entry.Message) // nolint: gas
 	} else if !f.FullTimestamp {
-		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%04d] %-44s ", levelColor, levelText, int(entry.Time.Sub(baseTimestamp)/time.Second), entry.Message)
+		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%04d] %-44s ", levelColor, levelText, int(entry.Time.Sub(baseTimestamp)/time.Second), entry.Message) // nolint: gas
 	} else {
-		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %-44s ", levelColor, levelText, entry.Time.Format(timestampFormat), entry.Message)
+		fmt.Fprintf(b, "\x1b[%dm%s\x1b[0m[%s] %-44s ", levelColor, levelText, entry.Time.Format(timestampFormat), entry.Message) // nolint: gas
 	}
 	for _, k := range keys {
 		v := entry.Data[k]
-		fmt.Fprintf(b, " \x1b[%dm%s\x1b[0m=", levelColor, k)
+		fmt.Fprintf(b, " \x1b[%dm%s\x1b[0m=", levelColor, k) // nolint: gas
 		f.appendValue(b, v)
 	}
 }
@@ -185,10 +185,10 @@ func (f *TextFormatter) needsQuoting(text string) bool {
 
 func (f *TextFormatter) appendKeyValue(b *bytes.Buffer, key string, value interface{}) {
 	if b.Len() > 0 {
-		b.WriteByte(' ')
+		b.WriteByte(' ') // nolint: gas
 	}
-	b.WriteString(key)
-	b.WriteByte('=')
+	b.WriteString(key) // nolint: gas
+	b.WriteByte('=')   // nolint: gas
 	f.appendValue(b, value)
 }
 
@@ -201,9 +201,9 @@ func (f *TextFormatter) appendValue(b *bytes.Buffer, value interface{}) {
 	}
 
 	if !f.needsQuoting(stringVal) {
-		b.WriteString(stringVal)
+		b.WriteString(stringVal) // nolint: gas
 	} else {
-		b.WriteString(fmt.Sprintf("%q", stringVal))
+		b.WriteString(fmt.Sprintf("%q", stringVal)) // nolint: gas
 	}
 }
 
