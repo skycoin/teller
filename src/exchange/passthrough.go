@@ -201,7 +201,7 @@ func (p *Passthrough) handleDepositInfoState(di DepositInfo) (DepositInfo, error
 
 // checkBalance checks that enough coins are held on the exchange
 func (p *Passthrough) checkBalance(di DepositInfo) error {
-	quantity, err := p.exchangeClient.GetBalance()
+	quantity, err := p.exchangeClient.GetBalance(di.CoinType)
 
 	if err != nil {
 		return err

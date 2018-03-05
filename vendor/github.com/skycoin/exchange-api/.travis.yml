@@ -1,0 +1,11 @@
+language: go
+
+go:
+  - 1.9
+
+install:
+  - go get -t ./...
+  - make install-linters
+
+script:
+  - make check
