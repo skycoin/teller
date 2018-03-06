@@ -13,7 +13,7 @@
 - [Setup project](#setup-project)
     - [Prerequisites](#prerequisites)
     - [Configure teller](#configure-teller)
-    - [Running teller without btcd, geth or skyd](#running-teller-without-btcd-geth-or-skyd)
+    - [Running teller without btcd, geth or mdld](#running-teller-without-btcd-geth-or-mdld)
     - [Running teller with Docker](#running-teller-with-docker)
     - [Generate BTC addresses](#generate-btc-addresses)
     - [Generate ETH addresses](#generate-eth-addresses)
@@ -128,7 +128,7 @@ Description of the config file:
 * `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-mdl)).
 * `dummy.http_addr` [bool]: Host address for the dummy scanner and sender API.
 
-### Running teller without btcd, geth or skyd
+### Running teller without btcd, geth or mdld
 
 Teller can be run in "dummy mode". It will ignore btcd, geth and mdld.
 It will still provide addresses via `/api/bind` and report status with `/api/status`.
