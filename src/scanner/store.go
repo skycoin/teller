@@ -104,7 +104,7 @@ type Storer interface {
 	GetScanAddresses(string) ([]string, error)
 	AddScanAddress(string, string) error
 	SetDepositProcessed(string) error
-	GetUnprocessedDeposits() ([]Deposit, error)
+	GetUnprocessedDeposits(string) ([]Deposit, error)
 	ScanBlock(*CommonBlock, string) ([]Deposit, error)
 }
 
@@ -228,7 +228,7 @@ func (s *Store) SetDepositProcessed(dvKey string) error {
 }
 
 // GetUnprocessedDeposits returns all Deposits not marked as Processed
-func (s *Store) GetUnprocessedDeposits() ([]Deposit, error) {
+func (s *Store) GetUnprocessedDeposits(coinType string) ([]Deposit, error) {
 	var dvs []Deposit
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
@@ -238,7 +238,7 @@ func (s *Store) GetUnprocessedDeposits() ([]Deposit, error) {
 				return err
 			}
 
-			if !dv.Processed {
+			if dv.CoinType == coinType && !dv.Processed {
 				dvs = append(dvs, dv)
 			}
 
