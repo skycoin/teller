@@ -30,6 +30,8 @@ var (
 	ErrDepositStatusInvalid = errors.New("Deposit status cannot be handled")
 	// ErrNoBoundAddress is returned if no skycoin address is bound to a deposit's address
 	ErrNoBoundAddress = errors.New("Deposit has no bound skycoin address")
+	// ErrLowExchangeBalance is returned if the trading exchange is supposed to have more coins than it does.
+	ErrLowExchangeBalance = errors.New("Exchange has less coins than it should")
 )
 
 // DepositFilter filters deposits
