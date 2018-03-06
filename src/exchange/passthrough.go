@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -223,15 +224,23 @@ func (p *Passthrough) checkBalance(di DepositInfo) error {
 	return nil
 }
 
-type askBid struct{}
-
 // getCheapestAsk returns the cheapest ask order from c2cx
-func getCheapestAsk(di DepositInfo) (askBid, error) {
-	return askBid{}, nil
+func (p *Passthrough) getCheapestAsk(di DepositInfo) (*exchange.MarketOrder, error) {
+	marketRecord, err := p.exchangeClient.Orderbook().Get(fmt.Sprintf("SKY_%s", di.CoinType))
+	if err != nil {
+		return nil, err
+	}
+
+	marketOrder := marketRecord.CheapestAsk()
+	if marketOrder == nil {
+		return nil, ErrNoAsksAvailable
+	}
+
+	return marketOrder, nil
 }
 
 // placeOrder places an order on the exchange and returns the orderID
-func placeOrder(ask askBid) (string, error) {
+func placeOrder(ask *exchange.MarketOrder) (string, error) {
 	return "", nil
 }
 
@@ -281,7 +290,7 @@ beginOrderLoop:
 		}
 
 		// Get the cheapest ask bid
-		ask, err := getCheapestAsk(di)
+		ask, err := p.getCheapestAsk(di)
 		if err != nil {
 			return di, err
 		}
