@@ -19,8 +19,8 @@ const (
 )
 
 var (
-	// ErrEmptySendAmount is returned if the calculated skycoin amount to send is 0
-	ErrEmptySendAmount = errors.New("Skycoin send amount is 0")
+	// ErrEmptySendAmount is returned if the calculated mdl amount to send is 0
+	ErrEmptySendAmount = errors.New("MDL send amount is 0")
 	// ErrNoResponse is returned when the send service returns a nil response. This happens if the send service has closed.
 	ErrNoResponse = errors.New("No response from the send service")
 	// ErrNotConfirmed is returned if the tx is not confirmed yet
@@ -28,8 +28,8 @@ var (
 	// ErrDepositStatusInvalid is returned when handling a deposit with a status that cannot be processed
 	// This includes StatusWaitDeposit and StatusUnknown
 	ErrDepositStatusInvalid = errors.New("Deposit status cannot be handled")
-	// ErrNoBoundAddress is returned if no skycoin address is bound to a deposit's address
-	ErrNoBoundAddress = errors.New("Deposit has no bound skycoin address")
+	// ErrNoBoundAddress is returned if no mdl address is bound to a deposit's address
+	ErrNoBoundAddress = errors.New("Deposit has no bound mdl address")
 )
 
 // DepositFilter filters deposits
@@ -43,20 +43,20 @@ type Runner interface {
 
 // Exchanger provides APIs to interact with the exchange service
 type Exchanger interface {
-	BindAddress(skyAddr, depositAddr, coinType string) (*BoundAddress, error)
-	GetDepositStatuses(skyAddr string) ([]DepositStatus, error)
+	BindAddress(mdlAddr, depositAddr, coinType string) (*BoundAddress, error)
+	GetDepositStatuses(mdlAddr string) ([]DepositStatus, error)
 	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
-	GetBindNum(skyAddr string) (int, error)
+	GetBindNum(mdlAddr string) (int, error)
 	GetDepositStats() (*DepositStats, error)
 	Status() error
 	Balance() (*cli.Balance, error)
 }
 
-// Exchange encompasses an entire coin<>skycoin deposit-process-send flow
+// Exchange encompasses an entire coin<>mdl deposit-process-send flow
 type Exchange struct {
 	log   logrus.FieldLogger
 	store Storer
-	cfg   config.SkyExchanger
+	cfg   config.MDLExchanger
 	quit  chan struct{}
 	done  chan struct{}
 
@@ -65,8 +65,8 @@ type Exchange struct {
 	Sender    SendRunner
 }
 
-// NewDirectExchange creates an Exchange which performs "direct buy", i.e. directly selling from a local skycoin wallet
-func NewDirectExchange(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, multiplexer *scanner.Multiplexer, coinSender sender.Sender) (*Exchange, error) {
+// NewDirectExchange creates an Exchange which performs "direct buy", i.e. directly selling from a local mdl wallet
+func NewDirectExchange(log logrus.FieldLogger, cfg config.MDLExchanger, store Storer, multiplexer *scanner.Multiplexer, coinSender sender.Sender) (*Exchange, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -103,8 +103,8 @@ func NewDirectExchange(log logrus.FieldLogger, cfg config.SkyExchanger, store St
 }
 
 // NewPassthroughExchange creates an Exchange which performs "passthrough buy",
-// i.e. it purchases coins from an exchange before sending from a local skycoin wallet
-func NewPassthroughExchange(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, multiplexer *scanner.Multiplexer, coinSender sender.Sender) (*Exchange, error) {
+// i.e. it purchases coins from an exchange before sending from a local mdl wallet
+func NewPassthroughExchange(log logrus.FieldLogger, cfg config.MDLExchanger, store Storer, multiplexer *scanner.Multiplexer, coinSender sender.Sender) (*Exchange, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -222,15 +222,15 @@ type DepositStatusDetail struct {
 	Seq            uint64 `json:"seq"`
 	UpdatedAt      int64  `json:"updated_at"`
 	Status         string `json:"status"`
-	SkyAddress     string `json:"skycoin_address"`
+	MDLAddress     string `json:"mdl_address"`
 	DepositAddress string `json:"deposit_address"`
 	CoinType       string `json:"coin_type"`
 	Txid           string `json:"txid"`
 }
 
-// GetDepositStatuses returns deamon.DepositStatus array of given skycoin address
-func (e *Exchange) GetDepositStatuses(skyAddr string) ([]DepositStatus, error) {
-	dis, err := e.store.GetDepositInfoOfSkyAddress(skyAddr)
+// GetDepositStatuses returns deamon.DepositStatus array of given mdl address
+func (e *Exchange) GetDepositStatuses(mdlAddr string) ([]DepositStatus, error) {
+	dis, err := e.store.GetDepositInfoOfMDLAddress(mdlAddr)
 	if err != nil {
 		return []DepositStatus{}, err
 	}
@@ -260,7 +260,7 @@ func (e *Exchange) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDet
 			Seq:            di.Seq,
 			UpdatedAt:      di.UpdatedAt,
 			Status:         di.Status.String(),
-			SkyAddress:     di.SkyAddress,
+			MDLAddress:     di.MDLAddress,
 			DepositAddress: di.DepositAddress,
 			Txid:           di.Txid,
 			CoinType:       di.CoinType,
@@ -269,9 +269,9 @@ func (e *Exchange) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDet
 	return dss, nil
 }
 
-// GetBindNum returns the number of btc/eth address the given sky address binded
-func (e *Exchange) GetBindNum(skyAddr string) (int, error) {
-	addrs, err := e.store.GetSkyBindAddresses(skyAddr)
+// GetBindNum returns the number of btc/eth address the given mdl address binded
+func (e *Exchange) GetBindNum(mdlAddr string) (int, error) {
+	addrs, err := e.store.GetMDLBindAddresses(mdlAddr)
 	return len(addrs), err
 }
 
@@ -284,7 +284,7 @@ func (e *Exchange) GetDepositStats() (*DepositStats, error) {
 
 	return &DepositStats{
 		TotalBTCReceived: tbr,
-		TotalSKYSent:     tss,
+		TotalMDLSent:     tss,
 	}, nil
 }
 
@@ -298,10 +298,10 @@ func (e *Exchange) Status() error {
 	return e.Sender.Status()
 }
 
-// BindAddress binds deposit address with skycoin address, and
+// BindAddress binds deposit address with mdl address, and
 // add the btc/eth address to scan service, when detect deposit coin
-// to the btc/eth address, will send specific skycoin to the binded
-// skycoin address
-func (e *Exchange) BindAddress(skyAddr, depositAddr, coinType string) (*BoundAddress, error) {
-	return e.Receiver.BindAddress(skyAddr, depositAddr, coinType, e.cfg.BuyMethod)
+// to the btc/eth address, will send specific mdl to the binded
+// mdl address
+func (e *Exchange) BindAddress(mdlAddr, depositAddr, coinType string) (*BoundAddress, error) {
+	return e.Receiver.BindAddress(mdlAddr, depositAddr, coinType, e.cfg.BuyMethod)
 }

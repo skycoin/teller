@@ -1,4 +1,4 @@
-// Package sender provids send service for skycoin
+// Package sender provids send service for mdl
 package sender
 
 import (
@@ -62,18 +62,18 @@ type ConfirmResponse struct {
 	Req       ConfirmRequest
 }
 
-// SendService is in charge of sending skycoin
+// SendService is in charge of sending mdl
 type SendService struct {
 	log             logrus.FieldLogger
-	SkyClient       SkyClient
+	MDLClient       MDLClient
 	quit            chan struct{}
 	done            chan struct{}
 	broadcastTxChan chan BroadcastTxRequest
 	confirmChan     chan ConfirmRequest
 }
 
-// SkyClient defines a Skycoin RPC client interface for sending and confirming
-type SkyClient interface {
+// MDLClient defines a MDL RPC client interface for sending and confirming
+type MDLClient interface {
 	CreateTransaction(string, uint64) (*coin.Transaction, error)
 	BroadcastTransaction(*coin.Transaction) (string, error)
 	GetTransaction(string) (*webrpc.TxnResult, error)
@@ -81,9 +81,9 @@ type SkyClient interface {
 }
 
 // NewService creates sender instance
-func NewService(log logrus.FieldLogger, skycli SkyClient) *SendService {
+func NewService(log logrus.FieldLogger, mdlcli MDLClient) *SendService {
 	return &SendService{
-		SkyClient:       skycli,
+		MDLClient:       mdlcli,
 		log:             log.WithField("prefix", "sender.service"),
 		quit:            make(chan struct{}),
 		done:            make(chan struct{}),
@@ -95,8 +95,8 @@ func NewService(log logrus.FieldLogger, skycli SkyClient) *SendService {
 // Run start the send service
 func (s *SendService) Run() error {
 	log := s.log
-	log.Info("Start skycoin send service")
-	defer log.Info("Skycoin send service closed")
+	log.Info("Start mdl send service")
+	defer log.Info("MDL send service closed")
 	defer close(s.done)
 
 	for {
@@ -148,9 +148,9 @@ func (s *SendService) Confirm(req ConfirmRequest) (*ConfirmResponse, error) {
 		return nil, err
 	}
 
-	tx, err := s.SkyClient.GetTransaction(req.Txid)
+	tx, err := s.MDLClient.GetTransaction(req.Txid)
 	if err != nil {
-		log.WithError(err).Error("SkyClient.GetTransaction failed")
+		log.WithError(err).Error("MDLClient.GetTransaction failed")
 		return nil, err
 	}
 
@@ -172,12 +172,12 @@ func (s *SendService) ConfirmRetry(req ConfirmRequest) (*ConfirmResponse, error)
 	// This loop tries to confirm the transaction until it succeeds.
 	// TODO: if this gets stuck, nothing will proceed.
 	// Add logic to give up confirmation after some number of retries, if necessary.
-	// Most likely reason for GetTransaction() to fail is because the skyd node
+	// Most likely reason for GetTransaction() to fail is because the mdld node
 	// is unavailable.
 	for {
-		tx, err := s.SkyClient.GetTransaction(req.Txid)
+		tx, err := s.MDLClient.GetTransaction(req.Txid)
 		if err != nil {
-			log.WithError(err).Error("SkyClient.GetTransaction failed, trying again...")
+			log.WithError(err).Error("MDLClient.GetTransaction failed, trying again...")
 
 			select {
 			case <-s.quit:
@@ -205,9 +205,9 @@ func (s *SendService) BroadcastTx(req BroadcastTxRequest) (*BroadcastTxResponse,
 		return nil, err
 	}
 
-	txid, err := s.SkyClient.BroadcastTransaction(req.Tx)
+	txid, err := s.MDLClient.BroadcastTransaction(req.Tx)
 	if err != nil {
-		log.WithError(err).Error("SkyClient.BroadcastTransaction failed")
+		log.WithError(err).Error("MDLClient.BroadcastTransaction failed")
 		return nil, err
 	}
 
@@ -230,12 +230,12 @@ func (s *SendService) BroadcastTxRetry(req BroadcastTxRequest) (*BroadcastTxResp
 	// This loop tries to send the coins until it succeeds.
 	// TODO: if this gets stuck, nothing will proceed.
 	// Add logic to give up sending after some number of retries if necessary
-	// Most likely reason for send() to fail is because the skyd node
+	// Most likely reason for send() to fail is because the mdld node
 	// is unavailable.
 	for {
-		txid, err := s.SkyClient.BroadcastTransaction(req.Tx)
+		txid, err := s.MDLClient.BroadcastTransaction(req.Tx)
 		if err != nil {
-			log.WithError(err).Error("SkyClient.BroadcastTransaction failed, trying again...")
+			log.WithError(err).Error("MDLClient.BroadcastTransaction failed, trying again...")
 
 			select {
 			case <-s.quit:

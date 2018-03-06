@@ -5,10 +5,10 @@ import axios from 'axios';
 // #getAddress reject, they should reject with an Error object containing
 // a meaningful error message (will be shown to the user)
 //
-// export const checkStatus = skyAddress =>
-//   axios.get(`https://fake.api/status?address=${skyAddress}`)
+// export const checkStatus = mdlAddress =>
+//   axios.get(`https://fake.api/status?address=${mdlAddress}`)
 //     .catch(() => {
-//       throw new Error(`Unable to check status for ${skyAddress}`)
+//       throw new Error(`Unable to check status for ${mdlAddress}`)
 //     });
 //
 
@@ -16,13 +16,13 @@ export const getConfig = () =>
   axios.get('/api/config')
     .then(response => response.data);
 
-export const checkStatus = skyAddress =>
-  axios.get(`/api/status?skyaddr=${skyAddress}`)
+export const checkStatus = mdlAddress =>
+  axios.get(`/api/status?mdladdr=${mdlAddress}`)
     .then(response => response.data.statuses || [])
     .catch((error) => { throw new Error(error.response.data); });
 
-export const getAddress = skyAddress =>
-  axios.post('/api/bind', { skyaddr: skyAddress, coin_type: 'BTC' }, {
+export const getAddress = mdlAddress =>
+  axios.post('/api/bind', { mdladdr: mdlAddress, coin_type: 'BTC' }, {
     headers: {
       'Content-Type': 'application/json',
     },

@@ -103,13 +103,13 @@ Description of the config file:
 * `btc_scanner.initial_scan_height` [int]: Begin scanning from this BTC blockchain height.
 * `btc_scanner.confirmations_required` [int]: Number of confirmations required before sending MDL for a BTC deposit.
 * `sky_exchanger.sky_btc_exchange_rate` [string]: How much MDL to send per BTC. This can be written as an integer, float, or a rational fraction.
-* `sky_exchanger.max_decimals` [int]: Number of decimal places to truncate SKY to.
+* `sky_exchanger.max_decimals` [int]: Number of decimal places to truncate MDL to.
 * `eth_rpc.server` [string]: Host address of the geth node.
 * `eth_rpc.port` [string]: Host port of the geth node.
 * `eth_scanner.scan_period` [duration]: How often to scan for ethereum blocks.
 * `eth_scanner.initial_scan_height` [int]: Begin scanning from this ETH blockchain height.
 * `eth_scanner.confirmations_required` [int]: Number of confirmations required before sending MDL for a ETH deposit.
-* `sky_exchanger.sky_eth_exchange_rate` [string]: How much SKY to send per ETH. This can be written as an integer, float, or a rational fraction.
+* `sky_exchanger.sky_eth_exchange_rate` [string]: How much MDL to send per ETH. This can be written as an integer, float, or a rational fraction.
 * `sky_exchanger.wallet` [string]: Filepath of the MDL hot wallet. See [setup MDL hot wallet](#setup-mdl-hot-wallet).
 * `sky_exchanger.tx_confirmation_check_wait` [duration]: How often to check for a sent MDL transaction's confirmation.
 * `sky_exchanger.send_enabled` [bool]: Disable this to prevent sending of coins (all other processing functions normally, e.g.. deposits are received)
@@ -124,8 +124,8 @@ Description of the config file:
 * `web.tls_cert` [string]: Filepath to TLS certificate. Cannot be used with `web.auto_tls_host`.
 * `web.tls_key` [string]: Filepath to TLS key. Cannot be used with `web.auto_tls_host`.
 * `admin_panel.host` [string] Host address of the admin panel.
-* `dummy.sender` [bool]: Use a fake MDL sender (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
-* `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
+* `dummy.sender` [bool]: Use a fake MDL sender (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-mdl)).
+* `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-mdl)).
 * `dummy.http_addr` [bool]: Host address for the dummy scanner and sender API.
 
 ### Running teller without btcd, geth or skyd
@@ -502,7 +502,7 @@ URI: /api/exchange-status
 ```
 
 Return the exchanger's status.
-The exchanger's status is the last error seen while trying to send SKY, or nil if no last error was seen.
+The exchanger's status is the last error seen while trying to send MDL, or nil if no last error was seen.
 Use this to detect if the OTC is temporarily offline or sold out.
 
 The balance of the OTC wallet is included in the response.  The wallet may still be considered "sold out" even

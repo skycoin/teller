@@ -12,7 +12,7 @@ const StyledLink = styled(Link)`
 `;
 
 const Img = styled.img.attrs({
-  alt: 'Skycoin',
+  alt: 'MDL',
 })`
   display: block;
   height: ${rem(40)};

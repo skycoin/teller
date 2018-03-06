@@ -17,7 +17,7 @@ const (
 // from c2cx.com, then tells the sender to send the amount bought.
 type Passthrough struct {
 	log        logrus.FieldLogger
-	cfg        config.SkyExchanger
+	cfg        config.MDLExchanger
 	receiver   Receiver
 	store      Storer
 	deposits   chan DepositInfo
@@ -28,7 +28,7 @@ type Passthrough struct {
 }
 
 // NewPassthrough creates Passthrough
-func NewPassthrough(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, receiver Receiver) (*Passthrough, error) {
+func NewPassthrough(log logrus.FieldLogger, cfg config.MDLExchanger, store Storer, receiver Receiver) (*Passthrough, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -238,7 +238,7 @@ func (p *Passthrough) fillOrder(di DepositInfo) (DepositInfo, error) {
 	// find order
 	// compare order amount to DepositValue
 	//      need to track remaining DepositValue to spend from
-	// Example ask BTC_SKY: [0.00189,46.49] [price in btc, sky qty]
+	// Example ask BTC_MDL: [0.00189,46.49] [price in btc, mdl qty]
 
 	// TODO -- determine fatal/retry cases
 	// TODO -- API wrapper around exchange-api
@@ -293,7 +293,7 @@ beginOrderLoop:
 		// TODO -- use UpdateDepositInfoCallback, in case the DB save fails?
 		di, err = p.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
 			di.Passthrough.Orders = append(di.Passthrough.Orders, PassthroughOrder{})
-			// di.Passthrough.SkyBought += o.Amount
+			// di.Passthrough.MDLBought += o.Amount
 			// di.Passthrough.DepositValueSpent += o.Amount * o.Price
 			return di
 		})

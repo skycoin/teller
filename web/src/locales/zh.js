@@ -34,15 +34,15 @@ export default {
     discord: 'Discord',
   },
   distribution: {
-    rate: 'Current OTC rate: {rate} SKY/BTC',
-    inventory: 'Current inventory: {coins} SKY available',
+    rate: 'Current OTC rate: {rate} MDL/BTC',
+    inventory: 'Current inventory: {coins} MDL available',
     title: '天空币OTC',
     heading: '天空币OTC',
     headingEnded: '天空币暂时关门',
-    ended: `<p>Join the <a href="https://t.me/skycoin">Skycoin Telegram</a>
+    ended: `<p>Join the <a href="https://t.me/mdl">MDL Telegram</a>
        or follow the
-      <a href="https://twitter.com/skycoinproject">Skycoin Twitter</a>.`,
-    instructions: `<p>You can check the current market value for <a href="https://coinmarketcap.com/currencies/skycoin/">Skycoin at CoinMarketCap</a>.</p>
+      <a href="https://twitter.com/mdlproject">MDL Twitter</a>.`,
+    instructions: `<p>You can check the current market value for <a href="https://coinmarketcap.com/currencies/mdl/">MDL at CoinMarketCap</a>.</p>
 
 <p>参加天空币分发活动:</p>
 
@@ -63,7 +63,7 @@ export default {
     btcAddress: '比特币地址',
     errors: {
       noSkyAddress: '请输入您的天空币地址',
-      coinsSoldOut: 'Skycoin OTC is currently sold out, check back later.',
+      coinsSoldOut: 'MDL OTC is currently sold out, check back later.',
     },
     statuses: {
       done: '交易 {id}: 天空币已经发送并确认(更新于{updated}).',

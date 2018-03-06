@@ -11,8 +11,8 @@ import (
 )
 
 var (
-	// ErrMaxBoundAddresses is returned when the maximum number of address to bind to a SKY address has been reached
-	ErrMaxBoundAddresses = errors.New("The maximum number of addresses have been assigned to this SKY address")
+	// ErrMaxBoundAddresses is returned when the maximum number of address to bind to a MDL address has been reached
+	ErrMaxBoundAddresses = errors.New("The maximum number of addresses have been assigned to this MDL address")
 	// ErrBindDisabled is returned if address binding is disabled
 	ErrBindDisabled = errors.New("Address binding is disabled")
 )
@@ -78,15 +78,15 @@ type Service struct {
 	addrManager *addrs.AddrManager // address manager
 }
 
-// BindAddress binds skycoin address with a deposit address according to coinType
+// BindAddress binds mdl address with a deposit address according to coinType
 // return deposit address
-func (s *Service) BindAddress(skyAddr, coinType string) (*exchange.BoundAddress, error) {
+func (s *Service) BindAddress(mdlAddr, coinType string) (*exchange.BoundAddress, error) {
 	if !s.cfg.BindEnabled {
 		return nil, ErrBindDisabled
 	}
 
 	if s.cfg.MaxBoundAddresses > 0 {
-		num, err := s.exchanger.GetBindNum(skyAddr)
+		num, err := s.exchanger.GetBindNum(mdlAddr)
 		if err != nil {
 			return nil, err
 		}
@@ -101,10 +101,10 @@ func (s *Service) BindAddress(skyAddr, coinType string) (*exchange.BoundAddress,
 		return nil, err
 	}
 
-	return s.exchanger.BindAddress(skyAddr, depositAddr, coinType)
+	return s.exchanger.BindAddress(mdlAddr, depositAddr, coinType)
 }
 
-// GetDepositStatuses returns deposit status of given skycoin address
-func (s *Service) GetDepositStatuses(skyAddr string) ([]exchange.DepositStatus, error) {
-	return s.exchanger.GetDepositStatuses(skyAddr)
+// GetDepositStatuses returns deposit status of given mdl address
+func (s *Service) GetDepositStatuses(mdlAddr string) ([]exchange.DepositStatus, error) {
+	return s.exchanger.GetDepositStatuses(mdlAddr)
 }
