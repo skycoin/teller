@@ -5,33 +5,34 @@
 debug = true
 profile = false
 # logfile = "./teller.log"  # logfile can be an absolute path or relative to the working directory
-# dbfile = "teller.db"  # dbfile is saved inside ~/.teller-mdl, do not include a path
+dbfile = "teller.db"  # dbfile is saved inside ~/.teller-mdl, do not include a path
 btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
 eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses file
 
 [teller]
 # max_bound_addrs = 5 # 0 means unlimited
-# bind_enabled = true # Disable this to prevent binding of new addresses
+bind_enabled = true # Disable this to prevent binding of new addresses
 
 [mdl_rpc]
-# address = "127.0.0.1:6430"
+address = "127.0.0.1:7800"
 
 [btc_rpc]
-# enabled = true
-# server = "127.0.0.1:8334"
-user = "" # REQUIRED
-pass = "" # REQUIRED
-cert = "" # REQUIRED
+enabled = true
+#server = "127.0.0.1:8334"
+#user = "test" # REQUIRED
+#pass = "test" # REQUIRED
+#cert = "rpc.cert" # REQUIRED
+#key = "rpc.key" # REQUIRED
 
 [eth_rpc]
-# enabled = false
-server = "" # REQUIRED
-port = "" # REQUIRED
+# enabled = true
+server = "127.0.0.1" # REQUIRED
+port = "8545" # REQUIRED
 
 [btc_scanner]
-# scan_period = "20s"
-# initial_scan_height = 492478
-# confirmations_required = 1
+scan_period = "20s"
+initial_scan_height = 492478
+confirmations_required = 1
 [eth_scanner]
 # scan_period = "5s"
 # initial_scan_height =4654259
@@ -58,7 +59,7 @@ tls_cert = ""
 tls_key = ""
 
 [admin_panel]
-# host = "127.0.0.1:7711"
+host = "127.0.0.1:7711"
 
 
 [dummy]

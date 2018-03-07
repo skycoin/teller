@@ -20,6 +20,9 @@
 #  name = "github.com/x/y"
 #  version = "2.4.0"
 
+[prune]
+  unused-packages = true
+  go-tests = true
 
 [[constraint]]
   branch = "master"
@@ -36,10 +39,6 @@
 [[override]]
   revision = "5ffa719c3882fd2ec1e8b9f4978066701c31a343"
   name = "github.com/btcsuite/btcutil"
-
-[[constraint]]
-  name = "github.com/fortytw2/leaktest"
-  version = "1.1.0"
 
 [[constraint]]
   name = "github.com/google/gops"

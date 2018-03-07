@@ -1,12 +1,16 @@
 package exchange
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
+	"github.com/skycoin/exchange-api/exchange"
 
 	"github.com/MDLlife/teller/src/config"
+	"github.com/MDLlife/teller/src/scanner"
 )
 
 const (
@@ -16,15 +20,16 @@ const (
 // Passthrough implements a Processor. For each deposit, it buys a corresponding amount
 // from c2cx.com, then tells the sender to send the amount bought.
 type Passthrough struct {
-	log        logrus.FieldLogger
-	cfg        config.MDLExchanger
-	receiver   Receiver
-	store      Storer
-	deposits   chan DepositInfo
-	quit       chan struct{}
-	done       chan struct{}
-	statusLock sync.RWMutex
-	status     error
+	log            logrus.FieldLogger
+	cfg            config.MDLExchanger
+	receiver       Receiver
+	store          Storer
+	deposits       chan DepositInfo
+	quit           chan struct{}
+	done           chan struct{}
+	statusLock     sync.RWMutex
+	status         error
+	exchangeClient exchange.Client
 }
 
 // NewPassthrough creates Passthrough
@@ -41,6 +46,7 @@ func NewPassthrough(log logrus.FieldLogger, cfg config.MDLExchanger, store Store
 		deposits: make(chan DepositInfo, 100),
 		quit:     make(chan struct{}),
 		done:     make(chan struct{}),
+		// TODO: create exchangeClient from some cfg item
 	}, nil
 }
 
@@ -195,29 +201,52 @@ func (p *Passthrough) handleDepositInfoState(di DepositInfo) (DepositInfo, error
 /* BEGIN PSEUDOCODE FOR EXCHANGE PURCHASE LOGIC */
 
 // checkBalance checks that enough coins are held on the exchange
-func checkBalance(di DepositInfo) error {
+func (p *Passthrough) checkBalance(di DepositInfo) error {
+	quantity, err := p.exchangeClient.GetBalance(di.CoinType)
+
+	if err != nil {
+		return err
+	}
+
+	switch di.CoinType {
+	case scanner.CoinTypeBTC:
+		quantity = quantity.Mul(decimal.New(SatoshisPerBTC, 0))
+	case scanner.CoinTypeETH:
+		quantity = quantity.Mul(decimal.New(WeiPerETH, 0))
+	default:
+		return scanner.ErrUnsupportedCoinType
+	}
+
+	if quantity.LessThan(decimal.New(di.DepositValue, 0)) {
+		return ErrLowExchangeBalance
+	}
+
 	return nil
 }
 
-type askBid struct{}
-
 // getCheapestAsk returns the cheapest ask order from c2cx
-func getCheapestAsk(di DepositInfo) (askBid, error) {
-	return askBid{}, nil
+func (p *Passthrough) getCheapestAsk(di DepositInfo) (*exchange.MarketOrder, error) {
+	marketRecord, err := p.exchangeClient.Orderbook().Get(fmt.Sprintf("MDL_%s", di.CoinType))
+	if err != nil {
+		return nil, err
+	}
+
+	marketOrder := marketRecord.CheapestAsk()
+	if marketOrder == nil {
+		return nil, ErrNoAsksAvailable
+	}
+
+	return marketOrder, nil
 }
 
 // placeOrder places an order on the exchange and returns the orderID
-func placeOrder(ask askBid) (string, error) {
-	return "", nil
-}
-
-type order struct {
-	Status string
+func (p *Passthrough) placeOrder(di DepositInfo, ask *exchange.MarketOrder) (int, error) {
+	return p.exchangeClient.Buy(fmt.Sprintf("MDL_%s", di.CoinType), ask.Price, ask.Volume)
 }
 
 // checkOrder returns the status of an order
-func checkOrder(orderID string) (order, error) {
-	return order{}, nil
+func (p *Passthrough) checkOrder(orderID int) (string, error) {
+	return p.exchangeClient.OrderStatus(orderID)
 }
 
 // clearOrders cancels all pending orders
@@ -243,7 +272,7 @@ func (p *Passthrough) fillOrder(di DepositInfo) (DepositInfo, error) {
 	// TODO -- determine fatal/retry cases
 	// TODO -- API wrapper around exchange-api
 
-	if err := checkBalance(di); err != nil {
+	if err := p.checkBalance(di); err != nil {
 		return di, err
 	}
 
@@ -257,14 +286,14 @@ beginOrderLoop:
 		}
 
 		// Get the cheapest ask bid
-		ask, err := getCheapestAsk(di)
+		ask, err := p.getCheapestAsk(di)
 		if err != nil {
 			return di, err
 		}
 
 		// Place an order matching this ask bid
 		// TODO -- adjust amount based upon remaining BTC to spend
-		orderID, err := placeOrder(ask)
+		orderID, err := p.placeOrder(di, ask)
 		if err != nil {
 			return di, err
 		}
@@ -272,18 +301,18 @@ beginOrderLoop:
 		// Wait for order to complete
 		// If not completed after checkOrderWait, cancel it
 		// Wait for a final state (complete or cancelled)
-		var o order
+		var status string
 		select {
 		case <-p.quit:
 			return di, nil
 		case <-time.After(checkOrderWait):
-			o, err = checkOrder(orderID)
+			status, err = p.checkOrder(orderID)
 			if err != nil {
 				return di, err
 			}
 
-			switch o.Status {
-			case "complete":
+			switch status {
+			case exchange.Completed:
 			default:
 				continue beginOrderLoop
 			}

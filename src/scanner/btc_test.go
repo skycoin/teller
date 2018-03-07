@@ -18,7 +18,7 @@ import (
 
 const (
 	// run tests in parallel
-	parallel        = true
+	parallel        = false
 	minShutdownWait = time.Second * 2 // set to time.Second * 5 when using -race
 )
 

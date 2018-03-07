@@ -55,7 +55,7 @@ export default {
 <p>You can check the status of your order by entering your address and selecting <strong>Check status</strong>.</p>
 <p>Each time you select <strong>Get Address</strong>, a new BTC address is generated. A single MDL address can have up to 5 BTC addresses assigned to it.</p>
     `,
-    statusFor: 'Status for {skyAddress}',
+    statusFor: 'Status for {mdlAddress}',
     enterAddress: 'Enter MDL address',
     getAddress: 'Get address',
     checkStatus: 'Check status',

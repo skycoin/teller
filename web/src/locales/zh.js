@@ -55,7 +55,7 @@ export default {
 <p>您可以通过输入您的天空币地址并点击下面的"<strong>检查状态</strong>"来核实订单的状态</p>
 <p>每次当您点击<strong>获取地址</strong>, 系统会产生一个新的比特币地址, 一个天空币地址最多只准许兑换5个比特币</p>
     `,
-    statusFor: '天空币地址{skyAddress}的订单状态',
+    statusFor: '天空币地址{mdlAddress}的订单状态',
     enterAddress: '输入天空币地址',
     getAddress: '获取地址',
     checkStatus: '检查状态',

@@ -3,9 +3,9 @@
 # MDL Teller
 
 [![Build Status](https://travis-ci.org/MDLlife/teller.svg?branch=master)](https://travis-ci.org/MDLlife/teller)
-[![GoDoc](https://godoc.org/github.com/skycoin/teller?status.svg)](https://godoc.org/github.com/skycoin/teller)
-[![Go Report Card](https://goreportcard.com/badge/github.com/skycoin/teller)](https://goreportcard.com/report/github.com/skycoin/teller)
-[![Docker Pulls](https://img.shields.io/docker/pulls/skycoin/teller.svg?maxAge=604800)](https://hub.docker.com/r/skycoin/teller/)
+[![GoDoc](https://godoc.org/github.com/MDLlife/teller?status.svg)](https://godoc.org/github.com/MDLlife/teller)
+[![Go Report Card](https://goreportcard.com/badge/github.com/MDLlife/teller)](https://goreportcard.com/report/github.com/MDLlife/teller)
+[![Docker Pulls](https://img.shields.io/docker/pulls/MDLlife/teller.svg?maxAge=604800)](https://hub.docker.com/r/MDLlife/teller/)
 
 <!-- MarkdownTOC autolink="true" bracket="round" depth="5" -->
 
@@ -13,7 +13,7 @@
 - [Setup project](#setup-project)
     - [Prerequisites](#prerequisites)
     - [Configure teller](#configure-teller)
-    - [Running teller without btcd, geth or skyd](#running-teller-without-btcd-geth-or-skyd)
+    - [Running teller without btcd, geth or mdld](#running-teller-without-btcd-geth-or-mdld)
     - [Running teller with Docker](#running-teller-with-docker)
     - [Generate BTC addresses](#generate-btc-addresses)
     - [Generate ETH addresses](#generate-eth-addresses)
@@ -128,7 +128,7 @@ Description of the config file:
 * `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-mdl)).
 * `dummy.http_addr` [bool]: Host address for the dummy scanner and sender API.
 
-### Running teller without btcd, geth or skyd
+### Running teller without btcd, geth or mdld
 
 Teller can be run in "dummy mode". It will ignore btcd, geth and mdld.
 It will still provide addresses via `/api/bind` and report status with `/api/status`.
@@ -168,7 +168,7 @@ docker run -ti --rm \
   -v $PWD/btc_addresses.json:/usr/local/teller/btc_addresses.json \
   -v $PWD/eth_addresses.json:/usr/local/teller/eth_addresses.json \
   -v teller-data:/data
-  skycoin/teller
+  mdl/teller
 ```
 
 Access the dashboard: [http://localhost:7071](http://localhost:7071).
