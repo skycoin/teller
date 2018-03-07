@@ -3,9 +3,9 @@
 # MDL Teller
 
 [![Build Status](https://travis-ci.org/MDLlife/teller.svg?branch=master)](https://travis-ci.org/MDLlife/teller)
-[![GoDoc](https://godoc.org/github.com/skycoin/teller?status.svg)](https://godoc.org/github.com/skycoin/teller)
-[![Go Report Card](https://goreportcard.com/badge/github.com/skycoin/teller)](https://goreportcard.com/report/github.com/skycoin/teller)
-[![Docker Pulls](https://img.shields.io/docker/pulls/skycoin/teller.svg?maxAge=604800)](https://hub.docker.com/r/skycoin/teller/)
+[![GoDoc](https://godoc.org/github.com/MDLlife/teller?status.svg)](https://godoc.org/github.com/MDLlife/teller)
+[![Go Report Card](https://goreportcard.com/badge/github.com/MDLlife/teller)](https://goreportcard.com/report/github.com/MDLlife/teller)
+[![Docker Pulls](https://img.shields.io/docker/pulls/MDLlife/teller.svg?maxAge=604800)](https://hub.docker.com/r/MDLlife/teller/)
 
 <!-- MarkdownTOC autolink="true" bracket="round" depth="5" -->
 
@@ -168,7 +168,7 @@ docker run -ti --rm \
   -v $PWD/btc_addresses.json:/usr/local/teller/btc_addresses.json \
   -v $PWD/eth_addresses.json:/usr/local/teller/eth_addresses.json \
   -v teller-data:/data
-  skycoin/teller
+  mdl/teller
 ```
 
 Access the dashboard: [http://localhost:7071](http://localhost:7071).

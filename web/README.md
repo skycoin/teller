@@ -1,6 +1,6 @@
-# event.skycoin.net
+# event.mdl.net
 
-https://event.skycoin.net
+https://event.mdl.net
 
 ## Setup
 
