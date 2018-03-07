@@ -244,13 +244,9 @@ func (p *Passthrough) placeOrder(di DepositInfo, ask *exchange.MarketOrder) (int
 	return p.exchangeClient.Buy(fmt.Sprintf("SKY_%s", di.CoinType), ask.Price, ask.Volume)
 }
 
-type order struct {
-	Status string
-}
-
 // checkOrder returns the status of an order
-func checkOrder(orderID int) (order, error) {
-	return order{}, nil
+func (p *Passthrough) checkOrder(orderID int) (string, error) {
+	return p.exchangeClient.OrderStatus(orderID)
 }
 
 // clearOrders cancels all pending orders
@@ -305,18 +301,18 @@ beginOrderLoop:
 		// Wait for order to complete
 		// If not completed after checkOrderWait, cancel it
 		// Wait for a final state (complete or cancelled)
-		var o order
+		var status string
 		select {
 		case <-p.quit:
 			return di, nil
 		case <-time.After(checkOrderWait):
-			o, err = checkOrder(orderID)
+			status, err = p.checkOrder(orderID)
 			if err != nil {
 				return di, err
 			}
 
-			switch o.Status {
-			case "complete":
+			switch status {
+			case exchange.Completed:
 			default:
 				continue beginOrderLoop
 			}
