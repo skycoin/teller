@@ -22,6 +22,8 @@ var (
 	// ErrBtcdTxindexDisabled is returned if RawTx is missing from GetBlockVerboseResult,
 	// which happens if txindex is not enabled in btcd.
 	ErrBtcdTxindexDisabled = errors.New("len(block.RawTx) == 0, make sure txindex is enabled in btcd")
+	// ErrEmptyBlock returns when no more new blocks
+	ErrEmptyBlock = errors.New("empty block")
 )
 
 // Config scanner config info
@@ -42,7 +44,7 @@ type BTCScanner struct {
 
 // NewBTCScanner creates scanner instance
 func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg Config) (*BTCScanner, error) {
-	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.btc"), cfg)
+	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.btc"), CoinTypeBTC, cfg)
 
 	return &BTCScanner{
 		btcClient: btc,
@@ -154,7 +156,7 @@ func btcBlock2CommonBlock(block *btcjson.GetBlockVerboseResult) (*CommonBlock, e
 // getNextBlock returns the next block from another block, return nil if next block does not exist
 func (s *BTCScanner) getNextBlock(block *CommonBlock) (*CommonBlock, error) {
 	if block.NextHash == "" {
-		return nil, errors.New("Block.NextHash is empty")
+		return nil, ErrEmptyBlock
 	}
 
 	nxtHash, err := chainhash.NewHashFromStr(block.NextHash)
@@ -166,6 +168,7 @@ func (s *BTCScanner) getNextBlock(block *CommonBlock) (*CommonBlock, error) {
 	s.log.WithField("nextHash", nxtHash.String()).Debug("Calling s.btcClient.GetBlockVerboseTx")
 	btc, err := s.btcClient.GetBlockVerboseTx(nxtHash)
 	if err != nil {
+
 		s.log.WithError(err).Error("chainhash.NewHashFromStr failed")
 		return nil, err
 	}
@@ -213,7 +216,11 @@ func (s *BTCScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 	for {
 		nextBlock, err := s.getNextBlock(block)
 		if err != nil {
-			log.WithError(err).Error("getNextBlock failed")
+			if err == ErrEmptyBlock {
+				log.WithError(err).Debug("getNextBlock empty")
+			} else {
+				log.WithError(err).Error("getNextBlock failed")
+			}
 		}
 		if nextBlock == nil {
 			log.Debug("No new block yet")

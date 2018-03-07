@@ -38,6 +38,7 @@ type BaseScanner struct {
 	scannedDeposits chan Deposit
 	quit            chan struct{}
 	done            chan struct{}
+	CoinType        string
 }
 
 // CommonVout common transaction output info
@@ -62,7 +63,7 @@ type CommonBlock struct {
 }
 
 // NewBaseScanner creates base scanner instance
-func NewBaseScanner(store Storer, log logrus.FieldLogger, cfg Config) *BaseScanner {
+func NewBaseScanner(store Storer, log logrus.FieldLogger, coinType string, cfg Config) *BaseScanner {
 	if cfg.ScanPeriod == 0 {
 		cfg.ScanPeriod = blockScanPeriod
 	}
@@ -78,6 +79,7 @@ func NewBaseScanner(store Storer, log logrus.FieldLogger, cfg Config) *BaseScann
 		scannedDeposits: make(chan Deposit, cfg.DepositBufferSize),
 		done:            make(chan struct{}),
 		Cfg:             cfg,
+		CoinType:        coinType,
 	}
 }
 
@@ -86,7 +88,7 @@ func NewBaseScanner(store Storer, log logrus.FieldLogger, cfg Config) *BaseScann
 func (s *BaseScanner) loadUnprocessedDeposits() error {
 	s.log.Info("Loading unprocessed deposit values")
 
-	dvs, err := s.store.GetUnprocessedDeposits()
+	dvs, err := s.store.GetUnprocessedDeposits(s.CoinType)
 	if err != nil {
 		s.log.WithError(err).Error("GetUnprocessedDeposits failed")
 		return err
@@ -185,9 +187,9 @@ func (s *BaseScanner) Run(
 	scanBlock func(*CommonBlock) (int, error),
 ) error {
 	log := s.log.WithField("config", s.Cfg)
-	log.Info("Start blockchain scan service")
+	log.Infof("Start %s blockchain scan service", s.CoinType)
 	defer func() {
-		log.Info("Blockchain scan service closed")
+		log.Infof("%s blockchain scan service closed", s.CoinType)
 		close(s.done)
 	}()
 
@@ -248,8 +250,8 @@ func (s *BaseScanner) Run(
 
 			blockHash, blockHeight := getBlockHashAndHeight(block)
 			log = log.WithFields(logrus.Fields{
-				"height": blockHash,
-				"hash":   blockHeight,
+				"height": blockHeight,
+				"hash":   blockHash,
 			})
 
 			// Check for necessary confirmations
@@ -293,6 +295,7 @@ func (s *BaseScanner) Run(
 			log.WithFields(logrus.Fields{
 				"scannedDeposits":      n,
 				"totalScannedDeposits": deposits,
+				"coinType":             s.CoinType,
 			}).Infof("Scanned %d deposits from block", n)
 
 			// Wait for the next block
