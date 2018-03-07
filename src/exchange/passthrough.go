@@ -240,8 +240,8 @@ func (p *Passthrough) getCheapestAsk(di DepositInfo) (*exchange.MarketOrder, err
 }
 
 // placeOrder places an order on the exchange and returns the orderID
-func placeOrder(ask *exchange.MarketOrder) (string, error) {
-	return "", nil
+func (p *Passthrough) placeOrder(di DepositInfo, ask *exchange.MarketOrder) (int, error) {
+	return p.exchangeClient.Buy(fmt.Sprintf("SKY_%s", di.CoinType), ask.Price, ask.Volume)
 }
 
 type order struct {
@@ -249,7 +249,7 @@ type order struct {
 }
 
 // checkOrder returns the status of an order
-func checkOrder(orderID string) (order, error) {
+func checkOrder(orderID int) (order, error) {
 	return order{}, nil
 }
 
@@ -297,7 +297,7 @@ beginOrderLoop:
 
 		// Place an order matching this ask bid
 		// TODO -- adjust amount based upon remaining BTC to spend
-		orderID, err := placeOrder(ask)
+		orderID, err := p.placeOrder(di, ask)
 		if err != nil {
 			return di, err
 		}
