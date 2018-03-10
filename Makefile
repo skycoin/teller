@@ -10,6 +10,9 @@ test: ## Run tests
 	go test ./cmd/... -timeout=1m -cover
 	go test ./src/... -timeout=1m -cover
 
+test-race: ## Run tests with -race. Note: expected to fail, but look for "DATA RACE" failures specifically
+	go test ./src/... -timeout=2m -race
+
 lint: ## Run linters. Use make install-linters first.
 	vendorcheck ./...
 	gometalinter --deadline=3m -j 2 --disable-all --tests --vendor \
