@@ -39,9 +39,6 @@ const (
 
 	rpcQuirks = true
 
-	// http API
-	shutdownTimeout = time.Second * 5
-
 	// https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
 	// The timeout configuration is necessary for public servers, or else
 	// connections will be used up
