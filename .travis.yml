@@ -1,10 +1,10 @@
 language: go
 
 go:
-    - 1.9
+    - "1.9"
+    - "1.10"
 
 install:
-  - go get -t ./...
   - make install-linters
 
 script:
