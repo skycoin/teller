@@ -22,6 +22,15 @@ type BtcRPCClient interface {
 	Shutdown()
 }
 
+// SkyRPCClient rpcclient interface
+type SkyRPCClient interface {
+	GetBlockVerboseTx(*chainhash.Hash) (*btcjson.GetBlockVerboseResult, error)
+	GetBlockHash(int64) (*chainhash.Hash, error)
+	GetBlockCount() (int64, error)
+	Shutdown()
+}
+
+
 // EthRPCClient rpcclient interface
 type EthRPCClient interface {
 	GetBlockVerboseTx(seq uint64) (*types.Block, error)
