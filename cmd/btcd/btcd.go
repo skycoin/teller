@@ -39,14 +39,14 @@ const (
 
 	rpcQuirks = true
 
-	defaultBestBlockHeight = 492478
-	defaultBestBlockHash   = "00000000000000000c4ac9ec73ff6a465532c22fd9b2a7c0015a5e13128cb9ed"
+	// http API
+	shutdownTimeout = time.Second * 5
 
 	// https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
 	// The timeout configuration is necessary for public servers, or else
 	// connections will be used up
 	serverReadTimeout  = time.Second * 10
-	serverWriteTimeout = time.Second * 60
+	serverWriteTimeout = time.Second * 20
 	serverIdleTimeout  = time.Second * 120
 )
 
@@ -67,11 +67,9 @@ type BlockStore struct {
 	HashBlocks      map[string]btcjson.GetBlockVerboseResult
 }
 
-var blocks = []btcjson.GetBlockVerboseResult{
-	{
-		Hash:   defaultBestBlockHash,
-		Height: defaultBestBlockHeight,
-	},
+var initialBlock = btcjson.GetBlockVerboseResult{
+	Hash:   "00000000000000000c4ac9ec73ff6a465532c22fd9b2a7c0015a5e13128cb9ed",
+	Height: 492478 - 1,
 }
 
 var defaultBlockStore *BlockStore
@@ -1019,6 +1017,7 @@ out:
 		var request btcjson.Request
 		err = json.Unmarshal(msg, &request)
 		if err != nil {
+			fmt.Printf("Failed to parse request: %v\n", err)
 			jsonErr := &btcjson.RPCError{
 				Code:    btcjson.ErrRPCParse.Code,
 				Message: "Failed to parse request: " + err.Error(),
@@ -1034,6 +1033,7 @@ out:
 
 		cmd := parseCmd(&request)
 		if cmd.err != nil {
+			fmt.Printf("Failed to parse command: %v\n", cmd.err)
 			reply, err := createMarshalledReply(cmd.id, nil, cmd.err)
 			if err != nil {
 				fmt.Printf("Failed to marshal parse failure reply: %v\n", err)
@@ -1143,8 +1143,10 @@ func (c *wsClient) serviceRequest(r *parsedRPCCmd) {
 	// exist fallback to handling the command as a standard command.
 	wsHandler, ok := wsHandlers[r.method]
 	if ok {
+		fmt.Printf("found wsHandler for method=%s, cmd=%v\n", r.method, r.cmd)
 		result, err = wsHandler(c, r.cmd)
 	} else {
+		fmt.Printf("did not find wsHandler for method=%s, cmd=%v\n", r.method, r.cmd)
 		result, err = c.server.standardCmdResult(r, nil)
 	}
 	reply, err := createMarshalledReply(r.id, result, err)
@@ -1152,6 +1154,7 @@ func (c *wsClient) serviceRequest(r *parsedRPCCmd) {
 		fmt.Printf("Failed to marshal reply for <%s> command: %v\n", r.method, err)
 		return
 	}
+	fmt.Printf("created reply: %s\n", string(reply))
 	c.SendMessage(reply, nil)
 }
 
@@ -1340,7 +1343,7 @@ func run() error {
 		if err := server.Stop(); err != nil {
 			fmt.Println("server.Stop failed:", err)
 		}
-		fmt.Printf("Shutdown complete")
+		fmt.Printf("Shutdown complete\n")
 	}()
 
 	// Signal process shutdown when the RPC server requests it.
@@ -1355,7 +1358,7 @@ func run() error {
 		fmt.Printf("HTTP API server listening on http://%s\n", *httpAPIAddress)
 		err := apiServer.start()
 		if err != nil {
-			fmt.Printf("HTTP API server failed to start")
+			fmt.Printf("HTTP API server failed to start\n")
 		}
 	}()
 
@@ -1374,12 +1377,34 @@ func main() {
 
 func init() {
 	defaultBlockStore = &BlockStore{
-		BestBlockHeight: defaultBestBlockHeight,
-		BlockHashes:     make(map[int64]string),
-		HashBlocks:      make(map[string]btcjson.GetBlockVerboseResult),
+		BlockHashes: make(map[int64]string),
+		HashBlocks:  make(map[string]btcjson.GetBlockVerboseResult),
 	}
-	for _, b := range blocks {
-		defaultBlockStore.BlockHashes[b.Height] = b.Hash
-		defaultBlockStore.HashBlocks[b.Hash] = b
+
+	// Initialize a block with transactions, in order to pass the len(block.RawTx) != 0 check in teller
+	// when it begins scanning its first block
+	deposits := []Deposit{
+		{
+			Address: "14S31KagL5js1FWcz1CiEJWa776aYJjV3N",
+			Value:   1,
+			N:       0,
+		},
 	}
+	b, err := createNewBlock(initialBlock.Hash, initialBlock.Height, deposits)
+	if err != nil {
+		fmt.Println("ERROR:", err)
+		os.Exit(1)
+	}
+
+	vb := convertBlockToGetBlockVerboseResult(b)
+
+	if vb.Height != initialBlock.Height+1 {
+		fmt.Println("ERROR: New block height is non-incrementing:", vb.Height)
+		os.Exit(1)
+	}
+
+	defaultBlockStore.BlockHashes[vb.Height] = vb.Hash
+	defaultBlockStore.HashBlocks[vb.Hash] = *vb
+
+	defaultBlockStore.BestBlockHeight = int32(vb.Height)
 }
