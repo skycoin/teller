@@ -223,7 +223,11 @@
 [[projects]]
   branch = "master"
   name = "github.com/skycoin/exchange-api"
-  packages = ["exchange"]
+  packages = [
+    "db",
+    "exchange",
+    "exchange/c2cx.com"
+  ]
   revision = "f709f722890675562c8fabe8f26bb1da64915399"
 
 [[projects]]
@@ -393,6 +397,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "775f1badcbb1e590b836d292c5f16162b86ee5f8d2399280654586806ea76e2d"
+  inputs-digest = "cf798eddbfdde99e1f6aa5f4350def47229ce34811175d1d2beff142f5c1e1bd"
   solver-name = "gps-cdcl"
   solver-version = 1

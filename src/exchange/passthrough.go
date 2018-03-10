@@ -7,7 +7,9 @@ import (
 
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
+	"github.com/skycoin/exchange-api/db"
 	"github.com/skycoin/exchange-api/exchange"
+	c2cx "github.com/skycoin/exchange-api/exchange/c2cx.com"
 
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/scanner"
@@ -38,6 +40,11 @@ func NewPassthrough(log logrus.FieldLogger, cfg config.SkyExchanger, store Store
 		return nil, err
 	}
 
+	orderbookDatabase, err := db.NewOrderbookTracker()
+	if err != nil {
+		return nil, err
+	}
+
 	return &Passthrough{
 		log:      log.WithField("prefix", "teller.exchange.passthrough"),
 		cfg:      cfg,
@@ -46,7 +53,14 @@ func NewPassthrough(log logrus.FieldLogger, cfg config.SkyExchanger, store Store
 		deposits: make(chan DepositInfo, 100),
 		quit:     make(chan struct{}),
 		done:     make(chan struct{}),
-		// TODO: create exchangeClient from some cfg item
+		exchangeClient: &c2cx.Client{
+			Key:                      cfg.ExchangeClient.Key,
+			Secret:                   cfg.ExchangeClient.Secret,
+			OrdersRefreshInterval:    time.Duration(cfg.ExchangeClient.OrdersRefreshInterval),
+			OrderbookRefreshInterval: time.Duration(cfg.ExchangeClient.OrderbookRefreshInterval),
+			Orders:     exchange.NewTracker(),
+			Orderbooks: orderbookDatabase,
+		},
 	}, nil
 }
 

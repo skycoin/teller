@@ -66,8 +66,6 @@ type Config struct {
 	EthScanner   EthScanner   `mapstructure:"eth_scanner"`
 	SkyExchanger SkyExchanger `mapstructure:"sky_exchanger"`
 
-	ExchangeClient ExchangeClient `mapstructure:"exchange_client"`
-
 	Web Web `mapstructure:"web"`
 
 	AdminPanel AdminPanel `mapstructure:"admin_panel"`
@@ -135,6 +133,8 @@ type SkyExchanger struct {
 	SendEnabled bool `mapstructure:"send_enabled"`
 	// Method of purchasing coins ("direct buy" or "passthrough"
 	BuyMethod string `mapstructure:"buy_method"`
+	// C2CX client parameters
+	ExchangeClient ExchangeClient `mapstructure:"exchange_client"`
 }
 
 // Validate validates the SkyExchanger config
@@ -205,6 +205,7 @@ type ExchangeClient struct {
 	OrderbookRefreshInterval uint   `mapstructure:"orderbook_refresh_interval"`
 }
 
+// Validate checks that the refresh intervals are non-zero
 func (ec ExchangeClient) Validate() error {
 	if ec.OrdersRefreshInterval == 0 {
 		return errors.New("OrdersRefreshInterval must be greater than zero")
@@ -411,10 +412,8 @@ func setDefaults() {
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)
 	viper.SetDefault("sky_exchanger.max_decimals", 3)
 	viper.SetDefault("sky_exchanger.buy_method", BuyMethodDirect)
-
-	// ExchangeClient
-	viper.SetDefault("exchange_client.orders_refresh_interval", time.Second*5)
-	viper.SetDefault("exchange_client.orderbook_refresh_interval", time.Second*5)
+	viper.SetDefault("sky_exchanger.exchange_client.orders_refresh_interval", time.Second*5)
+	viper.SetDefault("sky_exchanger.exchange_client.orderbook_refresh_interval", time.Second*5)
 
 	// Web
 	viper.SetDefault("web.bind_enabled", true)
