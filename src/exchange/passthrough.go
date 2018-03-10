@@ -56,8 +56,8 @@ func NewPassthrough(log logrus.FieldLogger, cfg config.SkyExchanger, store Store
 		exchangeClient: &c2cx.Client{
 			Key:                      cfg.ExchangeClient.Key,
 			Secret:                   cfg.ExchangeClient.Secret,
-			OrdersRefreshInterval:    time.Duration(cfg.ExchangeClient.OrdersRefreshInterval),
-			OrderbookRefreshInterval: time.Duration(cfg.ExchangeClient.OrderbookRefreshInterval),
+			OrdersRefreshInterval:    cfg.ExchangeClient.OrdersRefreshInterval,
+			OrderbookRefreshInterval: cfg.ExchangeClient.OrderbookRefreshInterval,
 			Orders:     exchange.NewTracker(),
 			Orderbooks: orderbookDatabase,
 		},

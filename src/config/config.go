@@ -199,19 +199,19 @@ func (c SkyExchanger) validateWallet() []error {
 
 // ExchangeClient config for the C2CX implementation from skycoin/exchange-api
 type ExchangeClient struct {
-	Key                      string `mapstructure:"key"`
-	Secret                   string `mapstructure:"secret"`
-	OrdersRefreshInterval    uint   `mapstructure:"orders_refresh_interval"`
-	OrderbookRefreshInterval uint   `mapstructure:"orderbook_refresh_interval"`
+	Key                      string        `mapstructure:"key"`
+	Secret                   string        `mapstructure:"secret"`
+	OrdersRefreshInterval    time.Duration `mapstructure:"orders_refresh_interval"`
+	OrderbookRefreshInterval time.Duration `mapstructure:"orderbook_refresh_interval"`
 }
 
 // Validate checks that the refresh intervals are non-zero
 func (ec ExchangeClient) Validate() error {
-	if ec.OrdersRefreshInterval == 0 {
+	if ec.OrdersRefreshInterval <= 0 {
 		return errors.New("OrdersRefreshInterval must be greater than zero")
 	}
 
-	if ec.OrderbookRefreshInterval == 0 {
+	if ec.OrderbookRefreshInterval <= 0 {
 		return errors.New("OrderbookRefreshInterval must be greater than zero")
 	}
 
