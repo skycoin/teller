@@ -66,6 +66,8 @@ type Config struct {
 	EthScanner   EthScanner   `mapstructure:"eth_scanner"`
 	SkyExchanger SkyExchanger `mapstructure:"sky_exchanger"`
 
+	ExchangeClient ExchangeClient `mapstructure:"exchange_client"`
+
 	Web Web `mapstructure:"web"`
 
 	AdminPanel AdminPanel `mapstructure:"admin_panel"`
@@ -193,6 +195,26 @@ func (c SkyExchanger) validateWallet() []error {
 	}
 
 	return errs
+}
+
+// ExchangeClient config for the C2CX implementation from skycoin/exchange-api
+type ExchangeClient struct {
+	Key                      string `mapstructure:"key"`
+	Secret                   string `mapstructure:"secret"`
+	OrdersRefreshInterval    uint   `mapstructure:"orders_refresh_interval"`
+	OrderbookRefreshInterval uint   `mapstructure:"orderbook_refresh_interval"`
+}
+
+func (ec ExchangeClient) Validate() error {
+	if ec.OrdersRefreshInterval == 0 {
+		return errors.New("OrdersRefreshInterval must be greater than zero")
+	}
+
+	if ec.OrderbookRefreshInterval == 0 {
+		return errors.New("OrderbookRefreshInterval must be greater than zero")
+	}
+
+	return nil
 }
 
 // Web config for the teller HTTP interface
@@ -389,6 +411,10 @@ func setDefaults() {
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)
 	viper.SetDefault("sky_exchanger.max_decimals", 3)
 	viper.SetDefault("sky_exchanger.buy_method", BuyMethodDirect)
+
+	// ExchangeClient
+	viper.SetDefault("exchange_client.orders_refresh_interval", time.Second*5)
+	viper.SetDefault("exchange_client.orderbook_refresh_interval", time.Second*5)
 
 	// Web
 	viper.SetDefault("web.bind_enabled", true)
