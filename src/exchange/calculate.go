@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	// SatoshiExponent is the number of decimal places for 1 satoshi
+	SatoshiExponent int64 = 8
 	// SatoshisPerBTC is the number of satoshis per 1 BTC
 	SatoshisPerBTC int64 = 1e8
 	// WeiPerETH is the number of wei per 1 ETH
