@@ -2,69 +2,18 @@ export default [{
   heading: 'footer.getStarted',
   links: [{
     label: 'footer.wallet',
-    href: 'https://www.mdl.net/downloads',
-  }, {
-    label: 'footer.infographics',
-    href: 'https://www.mdl.net/infographics',
-  }, {
-    label: 'footer.team',
-    href: 'https://www.mdl.net/blog/statement/mdl-team/',
-  }, {
-    label: 'footer.subscribe',
-    href: 'https://www.mdl.net/mailing-list',
-  }, {
-    label: 'footer.market',
-    href: 'https://www.mdl.net/markets',
-  }, {
-    label: 'footer.bitcoinTalks',
-    href: 'https://bitcointalk.org/index.php?topic=380441',
+    href: 'https://mdl.life',
   }],
 }, {
   heading: 'footer.explore',
   links: [{
     label: 'footer.blog',
-    href: 'https://www.mdl.net/blog',
-  }, {
-    label: 'footer.whitepapers',
-    href: 'https://www.mdl.net/whitepapers',
-  }, {
-    label: 'footer.blockchain',
-    href: 'https://explorer.mdl.net/blocks',
-  }, {
-    label: 'footer.roadmap',
-    href: 'https://www.mdl.net/roadmap',
-  }, {
-    label: 'footer.skyMessenger',
-    href: 'http://messenger.mdl.net/',
-  }, {
-    label: 'footer.cxPlayground',
-    href: 'http://cx.mdl.net/',
+    href: 'http://mdl.wtf',
   }],
 }, {
   heading: 'footer.community',
   links: [{
     label: 'footer.reddit',
-    href: 'https://www.reddit.com/r/MDLProject',
-  }, {
-    label: 'footer.twitter',
-    href: 'https://twitter.com/mdlproject',
-  }, {
-    label: 'footer.github',
-    href: 'https://github.com/mdl/mdl',
-  }, {
-    label: 'footer.telegram',
-    href: 'https://t.me/MDL',
-  }, {
-    label: 'footer.slack',
-    href: 'http://mdl.herokuapp.com/',
-  }, {
-    label: 'footer.discord',
-    href: 'https://discord.gg/EgBenrW',
-  }, {
-    label: 'footer.facebook',
-    href: 'https://www.facebook.com/mdlproject',
-  }, {
-    label: 'footer.instagram',
-    href: 'https://www.instagram.com/mdlproject/',
+    href: 'https://www.reddit.com/r/MDLTalentHub/',
   }],
 }];

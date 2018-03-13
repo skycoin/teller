@@ -4,8 +4,8 @@ import styled from 'styled-components';
 import { rem } from 'polished';
 
 import Link from 'components/Link';
-import logo from './logo.svg';
-import logoWhite from './logoWhite.svg';
+import logo from './logo-black.png';
+import logoWhite from './logo-white.png';
 
 const StyledLink = styled(Link)`
   display: block;
