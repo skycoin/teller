@@ -6,6 +6,7 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/skycoin/skycoin/src/visor"
 )
 
 // Scanner provids apis for interacting with a scan service
@@ -25,6 +26,14 @@ type BtcRPCClient interface {
 // EthRPCClient rpcclient interface
 type EthRPCClient interface {
 	GetBlockVerboseTx(seq uint64) (*types.Block, error)
+	GetBlockCount() (int64, error)
+	Shutdown()
+}
+
+// SkyRPCClient rpcclient interface
+// required so that we can mock it for testing
+type SkyRPCClient interface {
+	GetBlockVerboseTx(seq uint64) (*visor.ReadableBlock, error)
 	GetBlockCount() (int64, error)
 	Shutdown()
 }
