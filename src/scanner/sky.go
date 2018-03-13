@@ -24,11 +24,12 @@ type SKYScanner struct {
 	Base CommonScanner
 }
 
-// implements the SKYRpcClient interface
+// SkyClient implements the SKYRpcClient interface
 type SkyClient struct {
 	c *webrpc.Client
 }
 
+// NewSkyClient create a new skyclient instance
 func NewSkyClient(addr string) *SkyClient {
 	skyClient := SkyClient{
 		c: &webrpc.Client{Addr: addr},
@@ -106,6 +107,7 @@ func (sc *SkyClient) GetBlockCount() (int64, error) {
 	return int64(blockCnt), nil
 }
 
+// GetBlockVerboseTx returns skycoin block data for a give height
 func (sc *SkyClient) GetBlockVerboseTx(seq uint64) (*visor.ReadableBlock, error) {
 	block, err := sc.c.GetBlocksBySeq([]uint64{seq})
 	if err != nil {
@@ -116,6 +118,7 @@ func (sc *SkyClient) GetBlockVerboseTx(seq uint64) (*visor.ReadableBlock, error)
 	return &block.Blocks[0], nil
 }
 
+// Shutdown placeholder
 func (sc *SkyClient) Shutdown() {
 }
 
