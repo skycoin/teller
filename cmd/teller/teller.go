@@ -104,6 +104,32 @@ func createEthScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 	return ethScanner, nil
 }
 
+
+func createSkyScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.ETHScanner, error) {
+	skyrpc, err := scanner.NewSkyClient(cfg.SkyRPC.Server, cfg.SkyRPC.Port)
+	if err != nil {
+		log.WithError(err).Error("Connect geth failed")
+		return nil, err
+	}
+
+	err = scanStore.AddSupportedCoin(scanner.CoinTypeETH)
+	if err != nil {
+		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeETH) failed")
+		return nil, err
+	}
+
+	skyScanner, err := scanner.NewSkyScanner(log, scanStore, skyrpc, scanner.Config{
+		ScanPeriod:            cfg.EthScanner.ScanPeriod,
+		ConfirmationsRequired: cfg.EthScanner.ConfirmationsRequired,
+		InitialScanHeight:     cfg.EthScanner.InitialScanHeight,
+	})
+	if err != nil {
+		log.WithError(err).Error("Open ethscan service failed")
+		return nil, err
+	}
+	return skyScanner, nil
+}
+
 func run() error {
 	cur, err := user.Current()
 	if err != nil {
