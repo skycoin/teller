@@ -19,6 +19,8 @@ import Input from 'components/Input';
 import Modal, { styles } from 'components/Modal';
 import Text from 'components/Text';
 import media from '../../utils/media';
+import Select from 'react-select';
+import 'react-select/dist/react-select.css';
 
 import { checkStatus, getAddress, getConfig, checkExchangeStatus } from '../../utils/distributionAPI';
 
@@ -44,6 +46,7 @@ class Distribution extends React.Component {
     super();
     this.state = {
       status: [],
+      coinType: 'ETH',
       mdlAddress: null,
       btcAddress: '',
       statusIsOpen: false,
@@ -52,6 +55,7 @@ class Distribution extends React.Component {
     };
 
     this.handleChange = this.handleChange.bind(this);
+    this.handleCoinTypeChange = this.handleCoinTypeChange.bind(this);
     this.getAddress = this.getAddress.bind(this);
     this.checkStatus = this.checkStatus.bind(this);
     this.closeModals = this.closeModals.bind(this);
@@ -96,7 +100,7 @@ class Distribution extends React.Component {
       addressLoading: true,
     });
 
-    return getAddress(this.state.mdlAddress)
+    return getAddress(this.state)
       .then((res) => {
         this.setState({
           btcAddress: res,
@@ -114,7 +118,14 @@ class Distribution extends React.Component {
 
   handleChange(event) {
     this.setState({
-      mdlAddress: event.target.value,
+      mdlAddress: event.target.value
+    });
+  }
+
+  handleCoinTypeChange(selectedOption) {
+    this.state.btcAddress = ''
+    this.setState({
+      coinType: selectedOption.value
     });
   }
 
@@ -233,13 +244,25 @@ class Distribution extends React.Component {
                 </Text>
 
                 <Input
+                 as="div"
                   placeholder={intl.formatMessage({ id: 'distribution.enterAddress' })}
                   value={this.state.address}
                   onChange={this.handleChange}
                 />
 
+                <Select
+                 as="div"
+                  name="coin_type"
+                  value={this.state.coinType}
+                  onChange={this.handleCoinTypeChange}
+                  options={[
+                    { value: 'BTC', label: 'BTC' },
+                    { value: 'ETH', label: 'ETH' },
+                  ]}
+                />
+
                 {this.state.btcAddress && <Address heavy color="black" fontSize={[2, 3]} as="p">
-                  <strong><FormattedHTMLMessage id="distribution.btcAddress" />: </strong>
+                  <strong>{this.state.coinType} <FormattedHTMLMessage id="distribution.recAddress" />: </strong>
                   {this.state.btcAddress}
                 </Address>}
 

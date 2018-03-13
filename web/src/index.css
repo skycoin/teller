@@ -90,6 +90,10 @@ fieldset {
   margin-bottom: 1rem;
 }
 
+.Select {
+  margin-bottom: 1rem;
+}
+
 dd, ol, ul {
   margin-left: 1rem;
 }

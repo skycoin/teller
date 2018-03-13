@@ -61,7 +61,7 @@ export default {
     getAddress: 'Get address',
     checkStatus: 'Check status',
     loading: 'Loading...',
-    btcAddress: 'BTC address',
+    recAddress: 'address',
     errors: {
       noSkyAddress: 'Please enter your MDL address.',
       coinsSoldOut: 'MDL ITO is currently sold out, check back later.',
