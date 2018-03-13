@@ -21,29 +21,65 @@ var (
 	// DepositInfoBkt maps a BTC transaction to a DepositInfo
 	DepositInfoBkt = []byte("deposit_info")
 
-	// BindAddressBkt maps a BTC address to a SKY address
-	BindAddressBkt = []byte("bind_address")
-
 	// BtcTxsBkt maps a BTC address to multiple BTC transactions
 	BtcTxsBkt = []byte("btc_txs")
 
-	// SkyDepositSeqsIndexBkt maps a SKY address to its BTC addresses
-	SkyDepositSeqsIndexBkt = []byte("sky_deposit_seqs_index")
+	// MDLDepositSeqsIndexBkt maps a MDL address to its BTC addresses
+	MDLDepositSeqsIndexBkt = []byte("mdl_deposit_seqs_index")
 
-	// ErrAddressAlreadyBound is returned if an address has already been bound to a SKY address
-	ErrAddressAlreadyBound = errors.New("Address already bound to a SKY address")
+	// ErrAddressAlreadyBound is returned if an address has already been bound to a MDL address
+	ErrAddressAlreadyBound = errors.New("Address already bound to a MDL address")
 )
+
+const bindAddressBktPrefix = "bind_address"
+
+// GetBindAddressBkt returns the bind_address bucket name for a given coin type
+func GetBindAddressBkt(coinType string) ([]byte, error) {
+	var suffix string
+	switch coinType {
+	case scanner.CoinTypeBTC:
+		suffix = "btc"
+	case scanner.CoinTypeETH:
+		suffix = "eth"
+	default:
+		return nil, scanner.ErrUnsupportedCoinType
+	}
+
+	bktName := fmt.Sprintf("%s_%s", bindAddressBktPrefix, suffix)
+
+	return []byte(bktName), nil
+}
+
+// MustGetBindAddressBkt panics if GetBindAddressBkt returns an error
+func MustGetBindAddressBkt(coinType string) []byte {
+	name, err := GetBindAddressBkt(coinType)
+	if err != nil {
+		panic(err)
+	}
+	return name
+}
+
+func init() {
+	// Check that GetBindAddressBkt handles all possible coin types
+	// TODO -- do similar init checks for other switches over coinType
+	for _, ct := range scanner.GetCoinTypes() {
+		name := MustGetBindAddressBkt(ct)
+		if len(name) == 0 {
+			panic(fmt.Sprintf("GetBindAddressBkt(%s) returned empty", ct))
+		}
+	}
+}
 
 // Storer interface for exchange storage
 type Storer interface {
-	GetBindAddress(depositAddr, coinType string) (string, error)
-	BindAddress(skyAddr, depositAddr, coinType string) error
+	GetBindAddress(depositAddr, coinType string) (*BoundAddress, error)
+	BindAddress(mdlAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error)
 	GetOrCreateDepositInfo(scanner.Deposit, string) (DepositInfo, error)
 	GetDepositInfoArray(DepositFilter) ([]DepositInfo, error)
-	GetDepositInfoOfSkyAddress(string) ([]DepositInfo, error)
+	GetDepositInfoOfMDLAddress(string) ([]DepositInfo, error)
 	UpdateDepositInfo(string, func(DepositInfo) DepositInfo) (DepositInfo, error)
 	UpdateDepositInfoCallback(string, func(DepositInfo) DepositInfo, func(DepositInfo) error) (DepositInfo, error)
-	GetSkyBindAddresses(string) ([]string, error)
+	GetMDLBindAddresses(string) ([]BoundAddress, error)
 	GetDepositStats() (int64, int64, error)
 }
 
@@ -71,17 +107,15 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 		}
 
 		// create bind address bucket if not exist
-		btcBktFullName := dbutil.ByteJoin(BindAddressBkt, scanner.CoinTypeBTC, "_")
-		if _, err := tx.CreateBucketIfNotExists(btcBktFullName); err != nil {
-			return dbutil.NewCreateBucketFailedErr(btcBktFullName, err)
-		}
-		ethBktFullName := dbutil.ByteJoin(BindAddressBkt, scanner.CoinTypeETH, "_")
-		if _, err := tx.CreateBucketIfNotExists(ethBktFullName); err != nil {
-			return dbutil.NewCreateBucketFailedErr(ethBktFullName, err)
+		for _, ct := range scanner.GetCoinTypes() {
+			bktName := MustGetBindAddressBkt(ct)
+			if _, err := tx.CreateBucketIfNotExists(bktName); err != nil {
+				return dbutil.NewCreateBucketFailedErr(bktName, err)
+			}
 		}
 
-		if _, err := tx.CreateBucketIfNotExists(SkyDepositSeqsIndexBkt); err != nil {
-			return dbutil.NewCreateBucketFailedErr(SkyDepositSeqsIndexBkt, err)
+		if _, err := tx.CreateBucketIfNotExists(MDLDepositSeqsIndexBkt); err != nil {
+			return dbutil.NewCreateBucketFailedErr(MDLDepositSeqsIndexBkt, err)
 		}
 
 		if _, err := tx.CreateBucketIfNotExists(BtcTxsBkt); err != nil {
@@ -97,55 +131,77 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 		db:  db,
 		log: log.WithField("prefix", "exchange.Store"),
 	}, nil
-
 }
 
-// GetBindAddress returns bound skycoin address of given bitcoin address.
-// If no skycoin address is found, returns empty string and nil error.
-func (s *Store) GetBindAddress(depositAddr, coinType string) (string, error) {
-	var skyAddr string
-	err := s.db.View(func(tx *bolt.Tx) error {
+// GetBindAddress returns bound mdl address of given bitcoin address.
+// If no mdl address is found, returns empty string and nil error.
+func (s *Store) GetBindAddress(depositAddr, coinType string) (*BoundAddress, error) {
+	var boundAddr *BoundAddress
+	if err := s.db.View(func(tx *bolt.Tx) error {
 		var err error
-		skyAddr, err = s.getBindAddressTx(tx, depositAddr, coinType)
+		boundAddr, err = s.getBindAddressTx(tx, depositAddr, coinType)
 		return err
-	})
-	return skyAddr, err
+	}); err != nil {
+		return nil, err
+	}
+
+	return boundAddr, nil
 }
 
-// getBindAddressTx returns bound skycoin address of given bitcoin address.
-// If no skycoin address is found, returns empty string and nil error.
-func (s *Store) getBindAddressTx(tx *bolt.Tx, depositAddr, coinType string) (string, error) {
-	bindBktFullName := dbutil.ByteJoin(BindAddressBkt, coinType, "_")
-	skyAddr, err := dbutil.GetBucketString(tx, bindBktFullName, depositAddr)
+// getBindAddressTx returns bound mdl address of given bitcoin address.
+// If no mdl address is found, returns empty string and nil error.
+func (s *Store) getBindAddressTx(tx *bolt.Tx, depositAddr, coinType string) (*BoundAddress, error) {
+	bindBktFullName, err := GetBindAddressBkt(coinType)
+	if err != nil {
+		return nil, err
+	}
+
+	var boundAddr BoundAddress
+	err = dbutil.GetBucketObject(tx, bindBktFullName, depositAddr, &boundAddr)
 	switch err.(type) {
 	case nil:
-		return skyAddr, nil
+		return &boundAddr, nil
 	case dbutil.ObjectNotExistErr:
-		return "", nil
+		return nil, nil
 	default:
-		return "", err
+		return nil, err
 	}
 }
 
-// BindAddress binds a skycoin address to a deposit address
-func (s *Store) BindAddress(skyAddr, depositAddr, coinType string) error {
-	log := s.log.WithField("skyAddr", skyAddr)
+// BindAddress binds a mdl address to a deposit address
+func (s *Store) BindAddress(mdlAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error) {
+	log := s.log.WithField("mdlAddr", mdlAddr)
 	log = log.WithField("depositAddr", depositAddr)
-	return s.db.Update(func(tx *bolt.Tx) error {
-		existingSkyAddr, err := s.getBindAddressTx(tx, depositAddr, coinType)
+	log = log.WithField("coinType", coinType)
+	log = log.WithField("buyMethod", buyMethod)
+
+	bindBktFullName, err := GetBindAddressBkt(coinType)
+	if err != nil {
+		return nil, err
+	}
+
+	boundAddr := BoundAddress{
+		MDLAddress: mdlAddr,
+		Address:    depositAddr,
+		CoinType:   coinType,
+		BuyMethod:  buyMethod,
+	}
+
+	if err := s.db.Update(func(tx *bolt.Tx) error {
+		existingMDLAddr, err := s.getBindAddressTx(tx, depositAddr, coinType)
 		if err != nil {
 			return err
 		}
 
-		if existingSkyAddr != "" {
+		if existingMDLAddr != nil {
 			err := ErrAddressAlreadyBound
 			log.WithError(err).Error("Attempted to bind an address twice")
 			return err
 		}
 
-		// update index of skycoin address and the deposit seq
-		var addrs []string
-		if err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
+		// Update index of mdl address and the deposit seq
+		var addrs []BoundAddress
+		if err := dbutil.GetBucketObject(tx, MDLDepositSeqsIndexBkt, mdlAddr, &addrs); err != nil {
 			switch err.(type) {
 			case dbutil.ObjectNotExistErr:
 			default:
@@ -153,14 +209,18 @@ func (s *Store) BindAddress(skyAddr, depositAddr, coinType string) error {
 			}
 		}
 
-		addrs = append(addrs, depositAddr)
-		if err := dbutil.PutBucketValue(tx, SkyDepositSeqsIndexBkt, skyAddr, addrs); err != nil {
+		addrs = append(addrs, boundAddr)
+
+		if err := dbutil.PutBucketValue(tx, MDLDepositSeqsIndexBkt, mdlAddr, addrs); err != nil {
 			return err
 		}
 
-		bindBktFullName := dbutil.ByteJoin(BindAddressBkt, coinType, "_")
-		return dbutil.PutBucketValue(tx, bindBktFullName, depositAddr, skyAddr)
-	})
+		return dbutil.PutBucketValue(tx, bindBktFullName, depositAddr, boundAddr)
+	}); err != nil {
+		return nil, err
+	}
+
+	return &boundAddr, nil
 }
 
 // GetOrCreateDepositInfo creates a DepositInfo unless one exists with the DepositInfo.DepositID key,
@@ -180,27 +240,40 @@ func (s *Store) GetOrCreateDepositInfo(dv scanner.Deposit, rate string) (Deposit
 
 		case dbutil.ObjectNotExistErr:
 			log.Info("DepositInfo not found in DB, inserting")
-			skyAddr, err := s.getBindAddressTx(tx, dv.Address, dv.CoinType)
+			boundAddr, err := s.getBindAddressTx(tx, dv.Address, dv.CoinType)
 			if err != nil {
 				err = fmt.Errorf("GetBindAddress failed: %v", err)
 				log.WithError(err).Error(err)
 				return err
 			}
 
-			if skyAddr == "" {
+			if boundAddr == nil {
 				err = ErrNoBoundAddress
 				log.WithError(err).Error(err)
 				return err
 			}
 
-			log = log.WithField("skyAddr", skyAddr)
+			log = log.WithField("boundAddr", boundAddr)
+
+			// Sanity check the boundAddr data against the deposit value data
+			if boundAddr.CoinType != dv.CoinType {
+				err := fmt.Errorf("boundAddr.CoinType != dv.CoinType")
+				log.WithError(err).Error()
+				return err
+			}
+			if boundAddr.Address != dv.Address {
+				err := fmt.Errorf("boundAddr.Address != dv.Address")
+				log.WithError(err).Error()
+				return err
+			}
 
 			di := DepositInfo{
 				CoinType:       dv.CoinType,
-				SkyAddress:     skyAddr,
 				DepositAddress: dv.Address,
+				MDLAddress:     boundAddr.MDLAddress,
+				BuyMethod:      boundAddr.BuyMethod,
 				DepositID:      dv.ID(),
-				Status:         StatusWaitSend,
+				Status:         StatusWaitDecide,
 				DepositValue:   dv.Value,
 				// Save the rate at the time this deposit was noticed
 				ConversionRate: rate,
@@ -342,43 +415,21 @@ func (s *Store) GetDepositInfoArray(flt DepositFilter) ([]DepositInfo, error) {
 	return dpis, nil
 }
 
-//getDepositAddressCoinType returns coin type of deposit address
-func (s *Store) getDepositAddressCoinType(depositAddr string) (string, error) {
-	var coinType string
-	if err := s.db.View(func(tx *bolt.Tx) error {
-		for _, ct := range scanner.GetCoinTypes() {
-			bktFullName := dbutil.ByteJoin(BindAddressBkt, ct, "_")
-			exists, err := dbutil.BucketHasKey(tx, bktFullName, depositAddr)
-			if err != nil {
-				return err
-			}
-			if exists {
-				coinType = ct
-				break
-			}
-		}
-		return nil
-	}); err != nil {
-		return "", err
-	}
-	return coinType, nil
-}
-
-// GetDepositInfoOfSkyAddress returns all deposit info that are bound
-// to the given skycoin address
-func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error) {
+// GetDepositInfoOfMDLAddress returns all deposit info that are bound
+// to the given mdl address
+func (s *Store) GetDepositInfoOfMDLAddress(mdlAddr string) ([]DepositInfo, error) {
 	var dpis []DepositInfo
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		// TODO: DB queries in a loop, may need restructuring for performance
-		depositAddrs, err := s.getSkyBindAddressesTx(tx, skyAddr)
+		boundAddrs, err := s.getMDLBindAddressesTx(tx, mdlAddr)
 		if err != nil {
 			return err
 		}
 
-		for _, depositAddr := range depositAddrs {
+		for _, boundAddr := range boundAddrs {
 			var txns []string
-			if err := dbutil.GetBucketObject(tx, BtcTxsBkt, depositAddr, &txns); err != nil {
+			if err := dbutil.GetBucketObject(tx, BtcTxsBkt, boundAddr.Address, &txns); err != nil {
 				switch err.(type) {
 				case dbutil.ObjectNotExistErr:
 				default:
@@ -390,21 +441,12 @@ func (s *Store) GetDepositInfoOfSkyAddress(skyAddr string) ([]DepositInfo, error
 			// has not sent a deposit to the exchange, so the status is
 			// StatusWaitDeposit.
 			if len(txns) == 0 {
-				coinType, err := s.getDepositAddressCoinType(depositAddr)
-				if err != nil {
-					return err
-				}
-
-				if coinType == "" {
-					s.log.WithField("depositAddr", depositAddr).Warn("No coin type found for deposit address")
-				}
-
 				dpis = append(dpis, DepositInfo{
 					Status:         StatusWaitDeposit,
-					DepositAddress: depositAddr,
-					SkyAddress:     skyAddr,
+					DepositAddress: boundAddr.Address,
+					MDLAddress:     mdlAddr,
 					UpdatedAt:      time.Now().UTC().Unix(),
-					CoinType:       coinType,
+					CoinType:       boundAddr.CoinType,
 				})
 			}
 
@@ -479,28 +521,27 @@ func (s *Store) UpdateDepositInfoCallback(btcTx string, update func(DepositInfo)
 	return dpi, nil
 }
 
-// GetSkyBindAddresses returns the addresses of the given sky address bound
-func (s *Store) GetSkyBindAddresses(skyAddr string) ([]string, error) {
-	var addrs []string
+// GetMDLBindAddresses returns the addresses of the given mdl address bound
+func (s *Store) GetMDLBindAddresses(mdlAddr string) ([]BoundAddress, error) {
+	var boundAddrs []BoundAddress
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		var err error
-		addrs, err = s.getSkyBindAddressesTx(tx, skyAddr)
+		boundAddrs, err = s.getMDLBindAddressesTx(tx, mdlAddr)
 		return err
 	}); err != nil {
 		return nil, err
 	}
 
-	return addrs, nil
+	return boundAddrs, nil
 }
 
-// getSkyBindAddressesTx returns the addresses of the given sky address bound
-func (s *Store) getSkyBindAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, error) {
-	var addrs []string
-	if err := dbutil.GetBucketObject(tx, SkyDepositSeqsIndexBkt, skyAddr, &addrs); err != nil {
+// getMDLBindAddressesTx returns the addresses of the given mdl address bound
+func (s *Store) getMDLBindAddressesTx(tx *bolt.Tx, mdlAddr string) ([]BoundAddress, error) {
+	var addrs []BoundAddress
+	if err := dbutil.GetBucketObject(tx, MDLDepositSeqsIndexBkt, mdlAddr, &addrs); err != nil {
 		switch err.(type) {
 		case dbutil.ObjectNotExistErr:
-			err = nil
 		default:
 			return nil, err
 		}
@@ -513,9 +554,10 @@ func (s *Store) getSkyBindAddressesTx(tx *bolt.Tx, skyAddr string) ([]string, er
 	return addrs, nil
 }
 
+// GetDepositStats returns BTC received and MDL sent
 func (s *Store) GetDepositStats() (int64, int64, error) {
 	var totalBTCReceived int64
-	var totalSKYSent int64
+	var totalMDLSent int64
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		return dbutil.ForEach(tx, DepositInfoBkt, func(k, v []byte) error {
@@ -527,7 +569,7 @@ func (s *Store) GetDepositStats() (int64, int64, error) {
 			if dpi.CoinType == scanner.CoinTypeBTC {
 				totalBTCReceived += dpi.DepositValue
 			}
-			totalSKYSent += int64(dpi.SkySent)
+			totalMDLSent += int64(dpi.MDLSent)
 
 			return nil
 		})
@@ -535,5 +577,5 @@ func (s *Store) GetDepositStats() (int64, int64, error) {
 		return -1, -1, err
 	}
 
-	return totalBTCReceived, totalSKYSent, nil
+	return totalBTCReceived, totalMDLSent, nil
 }

@@ -1,5 +1,5 @@
-// Skycoin teller, which provides service of monitoring the bitcoin deposite
-// and sending skycoin coins
+// MDL teller, which provides service of monitoring the bitcoin deposite
+// and sending mdl coins
 package main
 
 import (
@@ -38,7 +38,7 @@ func main() {
 	}
 }
 
-func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.Store) (*scanner.BTCScanner, error) {
+func createBtcScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.BTCScanner, error) {
 	// create btc rpc client
 	certs, err := ioutil.ReadFile(cfg.BtcRPC.Cert)
 	if err != nil {
@@ -61,7 +61,11 @@ func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.
 
 	log.Info("Connect to btcd succeeded")
 
-	scanStore.AddSupportedCoin(scanner.CoinTypeBTC)
+	err = scanStore.AddSupportedCoin(scanner.CoinTypeBTC)
+	if err != nil {
+		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeBTC) failed")
+		return nil, err
+	}
 
 	btcScanner, err := scanner.NewBTCScanner(log, scanStore, btcrpc, scanner.Config{
 		ScanPeriod:            cfg.BtcScanner.ScanPeriod,
@@ -75,14 +79,18 @@ func createBtcScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.
 	return btcScanner, nil
 }
 
-func createEthScanner(log *logrus.Logger, cfg config.Config, scanStore *scanner.Store) (*scanner.ETHScanner, error) {
+func createEthScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.ETHScanner, error) {
 	ethrpc, err := scanner.NewEthClient(cfg.EthRPC.Server, cfg.EthRPC.Port)
 	if err != nil {
 		log.WithError(err).Error("Connect geth failed")
 		return nil, err
 	}
 
-	scanStore.AddSupportedCoin(scanner.CoinTypeETH)
+	err = scanStore.AddSupportedCoin(scanner.CoinTypeETH)
+	if err != nil {
+		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeETH) failed")
+		return nil, err
+	}
 
 	ethScanner, err := scanner.NewETHScanner(log, scanStore, ethrpc, scanner.Config{
 		ScanPeriod:            cfg.EthScanner.ScanPeriod,
@@ -102,7 +110,7 @@ func run() error {
 		fmt.Println("Failed to get user's home directory:", err)
 		return err
 	}
-	defaultAppDir := filepath.Join(cur.HomeDir, ".teller-skycoin")
+	defaultAppDir := filepath.Join(cur.HomeDir, ".teller-mdl")
 
 	appDirOpt := pflag.StringP("dir", "d", defaultAppDir, "application data directory")
 	configNameOpt := pflag.StringP("config", "c", "config", "name of configuration file")
@@ -153,7 +161,7 @@ func run() error {
 	}
 
 	errC := make(chan error, 20)
-	wg := sync.WaitGroup{}
+	var wg sync.WaitGroup
 
 	background := func(name string, errC chan<- error, f func() error) {
 		log.Infof("Backgrounding task %s", name)
@@ -238,17 +246,17 @@ func run() error {
 	background("multiplex.Run", errC, multiplexer.Multiplex)
 
 	if cfg.Dummy.Sender {
-		log.Info("skyd disabled, running dummy sender")
+		log.Info("mdld disabled, running dummy sender")
 		sendRPC = sender.NewDummySender(log)
 		sendRPC.(*sender.DummySender).BindHandlers(dummyMux)
 	} else {
-		skyClient, err := sender.NewRPC(cfg.SkyExchanger.Wallet, cfg.SkyRPC.Address)
+		mdlClient, err := sender.NewRPC(cfg.MDLExchanger.Wallet, cfg.MDLRPC.Address)
 		if err != nil {
 			log.WithError(err).Error("sender.NewRPC failed")
 			return err
 		}
 
-		sendService = sender.NewService(log, skyClient)
+		sendService = sender.NewService(log, mdlClient)
 
 		background("sendService.Run", errC, sendService.Run)
 
@@ -270,15 +278,32 @@ func run() error {
 		log.WithError(err).Error("exchange.NewStore failed")
 		return err
 	}
-	exchangeClient, err := exchange.NewExchange(log, exchangeStore, multiplexer, sendRPC, cfg.SkyExchanger)
-	if err != nil {
-		log.WithError(err).Error("exchange.NewExchange failed")
-		return err
+
+	var exchangeClient *exchange.Exchange
+
+	switch cfg.MDLExchanger.BuyMethod {
+	case config.BuyMethodDirect:
+		var err error
+		exchangeClient, err = exchange.NewDirectExchange(log, cfg.MDLExchanger, exchangeStore, multiplexer, sendRPC)
+		if err != nil {
+			log.WithError(err).Error("exchange.NewDirectExchange failed")
+			return err
+		}
+	case config.BuyMethodPassthrough:
+		var err error
+		exchangeClient, err = exchange.NewPassthroughExchange(log, cfg.MDLExchanger, exchangeStore, multiplexer, sendRPC)
+		if err != nil {
+			log.WithError(err).Error("exchange.NewPassthroughExchange failed")
+			return err
+		}
+	default:
+		log.WithError(config.ErrInvalidBuyMethod).Error()
+		return config.ErrInvalidBuyMethod
 	}
 
 	background("exchangeClient.Run", errC, exchangeClient.Run)
 
-	//create AddrManager
+	// create AddrManager
 	addrManager := addrs.NewAddrManager()
 
 	if cfg.BtcRPC.Enabled {
@@ -370,7 +395,7 @@ func run() error {
 	log.Info("Shutting down exchangeClient")
 	exchangeClient.Shutdown()
 
-	// close the skycoin send service
+	// close the mdl send service
 	if sendService != nil {
 		log.Info("Shutting down sendService")
 		sendService.Shutdown()

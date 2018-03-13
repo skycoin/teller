@@ -11,8 +11,8 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
-	"github.com/skycoin/teller/src/util/dbutil"
-	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/MDLlife/teller/src/util/dbutil"
+	"github.com/MDLlife/teller/src/util/testutil"
 )
 
 var (
@@ -47,11 +47,11 @@ func NewBlockFromBlockReadable(value []byte) (*types.Block, error) {
 	var br BlockReadable
 	if err := json.Unmarshal(value, &br); err != nil {
 		return nil, err
-	} else {
-		anBlock := types.NewBlockWithHeader(br.Header)
-		newBlock := anBlock.WithBody(br.Transactions, br.Uncles)
-		return newBlock, nil
 	}
+
+	anBlock := types.NewBlockWithHeader(br.Header)
+	newBlock := anBlock.WithBody(br.Transactions, br.Uncles)
+	return newBlock, nil
 }
 
 func openDummyEthDB(t *testing.T) *bolt.DB {
@@ -136,7 +136,8 @@ func setupEthScannerWithDB(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanne
 	rpc.blockCount = 2325214
 
 	store, err := NewStore(log, db)
-	store.AddSupportedCoin(CoinTypeETH)
+	require.NoError(t, err)
+	err = store.AddSupportedCoin(CoinTypeETH)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -150,6 +151,7 @@ func setupEthScannerWithDB(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanne
 
 	return scr
 }
+
 func setupEthScannerWithNonExistInitHeight(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanner {
 	log, _ := testutil.NewLogger(t)
 
@@ -161,10 +163,11 @@ func setupEthScannerWithNonExistInitHeight(t *testing.T, ethDB *bolt.DB, db *bol
 	rpc.blockCount = 2325214
 
 	store, err := NewStore(log, db)
-	store.AddSupportedCoin(CoinTypeETH)
+	require.NoError(t, err)
+	err = store.AddSupportedCoin(CoinTypeETH)
 	require.NoError(t, err)
 
-	//Block 2325204 isn't exists in db
+	// Block 2325204 doesn't exist in db
 	cfg := Config{
 		ScanPeriod:            time.Millisecond * 10,
 		DepositBufferSize:     5,
@@ -210,7 +213,7 @@ func testEthScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int
 				require.True(t, d.Processed)
 				require.Equal(t, CoinTypeETH, d.CoinType)
 				require.NotEmpty(t, d.Address)
-				if d.Value != 0 { //value(0x87b127ee022abcf9881b9bad6bb6aac25229dff0) = 0
+				if d.Value != 0 { // value(0x87b127ee022abcf9881b9bad6bb6aac25229dff0) = 0
 					require.NotEmpty(t, d.Value)
 				}
 				require.NotEmpty(t, d.Height)
@@ -511,7 +514,7 @@ func testEthScannerInitialGetBlockHashError(t *testing.T, ethDB *bolt.DB) {
 
 func TestEthScanner(t *testing.T) {
 	ethDB := openDummyEthDB(t)
-	defer ethDB.Close()
+	defer testutil.CheckError(t, ethDB.Close)
 	t.Run("group", func(t *testing.T) {
 
 		t.Run("RunProcessDeposits", func(t *testing.T) {

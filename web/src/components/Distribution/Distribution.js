@@ -44,7 +44,7 @@ class Distribution extends React.Component {
     super();
     this.state = {
       status: [],
-      skyAddress: null,
+      mdlAddress: null,
       btcAddress: '',
       statusIsOpen: false,
       addressLoading: false,
@@ -84,7 +84,7 @@ class Distribution extends React.Component {
   }
 
   getAddress() {
-    if (!this.state.skyAddress) {
+    if (!this.state.mdlAddress) {
       return alert(
         this.props.intl.formatMessage({
           id: 'distribution.errors.noSkyAddress',
@@ -96,7 +96,7 @@ class Distribution extends React.Component {
       addressLoading: true,
     });
 
-    return getAddress(this.state.skyAddress)
+    return getAddress(this.state.mdlAddress)
       .then((res) => {
         this.setState({
           btcAddress: res,
@@ -114,7 +114,7 @@ class Distribution extends React.Component {
 
   handleChange(event) {
     this.setState({
-      skyAddress: event.target.value,
+      mdlAddress: event.target.value,
     });
   }
 
@@ -125,7 +125,7 @@ class Distribution extends React.Component {
   }
 
   checkStatus() {
-    if (!this.state.skyAddress) {
+    if (!this.state.mdlAddress) {
       return alert(
         this.props.intl.formatMessage({
           id: 'distribution.errors.noSkyAddress',
@@ -137,7 +137,7 @@ class Distribution extends React.Component {
       statusLoading: true,
     });
 
-    return checkStatus(this.state.skyAddress)
+    return checkStatus(this.state.mdlAddress)
       .then((res) => {
         this.setState({
           statusIsOpen: true,
@@ -176,7 +176,7 @@ class Distribution extends React.Component {
               <FormattedMessage
                 id="distribution.statusFor"
                 values={{
-                  skyAddress: this.state.skyAddress,
+                  mdlAddress: this.state.mdlAddress,
                 }}
               />
             </Heading>
@@ -215,7 +215,7 @@ class Distribution extends React.Component {
                   <FormattedMessage
                     id="distribution.rate"
                     values={{
-                      rate: +this.state.sky_btc_exchange_rate,
+                      rate: +this.state.mdl_btc_exchange_rate,
                     }}
                   />
                 </Text>

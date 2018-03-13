@@ -20,6 +20,9 @@
 #  name = "github.com/x/y"
 #  version = "2.4.0"
 
+[prune]
+  unused-packages = true
+  go-tests = true
 
 [[constraint]]
   branch = "master"
@@ -38,17 +41,8 @@
   name = "github.com/btcsuite/btcutil"
 
 [[constraint]]
-  name = "github.com/fortytw2/leaktest"
-  version = "1.1.0"
-
-[[constraint]]
   name = "github.com/google/gops"
   version = "0.3.1"
-
-[[constraint]]
-  name = "github.com/skycoin/skycoin"
-  # This revision is v0.21.1 plus a fix for base58 address verification
-  revision = "c86e0afdebd0c06ee8ea8d01ac7dce84fef04ddc"
 
 [[constraint]]
   name = "github.com/stretchr/testify"

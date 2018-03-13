@@ -66,9 +66,7 @@ func (s *DummyScanner) GetScanAddresses() ([]string, error) {
 	defer s.RUnlock()
 
 	addrs := make([]string, len(s.addrs))
-	for i, a := range s.addrs {
-		addrs[i] = a
-	}
+	copy(addrs, s.addrs)
 
 	return addrs, nil
 }

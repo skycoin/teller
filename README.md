@@ -3,9 +3,9 @@
 # MDL Teller
 
 [![Build Status](https://travis-ci.org/MDLlife/teller.svg?branch=master)](https://travis-ci.org/MDLlife/teller)
-[![GoDoc](https://godoc.org/github.com/skycoin/teller?status.svg)](https://godoc.org/github.com/skycoin/teller)
-[![Go Report Card](https://goreportcard.com/badge/github.com/skycoin/teller)](https://goreportcard.com/report/github.com/skycoin/teller)
-[![Docker Pulls](https://img.shields.io/docker/pulls/skycoin/teller.svg?maxAge=604800)](https://hub.docker.com/r/skycoin/teller/)
+[![GoDoc](https://godoc.org/github.com/MDLlife/teller?status.svg)](https://godoc.org/github.com/MDLlife/teller)
+[![Go Report Card](https://goreportcard.com/badge/github.com/MDLlife/teller)](https://goreportcard.com/report/github.com/MDLlife/teller)
+[![Docker Pulls](https://img.shields.io/docker/pulls/MDLlife/teller.svg?maxAge=604800)](https://hub.docker.com/r/MDLlife/teller/)
 
 <!-- MarkdownTOC autolink="true" bracket="round" depth="5" -->
 
@@ -13,7 +13,7 @@
 - [Setup project](#setup-project)
     - [Prerequisites](#prerequisites)
     - [Configure teller](#configure-teller)
-    - [Running teller without btcd, geth or skyd](#running-teller-without-btcd-geth-or-skyd)
+    - [Running teller without btcd, geth or mdld](#running-teller-without-btcd-geth-or-mdld)
     - [Running teller with Docker](#running-teller-with-docker)
     - [Generate BTC addresses](#generate-btc-addresses)
     - [Generate ETH addresses](#generate-eth-addresses)
@@ -103,16 +103,17 @@ Description of the config file:
 * `btc_scanner.initial_scan_height` [int]: Begin scanning from this BTC blockchain height.
 * `btc_scanner.confirmations_required` [int]: Number of confirmations required before sending MDL for a BTC deposit.
 * `sky_exchanger.sky_btc_exchange_rate` [string]: How much MDL to send per BTC. This can be written as an integer, float, or a rational fraction.
-* `sky_exchanger.max_decimals` [int]: Number of decimal places to truncate SKY to.
+* `sky_exchanger.max_decimals` [int]: Number of decimal places to truncate MDL to.
 * `eth_rpc.server` [string]: Host address of the geth node.
 * `eth_rpc.port` [string]: Host port of the geth node.
 * `eth_scanner.scan_period` [duration]: How often to scan for ethereum blocks.
 * `eth_scanner.initial_scan_height` [int]: Begin scanning from this ETH blockchain height.
 * `eth_scanner.confirmations_required` [int]: Number of confirmations required before sending MDL for a ETH deposit.
-* `sky_exchanger.sky_eth_exchange_rate` [string]: How much SKY to send per ETH. This can be written as an integer, float, or a rational fraction.
+* `sky_exchanger.sky_eth_exchange_rate` [string]: How much MDL to send per ETH. This can be written as an integer, float, or a rational fraction.
 * `sky_exchanger.wallet` [string]: Filepath of the MDL hot wallet. See [setup MDL hot wallet](#setup-mdl-hot-wallet).
 * `sky_exchanger.tx_confirmation_check_wait` [duration]: How often to check for a sent MDL transaction's confirmation.
 * `sky_exchanger.send_enabled` [bool]: Disable this to prevent sending of coins (all other processing functions normally, e.g.. deposits are received)
+* `sky_exchanger.buy_method` [string]: Options are "direct" or "passthrough". "direct" will send directly from the wallet. "passthrough" will purchase from an exchange before sending from the wallet.
 * `web.behind_proxy` [bool]: Set true if running behind a proxy.
 * `web.static_dir` [string]: Location of static web assets.
 * `web.throttle_max` [int]: Maximum number of API requests allowed per `web.throttle_duration`.
@@ -123,11 +124,11 @@ Description of the config file:
 * `web.tls_cert` [string]: Filepath to TLS certificate. Cannot be used with `web.auto_tls_host`.
 * `web.tls_key` [string]: Filepath to TLS key. Cannot be used with `web.auto_tls_host`.
 * `admin_panel.host` [string] Host address of the admin panel.
-* `dummy.sender` [bool]: Use a fake MDL sender (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
-* `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
+* `dummy.sender` [bool]: Use a fake MDL sender (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-mdl)).
+* `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-mdl)).
 * `dummy.http_addr` [bool]: Host address for the dummy scanner and sender API.
 
-### Running teller without btcd, geth or skyd
+### Running teller without btcd, geth or mdld
 
 Teller can be run in "dummy mode". It will ignore btcd, geth and mdld.
 It will still provide addresses via `/api/bind` and report status with `/api/status`.
@@ -167,7 +168,7 @@ docker run -ti --rm \
   -v $PWD/btc_addresses.json:/usr/local/teller/btc_addresses.json \
   -v $PWD/eth_addresses.json:/usr/local/teller/eth_addresses.json \
   -v teller-data:/data
-  skycoin/teller
+  mdl/teller
 ```
 
 Access the dashboard: [http://localhost:7071](http://localhost:7071).
@@ -372,6 +373,10 @@ multiple BTC/ETH addresses. The default maximum number of bound addresses is 5.
 Coin type specifies which coin deposit address type to generate.
 Options are: BTC/ETH [TODO: support more coin types].
 
+"buy_method" in the response, indicates the purchasing mode.
+"direct" buy method is a fixed-price purchase directly from the wallet.
+"passthrough" but method is a variable-price purchase through an exchange.
+
 Returns `403 Forbidden` if `teller.bind_enabled` is `false`.
 
 Example:
@@ -386,6 +391,7 @@ Response:
 {
     "deposit_address": "1Bmp9Kv9vcbjNKfdxCrmL1Ve5n7gvkDoNp",
     "coin_type": "BTC",
+    "buy_method": "direct"
 }
 ```
 ETH example:
@@ -496,7 +502,7 @@ URI: /api/exchange-status
 ```
 
 Return the exchanger's status.
-The exchanger's status is the last error seen while trying to send SKY, or nil if no last error was seen.
+The exchanger's status is the last error seen while trying to send MDL, or nil if no last error was seen.
 Use this to detect if the OTC is temporarily offline or sold out.
 
 The balance of the OTC wallet is included in the response.  The wallet may still be considered "sold out" even

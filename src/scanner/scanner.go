@@ -59,7 +59,7 @@ func (d Deposit) ID() string {
 	return fmt.Sprintf("%s:%d", d.Tx, d.N)
 }
 
-// returns supported coin types
+// GetCoinTypes returns supported coin types
 func GetCoinTypes() []string {
 	return []string{CoinTypeBTC, CoinTypeETH}
 }

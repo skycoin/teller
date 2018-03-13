@@ -38,17 +38,17 @@ func loadETHAddresses(addrsReader io.Reader) ([]string, error) {
 	return addrs.Addresses, nil
 }
 
-//https://github.com/ethereum/go-ethereum/blob/2db97986460c57ba74a563d97a704a45a270df7d/common/icap.go
+// https://github.com/ethereum/go-ethereum/blob/2db97986460c57ba74a563d97a704a45a270df7d/common/icap.go
 func validCheckSum(s string) error {
 	if len(s) != 42 {
 		return errors.New("Invalid address length")
 	}
 	if strings.HasPrefix(s, "0x") {
 		return nil
-	} else {
-		return errors.New("invalid address")
 	}
+	return errors.New("invalid address")
 }
+
 func verifyETHAddresses(addrs []string) error {
 	if len(addrs) == 0 {
 		return errors.New("No ETH addresses")

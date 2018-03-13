@@ -189,7 +189,10 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 				httputil.ErrResponse(w, http.StatusInternalServerError)
 				return
 			}
-			httputil.JSONResponse(w, dpis)
+			if err := httputil.JSONResponse(w, dpis); err != nil {
+				log.WithError(err).Error("Write json response failed")
+				return
+			}
 			return
 		}
 
@@ -210,12 +213,15 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 				return
 			}
 
-			httputil.JSONResponse(w, dpis)
+			if err := httputil.JSONResponse(w, dpis); err != nil {
+				log.WithError(err).Error("Write json response failed")
+				return
+			}
 		}
 	}
 }
 
-// stats returns all deposit stats, including total BTC received and total SKY sent.
+// stats returns all deposit stats, including total BTC received and total MDL sent.
 // Method: GET
 // URI: /api/stats
 func (m *Monitor) statsHandler() http.HandlerFunc {

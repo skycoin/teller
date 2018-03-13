@@ -1,6 +1,6 @@
 {
     "meta": {
-        "coin": "skycoin",
+        "coin": "mdl",
         "filename": "2017_10_31_ff27.wlt",
         "label": "teller-test",
         "lastSeed": "3e5a7a63e8d6a53a8a0cbdae6695efc0dcf6e4d671a8f207c273b33ad3287301",

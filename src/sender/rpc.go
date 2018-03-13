@@ -10,7 +10,7 @@ import (
 	"github.com/MDLlife/MDL/src/wallet"
 )
 
-// RPCError wraps errors from the skycoin CLI/RPC library
+// RPCError wraps errors from the mdl CLI/RPC library
 type RPCError struct {
 	error
 }
@@ -49,7 +49,7 @@ func NewRPC(wltFile, rpcAddr string) (*RPC, error) {
 	}, nil
 }
 
-// CreateTransaction creates a raw Skycoin transaction offline, that can be broadcast later
+// CreateTransaction creates a raw MDL transaction offline, that can be broadcast later
 func (c *RPC) CreateTransaction(recvAddr string, amount uint64) (*coin.Transaction, error) {
 	// TODO -- this can support sending to multiple receivers at once,
 	// which would be necessary if the exchange was busy
@@ -107,7 +107,7 @@ func validateSendAmount(amt cli.SendAmount) error {
 	}
 
 	if amt.Coins == 0 {
-		return errors.New("Skycoin send amount is 0")
+		return errors.New("MDL send amount is 0")
 	}
 
 	return nil

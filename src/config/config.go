@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strings"
@@ -17,8 +18,26 @@ import (
 )
 
 const (
-	defaultAdminPanelHost = "127.0.0.1:7711"
+	// BuyMethodDirect is used when buying directly from the local hot wallet
+	BuyMethodDirect = "direct"
+	// BuyMethodPassthrough is used when coins are first bought from an exchange before sending from the local hot wallet
+	BuyMethodPassthrough = "passthrough"
 )
+
+var (
+	// ErrInvalidBuyMethod is returned if BindAddress is called with an invalid buy method
+	ErrInvalidBuyMethod = errors.New("Invalid buy method")
+)
+
+// ValidateBuyMethod returns an error if a buy method string is invalid
+func ValidateBuyMethod(m string) error {
+	switch m {
+	case BuyMethodDirect, BuyMethodPassthrough:
+		return nil
+	default:
+		return ErrInvalidBuyMethod
+	}
+}
 
 // Config represents the configuration root
 type Config struct {
@@ -28,7 +47,7 @@ type Config struct {
 	Profile bool `mapstructure:"profile"`
 	// Where log is saved
 	LogFilename string `mapstructure:"logfile"`
-	// Where database is saved, inside the ~/.teller-skycoin data directory
+	// Where database is saved, inside the ~/.teller-mdl data directory
 	DBFilename string `mapstructure:"dbfile"`
 
 	// Path of BTC addresses JSON file
@@ -38,13 +57,13 @@ type Config struct {
 
 	Teller Teller `mapstructure:"teller"`
 
-	SkyRPC SkyRPC `mapstructure:"sky_rpc"`
+	MDLRPC MDLRPC `mapstructure:"mdl_rpc"`
 	BtcRPC BtcRPC `mapstructure:"btc_rpc"`
 	EthRPC EthRPC `mapstructure:"eth_rpc"`
 
 	BtcScanner   BtcScanner   `mapstructure:"btc_scanner"`
 	EthScanner   EthScanner   `mapstructure:"eth_scanner"`
-	SkyExchanger SkyExchanger `mapstructure:"sky_exchanger"`
+	MDLExchanger MDLExchanger `mapstructure:"mdl_exchanger"`
 
 	Web Web `mapstructure:"web"`
 
@@ -55,14 +74,14 @@ type Config struct {
 
 // Teller config for teller
 type Teller struct {
-	// Max number of btc addresses a skycoin address can bind
+	// Max number of btc addresses a mdl address can bind
 	MaxBoundAddresses int `mapstructure:"max_bound_addrs"`
 	// Allow address binding
 	BindEnabled bool `mapstructure:"bind_enabled"`
 }
 
-// SkyRPC config for Skycoin daemon node RPC
-type SkyRPC struct {
+// MDLRPC config for MDL daemon node RPC
+type MDLRPC struct {
 	Address string `mapstructure:"address"`
 }
 
@@ -98,23 +117,25 @@ type EthScanner struct {
 	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
 }
 
-// SkyExchanger config for skycoin sender
-type SkyExchanger struct {
-	// SKY/BTC exchange rate. Can be an int, float or rational fraction string
-	SkyBtcExchangeRate string `mapstructure:"sky_btc_exchange_rate"`
-	SkyEthExchangeRate string `mapstructure:"sky_eth_exchange_rate"`
-	// Number of decimal places to truncate SKY to
+// MDLExchanger config for mdl sender
+type MDLExchanger struct {
+	// MDL/BTC exchange rate. Can be an int, float or rational fraction string
+	MDLBtcExchangeRate string `mapstructure:"mdl_btc_exchange_rate"`
+	MDLEthExchangeRate string `mapstructure:"mdl_eth_exchange_rate"`
+	// Number of decimal places to truncate MDL to
 	MaxDecimals int `mapstructure:"max_decimals"`
 	// How long to wait before rechecking transaction confirmations
 	TxConfirmationCheckWait time.Duration `mapstructure:"tx_confirmation_check_wait"`
-	// Path of hot Skycoin wallet file on disk
+	// Path of hot MDL wallet file on disk
 	Wallet string `mapstructure:"wallet"`
 	// Allow sending of coins (deposits will still be received and recorded)
 	SendEnabled bool `mapstructure:"send_enabled"`
+	// Method of purchasing coins ("direct buy" or "passthrough"
+	BuyMethod string `mapstructure:"buy_method"`
 }
 
-// Validate validates the SkyExchanger config
-func (c SkyExchanger) Validate() error {
+// Validate validates the MDLExchanger config
+func (c MDLExchanger) Validate() error {
 	if errs := c.validate(); len(errs) != 0 {
 		return errs[0]
 	}
@@ -126,44 +147,48 @@ func (c SkyExchanger) Validate() error {
 	return nil
 }
 
-func (c SkyExchanger) validate() []error {
+func (c MDLExchanger) validate() []error {
 	var errs []error
 
-	if _, err := mathutil.ParseRate(c.SkyBtcExchangeRate); err != nil {
-		errs = append(errs, fmt.Errorf("sky_exchanger.sky_btc_exchange_rate invalid: %v", err))
+	if _, err := mathutil.ParseRate(c.MDLBtcExchangeRate); err != nil {
+		errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_btc_exchange_rate invalid: %v", err))
 	}
 
-	if _, err := mathutil.ParseRate(c.SkyEthExchangeRate); err != nil {
-		errs = append(errs, fmt.Errorf("sky_exchanger.sky_eth_exchange_rate invalid: %v", err))
+	if _, err := mathutil.ParseRate(c.MDLEthExchangeRate); err != nil {
+		errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_eth_exchange_rate invalid: %v", err))
 	}
 
 	if c.MaxDecimals < 0 {
-		errs = append(errs, errors.New("sky_exchanger.max_decimals can't be negative"))
+		errs = append(errs, errors.New("mdl_exchanger.max_decimals can't be negative"))
 	}
 
 	if uint64(c.MaxDecimals) > visor.MaxDropletPrecision {
-		errs = append(errs, fmt.Errorf("sky_exchanger.max_decimals is larger than visor.MaxDropletPrecision=%d", visor.MaxDropletPrecision))
+		errs = append(errs, fmt.Errorf("mdl_exchanger.max_decimals is larger than visor.MaxDropletPrecision=%d", visor.MaxDropletPrecision))
+	}
+
+	if err := ValidateBuyMethod(c.BuyMethod); err != nil {
+		errs = append(errs, fmt.Errorf("mdl_exchanger.buy_method must be \"%s\" or \"%s\"", BuyMethodDirect, BuyMethodPassthrough))
 	}
 
 	return errs
 }
 
-func (c SkyExchanger) validateWallet() []error {
+func (c MDLExchanger) validateWallet() []error {
 	var errs []error
 
 	if c.Wallet == "" {
-		errs = append(errs, errors.New("sky_exchanger.wallet missing"))
+		errs = append(errs, errors.New("mdl_exchanger.wallet missing"))
 	}
 
 	if _, err := os.Stat(c.Wallet); os.IsNotExist(err) {
-		errs = append(errs, fmt.Errorf("sky_exchanger.wallet file %s does not exist", c.Wallet))
+		errs = append(errs, fmt.Errorf("mdl_exchanger.wallet file %s does not exist", c.Wallet))
 	}
 
 	w, err := wallet.Load(c.Wallet)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("sky_exchanger.wallet file %s failed to load: %v", c.Wallet, err))
+		errs = append(errs, fmt.Errorf("mdl_exchanger.wallet file %s failed to load: %v", c.Wallet, err))
 	} else if err := w.Validate(); err != nil {
-		errs = append(errs, fmt.Errorf("sky_exchanger.wallet file %s is invalid: %v", c.Wallet, err))
+		errs = append(errs, fmt.Errorf("mdl_exchanger.wallet file %s is invalid: %v", c.Wallet, err))
 	}
 
 	return errs
@@ -253,16 +278,18 @@ func (c Config) Validate() error {
 	}
 
 	if !c.Dummy.Sender {
-		if c.SkyRPC.Address == "" {
-			oops("sky_rpc.address missing")
+		if c.MDLRPC.Address == "" {
+			oops("mdl_rpc.address missing")
 		}
 
-		// test if skycoin node rpc service is reachable
-		conn, err := net.Dial("tcp", c.SkyRPC.Address)
+		// test if mdl node rpc service is reachable
+		conn, err := net.Dial("tcp", c.MDLRPC.Address)
 		if err != nil {
-			oops(fmt.Sprintf("sky_rpc.address connect failed: %v", err))
+			oops(fmt.Sprintf("mdl_rpc.address connect failed: %v", err))
 		} else {
-			conn.Close()
+			if err := conn.Close(); err != nil {
+				log.Printf("Failed to close test connection to mdl_rpc.address: %v", err)
+			}
 		}
 	}
 
@@ -309,13 +336,13 @@ func (c Config) Validate() error {
 		oops("eth_scanner.initial_scan_height must be >= 0")
 	}
 
-	exchangeErrs := c.SkyExchanger.validate()
+	exchangeErrs := c.MDLExchanger.validate()
 	for _, err := range exchangeErrs {
 		oops(err.Error())
 	}
 
 	if !c.Dummy.Sender {
-		exchangeErrs := c.SkyExchanger.validateWallet()
+		exchangeErrs := c.MDLExchanger.validateWallet()
 		for _, err := range exchangeErrs {
 			oops(err.Error())
 		}
@@ -342,8 +369,8 @@ func setDefaults() {
 	// Teller
 	viper.SetDefault("teller.max_bound_btc_addrs", 5)
 
-	// SkyRPC
-	viper.SetDefault("sky_rpc.address", "127.0.0.1:6430")
+	// MDLRPC
+	viper.SetDefault("mdl_rpc.address", "127.0.0.1:6430")
 
 	// BtcRPC
 	viper.SetDefault("btc_rpc.server", "127.0.0.1:8334")
@@ -357,13 +384,14 @@ func setDefaults() {
 	viper.SetDefault("btc_scanner.initial_scan_height", int64(492478))
 	viper.SetDefault("btc_scanner.confirmations_required", int64(1))
 
-	// SkyExchanger
-	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)
-	viper.SetDefault("sky_exchanger.max_decimals", 3)
-	viper.SetDefault("web.bind_enabled", true)
-	viper.SetDefault("web.send_enabled", true)
+	// MDLExchanger
+	viper.SetDefault("mdl_exchanger.tx_confirmation_check_wait", time.Second*5)
+	viper.SetDefault("mdl_exchanger.max_decimals", 3)
+	viper.SetDefault("mdl_exchanger.buy_method", BuyMethodDirect)
 
 	// Web
+	viper.SetDefault("web.bind_enabled", true)
+	viper.SetDefault("web.send_enabled", true)
 	viper.SetDefault("web.http_addr", "127.0.0.1:7071")
 	viper.SetDefault("web.static_dir", "./web/build")
 	viper.SetDefault("web.throttle_max", int64(60))

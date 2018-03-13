@@ -6,7 +6,8 @@ import (
 	"log"
 
 	"github.com/boltdb/bolt"
-	"github.com/skycoin/teller/src/util/dbutil"
+
+	"github.com/MDLlife/teller/src/util/dbutil"
 )
 
 //delete bucket
@@ -30,10 +31,7 @@ func renameBucket(db *bolt.DB, bucketName, newBucketName string) error {
 	if err := db.Update(func(tx *bolt.Tx) error {
 		// Assume bucket exists and has keys
 		return dbutil.ForEach(tx, []byte(bucketName), func(k, v []byte) error {
-			if err := dbutil.PutBucketValue(tx, newBktName, string(k), v); err != nil {
-				return err
-			}
-			return nil
+			return dbutil.PutBucketValue(tx, newBktName, string(k), v)
 		})
 	}); err != nil {
 		return err
@@ -65,7 +63,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Println("Failed to close db:", err)
+		}
+	}()
 
 	err = renameBucket(db, *oldBkt, *newBkt)
 	if err != nil {

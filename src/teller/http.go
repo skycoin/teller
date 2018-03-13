@@ -86,7 +86,7 @@ func (s *HTTPServer) Run() error {
 	var mux http.Handler = s.setupMux()
 
 	allowedHosts := []string{} // empty array means all hosts allowed
-	sslHost := ""
+	var sslHost string
 	if s.cfg.Web.AutoTLSHost == "" {
 		// Note: if AutoTLSHost is not set, but HTTPSAddr is set, then
 		// http will redirect to the HTTPSAddr listening IP, which would be
@@ -272,7 +272,7 @@ func (s *HTTPServer) setupMux() *http.ServeMux {
 	}
 
 	handleAPI := func(path string, h http.Handler) {
-		// Allow requests from a local skycoin wallet
+		// Allow requests from a local mdl wallet
 		h = cors.New(cors.Options{
 			AllowedOrigins: []string{"http://127.0.0.1:6420"},
 		}).Handler(h)
@@ -335,19 +335,20 @@ func (s *HTTPServer) Shutdown() {
 type BindResponse struct {
 	DepositAddress string `json:"deposit_address,omitempty"`
 	CoinType       string `json:"coin_type,omitempty"`
+	BuyMethod      string `json:"buy_method"`
 }
 
 type bindRequest struct {
-	SkyAddr  string `json:"skyaddr"`
+	MDLAddr  string `json:"mdladdr"`
 	CoinType string `json:"coin_type"`
 }
 
-// BindHandler binds skycoin address with a bitcoin address
+// BindHandler binds mdl address with a bitcoin address
 // Method: POST
 // Accept: application/json
 // URI: /api/bind
 // Args:
-//    {"skyaddr": "...", "coin_type": "BTC"}
+//    {"mdladdr": "...", "coin_type": "BTC"}
 func BindHandler(s *HTTPServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -371,17 +372,20 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			errorResponse(ctx, w, http.StatusBadRequest, err)
 			return
 		}
-		defer r.Body.Close()
+		defer func(log logrus.FieldLogger) {
+			if err := r.Body.Close(); err != nil {
+				log.WithError(err).Warn("Failed to closed request body")
+			}
+		}(log)
 
 		// Remove extraneous whitespace
-		bindReq.SkyAddr = strings.Trim(bindReq.SkyAddr, "\n\t ")
+		bindReq.MDLAddr = strings.Trim(bindReq.MDLAddr, "\n\t ")
 
 		log = log.WithField("bindReq", bindReq)
 		ctx = logger.WithContext(ctx, log)
-		r = r.WithContext(ctx)
 
-		if bindReq.SkyAddr == "" {
-			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing skyaddr"))
+		if bindReq.MDLAddr == "" {
+			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing mdladdr"))
 			return
 		}
 
@@ -406,13 +410,13 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 
 		log.Info()
 
-		if !verifySkycoinAddress(ctx, w, bindReq.SkyAddr) {
+		if !verifyMDLAddress(ctx, w, bindReq.MDLAddr) {
 			return
 		}
 
 		log.Info("Calling service.BindAddress")
 
-		coinAddr, err := s.service.BindAddress(bindReq.SkyAddr, bindReq.CoinType)
+		boundAddr, err := s.service.BindAddress(bindReq.MDLAddr, bindReq.CoinType)
 		if err != nil {
 			log.WithError(err).Error("service.BindAddress failed")
 			switch err {
@@ -429,15 +433,13 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		log = log.WithField("coinAddr", coinAddr)
-		ctx = logger.WithContext(ctx, log)
-		r = r.WithContext(ctx)
-
-		log.Infof("Bound sky and %s addresses", bindReq.CoinType)
+		log = log.WithField("boundAddr", boundAddr)
+		log.Infof("Bound mdl and %s addresses", bindReq.CoinType)
 
 		if err := httputil.JSONResponse(w, BindResponse{
-			DepositAddress: coinAddr,
-			CoinType:       bindReq.CoinType,
+			DepositAddress: boundAddr.Address,
+			CoinType:       boundAddr.CoinType,
+			BuyMethod:      boundAddr.BuyMethod,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}
@@ -449,11 +451,11 @@ type StatusResponse struct {
 	Statuses []exchange.DepositStatus `json:"statuses,omitempty"`
 }
 
-// StatusHandler returns the deposit status of specific skycoin address
+// StatusHandler returns the deposit status of specific mdl address
 // Method: GET
 // URI: /api/status
 // Args:
-//     skyaddr
+//     mdladdr
 func StatusHandler(s *HTTPServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
@@ -463,29 +465,28 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		skyAddr := r.URL.Query().Get("skyaddr")
+		mdlAddr := r.URL.Query().Get("mdladdr")
 
 		// Remove extraneous whitespace
-		skyAddr = strings.Trim(skyAddr, "\n\t ")
+		mdlAddr = strings.Trim(mdlAddr, "\n\t ")
 
-		if skyAddr == "" {
-			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing skyaddr"))
+		if mdlAddr == "" {
+			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing mdladdr"))
 			return
 		}
 
-		log = log.WithField("skyAddr", skyAddr)
+		log = log.WithField("mdlAddr", mdlAddr)
 		ctx = logger.WithContext(ctx, log)
-		r = r.WithContext(ctx)
 
 		log.Info()
 
-		if !verifySkycoinAddress(ctx, w, skyAddr) {
+		if !verifyMDLAddress(ctx, w, mdlAddr) {
 			return
 		}
 
 		log.Info("Sending StatusRequest to teller")
 
-		depositStatuses, err := s.service.GetDepositStatuses(skyAddr)
+		depositStatuses, err := s.service.GetDepositStatuses(mdlAddr)
 		if err != nil {
 			log.WithError(err).Error("service.GetDepositStatuses failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
@@ -496,9 +497,6 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 			"depositStatuses":    depositStatuses,
 			"depositStatusesLen": len(depositStatuses),
 		})
-		ctx = logger.WithContext(ctx, log)
-		r = r.WithContext(ctx)
-
 		log.Info("Got depositStatuses")
 
 		if err := httputil.JSONResponse(w, StatusResponse{
@@ -515,8 +513,8 @@ type ConfigResponse struct {
 	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
 	EthConfirmationsRequired int64  `json:"eth_confirmations_required"`
 	MaxBoundAddresses        int    `json:"max_bound_addrs"`
-	SkyBtcExchangeRate       string `json:"sky_btc_exchange_rate"`
-	SkyEthExchangeRate       string `json:"sky_eth_exchange_rate"`
+	MDLBtcExchangeRate       string `json:"mdl_btc_exchange_rate"`
+	MDLEthExchangeRate       string `json:"mdl_eth_exchange_rate"`
 	MaxDecimals              int    `json:"max_decimals"`
 }
 
@@ -532,30 +530,30 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		// Convert the exchange rate to a skycoin balance string
-		rate := s.cfg.SkyExchanger.SkyBtcExchangeRate
-		maxDecimals := s.cfg.SkyExchanger.MaxDecimals
-		dropletsPerBTC, err := exchange.CalculateBtcSkyValue(exchange.SatoshisPerBTC, rate, maxDecimals)
+		// Convert the exchange rate to a mdl balance string
+		rate := s.cfg.MDLExchanger.MDLBtcExchangeRate
+		maxDecimals := s.cfg.MDLExchanger.MaxDecimals
+		dropletsPerBTC, err := exchange.CalculateBtcMDLValue(exchange.SatoshisPerBTC, rate, maxDecimals)
 		if err != nil {
-			log.WithError(err).Error("exchange.CalculateBtcSkyValue failed")
+			log.WithError(err).Error("exchange.CalculateBtcMDLValue failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
 
-		skyPerBTC, err := droplet.ToString(dropletsPerBTC)
+		mdlPerBTC, err := droplet.ToString(dropletsPerBTC)
 		if err != nil {
 			log.WithError(err).Error("droplet.ToString failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
-		rate = s.cfg.SkyExchanger.SkyEthExchangeRate
-		dropletsPerETH, err := exchange.CalculateEthSkyValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
+		rate = s.cfg.MDLExchanger.MDLEthExchangeRate
+		dropletsPerETH, err := exchange.CalculateEthMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
 		if err != nil {
-			log.WithError(err).Error("exchange.CalculateEthSkyValue failed")
+			log.WithError(err).Error("exchange.CalculateEthMDLValue failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
-		skyPerETH, err := droplet.ToString(dropletsPerETH)
+		mdlPerETH, err := droplet.ToString(dropletsPerETH)
 		if err != nil {
 			log.WithError(err).Error("droplet.ToString failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
@@ -566,8 +564,8 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			Enabled:                  s.cfg.Teller.BindEnabled,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
 			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
-			SkyBtcExchangeRate:       skyPerBTC,
-			SkyEthExchangeRate:       skyPerETH,
+			MDLBtcExchangeRate:       mdlPerBTC,
+			MDLEthExchangeRate:       mdlPerETH,
 			MaxDecimals:              maxDecimals,
 			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
 		}); err != nil {
@@ -605,7 +603,7 @@ func ExchangeStatusHandler(s *HTTPServer) http.HandlerFunc {
 
 		// If the status is an RPCError, the most likely cause is that the
 		// wallet has an insufficient balance (other causes could be a temporary
-		// application error, or a bug in the skycoin node).
+		// application error, or a bug in the mdl node).
 		// Errors that are not RPCErrors are transient and common, such as
 		// exchange.ErrNotConfirmed, which will happen frequently and temporarily.
 		switch err.(type) {
@@ -657,16 +655,16 @@ func validMethod(ctx context.Context, w http.ResponseWriter, r *http.Request, al
 	return false
 }
 
-func verifySkycoinAddress(ctx context.Context, w http.ResponseWriter, skyAddr string) bool {
+func verifyMDLAddress(ctx context.Context, w http.ResponseWriter, mdlAddr string) bool {
 	log := logger.FromContext(ctx)
 
-	if _, err := cipher.DecodeBase58Address(skyAddr); err != nil {
-		msg := fmt.Sprintf("Invalid skycoin address: %v", err)
+	if _, err := cipher.DecodeBase58Address(mdlAddr); err != nil {
+		msg := fmt.Sprintf("Invalid mdl address: %v", err)
 		httputil.ErrResponse(w, http.StatusBadRequest, msg)
 		log.WithFields(logrus.Fields{
 			"status":  http.StatusBadRequest,
-			"skyAddr": skyAddr,
-		}).WithError(err).Info("Invalid skycoin address")
+			"mdlAddr": mdlAddr,
+		}).WithError(err).Info("Invalid mdl address")
 		return false
 	}
 
