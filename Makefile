@@ -67,7 +67,7 @@ test-package: ## Run tests on each package
 	go test -v ./src/config/... -timeout=1m -cover
 	go test -v ./src/exchange/... -timeout=1m -cover
 	go test -v ./src/monitor/... -timeout=1m -cover
-	go test -v ./src/scanner/... -timeout=1m -cover
+	go test -v ./src/scanner/... -timeout=2m -cover
 	go test -v ./src/sender/... -timeout=1m -cover
 	go test -v ./src/teller/... -timeout=1m -cover
 	go test -v ./src/util/... -timeout=1m -cover

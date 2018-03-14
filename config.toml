@@ -29,6 +29,11 @@ key = "rpc.key" # REQUIRED
 server = "127.0.0.1" # REQUIRED
 port = "8545" # REQUIRED
 
+[sky_rpc]
+# enabled = true
+server = "127.0.0.1" # REQUIRED
+port = "8081" # REQUIRED
+
 [btc_scanner]
 #scan_period = "20s"
 #initial_scan_height = 492478

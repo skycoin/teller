@@ -11,19 +11,19 @@ import (
 
 	"strconv"
 
-	"github.com/sirupsen/logrus"
-	"github.com/skycoin/skycoin/src/visor"
-	"github.com/skycoin/skycoin/src/api/webrpc"
-	"github.com/skycoin/skycoin/src/wallet"
 	"fmt"
-	"github.com/skycoin/skycoin/src/api/cli"
+
 	"github.com/MDLlife/MDL/src/cipher"
+	"github.com/sirupsen/logrus"
+	"github.com/skycoin/skycoin/src/api/cli"
+	"github.com/skycoin/skycoin/src/api/webrpc"
+	"github.com/skycoin/skycoin/src/visor"
 )
 
 // SKYScanner blockchain scanner to check if there're deposit coins
 type SKYScanner struct {
-	log       logrus.FieldLogger
-	Base      CommonScanner
+	log          logrus.FieldLogger
+	Base         CommonScanner
 	skyRpcClient SkyRPCClient
 }
 
@@ -32,9 +32,9 @@ func NewSkycoinScanner(log logrus.FieldLogger, store Storer, client SkyRPCClient
 	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.sky"), CoinTypeSKY, cfg)
 
 	return &SKYScanner{
-		skyRpcClient:  client,
-		log:       log.WithField("prefix", "scanner.sky"),
-		Base:      bs,
+		skyRpcClient: client,
+		log:          log.WithField("prefix", "scanner.sky"),
+		Base:         bs,
 	}, nil
 }
 
@@ -42,7 +42,6 @@ func NewSkycoinScanner(log logrus.FieldLogger, store Storer, client SkyRPCClient
 func (s *SKYScanner) Run() error {
 	return s.Base.Run(s.GetBlockCount, s.getBlockAtHeight, s.waitForNextBlock, s.scanBlock)
 }
-
 
 // Shutdown shutdown the scanner
 func (s *SKYScanner) Shutdown() {
@@ -201,34 +200,21 @@ func (s *SKYScanner) GetDeposit() <-chan DepositNote {
 	return s.Base.GetDeposit()
 }
 
-
-
 // RPC provides methods for sending coins
 type SkyClient struct {
-	walletFile string
-	changeAddr string
-	skyRpcClient  *webrpc.Client
+	walletFile   string
+	changeAddr   string
+	skyRpcClient *webrpc.Client
 }
 
 // New creates RPC instance
-func NewSkyRPC(wltFile, rpcAddr string) *SkyClient {
-	wlt, err := wallet.Load(wltFile)
-	if err != nil {
-		panic(err)
-	}
-
-	if len(wlt.Entries) == 0 {
-		panic("Wallet is empty")
-	}
-
+func NewSkyClient(server, port string) *SkyClient {
 	rpcClient := &webrpc.Client{
-		Addr: rpcAddr,
+		Addr: "http://" + server + ":" + port,
 	}
 
 	return &SkyClient{
-		walletFile: wltFile,
-		changeAddr: wlt.Entries[0].Address.String(),
-		skyRpcClient:  rpcClient,
+		skyRpcClient: rpcClient,
 	}
 }
 
