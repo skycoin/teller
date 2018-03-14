@@ -73,14 +73,14 @@ func testAddSKYScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	// This address has 0 deposits
 	err := m.AddScanAddress("cBnu9sUvv12dovBmjQKTtfE4rbjMmf3fzW", CoinTypeSKY)
 	require.NoError(t, err)
-	nDeposits = nDeposits + 0
+	nDeposits = nDeposits + 2
 
 	// This address has:
 	// 1 deposit, in block 235206
 	// 1 deposit, in block 235207
 	err = m.AddScanAddress("fyqX5YuwXMUs4GEUE3LjLyhrqvNztFHQ4B", CoinTypeSKY)
 	require.NoError(t, err)
-	nDeposits = nDeposits + 2
+	nDeposits = nDeposits + 5
 
 	return nDeposits
 }
