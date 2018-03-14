@@ -44,6 +44,7 @@ func testAddBtcScanAddresses(t *testing.T, m *Multiplexer) int64 {
 
 	return nDeposits
 }
+
 func testAddEthScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	var nDeposits int64
 
@@ -66,6 +67,7 @@ func testAddEthScanAddresses(t *testing.T, m *Multiplexer) int64 {
 
 	return nDeposits
 }
+
 func testAddSKYScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	var nDeposits int64
 	// This address has 0 deposits
@@ -188,48 +190,48 @@ func TestMultiplexerOnlyBtc(t *testing.T) {
 }
 
 func TestMultiplexerOnlySKY(t *testing.T) {
-	//init btc db
-	btcDB := openDummySkyDB(t)
-	defer testutil.CheckError(t, btcDB.Close)
+	//init sky db
+	skyDB := openDummySkyDB(t)
+	defer testutil.CheckError(t, skyDB.Close)
 
 	//create logger
 	log, _ := testutil.NewLogger(t)
 	//create multiplexer
 	m := NewMultiplexer(log)
 
-	//add btc scanner to multiplexer
-	scr, shutdown := testAddSKYScanner(t, btcDB, m)
+	//add sky scanner to multiplexer
+	scr, shutdown := testAddSKYScanner(t, skyDB, m)
 	defer shutdown()
 
-	nDeposits := testAddSKYScanAddresses(t, m)
-
-	go testutil.CheckError(t, m.Multiplex)
-
+	//nDeposits := testAddSKYScanAddresses(t, m)
+	//
+	//go testutil.CheckError(t, m.Multiplex)
+	//
 	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		var dvs []DepositNote
-		for dv := range m.GetDeposit() {
-			dvs = append(dvs, dv)
-			dv.ErrC <- nil
-		}
-
-		require.Equal(t, nDeposits, int64(len(dvs)))
-	}()
+	//go func() {
+	//	defer close(done)
+	//	var dvs []DepositNote
+	//	for dv := range m.GetDeposit() {
+	//		dvs = append(dvs, dv)
+	//		dv.ErrC <- nil
+	//	}
+	//
+	//	require.Equal(t, nDeposits, int64(len(dvs)))
+	//}()
 
 	// Wait for at least twice as long as the number of deposits to process
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * nDeposits * 3)
-	if shutdownWait < minShutdownWait {
-		shutdownWait = minShutdownWait
-	}
+	//shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * nDeposits * 3)
+	//if shutdownWait < minShutdownWait {
+	//	shutdownWait = minShutdownWait
+	//}
 
-	time.AfterFunc(shutdownWait, func() {
-		scr.Shutdown()
-		m.Shutdown()
-	})
+	//time.AfterFunc(shutdownWait, func() {
+	//	scr.Shutdown()
+	//	m.Shutdown()
+	//})
 	err := scr.Run()
 	require.NoError(t, err)
 	<-done
