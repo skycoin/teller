@@ -15,6 +15,7 @@ import (
 var (
 	ErrBtcScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeBTC)
 	ErrEthScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeETH)
+	ErrSkyScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeSKY)
 	ErrNilScanner              = errors.New("nil scanner")
 )
 
@@ -95,6 +96,37 @@ func testAddEthScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*ETHScanner, 
 	return ethscr, ethshutdown
 }
 
+func testAddSkyScanAddresses(t *testing.T, m *Multiplexer) int64 {
+	var nDeposits int64
+	// This address has 0 deposits
+	// 1 deposit, in block 176
+	err := m.AddScanAddress("v4qF7Ceq276tZpTS3HKsZbDguMAcAGAG1q", CoinTypeSKY)
+	require.NoError(t, err)
+	nDeposits = nDeposits + 1
+
+	// 2 deposits in block 117
+	err = m.AddScanAddress("8MQsjc5HYbSjPTZikFZYeHHDtLungBEHYS", CoinTypeSKY)
+	require.NoError(t, err)
+	nDeposits = nDeposits + 2
+
+	return nDeposits
+}
+
+func testAddSkyScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*SKYScanner, func()) {
+	scr, shutdown := setupSkyScanner(t, db)
+	err := m.AddScanner(scr, CoinTypeSKY)
+	require.NoError(t, err)
+	count := m.GetScannerCount()
+
+	//add sky again, should be error
+	err = m.AddScanner(scr, CoinTypeSKY)
+	require.Equal(t, ErrSkyScannerAlreadyExists, err)
+	//scanner count no change
+	require.Equal(t, count, m.GetScannerCount())
+
+	return scr, shutdown
+}
+
 func TestMultiplexerOnlyBtc(t *testing.T) {
 	//init btc db
 	btcDB := openDummyBtcDB(t)
@@ -151,6 +183,9 @@ func TestMultiplexerForAll(t *testing.T) {
 	ethDB := openDummyEthDB(t)
 	defer testutil.CheckError(t, ethDB.Close)
 
+	skyDB := openDummySkyDB(t)
+	defer testutil.CheckError(t, skyDB.Close)
+
 	//create logger
 	log, _ := testutil.NewLogger(t)
 	//create multiplexer
@@ -164,11 +199,16 @@ func TestMultiplexerForAll(t *testing.T) {
 	ethscr, ethshutdown := testAddEthScanner(t, ethDB, m)
 	defer ethshutdown()
 
-	// 2 scanner in multiplexer
-	require.Equal(t, 2, m.GetScannerCount())
+	//add sky scanner to multiplexer
+	skyscr, skyshutdown := testAddSkyScanner(t, skyDB, m)
+	defer skyshutdown()
+
+	// 3 scanner in multiplexer
+	require.Equal(t, 3, m.GetScannerCount())
 
 	nDepositsBtc := testAddBtcScanAddresses(t, m)
 	nDepositsEth := testAddEthScanAddresses(t, m)
+	nDepositsSky := testAddSkyScanAddresses(t, m)
 
 	go func() {
 		err := m.Multiplex()
@@ -184,7 +224,7 @@ func TestMultiplexerForAll(t *testing.T) {
 			dv.ErrC <- nil
 		}
 
-		require.Equal(t, nDepositsBtc+nDepositsEth, int64(len(dvs)))
+		require.Equal(t, nDepositsBtc+nDepositsEth+nDepositsSky, int64(len(dvs)))
 	}()
 
 	// Wait for at least twice as long as the number of deposits to process
@@ -197,12 +237,17 @@ func TestMultiplexerForAll(t *testing.T) {
 	}
 
 	time.AfterFunc(shutdownWait, func() {
-		ethscr.Shutdown()
 		scr.Shutdown()
+		ethscr.Shutdown()
+		skyscr.Shutdown()
 		m.Shutdown()
 	})
 	go func() {
 		err := ethscr.Run()
+		require.NoError(t, err)
+	}()
+	go func() {
+		err := skyscr.Run()
 		require.NoError(t, err)
 	}()
 	err := scr.Run()
