@@ -202,7 +202,8 @@ func getRate(cfg config.SkyExchanger, coinType string) (string, error) {
 	case scanner.CoinTypeETH:
 		return cfg.SkyEthExchangeRate, nil
 	case scanner.CoinTypeSKY:
-		fallthrough
+		//NOTE: add exchange rate accordingly when needed
+		return "0", nil
 	default:
 		return "", scanner.ErrUnsupportedCoinType
 	}
