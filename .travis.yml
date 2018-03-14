@@ -6,7 +6,7 @@ go:
 
 install:
   - make install-linters
-  - make test-package
+  - make test-ci
 
 script:
   - make check
