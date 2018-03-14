@@ -7,6 +7,7 @@ debug = true
 # dbfile = "teller.db"  # dbfile is saved inside ~/.teller-skycoin, do not include a path
 btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
 eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses file
+sky_addresses = "example_sky_addresses.json" # REQUIRED: path to eth addresses file
 
 [teller]
 # max_bound_addrs = 5 # 0 means unlimited

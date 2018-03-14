@@ -54,6 +54,8 @@ type Config struct {
 	BtcAddresses string `mapstructure:"btc_addresses"`
 	// Path of ETH addresses JSON file
 	EthAddresses string `mapstructure:"eth_addresses"`
+	// Path of SKY addresses JSON file
+	SkyAddresses string `mapstructure:"sky_addresses"`
 
 	Teller Teller `mapstructure:"teller"`
 
@@ -421,15 +423,18 @@ func setDefaults() {
 
 	// BtcRPC
 	viper.SetDefault("btc_rpc.server", "127.0.0.1:8334")
-	viper.SetDefault("btc_rpc.enabled", true)
-
-	// EthRPC
-	viper.SetDefault("eth_rpc.enabled", false)
 
 	// BtcScanner
 	viper.SetDefault("btc_scanner.scan_period", time.Second*20)
 	viper.SetDefault("btc_scanner.initial_scan_height", int64(492478))
 	viper.SetDefault("btc_scanner.confirmations_required", int64(1))
+	viper.SetDefault("btc_scanner.enabled", true)
+
+	// EthScanner
+	viper.SetDefault("eth_scanner.enabled", false)
+
+	// SkyScanner
+	viper.SetDefault("sky_scanner.enabled", false)
 
 	// SkyExchanger
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)

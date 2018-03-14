@@ -195,11 +195,14 @@ func (r *Receive) getRate(coinType string) (string, error) {
 
 // getRate returns conversion rate according to coin type
 func getRate(cfg config.SkyExchanger, coinType string) (string, error) {
+
 	switch coinType {
 	case scanner.CoinTypeBTC:
 		return cfg.SkyBtcExchangeRate, nil
 	case scanner.CoinTypeETH:
 		return cfg.SkyEthExchangeRate, nil
+	case scanner.CoinTypeSKY:
+		fallthrough
 	default:
 		return "", scanner.ErrUnsupportedCoinType
 	}

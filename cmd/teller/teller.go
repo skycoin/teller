@@ -196,6 +196,7 @@ func run() error {
 	var sendRPC sender.Sender
 	var btcAddrMgr *addrs.Addrs
 	var ethAddrMgr *addrs.Addrs
+	var skyAddrMgr *addrs.Addrs
 
 	//create multiplexer to manage scanner
 	multiplexer := scanner.NewMultiplexer(log)
@@ -371,6 +372,24 @@ func run() error {
 		}
 	}
 
+	if cfg.SkyScanner.Enabled {
+		// create sky address manager
+		f, err := ioutil.ReadFile(cfg.SkyAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit sky address list failed")
+			return err
+		}
+
+		skyAddrMgr, err = addrs.NewSKYAddrs(log, db, bytes.NewReader(f))
+		if err != nil {
+			log.WithError(err).Error("Create sky deposit address manager failed")
+			return err
+		}
+		if err := addrManager.PushGenerator(skyAddrMgr, scanner.CoinTypeSKY); err != nil {
+			log.WithError(err).Error("add sky address manager failed")
+			return err
+		}
+	}
 	tellerServer := teller.New(log, exchangeClient, addrManager, cfg)
 
 	// Run the service
@@ -380,7 +399,7 @@ func run() error {
 	monitorCfg := monitor.Config{
 		Addr: cfg.AdminPanel.Host,
 	}
-	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, exchangeClient, btcScanner)
+	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, skyAddrMgr, exchangeClient, btcScanner)
 
 	background("monitorService.Run", errC, monitorService.Run)
 
