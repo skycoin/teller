@@ -7,6 +7,7 @@ teller: ## Run teller. To add arguments, do 'make ARGS="--foo" teller'.
 	go run cmd/teller/teller.go ${ARGS}
 
 test: ## Run tests
+<<<<<<< 465ee5afe16953cbfb284294627988230404b6c4
 	go test ./cmd/... -timeout=1m -cover ${PARALLEL}
 	go test ./src/addrs/... -timeout=30s -cover ${PARALLEL}
 	go test ./src/config/... -timeout=30s -cover ${PARALLEL}
@@ -16,6 +17,10 @@ test: ## Run tests
 	go test ./src/sender/... -timeout=1m -cover ${PARALLEL}
 	go test ./src/teller/... -timeout=30s -cover ${PARALLEL}
 	go test ./src/util/... -timeout=30s -cover ${PARALLEL}
+=======
+	go test ./cmd/... -timeout=1m -cover
+	go test ./src/... -timeout=2m -cover
+>>>>>>> disable parallel tests
 
 test-race: ## Run tests with -race. Note: expected to fail, but look for "DATA RACE" failures specifically
 	go test ./cmd/... -timeout=1m -race ${PARALLEL}
