@@ -63,6 +63,7 @@ type Config struct {
 
 	BtcScanner   BtcScanner   `mapstructure:"btc_scanner"`
 	EthScanner   EthScanner   `mapstructure:"eth_scanner"`
+	SkyScanner   SkyScanner   `mapstructure:"sky_scanner"`
 	SkyExchanger SkyExchanger `mapstructure:"sky_exchanger"`
 
 	Web Web `mapstructure:"web"`
@@ -91,14 +92,12 @@ type BtcRPC struct {
 	User    string `mapstructure:"user"`
 	Pass    string `mapstructure:"pass"`
 	Cert    string `mapstructure:"cert"`
-	Enabled bool   `mapstructure:"enabled"`
 }
 
 // EthRPC config for ethrpc
 type EthRPC struct {
 	Server  string `mapstructure:"server"`
 	Port    string `mapstructure:"port"`
-	Enabled bool   `mapstructure:"enabled"`
 }
 
 // BtcScanner config for BTC scanner
@@ -107,6 +106,7 @@ type BtcScanner struct {
 	ScanPeriod            time.Duration `mapstructure:"scan_period"`
 	InitialScanHeight     int64         `mapstructure:"initial_scan_height"`
 	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
+	Enabled bool   `mapstructure:"enabled"`
 }
 
 // EthScanner config for ETH scanner
@@ -115,6 +115,15 @@ type EthScanner struct {
 	ScanPeriod            time.Duration `mapstructure:"scan_period"`
 	InitialScanHeight     int64         `mapstructure:"initial_scan_height"`
 	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
+	Enabled bool   `mapstructure:"enabled"`
+}
+
+// SkyScanner config for SKY Scanner
+type SkyScanner struct {
+	// How often to try to scan for blocks
+	ScanPeriod        time.Duration `mapstructure:"scan_period"`
+	InitialScanHeight int64         `mapstructure:"initial_scan_height"`
+	Enabled bool `mapstrucutre:"enabled"`
 }
 
 // SkyExchanger config for skycoin sender
@@ -326,7 +335,7 @@ func (c Config) Validate() error {
 	}
 
 	if !c.Dummy.Scanner {
-		if c.BtcRPC.Enabled {
+		if c.BtcScanner.Enabled {
 			if c.BtcRPC.Server == "" {
 				oops("btc_rpc.server missing")
 			}
@@ -345,7 +354,7 @@ func (c Config) Validate() error {
 				oops("btc_rpc.cert file does not exist")
 			}
 		}
-		if c.EthRPC.Enabled {
+		if c.EthScanner.Enabled {
 			if c.EthRPC.Server == "" {
 				oops("eth_rpc.server missing")
 			}

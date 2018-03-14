@@ -391,13 +391,18 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 
 		switch bindReq.CoinType {
 		case scanner.CoinTypeBTC:
-			if !s.cfg.BtcRPC.Enabled {
+			if !s.cfg.BtcScanner.Enabled {
 				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeBTC))
 				return
 			}
 		case scanner.CoinTypeETH:
-			if !s.cfg.EthRPC.Enabled {
+			if !s.cfg.SkyScanner.Enabled {
 				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeETH))
+				return
+			}
+		case scanner.CoinTypeSKY:
+			if !s.cfg.SkyScanner.Enabled {
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeSKY))
 				return
 			}
 		case "":
