@@ -391,12 +391,12 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 
 		switch bindReq.CoinType {
 		case scanner.CoinTypeBTC:
-			if !s.cfg.BtcRPC.Enabled {
+			if !s.cfg.BtcScanner.Enabled {
 				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeBTC))
 				return
 			}
 		case scanner.CoinTypeETH:
-			if !s.cfg.EthRPC.Enabled {
+			if !s.cfg.EthScanner.Enabled {
 				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeETH))
 				return
 			}
@@ -566,8 +566,8 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 
 		if err := httputil.JSONResponse(w, ConfigResponse{
 			Enabled:                  s.cfg.Teller.BindEnabled,
-			BtcEnabled:               s.cfg.BtcRPC.Enabled,
-			EthEnabled:               s.cfg.EthRPC.Enabled,
+			BtcEnabled:               s.cfg.BtcScanner.Enabled,
+			EthEnabled:               s.cfg.EthScanner.Enabled,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
 			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
 			SkyBtcExchangeRate:       skyPerBTC,

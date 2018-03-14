@@ -196,7 +196,7 @@ func run() error {
 		scanService.(*scanner.DummyScanner).BindHandlers(dummyMux)
 	} else {
 		// enable btc scanner
-		if cfg.BtcRPC.Enabled {
+		if cfg.BtcScanner.Enabled {
 			btcScanner, err = createBtcScanner(rusloggger, cfg, scanStore)
 			if err != nil {
 				log.WithError(err).Error("create btc scanner failed")
@@ -208,7 +208,7 @@ func run() error {
 		}
 
 		// enable eth scanner
-		if cfg.EthRPC.Enabled {
+		if cfg.EthScanner.Enabled {
 			ethScanner, err = createEthScanner(rusloggger, cfg, scanStore)
 			if err != nil {
 				log.WithError(err).Error("create eth scanner failed")
@@ -294,7 +294,7 @@ func run() error {
 	// create AddrManager
 	addrManager := addrs.NewAddrManager()
 
-	if cfg.BtcRPC.Enabled {
+	if cfg.BtcScanner.Enabled {
 		// create bitcoin address manager
 		f, err := ioutil.ReadFile(cfg.BtcAddresses)
 		if err != nil {
@@ -313,7 +313,7 @@ func run() error {
 		}
 	}
 
-	if cfg.EthRPC.Enabled {
+	if cfg.EthScanner.Enabled {
 		// create ethcoin address manager
 		f, err := ioutil.ReadFile(cfg.EthAddresses)
 		if err != nil {
