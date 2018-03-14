@@ -22,6 +22,8 @@ import (
 	"github.com/skycoin/skycoin/src/daemon"
 	"encoding/hex"
 	"github.com/skycoin/skycoin/src/cipher"
+	mock "github.com/stretchr/testify/mock"
+
 )
 
 var (
@@ -39,6 +41,15 @@ type fakeGateway struct {
 	addrRecvUxOuts       []*historydb.UxOut
 	addrSpentUxOUts      []*historydb.UxOut
 	uxouts               []coin.UxOut
+}
+
+// GatewayerMock mock
+type GatewayerMock struct {
+	mock.Mock
+}
+
+func NewGatewayerMock() *GatewayerMock {
+	return &GatewayerMock{}
 }
 
 type dummySkyrpcclient struct {
@@ -138,12 +149,28 @@ func (c *dummySkyrpcclient) GetBlocks(start, end uint64) (*visor.ReadableBlocks,
 }
 
 func (c *dummySkyrpcclient) GetBlocksBySeq(seq uint64) (*visor.ReadableBlock, error) {
-	ss := []uint64{seq}
-	blocks := visor.ReadableBlocks{}
+	//ss := []uint64{seq}
+	blocks := decodeBlock(blockString)
 
-	if err := c.skyRpcClient.Do(&blocks, "get_blocks_by_seq", ss); err != nil {
-		return nil, err
+	//if err := c.skyRpcClient.Do(&blocks, "get_blocks_by_seq", ss); err != nil {
+	//	return nil, err
+	//}
+
+	if len(blocks.Blocks) == 0 {
+		return nil, nil
 	}
+
+	return &blocks.Blocks[0], nil
+}
+
+
+func (c *dummySkyrpcclient) GetBlockCount(seq uint64) (*visor.ReadableBlock, error) {
+	//ss := []uint64{seq}
+	blocks := decodeBlock(blockString)
+
+	//if err := c.skyRpcClient.Do(&blocks, "get_blocks_by_seq", ss); err != nil {
+	//	return nil, err
+	//}
 
 	if len(blocks.Blocks) == 0 {
 		return nil, nil
@@ -153,11 +180,11 @@ func (c *dummySkyrpcclient) GetBlocksBySeq(seq uint64) (*visor.ReadableBlock, er
 }
 
 func (c *dummySkyrpcclient) GetLastBlocks() (*visor.ReadableBlock, error) {
-	param := []uint64{1}
-	blocks := visor.ReadableBlocks{}
-	if err := c.skyRpcClient.Do(&blocks, "get_lastblocks", param); err != nil {
-		return nil, err
-	}
+	//param := []uint64{1}
+	blocks := decodeBlock(blockString)
+	//if err := c.skyRpcClient.Do(&blocks, "get_lastblocks", param); err != nil {
+	//	return nil, err
+	//}
 
 	if len(blocks.Blocks) == 0 {
 		return nil, nil
@@ -739,6 +766,13 @@ func decodeRawTransaction(rawTxStr string) *visor.Transaction {
 }
 
 
+func decodeBlock(str string) *visor.ReadableBlocks {
+	var blocks visor.ReadableBlocks
+	if err := json.Unmarshal([]byte(str), &blocks); err != nil {
+		panic(err)
+	}
+	return &blocks
+}
 
 var blockString = `{
     "blocks": [
@@ -746,7 +780,7 @@ var blockString = `{
             "header": {
                 "version": 0,
                 "timestamp": 1477295242,
-                "seq": 454,
+                "seq": 1,
                 "fee": 20732,
                 "prev_hash": "f680fe1f068a1cd5c3ef9194f91a9bc3cacffbcae4a32359a3c014da4ef7516f",
                 "hash": "662835cc081e037561e1fe05860fdc4b426f6be562565bfaa8ec91be5675064a"
