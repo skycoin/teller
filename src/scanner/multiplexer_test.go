@@ -82,15 +82,6 @@ func testAddSKYScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
-	// This address has:
-	// 31 deposits in block 235205
-	// 47 deposits in block 235206
-	// 22 deposits, in block 235207
-	// 26 deposits, in block 235214
-	//err = m.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", CoinTypeSKY)
-	//require.NoError(t, err)
-	//nDeposits = nDeposits + 126
-
 	return nDeposits
 }
 
@@ -203,35 +194,35 @@ func TestMultiplexerOnlySKY(t *testing.T) {
 	scr, shutdown := testAddSKYScanner(t, skyDB, m)
 	defer shutdown()
 
-	//nDeposits := testAddSKYScanAddresses(t, m)
-	//
-	//go testutil.CheckError(t, m.Multiplex)
-	//
+	nDeposits := testAddSKYScanAddresses(t, m)
+
+	go testutil.CheckError(t, m.Multiplex)
+
 	done := make(chan struct{})
-	//go func() {
-	//	defer close(done)
-	//	var dvs []DepositNote
-	//	for dv := range m.GetDeposit() {
-	//		dvs = append(dvs, dv)
-	//		dv.ErrC <- nil
-	//	}
-	//
-	//	require.Equal(t, nDeposits, int64(len(dvs)))
-	//}()
+	go func() {
+		defer close(done)
+		var dvs []DepositNote
+		for dv := range m.GetDeposit() {
+			dvs = append(dvs, dv)
+			dv.ErrC <- nil
+		}
+
+		require.Equal(t, nDeposits, int64(len(dvs)))
+	}()
 
 	// Wait for at least twice as long as the number of deposits to process
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	//shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * nDeposits * 3)
-	//if shutdownWait < minShutdownWait {
-	//	shutdownWait = minShutdownWait
-	//}
+	shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * nDeposits * 3)
+	if shutdownWait < minShutdownWait {
+		shutdownWait = minShutdownWait
+	}
 
-	//time.AfterFunc(shutdownWait, func() {
-	//	scr.Shutdown()
-	//	m.Shutdown()
-	//})
+	time.AfterFunc(shutdownWait, func() {
+		scr.Shutdown()
+		m.Shutdown()
+	})
 	err := scr.Run()
 	require.NoError(t, err)
 	<-done

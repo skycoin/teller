@@ -149,43 +149,24 @@ func (c *dummySkyrpcclient) GetBlocks(start, end uint64) (*visor.ReadableBlocks,
 }
 
 func (c *dummySkyrpcclient) GetBlocksBySeq(seq uint64) (*visor.ReadableBlock, error) {
-	//ss := []uint64{seq}
 	blocks := decodeBlock(blockString)
-
-	//if err := c.skyRpcClient.Do(&blocks, "get_blocks_by_seq", ss); err != nil {
-	//	return nil, err
-	//}
-
 	if len(blocks.Blocks) == 0 {
 		return nil, nil
 	}
-
 	return &blocks.Blocks[0], nil
 }
 
 
 func (c *dummySkyrpcclient) GetBlockCount(seq uint64) (*visor.ReadableBlock, error) {
-	//ss := []uint64{seq}
 	blocks := decodeBlock(blockString)
-
-	//if err := c.skyRpcClient.Do(&blocks, "get_blocks_by_seq", ss); err != nil {
-	//	return nil, err
-	//}
-
 	if len(blocks.Blocks) == 0 {
 		return nil, nil
 	}
-
 	return &blocks.Blocks[0], nil
 }
 
 func (c *dummySkyrpcclient) GetLastBlocks() (*visor.ReadableBlock, error) {
-	//param := []uint64{1}
 	blocks := decodeBlock(blockString)
-	//if err := c.skyRpcClient.Do(&blocks, "get_lastblocks", param); err != nil {
-	//	return nil, err
-	//}
-
 	if len(blocks.Blocks) == 0 {
 		return nil, nil
 	}
@@ -198,17 +179,7 @@ func (c *dummySkyrpcclient) Shutdown() {
 // Send sends coins to batch recv address
 func (c *dummySkyrpcclient) SendBatch(saList []cli.SendAmount) (string, error) {
 	// validate the recvAddr
-	for _, sendAmount := range saList {
-		if _, err := cipher.DecodeBase58Address(sendAmount.Addr); err != nil {
-			return "", err
-		}
-		if sendAmount.Coins == 0 {
-			return "", fmt.Errorf("Can't send 0 coins", sendAmount.Coins)
-		}
-
-	}
-
-	return cli.SendFromWallet(c.skyRpcClient, c.walletFile, c.changeAddr, saList)
+	return "", nil
 }
 
 
