@@ -112,6 +112,7 @@ func TestStoreNewStore(t *testing.T) {
 		require.NotNil(t, tx.Bucket(DepositInfoBkt))
 		require.NotNil(t, tx.Bucket(MustGetBindAddressBkt(scanner.CoinTypeBTC)))
 		require.NotNil(t, tx.Bucket(MustGetBindAddressBkt(scanner.CoinTypeETH)))
+		require.NotNil(t, tx.Bucket(MustGetBindAddressBkt(scanner.CoinTypeSKY)))
 		require.NotNil(t, tx.Bucket(SkyDepositSeqsIndexBkt))
 		require.NotNil(t, tx.Bucket(BtcTxsBkt))
 		return nil

@@ -49,15 +49,15 @@ type Config struct {
 
 // Monitor monitor service struct
 type Monitor struct {
-	log            logrus.FieldLogger
+	log logrus.FieldLogger
 	AddrManager
 	EthAddrManager AddrManager
 	SkyAddrManager AddrManager
 	DepositStatusGetter
 	ScanAddressGetter
-	cfg            Config
-	ln             *http.Server
-	quit           chan struct{}
+	cfg  Config
+	ln   *http.Server
+	quit chan struct{}
 }
 
 // New creates monitor service

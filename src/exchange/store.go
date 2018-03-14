@@ -42,7 +42,7 @@ func GetBindAddressBkt(coinType string) ([]byte, error) {
 	case scanner.CoinTypeETH:
 		suffix = "eth"
 	case scanner.CoinTypeSKY:
-		fallthrough
+		suffix = "sky"
 	default:
 		return nil, scanner.ErrUnsupportedCoinType
 	}

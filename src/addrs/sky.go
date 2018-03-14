@@ -14,6 +14,7 @@ import (
 
 const skyBucketKey = "used_sky_address"
 
+// NewSKYAddrs returns an Addrs loaded with SKY addresses
 func NewSKYAddrs(log logrus.FieldLogger, db *bolt.DB, addrsReader io.Reader) (*Addrs, error) {
 	loader, err := loadSKYAddresses(addrsReader)
 	if err != nil {

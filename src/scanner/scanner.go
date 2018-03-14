@@ -6,6 +6,7 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/ethereum/go-ethereum/core/types"
+
 	"github.com/skycoin/skycoin/src/visor"
 )
 
