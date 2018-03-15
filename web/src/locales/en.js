@@ -34,7 +34,7 @@ export default {
     discord: 'Discord',
   },
   distribution: {
-    rate: 'Current rate: {rate} MDL/BTC',
+    rate: 'Current rate: {rate} MDL = 1 {coinType}',
     inventory: 'Current inventory: {coins} MDL available',
     title: 'MDL Talent Hub Initial Token Offering',
     heading: 'MDL Talent Hub Initial Token Offering',

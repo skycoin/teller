@@ -224,14 +224,6 @@ class Distribution extends React.Component {
                 </Heading>
                 <Text heavy color="black" fontSize={[2, 3]} mb={[4, 6]} as="div">
                   <FormattedMessage
-                    id="distribution.rate"
-                    values={{
-                      rate: +this.state.mdl_btc_exchange_rate,
-                    }}
-                  />
-                </Text>
-                <Text heavy color="black" fontSize={[2, 3]} mb={[4, 6]} as="div">
-                  <FormattedMessage
                     id="distribution.inventory"
                     values={{
                       coins: this.state.balance && this.state.balance.coins,
@@ -250,16 +242,26 @@ class Distribution extends React.Component {
                   onChange={this.handleChange}
                 />
 
-                <Select
-                 as="div"
-                  name="coin_type"
-                  value={this.state.coinType}
-                  onChange={this.handleCoinTypeChange}
-                  options={[
-                    { value: 'BTC', label: 'BTC' },
-                    { value: 'ETH', label: 'ETH' },
-                  ]}
-                />
+                <div>
+                  <Select
+                    name="coin_type"
+                    value={this.state.coinType}
+                    onChange={this.handleCoinTypeChange}
+                    options={[
+                      { value: 'BTC', label: 'BTC' },
+                      { value: 'ETH', label: 'ETH' },
+                    ]}
+                  />
+                  <Text heavy color="grey" fontSize={[2, 3]} as="div">
+                    <FormattedMessage
+                      id="distribution.rate"
+                      values={{
+                        rate: +(this.state.coinType == 'ETH' ?  this.state.mdl_eth_exchange_rate : this.state.mdl_btc_exchange_rate),
+                        coinType: this.state.coinType,
+                      }}
+                    />
+                  </Text>
+                </div>
 
                 {this.state.btcAddress && <Address heavy color="black" fontSize={[2, 3]} as="p">
                   <strong>{this.state.coinType} <FormattedHTMLMessage id="distribution.recAddress" />: </strong>
