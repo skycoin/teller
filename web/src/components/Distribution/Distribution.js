@@ -252,14 +252,14 @@ class Distribution extends React.Component {
                       { value: 'ETH', label: 'ETH' },
                     ]}
                   />
-                  <Text heavy color="grey" fontSize={[2, 3]} as="div">
+                  <Text heavy color="grey" fontSize={[2, 3]}>
                     <FormattedMessage
                       id="distribution.rate"
                       values={{
                         rate: +(this.state.coinType == 'ETH' ?  this.state.mdl_eth_exchange_rate : this.state.mdl_btc_exchange_rate),
                         coinType: this.state.coinType,
                       }}
-                    />
+                    /> "($0.02 USD per 1 MDL)"
                   </Text>
                 </div>
 
