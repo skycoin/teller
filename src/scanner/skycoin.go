@@ -24,15 +24,15 @@ import (
 type SKYScanner struct {
 	log          logrus.FieldLogger
 	Base         CommonScanner
-	skyRpcClient SkyRPCClient
+	skyRPCClient SkyRPCClient
 }
 
-// NewSKYScanner creates scanner instance
+// NewSkycoinScanner creates scanner instance
 func NewSkycoinScanner(log logrus.FieldLogger, store Storer, client SkyRPCClient, cfg Config) (*SKYScanner, error) {
 	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.sky"), CoinTypeSKY, cfg)
 
 	return &SKYScanner{
-		skyRpcClient: client,
+		skyRPCClient: client,
 		log:          log.WithField("prefix", "scanner.sky"),
 		Base:         bs,
 	}, nil
@@ -46,7 +46,7 @@ func (s *SKYScanner) Run() error {
 // Shutdown shutdown the scanner
 func (s *SKYScanner) Shutdown() {
 	s.log.Info("Closing SKY scanner")
-	s.skyRpcClient.Shutdown()
+	s.skyRPCClient.Shutdown()
 	s.Base.Shutdown()
 	s.log.Info("Waiting for SKY scanner to stop")
 	s.log.Info("SKY scanner stopped")
@@ -113,10 +113,9 @@ func skyBlock2CommonBlock(block *visor.ReadableBlock) (*CommonBlock, error) {
 	return &cb, nil
 }
 
-// GetBestBlock returns the hash and height of the block in the longest (best)
-// chain.
+// GetBlockCount returns the hash and height of the block in the longest (best) chain.
 func (s *SKYScanner) GetBlockCount() (int64, error) {
-	rb, err := s.skyRpcClient.GetLastBlocks()
+	rb, err := s.skyRPCClient.GetLastBlocks()
 	if err != nil {
 		return 0, err
 	}
@@ -126,7 +125,7 @@ func (s *SKYScanner) GetBlockCount() (int64, error) {
 
 // getBlock returns block of given hash
 func (s *SKYScanner) getBlock(seq int64) (*CommonBlock, error) {
-	rb, err := s.skyRpcClient.GetBlocksBySeq(uint64(seq))
+	rb, err := s.skyRPCClient.GetBlocksBySeq(uint64(seq))
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +141,7 @@ func (s *SKYScanner) getBlockAtHeight(seq int64) (*CommonBlock, error) {
 
 // getNextBlock returns the next block of given hash, return nil if next block does not exist
 func (s *SKYScanner) getNextBlock(seq uint64) (*CommonBlock, error) {
-	b, err := s.skyRpcClient.GetBlocksBySeq(seq + 1)
+	b, err := s.skyRPCClient.GetBlocksBySeq(seq + 1)
 	if err != nil {
 		return nil, err
 	}
@@ -200,21 +199,21 @@ func (s *SKYScanner) GetDeposit() <-chan DepositNote {
 	return s.Base.GetDeposit()
 }
 
-// RPC provides methods for sending coins
+// SkyClient provides methods for sending coins
 type SkyClient struct {
 	walletFile   string
 	changeAddr   string
-	skyRpcClient *webrpc.Client
+	skyRPCClient *webrpc.Client
 }
 
-// New creates RPC instance
+// NewSkyClient creates RPC instance
 func NewSkyClient(server, port string) *SkyClient {
 	rpcClient := &webrpc.Client{
 		Addr: "http://" + server + ":" + port,
 	}
 
 	return &SkyClient{
-		skyRpcClient: rpcClient,
+		skyRPCClient: rpcClient,
 	}
 }
 
@@ -226,7 +225,7 @@ func (c *SkyClient) Send(recvAddr string, amount uint64) (string, error) {
 	}
 
 	if amount == 0 {
-		return "", fmt.Errorf("Can't send 0 coins", amount)
+		return "", fmt.Errorf("Can't send %d coins", amount)
 	}
 
 	sendAmount := cli.SendAmount{
@@ -234,30 +233,32 @@ func (c *SkyClient) Send(recvAddr string, amount uint64) (string, error) {
 		Coins: amount,
 	}
 
-	return cli.SendFromWallet(c.skyRpcClient, c.walletFile, c.changeAddr, []cli.SendAmount{sendAmount})
+	return cli.SendFromWallet(c.skyRPCClient, c.walletFile, c.changeAddr, []cli.SendAmount{sendAmount})
 }
 
 // GetTransaction returns transaction by txid
 func (c *SkyClient) GetTransaction(txid string) (*webrpc.TxnResult, error) {
-	return c.skyRpcClient.GetTransactionByID(txid)
+	return c.skyRPCClient.GetTransactionByID(txid)
 }
 
+// GetBlocks get blocks from RPC
 func (c *SkyClient) GetBlocks(start, end uint64) (*visor.ReadableBlocks, error) {
 	param := []uint64{start, end}
 	blocks := visor.ReadableBlocks{}
 
-	if err := c.skyRpcClient.Do(&blocks, "get_blocks", param); err != nil {
+	if err := c.skyRPCClient.Do(&blocks, "get_blocks", param); err != nil {
 		return nil, err
 	}
 
 	return &blocks, nil
 }
 
+// GetBlocksBySeq get blocks by seq
 func (c *SkyClient) GetBlocksBySeq(seq uint64) (*visor.ReadableBlock, error) {
 	ss := []uint64{seq}
 	blocks := visor.ReadableBlocks{}
 
-	if err := c.skyRpcClient.Do(&blocks, "get_blocks_by_seq", ss); err != nil {
+	if err := c.skyRPCClient.Do(&blocks, "get_blocks_by_seq", ss); err != nil {
 		return nil, err
 	}
 
@@ -268,10 +269,11 @@ func (c *SkyClient) GetBlocksBySeq(seq uint64) (*visor.ReadableBlock, error) {
 	return &blocks.Blocks[0], nil
 }
 
+// GetLastBlocks get last blocks
 func (c *SkyClient) GetLastBlocks() (*visor.ReadableBlock, error) {
 	param := []uint64{1}
 	blocks := visor.ReadableBlocks{}
-	if err := c.skyRpcClient.Do(&blocks, "get_lastblocks", param); err != nil {
+	if err := c.skyRPCClient.Do(&blocks, "get_lastblocks", param); err != nil {
 		return nil, err
 	}
 
@@ -281,10 +283,11 @@ func (c *SkyClient) GetLastBlocks() (*visor.ReadableBlock, error) {
 	return &blocks.Blocks[0], nil
 }
 
+// Shutdown the node
 func (c *SkyClient) Shutdown() {
 }
 
-// Send sends coins to batch recv address
+// SendBatch sends coins to batch recv address
 func (c *SkyClient) SendBatch(saList []cli.SendAmount) (string, error) {
 	// validate the recvAddr
 	for _, sendAmount := range saList {
@@ -292,10 +295,10 @@ func (c *SkyClient) SendBatch(saList []cli.SendAmount) (string, error) {
 			return "", err
 		}
 		if sendAmount.Coins == 0 {
-			return "", fmt.Errorf("Can't send 0 coins", sendAmount.Coins)
+			return "", fmt.Errorf("Can't send %d coins", sendAmount.Coins)
 		}
 
 	}
 
-	return cli.SendFromWallet(c.skyRpcClient, c.walletFile, c.changeAddr, saList)
+	return cli.SendFromWallet(c.skyRPCClient, c.walletFile, c.changeAddr, saList)
 }

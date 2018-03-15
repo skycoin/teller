@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"log"
 
-	"github.com/sirupsen/logrus"
 	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/coin"
@@ -28,20 +27,19 @@ import (
 )
 
 var (
-	dummySkyBlocksBktName = []byte("blocks")
-	errNoSkyBlockHash     = errors.New("no block found for height")
-	testWebRPCAddr        = "127.0.0.1:8081"
-	txHeight              = uint64(103)
-	txConfirmed           = true
+	//errNoSkyBlockHash     = errors.New("no block found for height")
+	testWebRPCAddr = "127.0.0.1:8081"
+	txHeight       = uint64(103)
+	txConfirmed    = true
 )
 
 type fakeGateway struct {
 	transactions         map[string]string
 	injectRawTxMap       map[string]bool // key: transaction hash, value indicates whether the injectTransaction should return error.
 	injectedTransactions map[string]string
-	addrRecvUxOuts       []*historydb.UxOut
-	addrSpentUxOUts      []*historydb.UxOut
-	uxouts               []coin.UxOut
+	//addrRecvUxOuts       []*historydb.UxOut
+	//addrSpentUxOUts      []*historydb.UxOut
+	uxouts []coin.UxOut
 }
 
 type dummySkyrpcclient struct {
@@ -51,17 +49,17 @@ type dummySkyrpcclient struct {
 	blockCountError              error
 	blockVerboseTxError          error
 	blockVerboseTxErrorCallCount int
-	blockVerboseTxCallCount      int
+	//blockVerboseTxCallCount      int
 
 	// used for testSkyScannerBlockNextHashAppears
 	blockNextHashMissingOnceAt int64
-	hasSetMissingHash          bool
+	//hasSetMissingHash          bool
 
-	log          logrus.FieldLogger
+	//log          logrus.FieldLogger
 	Base         CommonScanner
 	walletFile   string
 	changeAddr   string
-	skyRpcClient *webrpc.Client
+	skyRPCClient *webrpc.Client
 }
 
 func openDummySkyDB(t *testing.T) *bolt.DB {
@@ -86,7 +84,7 @@ func newDummySkyrpcclient(t *testing.T, db *bolt.DB) *dummySkyrpcclient {
 	return &dummySkyrpcclient{
 		db:           db,
 		blockHashes:  make(map[int64]string),
-		skyRpcClient: client,
+		skyRPCClient: client,
 	}
 }
 
@@ -98,7 +96,7 @@ func (c *dummySkyrpcclient) Send(recvAddr string, amount uint64) (string, error)
 	}
 
 	if amount == 0 {
-		return "", fmt.Errorf("Can't send 0 coins", amount)
+		return "", fmt.Errorf("Can't send %d coins", amount)
 	}
 
 	sendAmount := cli.SendAmount{
@@ -106,19 +104,19 @@ func (c *dummySkyrpcclient) Send(recvAddr string, amount uint64) (string, error)
 		Coins: amount,
 	}
 
-	return cli.SendFromWallet(c.skyRpcClient, c.walletFile, c.changeAddr, []cli.SendAmount{sendAmount})
+	return cli.SendFromWallet(c.skyRPCClient, c.walletFile, c.changeAddr, []cli.SendAmount{sendAmount})
 }
 
 // GetTransaction returns transaction by txid
 func (c *dummySkyrpcclient) GetTransaction(txid string) (*webrpc.TxnResult, error) {
-	return c.skyRpcClient.GetTransactionByID(txid)
+	return c.skyRPCClient.GetTransactionByID(txid)
 }
 
 func (c *dummySkyrpcclient) GetBlocks(start, end uint64) (*visor.ReadableBlocks, error) {
 	param := []uint64{start, end}
 	blocks := visor.ReadableBlocks{}
 
-	if err := c.skyRpcClient.Do(&blocks, "get_blocks", param); err != nil {
+	if err := c.skyRPCClient.Do(&blocks, "get_blocks", param); err != nil {
 		return nil, err
 	}
 
@@ -130,6 +128,7 @@ func (c *dummySkyrpcclient) GetBlocksBySeq(seq uint64) (*visor.ReadableBlock, er
 	if len(blocks.Blocks) == 0 {
 		return nil, nil
 	}
+	fmt.Println("GetBlocksBySeq, ", seq)
 	return &blocks.Blocks[0], nil
 }
 
@@ -138,6 +137,7 @@ func (c *dummySkyrpcclient) GetBlockCount(seq uint64) (*visor.ReadableBlock, err
 	if len(blocks.Blocks) == 0 {
 		return nil, nil
 	}
+	fmt.Println("GetBlockCount, ", seq)
 	return &blocks.Blocks[0], nil
 }
 
@@ -158,33 +158,33 @@ func (c *dummySkyrpcclient) SendBatch(saList []cli.SendAmount) (string, error) {
 	return "", nil
 }
 
-func setupSkyScannerWithNonExistInitHeight(t *testing.T, skyDB *bolt.DB, db *bolt.DB) *SKYScanner {
-	log, _ := testutil.NewLogger(t)
-
-	// Blocks 2325205 through 2325214 are stored in eth.db
-	// Refer to https://blockchain.info or another explorer to see the block data
-	rpc := newDummySkyrpcclient(t, skyDB)
-
-	// 2325214 is the highest block in the test data sky.db
-	rpc.blockCount = 2325214
-
-	store, err := NewStore(log, db)
-	require.NoError(t, err)
-	err = store.AddSupportedCoin(CoinTypeSKY)
-	require.NoError(t, err)
-
-	// Block 2325204 doesn't exist in db
-	cfg := Config{
-		ScanPeriod:            time.Millisecond * 10,
-		DepositBufferSize:     5,
-		InitialScanHeight:     2325204,
-		ConfirmationsRequired: 0,
-	}
-	scr, err := NewSkycoinScanner(log, store, rpc, cfg)
-	require.NoError(t, err)
-
-	return scr
-}
+//func setupSkyScannerWithNonExistInitHeight(t *testing.T, skyDB *bolt.DB, db *bolt.DB) *SKYScanner {
+//	log, _ := testutil.NewLogger(t)
+//
+//	// Blocks 2325205 through 2325214 are stored in eth.db
+//	// Refer to https://blockchain.info or another explorer to see the block data
+//	rpc := newDummySkyrpcclient(t, skyDB)
+//
+//	// 2325214 is the highest block in the test data sky.db
+//	rpc.blockCount = 2325214
+//
+//	store, err := NewStore(log, db)
+//	require.NoError(t, err)
+//	err = store.AddSupportedCoin(CoinTypeSKY)
+//	require.NoError(t, err)
+//
+//	// Block 2325204 doesn't exist in db
+//	cfg := Config{
+//		ScanPeriod:            time.Millisecond * 10,
+//		DepositBufferSize:     5,
+//		InitialScanHeight:     2325204,
+//		ConfirmationsRequired: 0,
+//	}
+//	scr, err := NewSkycoinScanner(log, store, rpc, cfg)
+//	require.NoError(t, err)
+//
+//	return scr
+//}
 
 func setupSkyScannerWithDB(t *testing.T, skyDB *bolt.DB, db *bolt.DB) *SKYScanner {
 	log, _ := testutil.NewLogger(t)
@@ -322,7 +322,7 @@ func testSkyScannerGetBlockCountErrorRetry(t *testing.T, skyDB *bolt.DB) {
 	scr, shutdown := setupSkyScanner(t, skyDB)
 	defer shutdown()
 
-	scr.skyRpcClient.(*dummySkyrpcclient).blockCountError = errors.New("block count error")
+	scr.skyRPCClient.(*dummySkyrpcclient).blockCountError = errors.New("block count error")
 
 	testSkyScannerRun(t, scr)
 }
@@ -336,7 +336,7 @@ func testSkyScannerConfirmationsRequired(t *testing.T, skyDB *bolt.DB) {
 	// confirmations higher, so that only block 2325212 is processed.
 	scr.Base.(*BaseScanner).Cfg.DepositBufferSize = 6
 	scr.Base.(*BaseScanner).Cfg.ConfirmationsRequired = 0
-	scr.skyRpcClient.(*dummySkyrpcclient).blockCount = 1
+	scr.skyRPCClient.(*dummySkyrpcclient).blockCount = 1
 
 	// Add scan addresses for blocks 2325205-2325214, but only expect to scan
 	// deposits from block 2325205-2325212, since 2325213 and 2325214 don't have enough
@@ -364,8 +364,8 @@ func testSkyScannerScanBlockFailureRetry(t *testing.T, skyDB *bolt.DB) {
 	defer shutdown()
 
 	// Return an error on the 2nd call to GetBlockVerboseTx
-	scr.skyRpcClient.(*dummySkyrpcclient).blockVerboseTxError = errors.New("get block verbose tx error")
-	scr.skyRpcClient.(*dummySkyrpcclient).blockVerboseTxErrorCallCount = 2
+	scr.skyRPCClient.(*dummySkyrpcclient).blockVerboseTxError = errors.New("get block verbose tx error")
+	scr.skyRPCClient.(*dummySkyrpcclient).blockVerboseTxErrorCallCount = 2
 
 	testSkyScannerRun(t, scr)
 }
@@ -378,7 +378,7 @@ func testSkyScannerBlockNextHashAppears(t *testing.T, skyDB *bolt.DB) {
 
 	// The block at height 2325208 will lack a NextHash one time
 	// The scanner will continue and process everything normally
-	scr.skyRpcClient.(*dummySkyrpcclient).blockNextHashMissingOnceAt = 2
+	scr.skyRPCClient.(*dummySkyrpcclient).blockNextHashMissingOnceAt = 2
 
 	testSkyScannerRun(t, scr)
 }
@@ -533,18 +533,18 @@ func testSkyScannerProcessDepositError(t *testing.T, skyDB *bolt.DB) {
 	<-done
 }
 
-func testSkyScannerInitialGetBlockHashError(t *testing.T, skyDB *bolt.DB) {
-	// Test that scanner.Run() returns an error if the initial GetBlockHash
-	// based upon scanner.Base.Cfg.InitialScanHeight fails
-	db, shutdown := testutil.PrepareDB(t)
-	defer shutdown()
-
-	scr := setupSkyScannerWithNonExistInitHeight(t, skyDB, db)
-
-	err := scr.Run()
-	require.Error(t, err)
-	require.Equal(t, errNoSkyBlockHash, err)
-}
+//func testSkyScannerInitialGetBlockHashError(t *testing.T, skyDB *bolt.DB) {
+//	// Test that scanner.Run() returns an error if the initial GetBlockHash
+//	// based upon scanner.Base.Cfg.InitialScanHeight fails
+//	db, shutdown := testutil.PrepareDB(t)
+//	defer shutdown()
+//
+//	scr := setupSkyScannerWithNonExistInitHeight(t, skyDB, db)
+//
+//	err := scr.Run()
+//	require.Error(t, err)
+//	require.Equal(t, errNoSkyBlockHash, err)
+//}
 
 func TestSkyScanner(t *testing.T) {
 	skyDB := openDummySkyDB(t)
@@ -616,12 +616,13 @@ func TestSkyScanner(t *testing.T) {
 	})
 }
 
+// GetLastBlocks
 func (fg fakeGateway) GetLastBlocks(num uint64) (*visor.ReadableBlocks, error) {
 	var blocks visor.ReadableBlocks
 	if err := json.Unmarshal([]byte(blockString), &blocks); err != nil {
 		return nil, err
 	}
-
+	fmt.Println("GetLastBlocks, ", num)
 	return &blocks, nil
 }
 

@@ -9,4 +9,4 @@ install:
   - make test-ci
 
 script:
-  - make check
+  - make lint
