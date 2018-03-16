@@ -362,7 +362,7 @@ Accept: application/json
 Content-Type: application/json
 URI: /api/bind
 Request Body: {
-    "skyaddr": "...",
+    "mdladdr": "...",
     "coin_type": "BTC"
 }
 ```
@@ -382,7 +382,7 @@ Returns `403 Forbidden` if `teller.bind_enabled` is `false`.
 Example:
 
 ```sh
-curl -H  -X POST "Content-Type: application/json" -d '{"skyaddr":"...","coin_type":"BTC"}' http://localhost:7071/api/bind
+curl -H  -X POST "Content-Type: application/json" -d '{"mdladdr":"...","coin_type":"BTC"}' http://localhost:7071/api/bind
 ```
 
 Response:
@@ -396,7 +396,7 @@ Response:
 ```
 ETH example:
 ```sh
-curl -H  -X POST "Content-Type: application/json" -d '{"skyaddr":"...","coin_type":"ETH"}' http://localhost:7071/api/bind
+curl -H  -X POST "Content-Type: application/json" -d '{"mdladdr":"...","coin_type":"ETH"}' http://localhost:7071/api/bind
 ```
 
 Response:
@@ -414,7 +414,7 @@ Response:
 Method: GET
 Content-Type: application/json
 URI: /api/status
-Query Args: skyaddr
+Query Args: mdladdr
 ```
 
 Returns statuses of an MDL address.
@@ -434,7 +434,7 @@ Possible statuses are:
 Example:
 
 ```sh
-curl http://localhost:7071/api/status?skyaddr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
+curl http://localhost:7071/api/status?mdladdr=t5apgjk4LvV9PQareTPzWkE88o1G5A55FW
 ```
 
 Response:
@@ -665,7 +665,7 @@ Note: Maps a btc/eth txid:seq to exchange.DepositInfo struct
 Bucket: bind_address_BTC
 File: exchange/store.go
 
-Maps: btcaddr -> skyaddr
+Maps: btcaddr -> mdladdr
 Note: Maps a btc addr to a sky addr
 ```
 
@@ -673,7 +673,7 @@ Note: Maps a btc addr to a sky addr
 Bucket: bind_address_ETH
 File: exchange/store.go
 
-Maps: ethaddr -> skyaddr
+Maps: ethaddr -> mdladdr
 Note: Maps a eth addr to a sky addr
 ```
 
@@ -681,7 +681,7 @@ Note: Maps a eth addr to a sky addr
 Bucket: sky_deposit_seqs_index
 File: exchange/store.go
 
-Maps: skyaddr -> [btcaddrs/ethaddrs]
+Maps: mdladdr -> [btcaddrs/ethaddrs]
 Note: Maps a sky addr to multiple btc/eth addrs
 ```
 

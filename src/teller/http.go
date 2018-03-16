@@ -274,7 +274,7 @@ func (s *HTTPServer) setupMux() *http.ServeMux {
 	handleAPI := func(path string, h http.Handler) {
 		// Allow requests from a local mdl wallet
 		h = cors.New(cors.Options{
-			AllowedOrigins: []string{"http://127.0.0.1:6420"},
+			AllowedOrigins: []string{"http://127.0.0.1:8320"},
 		}).Handler(h)
 
 		h = gziphandler.GzipHandler(h)
