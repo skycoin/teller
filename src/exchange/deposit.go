@@ -192,6 +192,25 @@ func (di DepositInfo) ValidateForStatus() error {
 	case StatusWaitDecide:
 		return checkWaitSend()
 
+	case StatusWaitPassthroughOrderComplete:
+		if di.Passthrough.Order.OrderID == "" {
+			return errors.New("Passthrough.Order.OrderID missing")
+		}
+		fallthrough
+
+	case StatusWaitPassthrough:
+		if di.Passthrough.ExchangeName == "" {
+			return errors.New("Passthrough.ExchangeName missing")
+		}
+		if di.Passthrough.RequestedAmount == "" {
+			return errors.New("Passthrough.RequestedAmount missing")
+		}
+		if di.Passthrough.Order.CustomerID == "" {
+			return errors.New("Passthrough.Order.CustomerID missing")
+		}
+
+		return checkWaitSend()
+
 	case StatusWaitDeposit, StatusUnknown:
 		fallthrough
 	default:
