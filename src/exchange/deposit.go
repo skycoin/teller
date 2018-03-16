@@ -29,19 +29,22 @@ const (
 	StatusWaitDecide
 	// StatusWaitPassthrough wait to buy from 3rd party exchange
 	StatusWaitPassthrough
+	// StatusWaitPassthroughOrderComplete wait for order placed on 3rd party exchange to complete
+	StatusWaitPassthroughOrderComplete
 
 	// PassthroughExchangeC2CX for deposits using passthrough to c2cx.com
 	PassthroughExchangeC2CX = "c2cx"
 )
 
 var statusString = []string{
-	StatusWaitDeposit:     "waiting_deposit",
-	StatusWaitSend:        "waiting_send",
-	StatusWaitConfirm:     "waiting_confirm",
-	StatusDone:            "done",
-	StatusUnknown:         "unknown",
-	StatusWaitDecide:      "waiting_decide",
-	StatusWaitPassthrough: "waiting_passthrough",
+	StatusWaitDeposit:                  "waiting_deposit",
+	StatusWaitSend:                     "waiting_send",
+	StatusWaitConfirm:                  "waiting_confirm",
+	StatusDone:                         "done",
+	StatusUnknown:                      "unknown",
+	StatusWaitDecide:                   "waiting_decide",
+	StatusWaitPassthrough:              "waiting_passthrough",
+	StatusWaitPassthroughOrderComplete: "waiting_passthrough_order_complete",
 }
 
 func (s Status) String() string {
@@ -63,6 +66,8 @@ func NewStatusFromStr(st string) Status {
 		return StatusWaitDecide
 	case statusString[StatusWaitPassthrough]:
 		return StatusWaitPassthrough
+	case statusString[StatusWaitPassthroughOrderComplete]:
+		return StatusWaitPassthroughOrderComplete
 	default:
 		return StatusUnknown
 	}
@@ -100,19 +105,23 @@ type DepositInfo struct {
 
 // PassthroughData encapsulates data used for OTC passthrough
 type PassthroughData struct {
-	ExchangeName      string
-	SkyBought         uint64
-	DepositValueSpent int64
-	Orders            []PassthroughOrder
+	ExchangeName      string           `json:"exchange_name"`
+	SkyBought         uint64           `json:"sky_bought"`
+	DepositValueSpent int64            `json:"deposit_value_spent"`
+	RequestedAmount   string           `json:"requested_amount"`
+	Order             PassthroughOrder `json:"order"`
 }
 
-// PassthroughOrder contains information about an order placed on an exchange for passthrough
+// PassthroughOrder encapsulates 3rd party exchange order data
 type PassthroughOrder struct {
-	ID        string
-	Amount    string
-	Price     string
-	Timestamp string
-	CoinType  string
+	CustomerID      string      `json:"customer_id"`
+	OrderID         string      `json:"order_id"`
+	RequestedAmount string      `json:"requested_amount"`
+	CompletedAmount string      `json:"completed_amount"`
+	Price           string      `json:"price"`
+	Status          string      `json:"status"`
+	Final           bool        `json:"final"`
+	Original        interface{} `json:"original"`
 }
 
 // DepositStats records overall statistics about deposits

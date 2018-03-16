@@ -107,13 +107,23 @@ func (s *Send) Run() error {
 		}()
 
 		// Queue the saved StatusWaitConfirm deposits
+	queueWaitConfirmDeposits:
 		for _, di := range waitConfirmDeposits {
-			s.depositChan <- di
+			select {
+			case <-s.quit:
+				break queueWaitConfirmDeposits
+			case s.depositChan <- di:
+			}
 		}
 
 		// Queue the saved StatusWaitSend deposits
+	queueWaitSendDeposits:
 		for _, di := range waitSendDeposits {
-			s.depositChan <- di
+			select {
+			case <-s.quit:
+				break queueWaitSendDeposits
+			case s.depositChan <- di:
+			}
 		}
 	} else {
 		wg.Add(1)
