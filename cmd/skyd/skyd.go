@@ -139,7 +139,8 @@ func processDeposits(deposits []Deposit) (blocks visor.ReadableBlocks, err error
 	//bestHeight := int64(defaultBlockStore.BestBlockHeight)
 
 	//// Add new block
-	blocks = createFakeBlock("")
+	value := strconv.Itoa(int(deposits[0].Value))
+	blocks = createFakeBlock(deposits[0].Address, value)
 	defaultBlockStore.BestBlockHeight++
 
 	hash := blocks.Blocks[0].Head.BodyHash
@@ -158,10 +159,13 @@ func processDeposits(deposits []Deposit) (blocks visor.ReadableBlocks, err error
 	return
 }
 
-func createFakeBlock(address string) (blocks visor.ReadableBlocks) {
+func createFakeBlock(address, coins string) (blocks visor.ReadableBlocks) {
 
 	if address == "" {
 		address = "cBnu9sUvv12dovBmjQKTtfE4rbjMmf3fzW"
+	}
+	if coins == "" {
+		coins = "1"
 	}
 
 	blocks = visor.ReadableBlocks{
@@ -202,7 +206,7 @@ func createFakeBlock(address string) (blocks visor.ReadableBlocks) {
 								{
 									Hash:    "574d7e5afaefe4ee7e0adf6ce1971d979f038adc8ebbd35771b2c19b0bad7e3d",
 									Address: address,
-									Coins:   "1",
+									Coins:   coins,
 									Hours:   3455,
 								},
 							},
