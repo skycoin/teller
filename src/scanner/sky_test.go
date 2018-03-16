@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	//errNoSkyBlockHash     = errors.New("no block found for height")
+	errNoSkyBlockHash     = errors.New("Block 2 not found")
 	testWebRPCAddr = "127.0.0.1:8081"
 	txHeight       = uint64(103)
 	txConfirmed    = true
@@ -128,6 +128,10 @@ func (c *dummySkyrpcclient) GetBlocksBySeq(seq uint64) (*visor.ReadableBlock, er
 	if len(blocks.Blocks) == 0 {
 		return nil, nil
 	}
+	if blocks.Blocks[0].Head.BkSeq != seq {
+		log.Println("Block not found ", seq)
+		return nil, fmt.Errorf("Block %d not found", seq)
+	}
 	fmt.Println("GetBlocksBySeq, ", seq)
 	return &blocks.Blocks[0], nil
 }
@@ -158,33 +162,32 @@ func (c *dummySkyrpcclient) SendBatch(saList []cli.SendAmount) (string, error) {
 	return "", nil
 }
 
-//func setupSkyScannerWithNonExistInitHeight(t *testing.T, skyDB *bolt.DB, db *bolt.DB) *SKYScanner {
-//	log, _ := testutil.NewLogger(t)
-//
-//	// Blocks 2325205 through 2325214 are stored in eth.db
-//	// Refer to https://blockchain.info or another explorer to see the block data
-//	rpc := newDummySkyrpcclient(t, skyDB)
-//
-//	// 2325214 is the highest block in the test data sky.db
-//	rpc.blockCount = 2325214
-//
-//	store, err := NewStore(log, db)
-//	require.NoError(t, err)
-//	err = store.AddSupportedCoin(CoinTypeSKY)
-//	require.NoError(t, err)
-//
-//	// Block 2325204 doesn't exist in db
-//	cfg := Config{
-//		ScanPeriod:            time.Millisecond * 10,
-//		DepositBufferSize:     5,
-//		InitialScanHeight:     2325204,
-//		ConfirmationsRequired: 0,
-//	}
-//	scr, err := NewSkycoinScanner(log, store, rpc, cfg)
-//	require.NoError(t, err)
-//
-//	return scr
-//}
+func setupSkyScannerWithNonExistInitHeight(t *testing.T, skyDB *bolt.DB, db *bolt.DB) *SKYScanner {
+	log, _ := testutil.NewLogger(t)
+
+	// Blocks 0 through 1 are stored in sky.db
+	rpc := newDummySkyrpcclient(t, skyDB)
+
+	// 1 is the highest block in the test data sky.db
+	rpc.blockCount = 1
+
+	store, err := NewStore(log, db)
+	require.NoError(t, err)
+	err = store.AddSupportedCoin(CoinTypeSKY)
+	require.NoError(t, err)
+
+	// Block 2 doesn't exist in db
+	cfg := Config{
+		ScanPeriod:            time.Millisecond * 10,
+		DepositBufferSize:     5,
+		InitialScanHeight:     2,
+		ConfirmationsRequired: 0,
+	}
+	scr, err := NewSkycoinScanner(log, store, rpc, cfg)
+	require.NoError(t, err)
+
+	return scr
+}
 
 func setupSkyScannerWithDB(t *testing.T, skyDB *bolt.DB, db *bolt.DB) *SKYScanner {
 	log, _ := testutil.NewLogger(t)
@@ -533,18 +536,18 @@ func testSkyScannerProcessDepositError(t *testing.T, skyDB *bolt.DB) {
 	<-done
 }
 
-//func testSkyScannerInitialGetBlockHashError(t *testing.T, skyDB *bolt.DB) {
-//	// Test that scanner.Run() returns an error if the initial GetBlockHash
-//	// based upon scanner.Base.Cfg.InitialScanHeight fails
-//	db, shutdown := testutil.PrepareDB(t)
-//	defer shutdown()
-//
-//	scr := setupSkyScannerWithNonExistInitHeight(t, skyDB, db)
-//
-//	err := scr.Run()
-//	require.Error(t, err)
-//	require.Equal(t, errNoSkyBlockHash, err)
-//}
+func testSkyScannerInitialGetBlockHashError(t *testing.T, skyDB *bolt.DB) {
+	// Test that scanner.Run() returns an error if the initial GetBlockHash
+	// based upon scanner.Base.Cfg.InitialScanHeight fails
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
+
+	scr := setupSkyScannerWithNonExistInitHeight(t, skyDB, db)
+
+	err := scr.Run()
+	require.Error(t, err)
+	require.Equal(t, errNoSkyBlockHash, err)
+}
 
 func TestSkyScanner(t *testing.T) {
 	skyDB := openDummySkyDB(t)
@@ -565,12 +568,12 @@ func TestSkyScanner(t *testing.T) {
 			testSkyScannerGetBlockCountErrorRetry(t, skyDB)
 		})
 
-		//t.Run("InitialGetBlockHashError", func(t *testing.T) {
-		//	if parallel {
-		//		t.Parallel()
-		//	}
-		//	testSkyScannerInitialGetBlockHashError(t, skyDB)
-		//})
+		t.Run("InitialGetBlockHashError", func(t *testing.T) {
+			if parallel {
+				t.Parallel()
+			}
+			testSkyScannerInitialGetBlockHashError(t, skyDB)
+		})
 
 		t.Run("ProcessDepositError", func(t *testing.T) {
 			if parallel {
