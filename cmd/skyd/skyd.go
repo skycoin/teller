@@ -28,13 +28,6 @@ import (
 )
 
 const (
-	// websocketSendBufferSize is the number of elements the send channel
-	// can queue before blocking.  Note that this only applies to requests
-	// handled directly in the websocket client input handler or the async
-	// handler since notifications have their own queuing mechanism
-	// independent of the send channel buffer.
-	websocketSendBufferSize = 50
-
 	rpcQuirks = true
 
 	// https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
@@ -69,11 +62,11 @@ var defaultBlockStore *BlockStore
 type commandHandler func(*rpcServer, interface{}, <-chan struct{}) (interface{}, error)
 
 var rpcHandlers = map[string]commandHandler{
-	"get_blocks":      handleGetBlock,
-	"get_blocks_by_seq":  handleGetBestBlock,
-	"get_lastblocks":  handleGetBlockHash,
-	"getblockcount": handleGetBlockCount,
-	"nextdeposit":   handleNextDeposit, // for triggering a fake deposit
+	"get_blocks":        handleGetBlock,
+	"get_blocks_by_seq": handleGetBestBlock,
+	"get_lastblocks":    handleGetBlockHash,
+	//"getblockcount": handleGetBlockCount,
+	"nextdeposit": handleNextDeposit, // for triggering a fake deposit
 }
 
 type rpcServer struct {
@@ -123,28 +116,6 @@ func genCertPair(certFile, keyFile string) error {
 	fmt.Printf("Done generating TLS certificates\n")
 	return nil
 }
-
-//func createNewEmptyBlock(previousHash string, previousHeight int64) (*btcutil.Block, error) {
-//	newHash, err := chainhash.NewHashFromStr(previousHash)
-//	if err != nil {
-//		fmt.Printf("%v\n", err)
-//		return nil, err
-//	}
-//	msgBlock := &wire.MsgBlock{
-//		Header: wire.BlockHeader{
-//			PrevBlock: *newHash,
-//			Timestamp: time.Now(),
-//		},
-//	}
-//
-//	newBlock := btcutil.NewBlock(msgBlock)
-//	height := previousHeight + 1
-//	newBlock.SetHeight(int32(height))
-//
-//	return newBlock, nil
-//}
-
-
 
 func handleGetBestBlock(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
 	if hash, ok := defaultBlockStore.BlockHashes[int64(defaultBlockStore.BestBlockHeight)]; ok {
@@ -202,27 +173,82 @@ func processDeposits(deposits []Deposit) (gbvr *btcjson.GetBlockVerboseResult, e
 	defer defaultBlockStore.Unlock()
 
 	//bestHeight := int64(defaultBlockStore.BestBlockHeight)
-	//bestHash, ok := defaultBlockStore.BlockHashes[bestHeight]
-	//if !ok {
-	//	return nil, errors.New("Block not found")
-	//}
-	//
-	//block, err := createNewBlockWithTx(bestHash, bestHeight, deposits)
-	//if err != nil {
-	//	return nil, errors.New("createNewBlockWithTx failed")
-	//}
-	//
+
+	//// Add new block
+	blocks := createFakeBlock("")
+	defaultBlockStore.BestBlockHeight++
+
+	hash := blocks.Blocks[0].Head.BodyHash
+
 	//// Update NextHash of previous block
 	//prevBlockHash := defaultBlockStore.BlockHashes[bestHeight]
 	//prevBlock := defaultBlockStore.HashBlocks[prevBlockHash]
 	//prevBlock.NextHash = block.Hash().String()
 	//defaultBlockStore.HashBlocks[prevBlockHash] = prevBlock
 	//
-	//// Add new block
-	//defaultBlockStore.BestBlockHeight++
-	//defaultBlockStore.BlockHashes[int64(defaultBlockStore.BestBlockHeight)] = block.Hash().String()
-	//gbvr := convertBlockToGetBlockVerboseResult(block)
-	//defaultBlockStore.HashBlocks[block.Hash().String()] = *gbvr
+	// Add new block
+	defaultBlockStore.BestBlockHeight++
+	defaultBlockStore.BlockHashes[int64(defaultBlockStore.BestBlockHeight)] = hash
+	defaultBlockStore.HashBlocks[hash] = blocks
+
+	return
+}
+
+func createFakeBlock(address string) (blocks visor.ReadableBlocks) {
+
+	if address == "" {
+		address = "cBnu9sUvv12dovBmjQKTtfE4rbjMmf3fzW"
+	}
+
+	blocks = visor.ReadableBlocks{
+		Blocks: []visor.ReadableBlock{
+			{
+				Head: visor.ReadableBlockHeader{
+					BkSeq:             1,
+					BlockHash:         "662835cc081e037561e1fe05860fdc4b426f6be562565bfaa8ec91be5675064a",
+					PreviousBlockHash: "f680fe1f068a1cd5c3ef9194f91a9bc3cacffbcae4a32359a3c014da4ef7516f",
+					Time:              1,
+					Fee:               20732,
+					Version:           1,
+					BodyHash:          "tx_body_hash",
+				},
+				Body: visor.ReadableBlockBody{
+					Transactions: []visor.ReadableTransaction{
+						{
+							Length:    608,
+							Type:      0,
+							Hash:      "662835cc081e037561e1fe05860fdc4b426f6be562565bfaa8ec91be5675064a",
+							InnerHash: "37f1111bd83d9c995b9e48511bd52de3b0e440dccbf6d2cfd41dee31a10f1aa4",
+							Timestamp: 1,
+							Sigs: []string{
+								"ef0b8e1465557e6f21cb2bfad17136188f0b9bd54bba3db76c3488eb8bc900bc7662e3fe162dd6c236d9e52a7051a2133855081a91f6c1a63e1fce2ae9e3820e00",
+								"800323c8c22a2c078cecdfad35210902f91af6f97f0c63fe324e0a9c2159e9356f2fbbfff589edea5a5c24453ef5fc0cd5929f24bebee28e37057acd6d42f3d700",
+								"ca6a6ef5f5fb67490d88ddeeee5e5d11055246613b03e7ed2ad5cc82d01077d262e2da56560083928f5389580ae29500644719cf0e82a5bf065cecbed857598400",
+								"78ddc117607159c7b4c76fc91deace72425f21f2df5918d44d19a377da68cc610668c335c84e2bb7a8f16cd4f9431e900585fc0a3f1024b722b974fcef59dfd500",
+								"4c484d44072e23e97a437deb03a85e3f6eca0bd8875031efe833e3c700fc17f91491969b9864b56c280ef8a68d18dd728b211ce1d46fe477fe3104d73d55ad6501",
+							},
+							In: []string{
+								"4bd7c68ecf3039c2b2d8c26a5e2983e20cf53b6d62b099e7786546b3c3f600f9",
+								"f9e39908677cae43832e1ead2514e01eaae48c9a3614a97970f381187ee6c4b1",
+								"7e8ac23a2422b4666ff45192fe36b1bd05f1285cf74e077ac92cabf5a7c1100e",
+								"b3606a4f115d4161e1c8206f4fb5ac0e91551c40d0ee6fe40c86040d2faacac0",
+								"305f1983f5b630bba27e2777c229c725b6b57f37a6ddee138d1d82ae56311909",
+							},
+							Out: []visor.ReadableTransactionOutput{
+								{
+									Hash:    "574d7e5afaefe4ee7e0adf6ce1971d979f038adc8ebbd35771b2c19b0bad7e3d",
+									Address: address,
+									Coins:   "1",
+									Hours:   3455,
+								},
+							},
+						},
+					},
+				},
+			},
+
+		},
+	}
 
 	return
 }
@@ -618,20 +644,6 @@ func (s *rpcServer) Start() {
 		s.jsonRPCRead(w, r)
 	})
 
-	//rpcServeMux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-	//	// Attempt to upgrade the connection to a websocket connection
-	//	// using the default size for read/write buffers.
-	//	ws, err := websocket.Upgrade(w, r, nil, 0, 0)
-	//	if err != nil {
-	//		if _, ok := err.(websocket.HandshakeError); !ok {
-	//			fmt.Printf("Unexpected websocket error: %v\n", err)
-	//		}
-	//		http.Error(w, "400 Bad Request.", http.StatusBadRequest)
-	//		return
-	//	}
-	//	s.WebsocketHandler(ws, r.RemoteAddr)
-	//})
-
 	listeners, err := setupRPCListeners(s.key, s.cert, s.address)
 	if err != nil {
 		fmt.Printf("Unexpected setupRPCListeners error: %v\n", err)
@@ -756,46 +768,6 @@ type semaphore chan struct{}
 func (s semaphore) acquire() { s <- struct{}{} }
 func (s semaphore) release() { <-s }
 
-// wsClient provides an abstraction for handling a websocket client.
-type wsClient struct {
-	sync.Mutex
-
-	// server is the RPC server that is servicing the client.
-	server *rpcServer
-
-	// disconnected indicated whether or not the websocket client is
-	// disconnected.
-	disconnected bool
-
-	// addr is the remote address of the client.
-	addr string
-
-	// sessionID is a random ID generated for each client when connected.
-	// These IDs may be queried by a client using the session RPC.  A change
-	// to the session ID indicates that the client reconnected.
-	sessionID uint64
-
-	// verboseTxUpdates specifies whether a client has requested verbose
-	// information about all new transactions.
-	// verboseTxUpdates bool
-
-	// addrRequests is a set of addresses the caller has requested to be
-	// notified about.  It is maintained here so all requests can be removed
-	// when a wallet disconnects.  Owned by the notification manager.
-	addrRequests map[string]struct{}
-
-	// spentRequests is a set of unspent Outpoints a wallet has requested
-	// notifications for when they are spent by a processed transaction.
-	// Owned by the notification manager.
-	//spentRequests map[wire.OutPoint]struct{}
-
-	// Networking infrastructure.
-	serviceRequestSem semaphore
-	// ntfnChan          chan []byte
-	quit     chan struct{}
-	wg       sync.WaitGroup
-}
-
 type httpAPIServer struct {
 	address string
 	listen  *http.Server
@@ -917,10 +889,10 @@ func run() error {
 
 	server := rpcServer{
 		requestProcessShutdown: make(chan struct{}),
-		key:               *keyFile,
-		cert:              *certFile,
-		address:           *address,
-		maxConcurrentReqs: 10,
+		key:                    *keyFile,
+		cert:                   *certFile,
+		address:                *address,
+		maxConcurrentReqs:      10,
 	}
 
 	apiServer := newHTTPAPIServer(*httpAPIAddress)
@@ -973,7 +945,7 @@ func init() {
 	}
 }
 
-func getBlock() (*coin.Block){
+func getBlock() (*coin.Block) {
 	prev := coin.Block{Head: coin.BlockHeader{Version: 0x02, Time: 100, BkSeq: 98}}
 	b := make([]byte, 128)
 	rand.Read(b)
