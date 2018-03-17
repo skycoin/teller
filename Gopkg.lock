@@ -219,7 +219,7 @@
     "exchange",
     "exchange/c2cx"
   ]
-  revision = "63cfbd5a2b898c16e990ce3a5c9c2f8b0da489ea"
+  revision = "3071b60da64b4197b75f257bfc31227fd9e85256"
 
 [[projects]]
   name = "github.com/skycoin/skycoin"

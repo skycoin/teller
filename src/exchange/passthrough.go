@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -230,35 +231,57 @@ func (p *Passthrough) processWaitDecideDeposit(di DepositInfo) (DepositInfo, err
 
 		p.setStatus(err)
 
-		// TODO -- treat certain c2cx API errors as temporary, wait and retry
-		// Examples: 500 error
-		//           Network unreachable
-		//           API Ratelimit reached
-		// A fatal error would be one that can never recover:
-		// - Insufficient BTC volume for a deposit
-		// - Other?
+		if err != nil && err != errQuit {
+			log.WithError(err).Error("handleDepositInfoState failed")
+		}
 
-		switch err.(type) {
+		retry := "retry"
+		fail := "fail"
+		quit := "quit"
+
+		var action string
+		switch e := err.(type) {
+		case c2cx.APIError:
+			// Retry a c2cx.APIError by default
+			action = retry
+
+			// If the error is because the BTC volume for the order is too low, fail
+			if strings.HasPrefix(e.Message, "limit value:") {
+				action = fail
+			}
+
+		case c2cx.Error:
+			// Retry any other c2cx.Error by default.
+			// Includes net.Error, which can occur if the network or remote server are unavailable.
+			// Includes a JSON parsing error, since sometimes the C2CX API will respond with XML.
+			action = retry
+
 		case net.Error:
 			// Treat net.Error errors as temporary,
-			// which can occur if the requests were ratelimited
-			// or the network or remote server are unavailable.
-			log.WithError(err).Error("handleDepositInfoState failed")
+			action = retry
+
+		default:
+			switch err {
+			case nil:
+			case errQuit:
+				action = quit
+			default:
+				action = fail
+			}
+		}
+
+		switch action {
+		case retry:
 			select {
 			case <-time.After(p.cfg.ExchangeClient.RequestFailureWait):
 			case <-p.quit:
 				return di, err
 			}
-		default:
-			switch err {
-			case nil:
-				break
-			case errQuit:
-				return di, nil
-			default:
-				log.WithError(err).Error("handleDepositInfoState failed")
-				return di, err
-			}
+		case fail:
+			log.WithError(err).Error("handleDepositInfoState failed")
+			return di, err
+		case quit:
+			return di, nil
 		}
 
 		if di.Status == StatusWaitSend {
