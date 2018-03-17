@@ -78,6 +78,8 @@ type Teller struct {
 	MaxBoundAddresses int `mapstructure:"max_bound_addrs"`
 	// Allow address binding
 	BindEnabled bool `mapstructure:"bind_enabled"`
+	// Currently supported purchase methods
+	Supported 					[]string `mapstructure:"supported"`
 }
 
 // MDLRPC config for MDL daemon node RPC
@@ -122,6 +124,8 @@ type MDLExchanger struct {
 	// MDL/BTC exchange rate. Can be an int, float or rational fraction string
 	MDLBtcExchangeRate string `mapstructure:"mdl_btc_exchange_rate"`
 	MDLEthExchangeRate string `mapstructure:"mdl_eth_exchange_rate"`
+	MDLSkyExchangeRate string `mapstructure:"mdl_sky_exchange_rate"`
+	MDLWavesExchangeRate string `mapstructure:"mdl_waves_exchange_rate"`
 	// Number of decimal places to truncate MDL to
 	MaxDecimals int `mapstructure:"max_decimals"`
 	// How long to wait before rechecking transaction confirmations
@@ -367,7 +371,8 @@ func setDefaults() {
 	viper.SetDefault("dbfile", "teller.db")
 
 	// Teller
-	viper.SetDefault("teller.max_bound_btc_addrs", 5)
+	viper.SetDefault("teller.max_bound_btc_addrs", 2)
+	viper.SetDefault("teller.supported", []string{"BTC", "ETH", "SKY", "WAVES", "MDL.life"})
 
 	// MDLRPC
 	viper.SetDefault("mdl_rpc.address", "127.0.0.1:6430")

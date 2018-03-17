@@ -515,7 +515,10 @@ type ConfigResponse struct {
 	MaxBoundAddresses        int    `json:"max_bound_addrs"`
 	MDLBtcExchangeRate       string `json:"mdl_btc_exchange_rate"`
 	MDLEthExchangeRate       string `json:"mdl_eth_exchange_rate"`
+	MDLSkyExchangeRate       string `json:"mdl_sky_exchange_rate"`
+	MDLWavesExchangeRate       string `json:"mdl_waves_exchange_rate"`
 	MaxDecimals              int    `json:"max_decimals"`
+	Supported							 []string `json:"supported"`
 }
 
 // ConfigHandler returns the teller configuration
@@ -560,14 +563,48 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
+
+
+		rate = s.cfg.MDLExchanger.MDLSkyExchangeRate
+		dropletsPerSKY, err := exchange.CalculateSkyMDLValue(big.NewInt(exchange.DropletsPerSKY), rate, maxDecimals)
+		if err != nil {
+			log.WithError(err).Error("exchange.CalculateSkyMDLValue failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
+
+		mdlPerSKY, err := droplet.ToString(dropletsPerSKY)
+		if err != nil {
+			log.WithError(err).Error("droplet.ToString failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
+		rate = s.cfg.MDLExchanger.MDLWavesExchangeRate
+		dropletsPerWAVES, err := exchange.CalculateWavesMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
+		if err != nil {
+			log.WithError(err).Error("exchange.CalculateEthMDLValue failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
+		mdlPerWAVES, err := droplet.ToString(dropletsPerWAVES)
+		if err != nil {
+			log.WithError(err).Error("droplet.ToString failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
+
+
 		if err := httputil.JSONResponse(w, ConfigResponse{
 			Enabled:                  s.cfg.Teller.BindEnabled,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
 			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
 			MDLBtcExchangeRate:       mdlPerBTC,
 			MDLEthExchangeRate:       mdlPerETH,
+			MDLSkyExchangeRate:       mdlPerSKY,
+			MDLWavesExchangeRate:       mdlPerWAVES,
 			MaxDecimals:              maxDecimals,
 			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
+			Supported: 								s.cfg.Teller.Supported,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}

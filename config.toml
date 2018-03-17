@@ -11,8 +11,10 @@ btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses f
 eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses file
 
 [teller]
-# max_bound_addrs = 5 # 0 means unlimited
+max_bound_addrs = 2 # 0 means unlimited
 bind_enabled = true # Disable this to prevent binding of new addresses
+#supported = ['BTC','ETH','SKY','WAVES', 'MDL.life']
+supported = ['ETH']
 
 [mdl_rpc]
 address = "127.0.0.1:8330"
@@ -42,6 +44,8 @@ confirmations_required = 1
 [mdl_exchanger]
 mdl_btc_exchange_rate = "1" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
 mdl_eth_exchange_rate = "100" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
+mdl_sky_exchange_rate = "100" # REQUIRED: MDL/SKY exchange rate as a string, can be an int, float or a rational fraction
+mdl_waves_exchange_rate = "100" # REQUIRED: MDL/WAVES exchange rate as a string, can be an int, float or a rational fraction
 wallet = "example.wlt" # REQUIRED: path to local hot wallet file
 # max_decimals = 3  # Number of decimal places to truncate MDL to
 # tx_confirmation_check_wait = "5s"
