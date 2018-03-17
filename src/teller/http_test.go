@@ -16,6 +16,9 @@ import (
 	"github.com/MDLlife/teller/src/exchange"
 	"github.com/MDLlife/teller/src/sender"
 	"github.com/MDLlife/teller/src/util/testutil"
+	"bytes"
+	"github.com/MDLlife/teller/src/scanner"
+	"github.com/MDLlife/teller/src/config"
 )
 
 type fakeExchanger struct {
@@ -199,6 +202,102 @@ func TestExchangeStatusHandler(t *testing.T) {
 				Balance: ExchangeStatusResponseBalance{
 					Coins: tc.balance.Coins,
 					Hours: tc.balance.Hours,
+				},
+			}, msg)
+		})
+	}
+
+}
+
+func TestExchangeBindHandler(t *testing.T) {
+
+	tt := []struct {
+		name           string
+		method         string
+		url            string
+		status         int
+		err            string
+		exchangeStatus error
+		errorMsg       string
+		Body           bindRequest
+	}{
+		{
+			"400 invalid MDL address",
+			http.MethodPost,
+			"/api/bind",
+			http.StatusBadRequest,
+			"Invalid mdl address: Invalid base58 character",
+			nil,
+			"",
+			bindRequest{
+				MDLAddr:  "foo-addr",
+				CoinType: scanner.CoinTypeSKY,
+			},
+		},
+		{
+			"403 address binding disabled (makes sure its possible to bind addr)",
+			http.MethodPost,
+			"/api/bind",
+			http.StatusForbidden,
+			"Address binding is disabled",
+			nil,
+			"",
+			bindRequest{
+				MDLAddr:  "2fFvHziBN2DKCnJRF1sjJ81z2kAJK8idSoT",
+				CoinType: scanner.CoinTypeSKY,
+			},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			e := &fakeExchanger{}
+
+			e.On("BindAddress").Return(tc.exchangeStatus)
+
+			d, err := json.Marshal(tc.Body)
+			req, err := http.NewRequest(tc.method, tc.url, bytes.NewBuffer(d))
+			require.NoError(t, err)
+			req.Header.Set("Content-Type", "application/json")
+
+			log, _ := testutil.NewLogger(t)
+
+
+			rr := httptest.NewRecorder()
+			httpServ := &HTTPServer{
+				cfg: config.Config{
+					SkyRPC: config.SkyRPC{
+						Enabled: true,
+					},
+				},
+				log:       log,
+				exchanger: e,
+				service: &Service{
+					cfg: config.Teller{
+						BindEnabled: false,
+					},
+				},
+			}
+			handler := httpServ.setupMux()
+
+			handler.ServeHTTP(rr, req)
+
+			status := rr.Code
+			require.Equal(t, tc.status, status, "wrong status code: got `%v` want `%v`", tc.name, status, tc.status)
+
+			if status != http.StatusOK {
+				require.Equal(t, tc.err, strings.TrimSpace(rr.Body.String()))
+				return
+			}
+
+			var msg ExchangeStatusResponse
+			err = json.Unmarshal(rr.Body.Bytes(), &msg)
+			require.NoError(t, err)
+			require.Equal(t, ExchangeStatusResponse{
+				Error: tc.errorMsg,
+				Balance: ExchangeStatusResponseBalance{
+					//Coins: tc.balance.Coins,
+					//Hours: tc.balance.Hours,
 				},
 			}, msg)
 		})

@@ -186,6 +186,10 @@ func (c MDLExchanger) validate() []error {
 		errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_eth_exchange_rate invalid: %v", err))
 	}
 
+	if _, err := mathutil.ParseRate(c.MDLSkyExchangeRate); err != nil {
+		errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_sky_exchange_rate invalid: %v", err))
+	}
+
 	if c.MaxDecimals < 0 {
 		errs = append(errs, errors.New("mdl_exchanger.max_decimals can't be negative"))
 	}
