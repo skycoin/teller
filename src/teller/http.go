@@ -344,7 +344,7 @@ type bindRequest struct {
 	CoinType string `json:"coin_type"`
 }
 
-// BindHandler binds mdl address with a bitcoin address
+// BindHandler binds mdl address with another coin address
 // Method: POST
 // Accept: application/json
 // URI: /api/bind
@@ -399,6 +399,11 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		case scanner.CoinTypeETH:
 			if !s.cfg.EthRPC.Enabled {
 				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeETH))
+				return
+			}
+		case scanner.CoinTypeSKY:
+			if !s.cfg.EthRPC.Enabled {
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeSKY))
 				return
 			}
 		case "":
