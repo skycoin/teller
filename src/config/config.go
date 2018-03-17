@@ -398,7 +398,7 @@ func setDefaults() {
 	viper.SetDefault("teller.max_bound_btc_addrs", 2)
 	btc := SupportedCrypto{Value:"BTC",Label:"Bitcoin (Under Maintenance)",Disabled:true}
 	eth := SupportedCrypto{Value:"ETH",Label:"Ethereum",Disabled:false}
-	sky := SupportedCrypto{Value:"SKY",Label:"Skycoin (Temporary Disabled)",Disabled:true}
+	sky := SupportedCrypto{Value:"SKY",Label:"Skycoin (Temporary Disabled)",Disabled:false}
 	waves := SupportedCrypto{Value:"Waves",Label:"Waves (Temporary Disabled)",Disabled:true}
 	mdllife := SupportedCrypto{Value:"MDL.life",Label:"MDL.life - pre-MDL token on Waves (Temporary Disabled, but coming soon)",Disabled:true}
 	cryptos := [5]SupportedCrypto{btc,eth,sky,waves,mdllife};

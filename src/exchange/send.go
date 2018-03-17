@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"time"
+	"math/big"
 
 	"github.com/sirupsen/logrus"
 
@@ -412,6 +413,13 @@ func (s *Send) calculateMDLDroplets(di DepositInfo) (uint64, error) {
 		mdlAmt, err = CalculateEthMDLValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
 		if err != nil {
 			log.WithError(err).Error("CalculateEthMDLValue failed")
+			return 0, err
+		}
+	case scanner.CoinTypeSKY:
+		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
+		mdlAmt, err = CalculateSkyMDLValue(big.NewInt(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
+		if err != nil {
+			log.WithError(err).Error("CalculateSkyMDLValue failed")
 			return 0, err
 		}
 	default:

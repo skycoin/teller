@@ -402,7 +402,7 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 				return
 			}
 		case scanner.CoinTypeSKY:
-			if !s.cfg.EthRPC.Enabled {
+			if !s.cfg.SkyRPC.Enabled {
 				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeSKY))
 				return
 			}

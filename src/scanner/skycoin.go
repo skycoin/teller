@@ -209,7 +209,7 @@ type SkyClient struct {
 // NewSkyClient creates RPC instance
 func NewSkyClient(server, port string) *SkyClient {
 	rpcClient := &webrpc.Client{
-		Addr: "http://" + server + ":" + port,
+		Addr: server + ":" + port,
 	}
 
 	return &SkyClient{
