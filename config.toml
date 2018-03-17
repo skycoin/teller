@@ -8,7 +8,7 @@ enabled = true
 # logfile = "./teller.log"  # logfile can be an absolute path or relative to the working directory
 dbfile = "teller.db"  # dbfile is saved inside ~/.teller-mdl, do not include a path
 btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
-eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses file
+eth_addresses = "test_eth.json" # REQUIRED: path to eth addresses file
 
 [teller]
 max_bound_addrs = 2 # 0 means unlimited
@@ -20,11 +20,11 @@ supported = ['ETH']
 address = "127.0.0.1:8330"
 
 [btc_rpc]
-enabled = true
+enabled = true 
 server = "127.0.0.1:8334"
 user = "mdlissofunandawesomeJUSTAWESOMEANDAMAZING" # REQUIRED
 pass = "ejukixdthnbgfuhygicfddufyigdcfifhxhxhxd" # REQUIRED
-cert = "rpc.cert" # REQUIRED
+cert = "/home/customer/.btcd/rpc.cert" # REQUIRED
 key = "rpc.key" # REQUIRED
 
 [eth_rpc]
@@ -34,19 +34,19 @@ port = "8545" # REQUIRED
 
 [btc_scanner]
 scan_period = "20s"
-initial_scan_height = 406100 #492490
+initial_scan_height = 401787
 confirmations_required = 1
 [eth_scanner]
 scan_period = "5s"
-initial_scan_height =5135508
+initial_scan_height =135508
 confirmations_required = 1
 
 [mdl_exchanger]
-mdl_btc_exchange_rate = "1" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
-mdl_eth_exchange_rate = "100" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
 mdl_sky_exchange_rate = "100" # REQUIRED: MDL/SKY exchange rate as a string, can be an int, float or a rational fraction
 mdl_waves_exchange_rate = "100" # REQUIRED: MDL/WAVES exchange rate as a string, can be an int, float or a rational fraction
-wallet = "example.wlt" # REQUIRED: path to local hot wallet file
+mdl_btc_exchange_rate = "454545.454" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
+mdl_eth_exchange_rate = "10000" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
+wallet = "test.wlt" # REQUIRED: path to local hot wallet file
 # max_decimals = 3  # Number of decimal places to truncate MDL to
 # tx_confirmation_check_wait = "5s"
 send_enabled = true # Disable this to disable sending of coins (all other processing functions normally)
@@ -54,7 +54,7 @@ send_enabled = true # Disable this to disable sending of coins (all other proces
 
 [web]
 # behind_proxy = false  # This must be set to true when behind a proxy for ratelimiting to work
-http_addr = "127.0.0.1:7071"
+http_addr = ":1550"
 # static_dir = "./web/build"
 # throttle_max = 60
 # throttle_duration = "60s"
