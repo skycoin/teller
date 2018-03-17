@@ -240,6 +240,11 @@ func run() error {
 			background("btcScanner.Run", errC, btcScanner.Run)
 
 			scanService = btcScanner
+
+			if err := multiplexer.AddScanner(scanService, scanner.CoinTypeBTC); err != nil {
+				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeBTC)
+				return err
+			}
 		}
 
 		// enable eth scanner
@@ -280,10 +285,6 @@ func run() error {
 
 	}
 
-	if err := multiplexer.AddScanner(scanService, scanner.CoinTypeBTC); err != nil {
-		log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeBTC)
-		return err
-	}
 
 	background("multiplex.Run", errC, multiplexer.Multiplex)
 
