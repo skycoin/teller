@@ -204,6 +204,8 @@ func run() error {
 	var skyScanner *scanner.SKYScanner
 	var scanService scanner.Scanner
 	var scanEthService scanner.Scanner
+	var scanSkyService scanner.Scanner
+
 	var sendService *sender.SendService
 	var sendRPC sender.Sender
 	var btcAddrMgr *addrs.Addrs
@@ -269,16 +271,16 @@ func run() error {
 		if cfg.SkyRPC.Enabled {
 			skyScanner, err = createSkyScanner(rusloggger, cfg, scanStore)
 			if err != nil {
-				log.WithError(err).Error("create eth scanner failed")
+				log.WithError(err).Error("create sky scanner failed")
 				return err
 			}
 
-			background("skyScanner.Run", errC, ethScanner.Run)
+			background("skyScanner.Run", errC, skyScanner.Run)
 
-			scanEthService = ethScanner
+			scanSkyService = skyScanner
 
-			if err := multiplexer.AddScanner(scanEthService, scanner.CoinTypeETH); err != nil {
-				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeETH)
+			if err := multiplexer.AddScanner(scanSkyService, scanner.CoinTypeSKY); err != nil {
+				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeSKY)
 				return err
 			}
 		}
