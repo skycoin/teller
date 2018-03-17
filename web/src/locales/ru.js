@@ -34,7 +34,7 @@ export default {
     discord: 'Discord',
   },
   distribution: {
-    rate: 'Current OTC rate: {rate} MDL/BTC',
+    rate: 'Current OTC rate: {rate} MDL/{coinType}',
     inventory: 'Current inventory: {coins} MDL available',
     title: 'MDL OTC',
     heading: 'MDL OTC',

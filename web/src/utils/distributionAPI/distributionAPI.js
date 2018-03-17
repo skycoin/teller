@@ -21,8 +21,8 @@ export const checkStatus = mdlAddress =>
     .then(response => response.data.statuses || [])
     .catch((error) => { throw new Error(error.response.data); });
 
-export const getAddress = mdlAddress =>
-  axios.post('/api/bind', { mdladdr: mdlAddress, coin_type: 'BTC' }, {
+export const getAddress = req =>
+  axios.post('/api/bind', { mdladdr: req.mdlAddress, coin_type: req.coinType }, {
     headers: {
       'Content-Type': 'application/json',
     },

@@ -14,6 +14,8 @@ import (
 const (
 	// SatoshisPerBTC is the number of satoshis per 1 BTC
 	SatoshisPerBTC int64 = 1e8
+	// dropletsPerSKY is the number of droplets per 1 SKY
+	DropletsPerSKY int64 = 1e6
 	// WeiPerETH is the number of wei per 1 ETH
 	WeiPerETH int64 = 1e18
 )
@@ -66,6 +68,71 @@ func CalculateEthMDLValue(wei *big.Int, mdlPerETH string, maxDecimals int) (uint
 		return 0, errors.New("maxDecimals can't be negative")
 	}
 	rate, err := mathutil.ParseRate(mdlPerETH)
+	if err != nil {
+		return 0, err
+	}
+
+	eth := decimal.NewFromBigInt(wei, 0)
+	ethToWei := decimal.New(WeiPerETH, 0)
+	eth = eth.DivRound(ethToWei, 18)
+
+	mdl := eth.Mul(rate)
+	mdl = mdl.Truncate(int32(maxDecimals))
+
+	mdlToDroplets := decimal.New(droplet.Multiplier, 0)
+	droplets := mdl.Mul(mdlToDroplets)
+
+	amt := droplets.IntPart()
+	if amt < 0 {
+		// This should never occur, but double check before we convert to uint64,
+		// otherwise we would send all the coins due to integer wrapping.
+		return 0, errors.New("calculated mdl amount is negative")
+	}
+
+	return uint64(amt), nil
+}
+
+func CalculateSkyMDLValue(droplets *big.Int, mdlPerSKY string, maxDecimals int) (uint64, error) {
+	if droplets.Sign() < 0 {
+		return 0, errors.New("droplets must be greater than or equal to 0")
+	}
+	if maxDecimals < 0 {
+		return 0, errors.New("maxDecimals can't be negative")
+	}
+
+	rate, err := mathutil.ParseRate(mdlPerSKY)
+	if err != nil {
+		return 0, err
+	}
+
+	sky := decimal.NewFromBigInt(droplets, 0)
+	skyToDroplets := decimal.New(DropletsPerSKY, 0)
+	sky = sky.DivRound(skyToDroplets, 8)
+
+	mdl := sky.Mul(rate)
+	mdl = mdl.Truncate(int32(maxDecimals))
+
+	mdlToDroplets := decimal.New(droplet.Multiplier, 0)
+	droplts := mdl.Mul(mdlToDroplets)
+
+	amt := droplts.IntPart()
+	if amt < 0 {
+		// This should never occur, but double check before we convert to uint64,
+		// otherwise we would send all the coins due to integer wrapping.
+		return 0, errors.New("calculated mdl amount is negative")
+	}
+
+	return uint64(amt), nil
+}
+
+func CalculateWavesMDLValue(wei *big.Int, mdlPerWaves string, maxDecimals int) (uint64, error) {
+	if wei.Sign() < 0 {
+		return 0, errors.New("wei must be greater than or equal to 0")
+	}
+	if maxDecimals < 0 {
+		return 0, errors.New("maxDecimals can't be negative")
+	}
+	rate, err := mathutil.ParseRate(mdlPerWaves)
 	if err != nil {
 		return 0, err
 	}

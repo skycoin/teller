@@ -76,12 +76,19 @@ type Config struct {
 	Dummy Dummy `mapstructure:"dummy"`
 }
 
+type SupportedCrypto struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+	Disabled bool `json:"disabled"`
+}
 // Teller config for teller
 type Teller struct {
 	// Max number of btc addresses a mdl address can bind
 	MaxBoundAddresses int `mapstructure:"max_bound_addrs"`
 	// Allow address binding
 	BindEnabled bool `mapstructure:"bind_enabled"`
+	// Currently supported purchase methods
+	Supported 					[]SupportedCrypto `mapstructure:"supported"`
 }
 
 // MDLRPC config for MDL daemon node RPC
@@ -141,6 +148,8 @@ type MDLExchanger struct {
 	// MDL/BTC exchange rate. Can be an int, float or rational fraction string
 	MDLBtcExchangeRate string `mapstructure:"mdl_btc_exchange_rate"`
 	MDLEthExchangeRate string `mapstructure:"mdl_eth_exchange_rate"`
+	MDLSkyExchangeRate string `mapstructure:"mdl_sky_exchange_rate"`
+	MDLWavesExchangeRate string `mapstructure:"mdl_waves_exchange_rate"`
 	// Number of decimal places to truncate MDL to
 	MaxDecimals int `mapstructure:"max_decimals"`
 	// How long to wait before rechecking transaction confirmations
@@ -386,7 +395,14 @@ func setDefaults() {
 	viper.SetDefault("dbfile", "teller.db")
 
 	// Teller
-	viper.SetDefault("teller.max_bound_btc_addrs", 5)
+	viper.SetDefault("teller.max_bound_btc_addrs", 2)
+	btc := SupportedCrypto{Value:"BTC",Label:"Bitcoin (Under Maintenance)",Disabled:true}
+	eth := SupportedCrypto{Value:"ETH",Label:"Ethereum",Disabled:false}
+	sky := SupportedCrypto{Value:"SKY",Label:"Skycoin (Temporary Disabled)",Disabled:true}
+	waves := SupportedCrypto{Value:"Waves",Label:"Waves (Temporary Disabled)",Disabled:true}
+	mdllife := SupportedCrypto{Value:"MDL.life",Label:"MDL.life - pre-MDL token on Waves (Temporary Disabled, but coming soon)",Disabled:true}
+	cryptos := [5]SupportedCrypto{btc,eth,sky,waves,mdllife};
+	viper.SetDefault("teller.supported", cryptos)
 
 	// MDLRPC
 	viper.SetDefault("mdl_rpc.address", "127.0.0.1:6430")

@@ -47,25 +47,6 @@ const StyledLink = styled(Link)`
 
 const Navigation = ({ white }) => (
   <Wrapper>
-    <StyledLink white={white} href="https://www.mdl.net/downloads" target="_blank">
-      <FormattedMessage id="header.navigation.downloads" />
-    </StyledLink>
-
-    <StyledLink white={white} href="https://www.mdl.net/whitepapers" target="_blank">
-      <FormattedMessage id="header.navigation.whitepapers" />
-    </StyledLink>
-
-    <StyledLink white={white} href="https://www.mdl.net/roadmap" target="_blank">
-      <FormattedMessage id="header.navigation.roadmap" />
-    </StyledLink>
-
-    <StyledLink white={white} href="https://explorer.mdl.net" target="_blank">
-      <FormattedMessage id="header.navigation.explorer" />
-    </StyledLink>
-
-    <StyledLink white={white} href="https://www.mdl.net/blog" target="_blank">
-      <FormattedMessage id="header.navigation.blog" />
-    </StyledLink>
   </Wrapper>
 );
 

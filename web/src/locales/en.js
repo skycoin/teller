@@ -34,40 +34,41 @@ export default {
     discord: 'Discord',
   },
   distribution: {
-    rate: 'Current OTC rate: {rate} MDL/BTC',
+    rate: 'Current rate: {rate} MDL = 1 {coinType}',
     inventory: 'Current inventory: {coins} MDL available',
-    title: 'MDL OTC',
-    heading: 'MDL OTC',
-    headingEnded: 'MDL OTC is currently closed',
-    ended: `<p>Join the <a href="https://t.me/mdl">MDL Telegram</a>
+    title: 'MDL Talent Hub Initial Token Offering',
+    heading: 'MDL Talent Hub Initial Token Offering',
+    headingEnded: 'MDL Talent Hub Initial Token Offering is currently closed',
+    ended: `<p>Join the <a href="https://t.me/MDL_Talent_Hub">MDL Telegram</a>
       or follow the
-      <a href="https://twitter.com/mdlproject">MDL Twitter</a>.`,
-    instructions: `<p>You can check the current market value for <a href="https://coinmarketcap.com/currencies/mdl/">MDL at CoinMarketCap</a>.</p>
+      <a href="https://twitter.com/mdl_talent_hub">MDL Twitter</a>.`,
+    instructions: `
 
-<p>To use the MDL OTC:</p>
+<p>To purchase some MDL:</p>
 
 <ul>
   <li>Enter your MDL address below</li>
-  <li>You&apos;ll receive a unique Bitcoin address to purchase MDL</li>
-  <li>Send BTC to the address</li>
+  <li>Choose diserable payment method (BTC, ETH, SKY or WAVES - some can be temporarily disabled)</li>
+  <li>Press Get Address You&apos;ll receive a unique address in choosen crypto to purchase MDL</li>
+  <li>Send funds to the address</li>
 </ul>
 
 <p>You can check the status of your order by entering your address and selecting <strong>Check status</strong>.</p>
-<p>Each time you select <strong>Get Address</strong>, a new BTC address is generated. A single MDL address can have up to 5 BTC addresses assigned to it.</p>
+<p>Each time you select <strong>Get Address</strong>, a new address is generated. A single MDL address can have up to 5 other crypto addresses assigned to it.</p>
     `,
     statusFor: 'Status for {mdlAddress}',
     enterAddress: 'Enter MDL address',
     getAddress: 'Get address',
     checkStatus: 'Check status',
     loading: 'Loading...',
-    btcAddress: 'BTC address',
+    recAddress: 'address',
     errors: {
       noSkyAddress: 'Please enter your MDL address.',
-      coinsSoldOut: 'MDL OTC is currently sold out, check back later.',
+      coinsSoldOut: 'MDL ITO is currently sold out, check back later.',
     },
     statuses: {
-      waiting_deposit: '[tx-{id} {updated}] Waiting for BTC deposit.',
-      waiting_send: '[tx-{id} {updated}] BTC deposit confirmed. MDL transaction is queued.',
+      waiting_deposit: '[tx-{id} {updated}] Waiting for deposit.',
+      waiting_send: '[tx-{id} {updated}] Deposit confirmed. Transaction is queued.',
       waiting_confirm: '[tx-{id} {updated}] MDL transaction sent.  Waiting to confirm.',
       done: '[tx-{id} {updated}] Completed. Check your MDL wallet.',
     },

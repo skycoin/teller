@@ -21,7 +21,7 @@ class Buy extends React.Component {
     const Component = asAnchor ? 'a' : Button;
 
     const props = eventInProgress ? {
-      href: 'https://event.mdl.net/',
+      href: 'https://ito.mdl.wtf/',
     } : {
       to: 'markets',
     };

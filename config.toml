@@ -4,28 +4,31 @@
 
 debug = true
 profile = false
+enabled = true
 # logfile = "./teller.log"  # logfile can be an absolute path or relative to the working directory
 dbfile = "teller.db"  # dbfile is saved inside ~/.teller-mdl, do not include a path
 btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
-eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses file
+eth_addresses = "test_eth.json" # REQUIRED: path to eth addresses file
 
 [teller]
-# max_bound_addrs = 5 # 0 means unlimited
-#bind_enabled = true # Disable this to prevent binding of new addresses
+max_bound_addrs = 2 # 0 means unlimited
+bind_enabled = true # Disable this to prevent binding of new addresses
+#supported = ['BTC','ETH','SKY','WAVES', 'MDL.life']
+supported = ['ETH']
 
 [mdl_rpc]
-address = "127.0.0.1:7800"
+address = "127.0.0.1:8330"
 
 [btc_rpc]
 enabled = true
 server = "127.0.0.1:8334"
-user = "1" # REQUIRED
-pass = "1" # REQUIRED
-cert = "rpc.cert" # REQUIRED
+user = "mdlissofunandawesomeJUSTAWESOMEANDAMAZING" # REQUIRED
+pass = "ejukixdthnbgfuhygicfddufyigdcfifhxhxhxd" # REQUIRED
+cert = "/home/customer/.btcd/rpc.cert" # REQUIRED
 key = "rpc.key" # REQUIRED
 
 [eth_rpc]
-# enabled = true
+enabled = true
 server = "127.0.0.1" # REQUIRED
 port = "8545" # REQUIRED
 
@@ -35,26 +38,28 @@ server = "127.0.0.1" # REQUIRED
 port = "8081" # REQUIRED
 
 [btc_scanner]
-#scan_period = "20s"
-#initial_scan_height = 492478
-#confirmations_required = 1
+scan_period = "20s"
+initial_scan_height = 401787
+confirmations_required = 1
 [eth_scanner]
-# scan_period = "5s"
-# initial_scan_height =4654259
-# confirmations_required = 1
+scan_period = "5s"
+initial_scan_height =135508
+confirmations_required = 1
 
 [mdl_exchanger]
-mdl_btc_exchange_rate = "1" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
-mdl_eth_exchange_rate = "100" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
-wallet = "example.wlt" # REQUIRED: path to local hot wallet file
+mdl_sky_exchange_rate = "100" # REQUIRED: MDL/SKY exchange rate as a string, can be an int, float or a rational fraction
+mdl_waves_exchange_rate = "100" # REQUIRED: MDL/WAVES exchange rate as a string, can be an int, float or a rational fraction
+mdl_btc_exchange_rate = "454545.454" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
+mdl_eth_exchange_rate = "10000" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
+wallet = "test.wlt" # REQUIRED: path to local hot wallet file
 # max_decimals = 3  # Number of decimal places to truncate MDL to
 # tx_confirmation_check_wait = "5s"
-# send_enabled = true # Disable this to disable sending of coins (all other processing functions normally)
+send_enabled = true # Disable this to disable sending of coins (all other processing functions normally)
 # buy_method = "direct" # Options are "direct" or "passthrough"
 
 [web]
 # behind_proxy = false  # This must be set to true when behind a proxy for ratelimiting to work
-http_addr = "127.0.0.1:7071"
+http_addr = ":1550"
 # static_dir = "./web/build"
 # throttle_max = 60
 # throttle_duration = "60s"
@@ -70,6 +75,6 @@ host = "127.0.0.1:7711"
 [dummy]
 # fake sender and scanner with admin interface adding fake deposits,
 # and viewing and confirmed mdl transactions
-sender = true
+sender = false
 scanner = false
-# http_addr = "127.0.0.1:4121"
+#http_addr = "127.0.0.1:4121"
