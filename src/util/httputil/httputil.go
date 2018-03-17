@@ -23,12 +23,13 @@ func ErrResponse(w http.ResponseWriter, code int, errMsg ...string) {
 
 // JSONResponse marshal data into json and write response
 func JSONResponse(w http.ResponseWriter, data interface{}) error {
-	w.Header().Set("Content-Type", "application/json")
 	d, err := json.MarshalIndent(data, "", "    ")
 	if err != nil {
+		ErrResponse(w, http.StatusInternalServerError, err.Error())
 		return err
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	_, err = w.Write(d)
 	return err
 }

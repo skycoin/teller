@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/spf13/viper"
 
 	"github.com/skycoin/skycoin/src/visor"
@@ -44,8 +45,6 @@ func ValidateBuyMethod(m string) error {
 type Config struct {
 	// Enable debug logging
 	Debug bool `mapstructure:"debug"`
-	// Run with gops profiler
-	Profile bool `mapstructure:"profile"`
 	// Where log is saved
 	LogFilename string `mapstructure:"logfile"`
 	// Where database is saved, inside the ~/.teller-skycoin data directory
@@ -199,8 +198,10 @@ func (c SkyExchanger) validateWallet() []error {
 
 // ExchangeClient config for the C2CX implementation from skycoin/exchange-api
 type ExchangeClient struct {
-	Key    string `mapstructure:"key"`
-	Secret string `mapstructure:"secret"`
+	Key                string          `mapstructure:"key"`
+	Secret             string          `mapstructure:"secret"`
+	RequestFailureWait time.Duration   `mapstructure:"request_failure_wait"`
+	BtcMinimumVolume   decimal.Decimal `mapstructure:"btc_minimum_volume"`
 }
 
 // Web config for the teller HTTP interface
@@ -345,6 +346,12 @@ func (c Config) Validate() error {
 		oops("eth_scanner.initial_scan_height must be >= 0")
 	}
 
+	if c.SkyExchanger.BuyMethod == BuyMethodPassthrough {
+		if c.EthRPC.Enabled {
+			oops("eth_rpc must be disabled for buy_method passthrough")
+		}
+	}
+
 	exchangeErrs := c.SkyExchanger.validate()
 	for _, err := range exchangeErrs {
 		oops(err.Error())
@@ -370,7 +377,6 @@ func (c Config) Validate() error {
 
 func setDefaults() {
 	// Top-level args
-	viper.SetDefault("profile", false)
 	viper.SetDefault("debug", true)
 	viper.SetDefault("logfile", "./teller.log")
 	viper.SetDefault("dbfile", "teller.db")
@@ -397,8 +403,14 @@ func setDefaults() {
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)
 	viper.SetDefault("sky_exchanger.max_decimals", 3)
 	viper.SetDefault("sky_exchanger.buy_method", BuyMethodDirect)
-	viper.SetDefault("sky_exchanger.exchange_client.orders_refresh_interval", time.Second*5)
-	viper.SetDefault("sky_exchanger.exchange_client.orderbook_refresh_interval", time.Second*5)
+
+	// ExchangeClient
+	viper.SetDefault("sky_exchanger.exchange_client.request_failure_wait", time.Second*60)
+	btcMinimumVolume, err := decimal.NewFromString("0.005")
+	if err != nil {
+		panic(err)
+	}
+	viper.SetDefault("sky_exchanger.exchange_client.btc_minimum_volume", btcMinimumVolume)
 
 	// Web
 	viper.SetDefault("web.bind_enabled", true)

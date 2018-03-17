@@ -3,6 +3,7 @@ package exchange
 import (
 	"errors"
 	"fmt"
+	"net"
 	"strconv"
 	"sync"
 	"time"
@@ -238,12 +239,22 @@ func (p *Passthrough) processWaitDecideDeposit(di DepositInfo) (DepositInfo, err
 		// - Other?
 
 		switch err.(type) {
+		case net.Error:
+			// Treat net.Error errors as temporary,
+			// which can occur if the requests were ratelimited
+			// or the network or remote server are unavailable.
+			log.WithError(err).Error("handleDepositInfoState failed")
+			select {
+			case <-time.After(p.cfg.ExchangeClient.RequestFailureWait):
+			case <-p.quit:
+				return di, err
+			}
 		default:
 			switch err {
 			case nil:
 				break
 			case errQuit:
-				break
+				return di, nil
 			default:
 				log.WithError(err).Error("handleDepositInfoState failed")
 				return di, err
@@ -301,9 +312,10 @@ func (p *Passthrough) handleDepositInfoState(di DepositInfo) (DepositInfo, error
 		log = log.WithField("orderID", orderID)
 		log.Info("Created order")
 
-		// TODO -- if the DB update fails, the order had already been placed and we lost this info
-		// We could potentially recover it from the CustomerID, but we'd have to scan the orderbook
-		// This may be the only option, since we need to place the order to get the OrderID anyway
+		// NOTE: if the DB update fails, the order had already been placed and we lost this info.
+		// To handle this case, during startup, for any deposits of StatusWaitPassthrough,
+		// we scan our orders on C2CX to see if any have a CustomerID matching our DepositID,
+		// and update the DepositInfo in the database to recover.
 		di, err = p.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
 			di.Status = StatusWaitPassthroughOrderComplete
 			di.Passthrough.Order.OrderID = fmt.Sprint(orderID)
@@ -393,6 +405,9 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 
 		cidToDeposits[di.Passthrough.Order.CustomerID] = di
 	}
+
+	// TODO -- use the "duration" argument to filter orders since a certain time?
+	// Is that how this parameter works?
 
 	// Get all orders
 	// If any's CID matches the DepositInfo's, update that DepositInfo

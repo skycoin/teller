@@ -17,7 +17,6 @@ import (
 
 	"github.com/boltdb/bolt"
 	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
-	"github.com/google/gops/agent"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
@@ -136,16 +135,6 @@ func run() error {
 	log := rusloggger.WithField("prefix", "teller")
 
 	log.WithField("config", cfg.Redacted()).Info("Loaded teller config")
-
-	if cfg.Profile {
-		// Start gops agent, for profiling
-		if err := agent.Listen(&agent.Options{
-			NoShutdownCleanup: true,
-		}); err != nil {
-			log.WithError(err).Error("Start profile agent failed")
-			return err
-		}
-	}
 
 	quit := make(chan struct{})
 	go catchInterrupt(quit)

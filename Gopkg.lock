@@ -105,16 +105,6 @@
   revision = "553a641470496b2327abcac10b36396bd98e45c9"
 
 [[projects]]
-  name = "github.com/google/gops"
-  packages = [
-    "agent",
-    "internal",
-    "signal"
-  ]
-  revision = "0e2aa5d22efec1603f7ded7097c500e9a36a13b3"
-  version = "v0.3.3"
-
-[[projects]]
   name = "github.com/gz-c/logrus-prefixed-formatter"
   packages = ["."]
   revision = "3f60c5b6f7ebd01d3bbda8ccc53c7bebd881caee"
@@ -146,12 +136,6 @@
     "json/token"
   ]
   revision = "23c074d0eceb2b8a5bfdbb271ab780cde70f05a8"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/kardianos/osext"
-  packages = ["."]
-  revision = "ae77be60afb1dcacde03767a8c37337fad28ac14"
 
 [[projects]]
   name = "github.com/magiconair/properties"
@@ -360,7 +344,7 @@
     "ripemd160",
     "ssh/terminal"
   ]
-  revision = "b4956d363a8b14623cc81db401707679605930a3"
+  revision = "374053ea96cb300f8671b8d3b07edeeb06e203b4"
 
 [[projects]]
   branch = "master"
@@ -378,7 +362,7 @@
     "unix",
     "windows"
   ]
-  revision = "cc7307a45468e49eaf2997c890f14aa03a26917b"
+  revision = "2f1e207ee39ff70f3433e49c6eb52677a515e3b5"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -426,6 +410,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "9e0ebf5091221efbc27b3f17ff96c4894b86425e66953c3813862d129b3abf6c"
+  inputs-digest = "122bc1cd14c159b46a9053a5c0d563d47f474be33070a2d9927409146757cb33"
   solver-name = "gps-cdcl"
   solver-version = 1
