@@ -519,7 +519,7 @@ type ConfigResponse struct {
 	MDLSkyExchangeRate       string `json:"mdl_sky_exchange_rate"`
 	MDLWavesExchangeRate       string `json:"mdl_waves_exchange_rate"`
 	MaxDecimals              int    `json:"max_decimals"`
-	Supported							 []string `json:"supported"`
+	Supported							 []config.SupportedCrypto `json:"supported"`
 }
 
 // ConfigHandler returns the teller configuration
