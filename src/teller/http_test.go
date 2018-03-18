@@ -257,8 +257,11 @@ func TestExchangeBindHandler(t *testing.T) {
 			e.On("BindAddress").Return(tc.exchangeStatus)
 
 			d, err := json.Marshal(tc.Body)
+			require.NoError(t, err)
+
 			req, err := http.NewRequest(tc.method, tc.url, bytes.NewBuffer(d))
 			require.NoError(t, err)
+
 			req.Header.Set("Content-Type", "application/json")
 
 			log, _ := testutil.NewLogger(t)

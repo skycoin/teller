@@ -1,4 +1,4 @@
-// MDL teller, which provides service of monitoring deposites in different crypto
+// MDL teller, which provides service of monitoring deposits in different crypto
 // and sending mdl coins
 package main
 

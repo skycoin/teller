@@ -19,12 +19,9 @@ import (
 
 	"flag"
 
-	"crypto/rand"
 	"log"
 
 	"github.com/btcsuite/btcd/btcjson"
-	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/visor"
 )
 
@@ -66,8 +63,8 @@ var rpcHandlers = map[string]commandHandler{
 	"get_blocks":        handleGetBlock,
 	"get_blocks_by_seq": handleGetBestBlock,
 	"get_lastblocks":    handleGetBlockHash,
-	//"getblockcount": handleGetBlockCount,
-	"nextdeposit": handleNextDeposit, // for triggering a fake deposit
+	"getblockcount":     handleGetBlockCount,
+	"nextdeposit":       handleNextDeposit, // for triggering a fake deposit
 }
 
 type rpcServer struct {
@@ -157,7 +154,7 @@ func processDeposits(deposits []Deposit) (blocks visor.ReadableBlocks, err error
 	defaultBlockStore.BlockHashes[int64(defaultBlockStore.BestBlockHeight)] = hash
 	defaultBlockStore.HashBlocks[hash] = blocks
 
-	return
+	return blocks, err
 }
 
 func createFakeBlock(address, coins string) (blocks visor.ReadableBlocks) {
@@ -218,7 +215,7 @@ func createFakeBlock(address, coins string) (blocks visor.ReadableBlocks) {
 		},
 	}
 
-	return
+	return blocks
 }
 
 func handleNextDeposit(s *rpcServer, cmd interface{}, closeChan <-chan struct{}) (interface{}, error) {
@@ -285,7 +282,7 @@ func parseListeners(addrs []string) ([]net.Addr, error) {
 	return netAddrs, nil
 }
 
-func setupRPCListeners(key string, cert string, address string) ([]net.Listener, error) {
+func setupRPCListeners(address string) ([]net.Listener, error) {
 
 	// Change the standard net.Listen function to the tls one.
 
@@ -588,7 +585,7 @@ func (s *rpcServer) Start() {
 		s.jsonRPCRead(w, r)
 	})
 
-	listeners, err := setupRPCListeners(s.key, s.cert, s.address)
+	listeners, err := setupRPCListeners(s.address)
 	if err != nil {
 		fmt.Printf("Unexpected setupRPCListeners error: %v\n", err)
 		return
@@ -706,11 +703,6 @@ func (a simpleAddr) Network() string {
 // timeZeroVal is simply the zero value for a time.Time and is used to avoid
 // creating multiple instances.
 var timeZeroVal time.Time
-
-type semaphore chan struct{}
-
-func (s semaphore) acquire() { s <- struct{}{} }
-func (s semaphore) release() { <-s }
 
 type httpAPIServer struct {
 	address string
@@ -891,22 +883,22 @@ func init() {
 	}
 }
 
-func getBlock() *coin.Block {
-	prev := coin.Block{Head: coin.BlockHeader{Version: 0x02, Time: 100, BkSeq: 98}}
-	b := make([]byte, 128)
-	rand.Read(b)
-	uxHash := cipher.SumSHA256(b)
-	txns := coin.Transactions{coin.Transaction{}}
-
-	// valid block is fine
-	fee := uint64(121)
-	currentTime := uint64(133)
-	block, err := coin.NewBlock(prev, currentTime, uxHash, txns, _makeFeeCalc(fee))
-	if err != nil {
-		panic(err)
-	}
-	return block
-}
+//func getBlock() *coin.Block {
+//	prev := coin.Block{Head: coin.BlockHeader{Version: 0x02, Time: 100, BkSeq: 98}}
+//	b := make([]byte, 128)
+//	rand.Read(b)
+//	uxHash := cipher.SumSHA256(b)
+//	txns := coin.Transactions{coin.Transaction{}}
+//
+//	// valid block is fine
+//	fee := uint64(121)
+//	currentTime := uint64(133)
+//	block, err := coin.NewBlock(prev, currentTime, uxHash, txns, _makeFeeCalc(fee))
+//	if err != nil {
+//		panic(err)
+//	}
+//	return block
+//}
 
 var blockString = `{
     "blocks": [
@@ -961,8 +953,8 @@ var blockString = `{
     ]
 }`
 
-func _makeFeeCalc(fee uint64) coin.FeeCalculator {
-	return func(t *coin.Transaction) (uint64, error) {
-		return fee, nil
-	}
-}
+//func _makeFeeCalc(fee uint64) coin.FeeCalculator {
+//	return func(t *coin.Transaction) (uint64, error) {
+//		return fee, nil
+//	}
+//}

@@ -393,17 +393,17 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		switch bindReq.CoinType {
 		case scanner.CoinTypeBTC:
 			if !s.cfg.BtcRPC.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon.", scanner.CoinTypeBTC))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon", scanner.CoinTypeBTC))
 				return
 			}
 		case scanner.CoinTypeETH:
 			if !s.cfg.EthRPC.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon.", scanner.CoinTypeETH))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon", scanner.CoinTypeETH))
 				return
 			}
 		case scanner.CoinTypeSKY:
 			if !s.cfg.SkyRPC.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon.", scanner.CoinTypeSKY))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon", scanner.CoinTypeSKY))
 				return
 			}
 		case "":
@@ -584,30 +584,32 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
+		// FIXME: WeiPerETH
 		rate = s.cfg.MDLExchanger.MDLWavesExchangeRate
 		dropletsPerWAVES, err := exchange.CalculateWavesMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
 		if err != nil {
-			log.WithError(err).Error("exchange.CalculateEthMDLValue failed")
+			log.WithError(err).Error("exchange.CalculateWavesMDLValue failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
 		mdlPerWAVES, err := droplet.ToString(dropletsPerWAVES)
 		if err != nil {
-			log.WithError(err).Error("droplet.ToString failed CalculateEthMDLValue")
+			log.WithError(err).Error("droplet.ToString failed CalculateWavesMDLValue")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
 
+		// FIXME: WeiPerETH
 		rate = s.cfg.MDLExchanger.MDLWavesExchangeRate
-		dropletsPerWAVES_MDL, err := exchange.CalculateWavesMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
+		dropletsPerWAVESMDL, err := exchange.CalculateWavesMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
 		if err != nil {
-			log.WithError(err).Error("exchange.CalculateEthMDLValue failed")
+			log.WithError(err).Error("exchange.CalculateWavesMDLValue failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
-		mdlPerWAVES_MDL, err := droplet.ToString(dropletsPerWAVES_MDL)
+		mdlPerWAVESMDL, err := droplet.ToString(dropletsPerWAVESMDL)
 		if err != nil {
-			log.WithError(err).Error("droplet.ToString failed CalculateEthMDLValue")
+			log.WithError(err).Error("droplet.ToString failed CalculateWavesMDLValue")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
@@ -659,7 +661,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			MDLEthExchangeRate:      mdlPerETH,
 			MDLSkyExchangeRate:      mdlPerSKY,
 			MDLWavesExchangeRate:    mdlPerWAVES,
-			MDLWavesMDLExchangeRate: mdlPerWAVES_MDL,
+			MDLWavesMDLExchangeRate: mdlPerWAVESMDL,
 
 			MaxDecimals:       maxDecimals,
 			MaxBoundAddresses: s.cfg.Teller.MaxBoundAddresses,

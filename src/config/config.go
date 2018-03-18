@@ -85,6 +85,7 @@ type Config struct {
 	Dummy Dummy `mapstructure:"dummy"`
 }
 
+// SupportedCrypto is used in the UI to build a list of supported Cryptos
 type SupportedCrypto struct {
 	Name            string `json:"name"`
 	Label           string `json:"label"` //i18n label for translation
@@ -168,7 +169,7 @@ type SkyScanner struct {
 	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
 }
 
-// SkyScanner config for SKY scanner
+// WavesScanner config for WAVES scanner
 type WavesScanner struct {
 	// How often to try to scan for blocks
 	ScanPeriod            time.Duration `mapstructure:"scan_period"`
@@ -176,7 +177,7 @@ type WavesScanner struct {
 	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
 }
 
-// SkyScanner config for SKY scanner
+// WavesMDLScanner config for WAVES MDL scanner
 type WavesMDLScanner struct {
 	// How often to try to scan for blocks
 	ScanPeriod            time.Duration `mapstructure:"scan_period"`
