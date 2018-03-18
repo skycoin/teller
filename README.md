@@ -117,6 +117,7 @@ Description of the config file:
 * `sky_exchanger.exchange_client.key` [string]: C2CX API key.  Required if `sky_exchanger.buy_method` is "passthrough".
 * `sky_exchanger.exchange_client.secret` [string]: C2CX API secret key.  Required if `sky_exchanger.buy_method` is "passthrough".
 * `sky_exchanger.exchange_client.request_failure_wait` [duration]: How long to wait after a request failure to C2CX.
+* `sky_exchanger.exchange_client.ratelimit_wait` [duration]: How long to wait after being ratelimited by the C2CX API.
 * `sky_exchanger.exchange_client.btc_minimum_volume` [decimal]: Minimum BTC volume allowed for a deposit. C2CX's minimum is variable, this should be set to some higher arbitrary value to avoid making a failed order.
 * `web.behind_proxy` [bool]: Set true if running behind a proxy.
 * `web.static_dir` [string]: Location of static web assets.

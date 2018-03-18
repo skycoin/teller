@@ -72,7 +72,7 @@ func NewPassthrough(log logrus.FieldLogger, cfg config.SkyExchanger, store Store
 		exchangeClient: &c2cx.Client{
 			Key:    cfg.C2CX.Key,
 			Secret: cfg.C2CX.Secret,
-			Debug:  false,
+			Debug:  true,
 		},
 	}, nil
 }
@@ -235,6 +235,7 @@ func (p *Passthrough) processWaitDecideDeposit(di DepositInfo) (DepositInfo, err
 		p.setStatus(err)
 
 		retry := "retry"
+		retryRatelimited := "retry_ratelimited"
 		fail := "fail"
 		quit := "quit"
 
@@ -247,6 +248,10 @@ func (p *Passthrough) processWaitDecideDeposit(di DepositInfo) (DepositInfo, err
 			// If the error is because the BTC volume for the order is too low, fail
 			if strings.HasPrefix(e.Message, "limit value:") {
 				action = fail
+			}
+
+			if e.Message == "Too Many Requests" {
+				action = retryRatelimited
 			}
 
 		case c2cx.Error:
@@ -277,6 +282,12 @@ func (p *Passthrough) processWaitDecideDeposit(di DepositInfo) (DepositInfo, err
 		case retry:
 			select {
 			case <-time.After(p.cfg.C2CX.RequestFailureWait):
+			case <-p.quit:
+				return di, nil
+			}
+		case retryRatelimited:
+			select {
+			case <-time.After(p.cfg.C2CX.RatelimitWait):
 			case <-p.quit:
 				return di, nil
 			}

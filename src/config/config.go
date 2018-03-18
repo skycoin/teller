@@ -141,6 +141,7 @@ type C2CX struct {
 	Key                string          `mapstructure:"key"`
 	Secret             string          `mapstructure:"secret"`
 	RequestFailureWait time.Duration   `mapstructure:"request_failure_wait"`
+	RatelimitWait      time.Duration   `mapstructure:"ratelimit_wait"`
 	BtcMinimumVolume   decimal.Decimal `mapstructure:"btc_minimum_volume"`
 }
 
@@ -431,7 +432,8 @@ func setDefaults() {
 		panic(err)
 	}
 	viper.SetDefault("sky_exchanger.c2cx.btc_minimum_volume", btcMinimumVolume)
-	viper.SetDefault("sky_exchanger.c2cx.request_failure_wait", time.Second*60)
+	viper.SetDefault("sky_exchanger.c2cx.request_failure_wait", time.Second*10)
+	viper.SetDefault("sky_exchanger.c2cx.ratelimit_wait", time.Second*30)
 
 	// Web
 	viper.SetDefault("web.send_enabled", true)

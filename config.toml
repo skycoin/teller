@@ -48,7 +48,8 @@ wallet = "example.wlt" # REQUIRED: path to local hot wallet file
 [sky_exchanger.c2cx]
 key = "" # REQUIRED if buy_method = "passthrough"
 secret = "" # REQUIRED if buy_method = "passthrough"
-# request_failure_wait = "60s"
+# request_failure_wait = "10s" # how long to wait after receiving a c2cx request error
+# ratelimit_wait = "30s" # how long to wait after being ratelimited by the c2cx API
 # btc_minimum_volume = "0.005"
 
 [web]
