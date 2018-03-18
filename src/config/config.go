@@ -80,6 +80,8 @@ type SupportedCrypto struct {
 	Value string `json:"value"`
 	Label string `json:"label"`
 	Disabled bool `json:"disabled"`
+	PriceUsd string `json:"price_usd"`
+	PriceMDL string `json:"price_mdl"`
 }
 // Teller config for teller
 type Teller struct {
@@ -398,15 +400,8 @@ func setDefaults() {
 	viper.SetDefault("logfile", "./teller.log")
 	viper.SetDefault("dbfile", "teller.db")
 
-	// Teller
+	// Teller1
 	viper.SetDefault("teller.max_bound_btc_addrs", 2)
-	btc := SupportedCrypto{Value:"BTC",Label:"Bitcoin (Under Maintenance)",Disabled:true}
-	eth := SupportedCrypto{Value:"ETH",Label:"Ethereum",Disabled:false}
-	sky := SupportedCrypto{Value:"SKY",Label:"Skycoin (Temporary Disabled)",Disabled:false}
-	waves := SupportedCrypto{Value:"Waves",Label:"Waves (Temporary Disabled)",Disabled:true}
-	mdllife := SupportedCrypto{Value:"MDL.life",Label:"MDL.life - pre-MDL token on Waves (Temporary Disabled, but coming soon)",Disabled:true}
-	cryptos := [5]SupportedCrypto{btc,eth,sky,waves,mdllife};
-	viper.SetDefault("teller.supported", cryptos)
 
 	// MDLRPC
 	viper.SetDefault("mdl_rpc.address", "127.0.0.1:6430")
@@ -443,6 +438,7 @@ func setDefaults() {
 	viper.SetDefault("dummy.http_addr", "127.0.0.1:4121")
 	viper.SetDefault("dummy.scanner", false)
 	viper.SetDefault("dummy.sender", false)
+
 }
 
 // Load loads the configuration from "./$configName.*" where "*" is a
@@ -461,6 +457,15 @@ func Load(configName, appDir string) (Config, error) {
 
 	cfg := Config{}
 
+
+	btc := SupportedCrypto{Value:"BTC",Label:"Bitcoin (Under Maintenance)",Disabled:true}
+	eth := SupportedCrypto{Value:"ETH",Label:"Ethereum (Syncing)",Disabled:true}
+	sky := SupportedCrypto{Value:"SKY",Label:"Skycoin (Experimental) ",Disabled:true}
+	waves := SupportedCrypto{Value:"Waves",Label:"Waves (Temporary Disabled)",Disabled:true}
+	mdllife := SupportedCrypto{Value:"MDL.life",Label:"MDL.life - pre-MDL token on Waves (Temporary Disabled, but coming soon)",Disabled:true}
+	cryptos := [5]SupportedCrypto{btc,eth,sky,waves,mdllife};
+	viper.SetDefault("teller.supported", cryptos)
+
 	if err := viper.ReadInConfig(); err != nil {
 		return cfg, err
 	}
@@ -472,6 +477,15 @@ func Load(configName, appDir string) (Config, error) {
 	if err := cfg.Validate(); err != nil {
 		return cfg, err
 	}
+
+	cfg.Teller.Supported[0].Disabled = !cfg.BtcRPC.Enabled
+	cfg.Teller.Supported[0].PriceMDL = cfg.MDLExchanger.MDLBtcExchangeRate
+  cfg.Teller.Supported[1].Disabled = !cfg.EthRPC.Enabled
+	cfg.Teller.Supported[1].PriceMDL = cfg.MDLExchanger.MDLEthExchangeRate
+	cfg.Teller.Supported[2].Disabled = !cfg.SkyRPC.Enabled
+	cfg.Teller.Supported[2].PriceMDL = cfg.MDLExchanger.MDLSkyExchangeRate
+	cfg.Teller.Supported[3].PriceMDL = "???" //cfg.MDLExchanger.MDLWavesExchangeRate
+	cfg.Teller.Supported[4].PriceMDL = "1"
 
 	return cfg, nil
 }

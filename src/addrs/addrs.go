@@ -12,9 +12,9 @@ import (
 
 var (
 	// ErrDepositAddressEmpty represents all deposit addresses are used
-	ErrDepositAddressEmpty = errors.New("Deposit address pool is empty")
+	ErrDepositAddressEmpty = errors.New("Oopps, it seems there were some problems. Deposit address pool is currently empty for this coin type. We're working on fixing it, please try again in a few hours.")
 	// ErrCoinTypeNotExists is returned when an unrecognized coin type is used
-	ErrCoinTypeNotExists = errors.New("Invalid coin type")
+	ErrCoinTypeNotExists = errors.New("Oopps, it seems there were some problems. This coin type is currently not supported. We're working hard on fixing it, so please try again in a couple hours.")
 )
 
 // AddrGenerator generate new deposit address
