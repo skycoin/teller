@@ -44,7 +44,8 @@ wallet = "example.wlt" # REQUIRED: path to local hot wallet file
 # tx_confirmation_check_wait = "5s"
 # send_enabled = true # Disable this to disable sending of coins (all other processing functions normally)
 # buy_method = "direct" # Options are "direct" or "passthrough"
-[[exchange_client]]
+
+[sky_exchanger.c2cx]
 key = "" # REQUIRED if buy_method = "passthrough"
 secret = "" # REQUIRED if buy_method = "passthrough"
 # request_failure_wait = "60s"

@@ -116,7 +116,6 @@ type PassthroughData struct {
 type PassthroughOrder struct {
 	CustomerID      string      `json:"customer_id"`
 	OrderID         string      `json:"order_id"`
-	RequestedAmount string      `json:"requested_amount"`
 	CompletedAmount string      `json:"completed_amount"`
 	Price           string      `json:"price"`
 	Status          string      `json:"status"`

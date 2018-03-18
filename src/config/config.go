@@ -132,8 +132,16 @@ type SkyExchanger struct {
 	SendEnabled bool `mapstructure:"send_enabled"`
 	// Method of purchasing coins ("direct buy" or "passthrough"
 	BuyMethod string `mapstructure:"buy_method"`
-	// C2CX client parameters
-	ExchangeClient ExchangeClient `mapstructure:"exchange_client"`
+	// C2CX configuration
+	C2CX C2CX `mapstructure:"c2cx"`
+}
+
+// C2CX config for the C2CX implementation from skycoin/exchange-api
+type C2CX struct {
+	Key                string          `mapstructure:"key"`
+	Secret             string          `mapstructure:"secret"`
+	RequestFailureWait time.Duration   `mapstructure:"request_failure_wait"`
+	BtcMinimumVolume   decimal.Decimal `mapstructure:"btc_minimum_volume"`
 }
 
 // Validate validates the SkyExchanger config
@@ -172,6 +180,16 @@ func (c SkyExchanger) validate() []error {
 		errs = append(errs, fmt.Errorf("sky_exchanger.buy_method must be \"%s\" or \"%s\"", BuyMethodDirect, BuyMethodPassthrough))
 	}
 
+	if c.BuyMethod == BuyMethodPassthrough {
+		if c.C2CX.Key == "" {
+			errs = append(errs, errors.New("c2cx.key must be set for buy_method passthrough"))
+		}
+
+		if c.C2CX.Secret == "" {
+			errs = append(errs, errors.New("c2cx.secret must be set for buy_method passthrough"))
+		}
+	}
+
 	return errs
 }
 
@@ -194,14 +212,6 @@ func (c SkyExchanger) validateWallet() []error {
 	}
 
 	return errs
-}
-
-// ExchangeClient config for the C2CX implementation from skycoin/exchange-api
-type ExchangeClient struct {
-	Key                string          `mapstructure:"key"`
-	Secret             string          `mapstructure:"secret"`
-	RequestFailureWait time.Duration   `mapstructure:"request_failure_wait"`
-	BtcMinimumVolume   decimal.Decimal `mapstructure:"btc_minimum_volume"`
 }
 
 // Web config for the teller HTTP interface
@@ -256,12 +266,22 @@ type Dummy struct {
 
 // Redacted returns a copy of the config with sensitive information redacted
 func (c Config) Redacted() Config {
+	redacted := "<redacted>"
+
 	if c.BtcRPC.User != "" {
-		c.BtcRPC.User = "<redacted>"
+		c.BtcRPC.User = redacted
 	}
 
 	if c.BtcRPC.Pass != "" {
-		c.BtcRPC.Pass = "<redacted>"
+		c.BtcRPC.Pass = redacted
+	}
+
+	if c.SkyExchanger.C2CX.Key != "" {
+		c.SkyExchanger.C2CX.Key = redacted
+	}
+
+	if c.SkyExchanger.C2CX.Secret != "" {
+		c.SkyExchanger.C2CX.Secret = redacted
 	}
 
 	return c
@@ -383,6 +403,7 @@ func setDefaults() {
 
 	// Teller
 	viper.SetDefault("teller.max_bound_btc_addrs", 5)
+	viper.SetDefault("teller.bind_enabled", true)
 
 	// SkyRPC
 	viper.SetDefault("sky_rpc.address", "127.0.0.1:6430")
@@ -404,16 +425,15 @@ func setDefaults() {
 	viper.SetDefault("sky_exchanger.max_decimals", 3)
 	viper.SetDefault("sky_exchanger.buy_method", BuyMethodDirect)
 
-	// ExchangeClient
-	viper.SetDefault("sky_exchanger.exchange_client.request_failure_wait", time.Second*60)
+	// C2CX
 	btcMinimumVolume, err := decimal.NewFromString("0.005")
 	if err != nil {
 		panic(err)
 	}
-	viper.SetDefault("sky_exchanger.exchange_client.btc_minimum_volume", btcMinimumVolume)
+	viper.SetDefault("sky_exchanger.c2cx.btc_minimum_volume", btcMinimumVolume)
+	viper.SetDefault("sky_exchanger.c2cx.request_failure_wait", time.Second*60)
 
 	// Web
-	viper.SetDefault("web.bind_enabled", true)
 	viper.SetDefault("web.send_enabled", true)
 	viper.SetDefault("web.http_addr", "127.0.0.1:7071")
 	viper.SetDefault("web.static_dir", "./web/build")

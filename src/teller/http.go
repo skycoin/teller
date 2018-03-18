@@ -575,7 +575,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			MaxDecimals:              maxDecimals,
 			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
 			BuyMethod:                s.cfg.SkyExchanger.BuyMethod,
-			BtcMinimumVolume:         s.cfg.SkyExchanger.ExchangeClient.BtcMinimumVolume.String(),
+			BtcMinimumVolume:         s.cfg.SkyExchanger.C2CX.BtcMinimumVolume.String(),
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}

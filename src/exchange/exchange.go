@@ -155,6 +155,8 @@ func (e *Exchange) Run() error {
 	errC := make(chan error, 3)
 	var wg sync.WaitGroup
 
+	// TODO FIXME -- exchange.Exchanger does not shut down properly when an error is returned by Run() here
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()

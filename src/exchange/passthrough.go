@@ -70,8 +70,9 @@ func NewPassthrough(log logrus.FieldLogger, cfg config.SkyExchanger, store Store
 		quit:             make(chan struct{}),
 		done:             make(chan struct{}),
 		exchangeClient: &c2cx.Client{
-			Key:    cfg.ExchangeClient.Key,
-			Secret: cfg.ExchangeClient.Secret,
+			Key:    cfg.C2CX.Key,
+			Secret: cfg.C2CX.Secret,
+			Debug:  false,
 		},
 	}, nil
 }
@@ -95,6 +96,8 @@ func (p *Passthrough) Run() error {
 		log.WithError(err).Error("fixUnrecordedOrders failed")
 		return err
 	}
+
+	// TODO FIXME -- exchange.Exchanger does not shut down properly when an error is returned by Run() here
 
 	if len(recoveredDeposits) > 0 {
 		log.WithField("recoveredDeposits", len(recoveredDeposits)).Info("Recovered unrecorded orders for deposits")
@@ -165,17 +168,17 @@ func (p *Passthrough) runBuy() {
 			log.Info("quit")
 			return
 		case d := <-p.internalDeposits:
+			d, err := p.processWaitDecideDeposit(d)
 			log := log.WithField("depositInfo", d)
-			updatedDeposit, err := p.processWaitDecideDeposit(d)
 			if err != nil {
 				msg := "handleDeposit failed. This deposit will not be reprocessed until teller is restarted."
-				log.WithField("depositInfo", d).WithError(err).Error(msg)
+				log.WithError(err).Error(msg)
 				continue
 			}
 
-			log.WithField("depositInfo", updatedDeposit).Info("Deposit processed")
+			log.WithField("depositInfo", d).Info("Deposit processed")
 
-			p.deposits <- updatedDeposit
+			p.deposits <- d
 		}
 	}
 }
@@ -231,10 +234,6 @@ func (p *Passthrough) processWaitDecideDeposit(di DepositInfo) (DepositInfo, err
 
 		p.setStatus(err)
 
-		if err != nil && err != errQuit {
-			log.WithError(err).Error("handleDepositInfoState failed")
-		}
-
 		retry := "retry"
 		fail := "fail"
 		quit := "quit"
@@ -270,15 +269,18 @@ func (p *Passthrough) processWaitDecideDeposit(di DepositInfo) (DepositInfo, err
 			}
 		}
 
+		if err != nil && err != errQuit {
+			log.WithField("action", action).WithError(err).Error("handleDepositInfoState failed")
+		}
+
 		switch action {
 		case retry:
 			select {
-			case <-time.After(p.cfg.ExchangeClient.RequestFailureWait):
+			case <-time.After(p.cfg.C2CX.RequestFailureWait):
 			case <-p.quit:
-				return di, err
+				return di, nil
 			}
 		case fail:
-			log.WithError(err).Error("handleDepositInfoState failed")
 			return di, err
 		case quit:
 			return di, nil
@@ -359,6 +361,7 @@ func (p *Passthrough) handleDepositInfoState(di DepositInfo) (DepositInfo, error
 		log = log.WithField("depositInfo", newDepositInfo)
 
 		switch err {
+		case nil:
 		case errQuit:
 			return di, err
 		case ErrFatalOrderStatus:
@@ -398,7 +401,6 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 	// have to scan all orders to find one matching the customer ID.
 	// Here, we query all c2cx orders and see if any have a CID that matches
 	// a DepositInfo whose status is StatusWaitPassthrough.
-
 	var updates []DepositInfo
 
 	// Check all orders on StatusWaitPassthrough, to see if the order had actually been placed.
@@ -411,9 +413,8 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 		return nil, err
 	}
 
-	p.log.Info("No StatusWaitPassthrough deposits found")
-
 	if len(deposits) == 0 {
+		p.log.Info("No StatusWaitPassthrough deposits found")
 		return nil, nil
 	}
 
@@ -434,6 +435,7 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 
 	// Get all orders
 	// If any's CID matches the DepositInfo's, update that DepositInfo
+	log.Info("Calling GetOrderByStatus to recover placed orders")
 	orders, err := p.exchangeClient.GetOrderByStatus(c2cx.BtcSky, c2cx.StatusAll)
 	if err != nil {
 		log.WithError(err).Error("exchangeClient.GetOrderByStatus(StatusAll) failed")
@@ -493,6 +495,7 @@ func (p *Passthrough) placeOrder(di DepositInfo) (c2cx.OrderID, error) {
 	}
 
 	customerID := di.Passthrough.Order.CustomerID
+
 	orderID, err := p.exchangeClient.MarketBuy(c2cx.BtcSky, amount, &customerID)
 	if err != nil {
 		return 0, err
@@ -570,18 +573,16 @@ waitCompletedLoop:
 					// The sender will reject a send of 0 sky later
 				}
 
-				btcSpent := order.CompletedAmount.Mul(decimal.New(SatoshisPerBTC, 0)).IntPart()
+				btcSpent := calculateBtcSpent(order)
 
 				di.Passthrough.SkyBought = skyBought
 				di.Passthrough.DepositValueSpent = btcSpent
 
 				di.Passthrough.Order.Status = order.Status.String()
 				di.Passthrough.Order.Final = true
-				di.Passthrough.Order.Original = order
+				di.Passthrough.Order.Original = *order
 
-				di.Passthrough.Order.RequestedAmount = order.Amount.String()
 				di.Passthrough.Order.CompletedAmount = order.CompletedAmount.String()
-				// TODO -- check that AvgPrice is the correct field for market order price
 				di.Passthrough.Order.Price = order.AvgPrice.String()
 
 				return di, nil
@@ -590,7 +591,7 @@ waitCompletedLoop:
 				log.WithError(ErrFatalOrderStatus).Error("Fatal status encountered")
 				di.Passthrough.Order.Status = order.Status.String()
 				di.Passthrough.Order.Final = true
-				di.Passthrough.Order.Original = order
+				di.Passthrough.Order.Original = *order
 				return di, ErrFatalOrderStatus
 			}
 		}
@@ -599,22 +600,26 @@ waitCompletedLoop:
 	return di, nil
 }
 
+// calculateSkyBought returns the amount of SKY bought in droplets
+// The amount of SKY bought is in order.CompletedAmount
+// This amount does is not adjusted for the C2CX commission, which is not
+// known through the API, so the actual amount bought is less.
+// For now, ignore the commission and eat the fee.
 func calculateSkyBought(order *c2cx.Order) (uint64, error) {
-	if order.AvgPrice.Equal(decimal.Zero) {
-		return 0, errors.New("order.AvgPrice is unexpectedly zero")
-	}
-
-	// TODO -- do we have to calculate the sky bought or is it in one of the order fields?
-	skyBoughtDec := order.CompletedAmount.Div(order.AvgPrice)
-	// TODO -- truncate here?
-	// The actual SKY bought on c2cx depends on their orderbook decimal restrictions [yet unknown]
-	// We will further truncate to our own configured max decimals when sending the coins to the user
-	skyBought := skyBoughtDec.Mul(decimal.New(droplet.Multiplier, 0)).IntPart()
+	// Convert CompletedAmount from whole skycoin to satoshis
+	skyBought := order.CompletedAmount.Mul(decimal.New(droplet.Multiplier, 0)).IntPart()
 	if skyBought < 0 {
 		return 0, errors.New("Calculated amount of SKY bought is unexpectedly negative")
 	}
-
 	return uint64(skyBought), nil
+}
+
+// calculateBtcSpent returns the amount of BTC spent in satoshis.
+// The amount spent can less than the amount requested to be spent, due to the
+// minimum BTC price of the smallest purchasable unit of SKY on the exchange.
+func calculateBtcSpent(order *c2cx.Order) int64 {
+	btcSpentDec := order.CompletedAmount.Mul(order.AvgPrice)
+	return btcSpentDec.Mul(decimal.New(SatoshisPerBTC, 0)).IntPart()
 }
 
 func (p *Passthrough) setStatus(err error) {
