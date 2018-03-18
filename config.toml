@@ -14,18 +14,18 @@ eth_addresses = "test_eth.json" # REQUIRED: path to eth addresses file
 max_bound_addrs = 2 # 0 means unlimited
 bind_enabled = true # Disable this to prevent binding of new addresses
 #supported = ['BTC','ETH','SKY','WAVES', 'MDL.life']
-supported = ['ETH']
+#supported = ['ETH']
 
 [mdl_rpc]
 address = "127.0.0.1:8330"
 
 [btc_rpc]
-enabled = true 
+enabled = true
 server = "127.0.0.1:8334"
 user = "mdlissofunandawesomeJUSTAWESOMEANDAMAZING" # REQUIRED
 pass = "ejukixdthnbgfuhygicfddufyigdcfifhxhxhxd" # REQUIRED
-cert = "/home/customer/.btcd/rpc.cert" # REQUIRED
-key = "rpc.key" # REQUIRED
+cert = "../rpc.cert" # REQUIRED
+key = "../rpc.key" # REQUIRED
 
 [eth_rpc]
 enabled = true
@@ -42,11 +42,11 @@ initial_scan_height =135508
 confirmations_required = 1
 
 [mdl_exchanger]
-mdl_sky_exchange_rate = "100" # REQUIRED: MDL/SKY exchange rate as a string, can be an int, float or a rational fraction
+mdl_sky_exchange_rate = "176" # REQUIRED: MDL/SKY exchange rate as a string, can be an int, float or a rational fraction
 mdl_waves_exchange_rate = "100" # REQUIRED: MDL/WAVES exchange rate as a string, can be an int, float or a rational fraction
-mdl_btc_exchange_rate = "454545.454" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
-mdl_eth_exchange_rate = "10000" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
-wallet = "test.wlt" # REQUIRED: path to local hot wallet file
+mdl_btc_exchange_rate = "159500" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
+mdl_eth_exchange_rate = "11760" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
+wallet = "example.wlt" # REQUIRED: path to local hot wallet file
 # max_decimals = 3  # Number of decimal places to truncate MDL to
 # tx_confirmation_check_wait = "5s"
 send_enabled = true # Disable this to disable sending of coins (all other processing functions normally)
@@ -71,5 +71,5 @@ host = "127.0.0.1:7711"
 # fake sender and scanner with admin interface adding fake deposits,
 # and viewing and confirmed mdl transactions
 sender = false
-scanner = false
+scanner = true
 #http_addr = "127.0.0.1:4121"
