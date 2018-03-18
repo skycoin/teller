@@ -20,11 +20,12 @@ import (
 	"github.com/MDLlife/MDL/src/cipher"
 	"github.com/MDLlife/MDL/src/coin"
 
+	"math/big"
+
 	"github.com/MDLlife/teller/src/config"
 	"github.com/MDLlife/teller/src/scanner"
 	"github.com/MDLlife/teller/src/sender"
 	"github.com/MDLlife/teller/src/util/testutil"
-	"math/big"
 )
 
 type dummySender struct {
@@ -457,7 +458,6 @@ func TestExchangeRunSend(t *testing.T) {
 	closeMultiplexer(e)
 }
 
-
 func TestExchangeSkyRunSend(t *testing.T) {
 	e, shutdown, _ := runExchange(t)
 	defer shutdown()
@@ -467,7 +467,7 @@ func TestExchangeSkyRunSend(t *testing.T) {
 	skyAddr := "foo-sky-addr"
 	mustBindAddressSky(t, e.store, mdlAddr, skyAddr)
 
-	var value = big.NewInt( 1e6)
+	var value = big.NewInt(1e6)
 	mdlSent, err := CalculateSkyMDLValue(value, testMDLSkyRate, testMaxDecimals)
 	require.NoError(t, err)
 	txid := e.Sender.(*Send).sender.(*dummySender).predictTxid(t, mdlAddr, mdlSent)

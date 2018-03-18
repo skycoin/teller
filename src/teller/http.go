@@ -275,7 +275,7 @@ func (s *HTTPServer) setupMux() *http.ServeMux {
 		// Allow requests from a local mdl wallet
 		h = cors.New(cors.Options{
 			//AllowedOrigins: []string{"http://127.0.0.1:8320"},
-				AllowedOrigins: []string{"*"},
+			AllowedOrigins: []string{"*"},
 		}).Handler(h)
 
 		h = gziphandler.GzipHandler(h)
@@ -515,16 +515,17 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 
 // ConfigResponse http response for /api/config
 type ConfigResponse struct {
-	Enabled                  bool   `json:"enabled"`
-	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
-	EthConfirmationsRequired int64  `json:"eth_confirmations_required"`
-	MaxBoundAddresses        int    `json:"max_bound_addrs"`
-	MDLBtcExchangeRate       string `json:"mdl_btc_exchange_rate"`
-	MDLEthExchangeRate       string `json:"mdl_eth_exchange_rate"`
-	MDLSkyExchangeRate       string `json:"mdl_sky_exchange_rate"`
-	MDLWavesExchangeRate       string `json:"mdl_waves_exchange_rate"`
-	MaxDecimals              int    `json:"max_decimals"`
-	Supported							 []config.SupportedCrypto `json:"supported"`
+	Enabled                  bool                     `json:"enabled"`
+	BtcConfirmationsRequired int64                    `json:"btc_confirmations_required"`
+	EthConfirmationsRequired int64                    `json:"eth_confirmations_required"`
+	MaxBoundAddresses        int                      `json:"max_bound_addrs"`
+	MDLBtcExchangeRate       string                   `json:"mdl_btc_exchange_rate"`
+	MDLEthExchangeRate       string                   `json:"mdl_eth_exchange_rate"`
+	MDLSkyExchangeRate       string                   `json:"mdl_sky_exchange_rate"`
+	MDLWavesExchangeRate     string                   `json:"mdl_waves_exchange_rate"`
+	MDLWavesMDLExchangeRate  string                   `json:"mdl_waves_mdl_exchange_rate"`
+	MaxDecimals              int                      `json:"max_decimals"`
+	Supported                []config.SupportedCrypto `json:"supported"`
 }
 
 // ConfigHandler returns the teller configuration
@@ -551,7 +552,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 
 		mdlPerBTC, err := droplet.ToString(dropletsPerBTC)
 		if err != nil {
-			log.WithError(err).Error("droplet.ToString failed")
+			log.WithError(err).Error("droplet.ToString failed dropletsPerBTC")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
@@ -564,12 +565,10 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 		}
 		mdlPerETH, err := droplet.ToString(dropletsPerETH)
 		if err != nil {
-			log.WithError(err).Error("droplet.ToString failed")
+			log.WithError(err).Error("droplet.ToString failed dropletsPerETH")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
-
-
 
 		rate = s.cfg.MDLExchanger.MDLSkyExchangeRate
 		dropletsPerSKY, err := exchange.CalculateSkyMDLValue(big.NewInt(exchange.DropletsPerSKY), rate, maxDecimals)
@@ -578,13 +577,13 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
-
 		mdlPerSKY, err := droplet.ToString(dropletsPerSKY)
 		if err != nil {
-			log.WithError(err).Error("droplet.ToString failed")
+			log.WithError(err).Error("droplet.ToString failed dropletsPerSKY")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
+
 		rate = s.cfg.MDLExchanger.MDLWavesExchangeRate
 		dropletsPerWAVES, err := exchange.CalculateWavesMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
 		if err != nil {
@@ -594,23 +593,77 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 		}
 		mdlPerWAVES, err := droplet.ToString(dropletsPerWAVES)
 		if err != nil {
-			log.WithError(err).Error("droplet.ToString failed")
+			log.WithError(err).Error("droplet.ToString failed CalculateEthMDLValue")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
 			return
 		}
 
+		rate = s.cfg.MDLExchanger.MDLWavesExchangeRate
+		dropletsPerWAVES_MDL, err := exchange.CalculateWavesMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
+		if err != nil {
+			log.WithError(err).Error("exchange.CalculateEthMDLValue failed")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
+		mdlPerWAVES_MDL, err := droplet.ToString(dropletsPerWAVES_MDL)
+		if err != nil {
+			log.WithError(err).Error("droplet.ToString failed CalculateEthMDLValue")
+			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
+			return
+		}
+
+		supportedCrypto := []config.SupportedCrypto{
+			{
+				Name:            s.cfg.MDLExchanger.MDLBtcExchangeName,
+				ExchangeRate:    s.cfg.MDLExchanger.MDLBtcExchangeRate,
+				ExchangeRateUSD: s.cfg.MDLExchanger.MDLBtcExchangeRateUSD,
+				Label:           s.cfg.MDLExchanger.MDLBtcExchangeLabel,
+				Enabled:         s.cfg.MDLExchanger.MDLBtcExchangeEnabled,
+			},
+			{
+				Name:            s.cfg.MDLExchanger.MDLEthExchangeName,
+				ExchangeRate:    s.cfg.MDLExchanger.MDLEthExchangeRate,
+				ExchangeRateUSD: s.cfg.MDLExchanger.MDLEthExchangeRateUSD,
+				Label:           s.cfg.MDLExchanger.MDLEthExchangeLabel,
+				Enabled:         s.cfg.MDLExchanger.MDLEthExchangeEnabled,
+			},
+			{
+				Name:            s.cfg.MDLExchanger.MDLSkyExchangeName,
+				ExchangeRate:    s.cfg.MDLExchanger.MDLSkyExchangeRate,
+				ExchangeRateUSD: s.cfg.MDLExchanger.MDLSkyExchangeRateUSD,
+				Label:           s.cfg.MDLExchanger.MDLSkyExchangeLabel,
+				Enabled:         s.cfg.MDLExchanger.MDLSkyExchangeEnabled,
+			},
+			{
+				Name:            s.cfg.MDLExchanger.MDLWavesExchangeName,
+				ExchangeRate:    s.cfg.MDLExchanger.MDLWavesExchangeRate,
+				ExchangeRateUSD: s.cfg.MDLExchanger.MDLWavesExchangeRateUSD,
+				Label:           s.cfg.MDLExchanger.MDLWavesExchangeLabel,
+				Enabled:         s.cfg.MDLExchanger.MDLWavesExchangeEnabled,
+			},
+			{
+				Name:            s.cfg.MDLExchanger.MDLWavesMDLExchangeName,
+				ExchangeRate:    s.cfg.MDLExchanger.MDLWavesMDLExchangeRate,
+				ExchangeRateUSD: s.cfg.MDLExchanger.MDLWavesMDLExchangeRateUSD,
+				Label:           s.cfg.MDLExchanger.MDLWavesMDLExchangeLabel,
+				Enabled:         s.cfg.MDLExchanger.MDLWavesMDLExchangeEnabled,
+			},
+		}
 
 		if err := httputil.JSONResponse(w, ConfigResponse{
 			Enabled:                  s.cfg.Teller.BindEnabled,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
 			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
-			MDLBtcExchangeRate:       mdlPerBTC,
-			MDLEthExchangeRate:       mdlPerETH,
-			MDLSkyExchangeRate:       mdlPerSKY,
-			MDLWavesExchangeRate:       mdlPerWAVES,
-			MaxDecimals:              maxDecimals,
-			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
-			Supported: 								s.cfg.Teller.Supported,
+
+			MDLBtcExchangeRate:      mdlPerBTC,
+			MDLEthExchangeRate:      mdlPerETH,
+			MDLSkyExchangeRate:      mdlPerSKY,
+			MDLWavesExchangeRate:    mdlPerWAVES,
+			MDLWavesMDLExchangeRate: mdlPerWAVES_MDL,
+
+			MaxDecimals:       maxDecimals,
+			MaxBoundAddresses: s.cfg.Teller.MaxBoundAddresses,
+			Supported:         supportedCrypto,
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}

@@ -287,7 +287,6 @@ func run() error {
 
 	}
 
-
 	background("multiplex.Run", errC, multiplexer.Multiplex)
 
 	if cfg.Dummy.Sender {

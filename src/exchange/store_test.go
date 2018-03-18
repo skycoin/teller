@@ -210,7 +210,6 @@ func mustBindAddressSky(t *testing.T, s Storer, mdlAddr, addr string) {
 	require.Equal(t, config.BuyMethodDirect, boundAddr.BuyMethod)
 }
 
-
 func TestStoreBindAddress(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
@@ -247,7 +246,6 @@ func TestStoreBindAddress(t *testing.T) {
 	// A mdl address can have multiple addresses bound to it
 	mustBindAddress(t, s, "sa1", "ba2")
 }
-
 
 func TestStoreSkyBindAddress(t *testing.T) {
 	s, shutdown := newTestStore(t)
@@ -309,11 +307,11 @@ func TestStoreGetBindAddress(t *testing.T) {
 
 	var testCases = []struct {
 		name          string
-		coinAddr       string
+		coinAddr      string
 		expectMDLAddr string
 		ok            bool
 		err           error
-		coinType string
+		coinType      string
 	}{
 		{
 			"get btcaddr1",
@@ -383,11 +381,11 @@ func TestStoreGetBindAddress(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-				// init the bind address bucket
+			// init the bind address bucket
 			if tc.expectMDLAddr != "" {
 				if tc.coinType == scanner.CoinTypeSKY {
 					mustBindAddressSky(t, s, tc.expectMDLAddr, tc.coinAddr)
-				}else {
+				} else {
 					mustBindAddress(t, s, tc.expectMDLAddr, tc.coinAddr)
 				}
 			}
@@ -865,7 +863,5 @@ func TestStoreGetMDLBindAddresses(t *testing.T) {
 		BuyMethod:  config.BuyMethodDirect,
 		CoinType:   scanner.CoinTypeSKY,
 	})
-
-
 
 }

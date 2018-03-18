@@ -19,12 +19,13 @@ import (
 
 	"flag"
 
-	"github.com/btcsuite/btcd/btcjson"
-	"github.com/skycoin/skycoin/src/visor"
-	"github.com/skycoin/skycoin/src/coin"
 	"crypto/rand"
-	"github.com/skycoin/skycoin/src/cipher"
 	"log"
+
+	"github.com/btcsuite/btcd/btcjson"
+	"github.com/skycoin/skycoin/src/cipher"
+	"github.com/skycoin/skycoin/src/coin"
+	"github.com/skycoin/skycoin/src/visor"
 )
 
 const (
@@ -214,7 +215,6 @@ func createFakeBlock(address, coins string) (blocks visor.ReadableBlocks) {
 					},
 				},
 			},
-
 		},
 	}
 
@@ -835,10 +835,10 @@ func run() error {
 
 	server := rpcServer{
 		requestProcessShutdown: make(chan struct{}),
-		key:                    *keyFile,
-		cert:                   *certFile,
-		address:                *address,
-		maxConcurrentReqs:      10,
+		key:               *keyFile,
+		cert:              *certFile,
+		address:           *address,
+		maxConcurrentReqs: 10,
 	}
 
 	apiServer := newHTTPAPIServer(*httpAPIAddress)
@@ -891,7 +891,7 @@ func init() {
 	}
 }
 
-func getBlock() (*coin.Block) {
+func getBlock() *coin.Block {
 	prev := coin.Block{Head: coin.BlockHeader{Version: 0x02, Time: 100, BkSeq: 98}}
 	b := make([]byte, 128)
 	rand.Read(b)

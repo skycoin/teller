@@ -256,7 +256,6 @@ func TestAddrManager(t *testing.T) {
 	_, err = addrManager.NewAddress(typeE)
 	require.Equal(t, ErrDepositAddressEmpty, err)
 
-
 	//set typeE address into map
 	addrMap = make(map[string]struct{})
 	for _, a := range skyAddresses {

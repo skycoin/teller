@@ -27,10 +27,10 @@ import (
 )
 
 var (
-	errNoSkyBlockHash     = errors.New("Block 2 not found")
-	testWebRPCAddr = "127.0.0.1:8081"
-	txHeight       = uint64(103)
-	txConfirmed    = true
+	errNoSkyBlockHash = errors.New("Block 2 not found")
+	testWebRPCAddr    = "127.0.0.1:8081"
+	txHeight          = uint64(103)
+	txConfirmed       = true
 )
 
 type fakeGateway struct {

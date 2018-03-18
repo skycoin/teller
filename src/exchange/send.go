@@ -3,9 +3,9 @@ package exchange
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
-	"math/big"
 
 	"github.com/sirupsen/logrus"
 

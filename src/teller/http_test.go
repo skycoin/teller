@@ -13,12 +13,13 @@ import (
 
 	"github.com/MDLlife/MDL/src/api/cli"
 
+	"bytes"
+
+	"github.com/MDLlife/teller/src/config"
 	"github.com/MDLlife/teller/src/exchange"
+	"github.com/MDLlife/teller/src/scanner"
 	"github.com/MDLlife/teller/src/sender"
 	"github.com/MDLlife/teller/src/util/testutil"
-	"bytes"
-	"github.com/MDLlife/teller/src/scanner"
-	"github.com/MDLlife/teller/src/config"
 )
 
 type fakeExchanger struct {
@@ -262,7 +263,6 @@ func TestExchangeBindHandler(t *testing.T) {
 
 			log, _ := testutil.NewLogger(t)
 
-
 			rr := httptest.NewRecorder()
 			httpServ := &HTTPServer{
 				cfg: config.Config{
@@ -294,10 +294,10 @@ func TestExchangeBindHandler(t *testing.T) {
 			err = json.Unmarshal(rr.Body.Bytes(), &msg)
 			require.NoError(t, err)
 			require.Equal(t, ExchangeStatusResponse{
-				Error: tc.errorMsg,
+				Error:   tc.errorMsg,
 				Balance: ExchangeStatusResponseBalance{
-					//Coins: tc.balance.Coins,
-					//Hours: tc.balance.Hours,
+				//Coins: tc.balance.Coins,
+				//Hours: tc.balance.Hours,
 				},
 			}, msg)
 		})
