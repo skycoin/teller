@@ -89,7 +89,7 @@ type Config struct {
 type SupportedCrypto struct {
 	Name            string `json:"name"`
 	Label           string `json:"label"` //i18n label for translation
-	Enabled         bool `json:"enabled"`
+	Enabled         bool   `json:"enabled"`
 	ExchangeRateUSD string `json:"exchange_rate_usd"`
 	ExchangeRate    string `json:"exchange_rate"`
 }
@@ -192,31 +192,31 @@ type MDLExchanger struct {
 	MDLBtcExchangeRate    string `mapstructure:"mdl_btc_exchange_rate"`
 	MDLBtcExchangeRateUSD string `mapstructure:"mdl_btc_exchange_rate_usd"`
 	MDLBtcExchangeLabel   string `mapstructure:"mdl_btc_exchange_label"`
-	MDLBtcExchangeEnabled bool `mapstructure:"mdl_btc_exchange_enabled"`
+	MDLBtcExchangeEnabled bool   `mapstructure:"mdl_btc_exchange_enabled"`
 
 	MDLEthExchangeName    string `mapstructure:"mdl_eth_exchange_name"`
 	MDLEthExchangeRate    string `mapstructure:"mdl_eth_exchange_rate"`
 	MDLEthExchangeRateUSD string `mapstructure:"mdl_eth_exchange_rate_usd"`
 	MDLEthExchangeLabel   string `mapstructure:"mdl_eth_exchange_label"`
-	MDLEthExchangeEnabled bool `mapstructure:"mdl_eth_exchange_enabled"`
+	MDLEthExchangeEnabled bool   `mapstructure:"mdl_eth_exchange_enabled"`
 
 	MDLSkyExchangeName    string `mapstructure:"mdl_sky_exchange_name"`
 	MDLSkyExchangeRate    string `mapstructure:"mdl_sky_exchange_rate"`
 	MDLSkyExchangeRateUSD string `mapstructure:"mdl_sky_exchange_rate_usd"`
 	MDLSkyExchangeLabel   string `mapstructure:"mdl_sky_exchange_label"`
-	MDLSkyExchangeEnabled bool `mapstructure:"mdl_sky_exchange_enabled"`
+	MDLSkyExchangeEnabled bool   `mapstructure:"mdl_sky_exchange_enabled"`
 
 	MDLWavesExchangeName    string `mapstructure:"mdl_waves_exchange_name"`
 	MDLWavesExchangeRate    string `mapstructure:"mdl_waves_exchange_rate"`
 	MDLWavesExchangeRateUSD string `mapstructure:"mdl_waves_exchange_rate_usd"`
 	MDLWavesExchangeLabel   string `mapstructure:"mdl_waves_exchange_label"`
-	MDLWavesExchangeEnabled bool `mapstructure:"mdl_waves_exchange_enabled"`
+	MDLWavesExchangeEnabled bool   `mapstructure:"mdl_waves_exchange_enabled"`
 
 	MDLWavesMDLExchangeName    string `mapstructure:"mdl_waves_mdl_exchange_name"`
 	MDLWavesMDLExchangeRate    string `mapstructure:"mdl_waves_mdl_exchange_rate"`
 	MDLWavesMDLExchangeRateUSD string `mapstructure:"mdl_waves_mdl_exchange_rate_usd"`
 	MDLWavesMDLExchangeLabel   string `mapstructure:"mdl_waves_mdl_exchange_label"`
-	MDLWavesMDLExchangeEnabled bool `mapstructure:"mdl_waves_mdl_exchange_enabled"`
+	MDLWavesMDLExchangeEnabled bool   `mapstructure:"mdl_waves_mdl_exchange_enabled"`
 
 	// Number of decimal places to truncate MDL to
 	MaxDecimals int `mapstructure:"max_decimals"`

@@ -20,7 +20,6 @@ import (
 	"github.com/MDLlife/MDL/src/cipher"
 	"github.com/MDLlife/MDL/src/coin"
 
-
 	"github.com/MDLlife/teller/src/config"
 	"github.com/MDLlife/teller/src/scanner"
 	"github.com/MDLlife/teller/src/sender"
