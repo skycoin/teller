@@ -2,11 +2,10 @@ language: go
 
 go:
     - "1.9"
-    - "1.10"
 
 install:
   - make install-linters
   - make test-ci
 
 script:
-  - make lint
+  #- make lint
