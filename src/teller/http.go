@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
-	"strconv"
 
 	"time"
 
@@ -517,7 +517,7 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 // ConfigResponse http response for /api/config
 type ConfigResponse struct {
 	Enabled                  bool                     `json:"enabled"`
-	Available								 float64                   `json:"available"`
+	Available                float64                  `json:"available"`
 	BtcConfirmationsRequired int64                    `json:"btc_confirmations_required"`
 	EthConfirmationsRequired int64                    `json:"eth_confirmations_required"`
 	MaxBoundAddresses        int                      `json:"max_bound_addrs"`
@@ -654,15 +654,15 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			},
 		}
 
-		balance := 0.0;
+		balance := 0.0
 		if b, err := s.exchanger.Balance(); err == nil {
 			if balance, err = strconv.ParseFloat(b.Coins, 3); err != nil {
-				balance = 0.0;
+				balance = 0.0
 			}
 		}
 		if err := httputil.JSONResponse(w, ConfigResponse{
 			Enabled:                  s.cfg.Teller.BindEnabled,
-			Available:								balance,
+			Available:                balance,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
 			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
 
