@@ -95,8 +95,8 @@ func CalculateEthMDLValue(wei *big.Int, mdlPerETH string, maxDecimals int) (uint
 // CalculateSkyMDLValue returns the amount of MDL (in droplets) to give for an
 // amount of SKY.
 // Rate is measured in MDL per SKY
-func CalculateSkyMDLValue(droplets *big.Int, mdlPerSKY string, maxDecimals int) (uint64, error) {
-	if droplets.Sign() < 0 {
+func CalculateSkyMDLValue(droplets int64, mdlPerSKY string, maxDecimals int) (uint64, error) {
+	if droplets < 0 {
 		return 0, errors.New("droplets must be greater than or equal to 0")
 	}
 	if maxDecimals < 0 {
@@ -108,17 +108,12 @@ func CalculateSkyMDLValue(droplets *big.Int, mdlPerSKY string, maxDecimals int) 
 		return 0, err
 	}
 
-	sky := decimal.NewFromBigInt(droplets, 0)
-	skyToDroplets := decimal.New(DropletsPerSKY, 0)
-	sky = sky.DivRound(skyToDroplets, 8)
+	sky := decimal.New(droplets, 0)
 
 	mdl := sky.Mul(rate)
 	mdl = mdl.Truncate(int32(maxDecimals))
 
-	mdlToDroplets := decimal.New(droplet.Multiplier, 0)
-	droplts := mdl.Mul(mdlToDroplets)
-
-	amt := droplts.IntPart()
+	amt := mdl.IntPart()
 	if amt < 0 {
 		// This should never occur, but double check before we convert to uint64,
 		// otherwise we would send all the coins due to integer wrapping.

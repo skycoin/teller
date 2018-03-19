@@ -3,7 +3,6 @@ package exchange
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
@@ -417,7 +416,7 @@ func (s *Send) calculateMDLDroplets(di DepositInfo) (uint64, error) {
 		}
 	case scanner.CoinTypeSKY:
 		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
-		mdlAmt, err = CalculateSkyMDLValue(big.NewInt(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
+		mdlAmt, err = CalculateSkyMDLValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
 		if err != nil {
 			log.WithError(err).Error("CalculateSkyMDLValue failed")
 			return 0, err

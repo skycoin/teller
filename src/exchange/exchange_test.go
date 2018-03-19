@@ -20,7 +20,6 @@ import (
 	"github.com/MDLlife/MDL/src/cipher"
 	"github.com/MDLlife/MDL/src/coin"
 
-	"math/big"
 
 	"github.com/MDLlife/teller/src/config"
 	"github.com/MDLlife/teller/src/scanner"
@@ -467,7 +466,7 @@ func TestExchangeSkyRunSend(t *testing.T) {
 	skyAddr := "foo-sky-addr"
 	mustBindAddressSky(t, e.store, mdlAddr, skyAddr)
 
-	var value = big.NewInt(1e6)
+	var value = int64(1e6)
 	mdlSent, err := CalculateSkyMDLValue(value, testMDLSkyRate, testMaxDecimals)
 	require.NoError(t, err)
 	txid := e.Sender.(*Send).sender.(*dummySender).predictTxid(t, mdlAddr, mdlSent)
@@ -476,7 +475,7 @@ func TestExchangeSkyRunSend(t *testing.T) {
 		Deposit: scanner.Deposit{
 			CoinType: scanner.CoinTypeSKY,
 			Address:  skyAddr,
-			Value:    value.Int64(),
+			Value:    value,
 			Height:   20,
 			Tx:       "foo-tx",
 			N:        2,
