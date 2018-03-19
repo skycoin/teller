@@ -248,11 +248,11 @@ class Distribution extends React.Component {
                     value={this.state.coinType}
                     onChange={this.handleCoinTypeChange}
                     options={[
-                      { value: 'BTC', label: 'Bitcoin (Under Maintenance) 1 BTC = $7975, 1 BTC = ' + Math.floor(this.state.mdl_btc_exchange_rate) + ' MDL', disabled: false },
-                      { value: 'ETH', label: 'Ethereum (Maintenance, might be VERY slow) 1 ETH = $588, 1 ETH =  ' + Math.floor(this.state.mdl_eth_exchange_rate) + ' MDL', disabled: false },
-                      { value: 'SKY', label: 'SKY (Experimental)  1 SKY = $8.8, 1 SKY = ' + Math.floor(this.state.mdl_sky_exchange_rate) + ' MDL', disabled: false },
-                      { value: 'WAVES', label: 'WAVES (Temporary Disabled)', disabled: true },,
-                      { value: 'MDL.life', label: 'MDL.life (pre-MDL token on Waves)', disabled: true },
+                      { value: 'BTC', label: 'Bitcoin (Under Maintenance)', disabled: true },
+                      { value: 'ETH', label: 'ETH' },
+                      { value: 'BTC', label: 'SKY', disabled: false },
+                      { value: 'BTC', label: 'WAVES (Temporary Disabled)', disabled: true },
+                      { value: 'BTC', label: 'MDL.life (pre-MDL token on Waves)', disabled: true },
                     ]}
                   />
                   <Text heavy color="grey" fontSize={[2, 3]}>
