@@ -250,7 +250,7 @@ class Distribution extends React.Component {
                     options={[
                       { value: 'BTC', label: 'Bitcoin (Under Maintenance)', disabled: true },
                       { value: 'ETH', label: 'ETH' },
-                      { value: 'BTC', label: 'SKY (Temporary Disabled)', disabled: true },
+                      { value: 'BTC', label: 'SKY', disabled: false },
                       { value: 'BTC', label: 'WAVES (Temporary Disabled)', disabled: true },,
                       { value: 'BTC', label: 'MDL.life (pre-MDL token on Waves)', disabled: true },
                     ]}
