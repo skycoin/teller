@@ -55,7 +55,7 @@ confirmations_required = 1
 
 [eth_scanner]
 scan_period = "5s"
-initial_scan_height=4654259
+initial_scan_height=135508
 confirmations_required = 1
 
 [sky_scanner]
@@ -98,6 +98,7 @@ mdl_waves_exchange_rate_usd = ""  # TODO:
 mdl_waves_exchange_label = "Waves (Temporary Disabled)"
 mdl_waves_exchange_enabled = false
 
+mdl_waves_mdl_exchange_name = "MDLlife"
 mdl_waves_mdl_exchange_rate = "100" # REQUIRED: MDL/WAVES MDL exchange rate as a string, can be an int, float or a rational fraction
 mdl_waves_mdl_exchange_rate_usd = "" # TODO:
 mdl_waves_mdl_exchange_label = "MDL.life - pre-MDL token on Waves (Temporary Disabled, but coming soon)"
