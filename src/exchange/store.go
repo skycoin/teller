@@ -41,6 +41,8 @@ func GetBindAddressBkt(coinType string) ([]byte, error) {
 		suffix = "btc"
 	case scanner.CoinTypeETH:
 		suffix = "eth"
+	case scanner.CoinTypeSKY:
+		suffix = "sky"
 	default:
 		return nil, scanner.ErrUnsupportedCoinType
 	}
@@ -133,7 +135,7 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 	}, nil
 }
 
-// GetBindAddress returns bound mdl address of given bitcoin address.
+// GetBindAddress returns bound mdl address of given coin address.
 // If no mdl address is found, returns empty string and nil error.
 func (s *Store) GetBindAddress(depositAddr, coinType string) (*BoundAddress, error) {
 	var boundAddr *BoundAddress
@@ -148,7 +150,7 @@ func (s *Store) GetBindAddress(depositAddr, coinType string) (*BoundAddress, err
 	return boundAddr, nil
 }
 
-// getBindAddressTx returns bound mdl address of given bitcoin address.
+// getBindAddressTx returns bound mdl address of given coin address.
 // If no mdl address is found, returns empty string and nil error.
 func (s *Store) getBindAddressTx(tx *bolt.Tx, depositAddr, coinType string) (*BoundAddress, error) {
 	bindBktFullName, err := GetBindAddressBkt(coinType)

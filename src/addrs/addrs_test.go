@@ -54,6 +54,26 @@ func testNewEthAddrManager(t *testing.T, db *bolt.DB, log *logrus.Logger) (*Addr
 	return etha, addresses
 }
 
+func testNewSkyAddrManager(t *testing.T, db *bolt.DB, log *logrus.Logger) (*Addrs, []string) {
+	addresses := []string{
+		"2d755DQCskeFg7xKqpryCHiS78K91qD1syQ",
+	}
+
+	etha, err := NewAddrs(log, db, addresses, "test_bucket_sky")
+	require.NoError(t, err)
+
+	addrMap := make(map[string]struct{}, len(etha.addresses))
+	for _, a := range etha.addresses {
+		addrMap[a] = struct{}{}
+	}
+
+	for _, addr := range addresses {
+		_, ok := addrMap[addr]
+		require.True(t, ok)
+	}
+	return etha, addresses
+}
+
 func TestNewBtcAddrs(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
@@ -188,15 +208,19 @@ func TestAddrManager(t *testing.T) {
 	//create AddrGenertor
 	btcGen, btcAddresses := testNewBtcAddrManager(t, db, log)
 	ethGen, ethAddresses := testNewEthAddrManager(t, db, log)
+	skyGen, skyAddresses := testNewSkyAddrManager(t, db, log)
 
 	typeB := "TOKENB"
 	typeE := "TOKENE"
+	typeS := "TOKENS"
 
 	addrManager := NewAddrManager()
 	//add generator to addrManager
 	err := addrManager.PushGenerator(btcGen, typeB)
 	require.NoError(t, err)
 	err = addrManager.PushGenerator(ethGen, typeE)
+	require.NoError(t, err)
+	err = addrManager.PushGenerator(skyGen, typeS)
 	require.NoError(t, err)
 
 	addrMap := make(map[string]struct{})
@@ -230,6 +254,23 @@ func TestAddrManager(t *testing.T) {
 		require.True(t, ok)
 	}
 	_, err = addrManager.NewAddress(typeE)
+	require.Equal(t, ErrDepositAddressEmpty, err)
+
+	//set typeE address into map
+	addrMap = make(map[string]struct{})
+	for _, a := range skyAddresses {
+		addrMap[a] = struct{}{}
+	}
+
+	// run out all addresses of typeE
+	for i := 0; i < len(skyAddresses); i++ {
+		addr, err := addrManager.NewAddress(typeS)
+		require.NoError(t, err)
+		// check if the addr still in the address pool
+		_, ok := addrMap[addr]
+		require.True(t, ok)
+	}
+	_, err = addrManager.NewAddress(typeS)
 	require.Equal(t, ErrDepositAddressEmpty, err)
 
 	//check not exists cointype

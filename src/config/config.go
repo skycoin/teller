@@ -54,15 +54,28 @@ type Config struct {
 	BtcAddresses string `mapstructure:"btc_addresses"`
 	// Path of ETH addresses JSON file
 	EthAddresses string `mapstructure:"eth_addresses"`
+	// Path of SKY addresses JSON file
+	SkyAddresses string `mapstructure:"sky_addresses"`
+	// Path of Waves addresses JSON file
+	WavesAddresses string `mapstructure:"waves_addresses"`
+	// Path of Waves MDL addresses JSON file
+	WavesMDLAddresses string `mapstructure:"waves_mdl_addresses"`
 
 	Teller Teller `mapstructure:"teller"`
 
-	MDLRPC MDLRPC `mapstructure:"mdl_rpc"`
-	BtcRPC BtcRPC `mapstructure:"btc_rpc"`
-	EthRPC EthRPC `mapstructure:"eth_rpc"`
+	MDLRPC      MDLRPC `mapstructure:"mdl_rpc"`
+	BtcRPC      BtcRPC `mapstructure:"btc_rpc"`
+	EthRPC      EthRPC `mapstructure:"eth_rpc"`
+	SkyRPC      SkyRPC `mapstructure:"sky_rpc"`
+	WavesRPC    SkyRPC `mapstructure:"waves_rpc"`
+	WavesMDLRPC SkyRPC `mapstructure:"waves__mdl_rpc"`
 
-	BtcScanner   BtcScanner   `mapstructure:"btc_scanner"`
-	EthScanner   EthScanner   `mapstructure:"eth_scanner"`
+	BtcScanner      BtcScanner `mapstructure:"btc_scanner"`
+	EthScanner      EthScanner `mapstructure:"eth_scanner"`
+	SkyScanner      SkyScanner `mapstructure:"sky_scanner"`
+	WavesScanner    SkyScanner `mapstructure:"waves_scanner"`
+	WavesMDLScanner SkyScanner `mapstructure:"waves_mdl_scanner"`
+
 	MDLExchanger MDLExchanger `mapstructure:"mdl_exchanger"`
 
 	Web Web `mapstructure:"web"`
@@ -72,11 +85,15 @@ type Config struct {
 	Dummy Dummy `mapstructure:"dummy"`
 }
 
+// SupportedCrypto is used in the UI to build a list of supported Cryptos
 type SupportedCrypto struct {
-	Value string `json:"value"`
-	Label string `json:"label"`
-	Disabled bool `json:"disabled"`
+	Name            string `json:"name"`
+	Label           string `json:"label"` //i18n label for translation
+	Enabled         bool   `json:"enabled"`
+	ExchangeRateUSD string `json:"exchange_rate_usd"`
+	ExchangeRate    string `json:"exchange_rate"`
 }
+
 // Teller config for teller
 type Teller struct {
 	// Max number of btc addresses a mdl address can bind
@@ -84,7 +101,6 @@ type Teller struct {
 	// Allow address binding
 	BindEnabled bool `mapstructure:"bind_enabled"`
 	// Currently supported purchase methods
-	Supported 					[]SupportedCrypto `mapstructure:"supported"`
 }
 
 // MDLRPC config for MDL daemon node RPC
@@ -108,6 +124,27 @@ type EthRPC struct {
 	Enabled bool   `mapstructure:"enabled"`
 }
 
+// SkyRPC config for skyrpc
+type SkyRPC struct {
+	Server  string `mapstructure:"server"`
+	Port    string `mapstructure:"port"`
+	Enabled bool   `mapstructure:"enabled"`
+}
+
+// WavesRPC config for wavesrpc
+type WavesRPC struct {
+	Server  string `mapstructure:"server"`
+	Port    string `mapstructure:"port"`
+	Enabled bool   `mapstructure:"enabled"`
+}
+
+// WavesMDLRPC config for wavesmdlrpc
+type WavesMDLRPC struct {
+	Server  string `mapstructure:"server"`
+	Port    string `mapstructure:"port"`
+	Enabled bool   `mapstructure:"enabled"`
+}
+
 // BtcScanner config for BTC scanner
 type BtcScanner struct {
 	// How often to try to scan for blocks
@@ -124,13 +161,63 @@ type EthScanner struct {
 	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
 }
 
-// MDLExchanger config for mdl sender
+// SkyScanner config for SKY scanner
+type SkyScanner struct {
+	// How often to try to scan for blocks
+	ScanPeriod            time.Duration `mapstructure:"scan_period"`
+	InitialScanHeight     int64         `mapstructure:"initial_scan_height"`
+	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
+}
+
+// WavesScanner config for WAVES scanner
+type WavesScanner struct {
+	// How often to try to scan for blocks
+	ScanPeriod            time.Duration `mapstructure:"scan_period"`
+	InitialScanHeight     int64         `mapstructure:"initial_scan_height"`
+	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
+}
+
+// WavesMDLScanner config for WAVES MDL scanner
+type WavesMDLScanner struct {
+	// How often to try to scan for blocks
+	ScanPeriod            time.Duration `mapstructure:"scan_period"`
+	InitialScanHeight     int64         `mapstructure:"initial_scan_height"`
+	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
+}
+
+// MDLExchanger config for mdl sender, disabling enabling coin on exchange, message and rates
 type MDLExchanger struct {
-	// MDL/BTC exchange rate. Can be an int, float or rational fraction string
-	MDLBtcExchangeRate string `mapstructure:"mdl_btc_exchange_rate"`
-	MDLEthExchangeRate string `mapstructure:"mdl_eth_exchange_rate"`
-	MDLSkyExchangeRate string `mapstructure:"mdl_sky_exchange_rate"`
-	MDLWavesExchangeRate string `mapstructure:"mdl_waves_exchange_rate"`
+	// exchange rate. Can be an int, float or rational fraction string
+	MDLBtcExchangeName    string `mapstructure:"mdl_btc_exchange_name"`
+	MDLBtcExchangeRate    string `mapstructure:"mdl_btc_exchange_rate"`
+	MDLBtcExchangeRateUSD string `mapstructure:"mdl_btc_exchange_rate_usd"`
+	MDLBtcExchangeLabel   string `mapstructure:"mdl_btc_exchange_label"`
+	MDLBtcExchangeEnabled bool   `mapstructure:"mdl_btc_exchange_enabled"`
+
+	MDLEthExchangeName    string `mapstructure:"mdl_eth_exchange_name"`
+	MDLEthExchangeRate    string `mapstructure:"mdl_eth_exchange_rate"`
+	MDLEthExchangeRateUSD string `mapstructure:"mdl_eth_exchange_rate_usd"`
+	MDLEthExchangeLabel   string `mapstructure:"mdl_eth_exchange_label"`
+	MDLEthExchangeEnabled bool   `mapstructure:"mdl_eth_exchange_enabled"`
+
+	MDLSkyExchangeName    string `mapstructure:"mdl_sky_exchange_name"`
+	MDLSkyExchangeRate    string `mapstructure:"mdl_sky_exchange_rate"`
+	MDLSkyExchangeRateUSD string `mapstructure:"mdl_sky_exchange_rate_usd"`
+	MDLSkyExchangeLabel   string `mapstructure:"mdl_sky_exchange_label"`
+	MDLSkyExchangeEnabled bool   `mapstructure:"mdl_sky_exchange_enabled"`
+
+	MDLWavesExchangeName    string `mapstructure:"mdl_waves_exchange_name"`
+	MDLWavesExchangeRate    string `mapstructure:"mdl_waves_exchange_rate"`
+	MDLWavesExchangeRateUSD string `mapstructure:"mdl_waves_exchange_rate_usd"`
+	MDLWavesExchangeLabel   string `mapstructure:"mdl_waves_exchange_label"`
+	MDLWavesExchangeEnabled bool   `mapstructure:"mdl_waves_exchange_enabled"`
+
+	MDLWavesMDLExchangeName    string `mapstructure:"mdl_waves_mdl_exchange_name"`
+	MDLWavesMDLExchangeRate    string `mapstructure:"mdl_waves_mdl_exchange_rate"`
+	MDLWavesMDLExchangeRateUSD string `mapstructure:"mdl_waves_mdl_exchange_rate_usd"`
+	MDLWavesMDLExchangeLabel   string `mapstructure:"mdl_waves_mdl_exchange_label"`
+	MDLWavesMDLExchangeEnabled bool   `mapstructure:"mdl_waves_mdl_exchange_enabled"`
+
 	// Number of decimal places to truncate MDL to
 	MaxDecimals int `mapstructure:"max_decimals"`
 	// How long to wait before rechecking transaction confirmations
@@ -166,6 +253,18 @@ func (c MDLExchanger) validate() []error {
 	if _, err := mathutil.ParseRate(c.MDLEthExchangeRate); err != nil {
 		errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_eth_exchange_rate invalid: %v", err))
 	}
+
+	if _, err := mathutil.ParseRate(c.MDLSkyExchangeRate); err != nil {
+		errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_sky_exchange_rate invalid: %v", err))
+	}
+
+	//if _, err := mathutil.ParseRate(c.MDLWavesExchangeRate); err != nil {
+	//	errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_waves_exchange_rate invalid: %v", err))
+	//}
+	//
+	//if _, err := mathutil.ParseRate(c.MDLWavesMDLExchangeRate); err != nil {
+	//	errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_waves_mdl_exchange_rate invalid: %v", err))
+	//}
 
 	if c.MaxDecimals < 0 {
 		errs = append(errs, errors.New("mdl_exchanger.max_decimals can't be negative"))
@@ -285,6 +384,24 @@ func (c Config) Validate() error {
 	if _, err := os.Stat(c.EthAddresses); os.IsNotExist(err) {
 		oops("eth_addresses file does not exist")
 	}
+	if c.SkyAddresses == "" {
+		oops("sky_addresses missing")
+	}
+	if _, err := os.Stat(c.SkyAddresses); os.IsNotExist(err) {
+		oops("sky_addresses file does not exist")
+	}
+	if c.WavesAddresses == "" {
+		oops("waves_addresses missing")
+	}
+	if _, err := os.Stat(c.WavesAddresses); os.IsNotExist(err) {
+		oops("waves_addresses file does not exist")
+	}
+	if c.WavesMDLAddresses == "" {
+		oops("waves_mdl_addresses missing")
+	}
+	if _, err := os.Stat(c.WavesMDLAddresses); os.IsNotExist(err) {
+		oops("waves_mdl_addresses file does not exist")
+	}
 
 	if !c.Dummy.Sender {
 		if c.MDLRPC.Address == "" {
@@ -330,6 +447,34 @@ func (c Config) Validate() error {
 				oops("eth_rpc.port missing")
 			}
 		}
+
+		if c.SkyRPC.Enabled {
+			if c.SkyRPC.Server == "" {
+				oops("sky_rpc.server missing")
+			}
+			if c.SkyRPC.Port == "" {
+				oops("sky_rpc.port missing")
+			}
+		}
+
+		if c.WavesRPC.Enabled {
+			if c.WavesRPC.Server == "" {
+				oops("waves_rpc.server missing")
+			}
+			if c.WavesRPC.Port == "" {
+				oops("waves_rpc.port missing")
+			}
+		}
+
+		if c.WavesMDLRPC.Enabled {
+			if c.WavesMDLRPC.Server == "" {
+				oops("waves_mdl_rpc.server missing")
+			}
+			if c.WavesMDLRPC.Port == "" {
+				oops("waves_mdl_rpc.port missing")
+			}
+		}
+
 	}
 
 	if c.BtcScanner.ConfirmationsRequired < 0 {
@@ -343,6 +488,27 @@ func (c Config) Validate() error {
 	}
 	if c.EthScanner.InitialScanHeight < 0 {
 		oops("eth_scanner.initial_scan_height must be >= 0")
+	}
+
+	if c.SkyScanner.ConfirmationsRequired < 0 {
+		oops("sky_scanner.confirmations_required must be >= 0")
+	}
+	if c.SkyScanner.InitialScanHeight < 0 {
+		oops("sky_scanner.initial_scan_height must be >= 0")
+	}
+
+	if c.WavesScanner.ConfirmationsRequired < 0 {
+		oops("waves_scanner.confirmations_required must be >= 0")
+	}
+	if c.WavesScanner.InitialScanHeight < 0 {
+		oops("waves_scanner.initial_scan_height must be >= 0")
+	}
+
+	if c.WavesMDLScanner.ConfirmationsRequired < 0 {
+		oops("waves_mdl_scanner.confirmations_required must be >= 0")
+	}
+	if c.WavesMDLScanner.InitialScanHeight < 0 {
+		oops("waves_mdl_scanner.initial_scan_height must be >= 0")
 	}
 
 	exchangeErrs := c.MDLExchanger.validate()
@@ -377,13 +543,6 @@ func setDefaults() {
 
 	// Teller
 	viper.SetDefault("teller.max_bound_btc_addrs", 2)
-	btc := SupportedCrypto{Value:"BTC",Label:"Bitcoin (Under Maintenance)",Disabled:true}
-	eth := SupportedCrypto{Value:"ETH",Label:"Ethereum",Disabled:false}
-	sky := SupportedCrypto{Value:"SKY",Label:"Skycoin (Temporary Disabled)",Disabled:true}
-	waves := SupportedCrypto{Value:"Waves",Label:"Waves (Temporary Disabled)",Disabled:true}
-	mdllife := SupportedCrypto{Value:"MDL.life",Label:"MDL.life - pre-MDL token on Waves (Temporary Disabled, but coming soon)",Disabled:true}
-	cryptos := [5]SupportedCrypto{btc,eth,sky,waves,mdllife};
-	viper.SetDefault("teller.supported", cryptos)
 
 	// MDLRPC
 	viper.SetDefault("mdl_rpc.address", "127.0.0.1:6430")
@@ -395,6 +554,15 @@ func setDefaults() {
 	// EthRPC
 	viper.SetDefault("eth_rpc.enabled", false)
 
+	// SkyRPC
+	viper.SetDefault("sky_rpc.enabled", false)
+
+	// WavesRPC
+	viper.SetDefault("waves_rpc.enabled", false)
+
+	// WavesMDLRPC
+	viper.SetDefault("waves_mdl_rpc.enabled", false)
+
 	// BtcScanner
 	viper.SetDefault("btc_scanner.scan_period", time.Second*20)
 	viper.SetDefault("btc_scanner.initial_scan_height", int64(492478))
@@ -404,6 +572,21 @@ func setDefaults() {
 	viper.SetDefault("mdl_exchanger.tx_confirmation_check_wait", time.Second*5)
 	viper.SetDefault("mdl_exchanger.max_decimals", 3)
 	viper.SetDefault("mdl_exchanger.buy_method", BuyMethodDirect)
+
+	// MDLExchanger BTC
+	viper.SetDefault("mdl_exchanger.mdl_btc_exchange_enabled", false)
+
+	// MDLExchanger ETH
+	viper.SetDefault("mdl_exchanger.mdl_eth_exchange_enabled", false)
+
+	// MDLExchanger SKY
+	viper.SetDefault("mdl_exchanger.mdl_sky_exchange_enabled", false)
+
+	// MDLExchanger WAVES
+	viper.SetDefault("mdl_exchanger.mdl_waves_exchange_enabled", false)
+
+	// MDLExchanger WAVES MDL
+	viper.SetDefault("mdl_exchanger.mdl_waves_mdl_exchange_enabled", false)
 
 	// Web
 	viper.SetDefault("web.bind_enabled", true)

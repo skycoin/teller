@@ -9,44 +9,102 @@ enabled = true
 dbfile = "teller.db"  # dbfile is saved inside ~/.teller-mdl, do not include a path
 btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
 eth_addresses = "test_eth.json" # REQUIRED: path to eth addresses file
+sky_addresses = "example_sky_addresses.json"
+waves_addresses = "example_waves_addresses.json"
+waves_mdl_addresses = "example_waves_mdl_addresses.json"
 
 [teller]
 max_bound_addrs = 2 # 0 means unlimited
 bind_enabled = true # Disable this to prevent binding of new addresses
-#supported = ['BTC','ETH','SKY','WAVES', 'MDL.life']
-#supported = ['ETH']
 
 [mdl_rpc]
 address = "127.0.0.1:8330"
 
 [btc_rpc]
-enabled = true
+enabled = false
 server = "127.0.0.1:8334"
-user = "mdlissofunandawesomeJUSTAWESOMEANDAMAZING" # REQUIRED
-pass = "ejukixdthnbgfuhygicfddufyigdcfifhxhxhxd" # REQUIRED
-cert = "../rpc.cert" # REQUIRED
-key = "../rpc.key" # REQUIRED
+user = "1" # REQUIRED
+pass = "1" # REQUIRED
+cert = "rpc.cert" # REQUIRED
+key = "rpc.key" # REQUIRED
 
 [eth_rpc]
-enabled = true
+enabled = false
 server = "127.0.0.1" # REQUIRED
 port = "8545" # REQUIRED
 
+[sky_rpc]
+enabled = true
+server = "127.0.0.1" # REQUIRED
+port = "6430" # REQUIRED
+
+[waves_rpc]
+enabled = false # not yet implemented
+server = "127.0.0.1" # REQUIRED
+port = "8081" # REQUIRED
+
+[waves_mdl_rpc]
+enabled = false # not yet implemented
+server = "127.0.0.1" # REQUIRED
+port = "8081" # REQUIRED
+
 [btc_scanner]
 scan_period = "20s"
-initial_scan_height = 401787
+initial_scan_height = 492478
 confirmations_required = 1
+
 [eth_scanner]
 scan_period = "5s"
-initial_scan_height =135508
+initial_scan_height=135508
+confirmations_required = 1
+
+[sky_scanner]
+scan_period = "5s"
+initial_scan_height=18224
+confirmations_required = 0
+
+[waves_scanner]
+scan_period = "5s"
+initial_scan_height=4654259
+confirmations_required = 1
+
+[waves_mdl_scanner]
+scan_period = "5s"
+initial_scan_height=4654259
 confirmations_required = 1
 
 [mdl_exchanger]
-mdl_sky_exchange_rate = "176" # REQUIRED: MDL/SKY exchange rate as a string, can be an int, float or a rational fraction
-mdl_waves_exchange_rate = "100" # REQUIRED: MDL/WAVES exchange rate as a string, can be an int, float or a rational fraction
-mdl_btc_exchange_rate = "159500" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
-mdl_eth_exchange_rate = "11760" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
-wallet = "example.wlt" # REQUIRED: path to local hot wallet file
+mdl_btc_exchange_name = "BTC"
+mdl_btc_exchange_rate = "168000" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
+mdl_btc_exchange_rate_usd = "" # TODO:
+mdl_btc_exchange_label = "Bitcoin"
+mdl_btc_exchange_enabled = true
+
+mdl_eth_exchange_name = "ETH"
+mdl_eth_exchange_rate = "1100" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
+mdl_eth_exchange_rate_usd = ""  # TODO:
+mdl_eth_exchange_label = "Ethereum"
+mdl_eth_exchange_enabled = true
+
+mdl_sky_exchange_name = "SKY"
+mdl_sky_exchange_rate = "188" # REQUIRED: MDL/SKY exchange rate as a string, can be an int, float or a rational fraction
+mdl_sky_exchange_rate_usd = ""  # TODO:
+mdl_sky_exchange_label = "Skycoin"
+mdl_sky_exchange_enabled = true
+
+mdl_waves_exchange_name = "WAVES"
+mdl_waves_exchange_rate = "88" # REQUIRED: MDL/WAVES exchange rate as a string, can be an int, float or a rational fraction
+mdl_waves_exchange_rate_usd = ""  # TODO:
+mdl_waves_exchange_label = "Waves (Temporary Disabled)"
+mdl_waves_exchange_enabled = false
+
+mdl_waves_mdl_exchange_name = "MDL.life"
+mdl_waves_mdl_exchange_rate = "100" # REQUIRED: MDL/WAVES MDL exchange rate as a string, can be an int, float or a rational fraction
+mdl_waves_mdl_exchange_rate_usd = "" # TODO:
+mdl_waves_mdl_exchange_label = "MDL.life - pre-MDL token on Waves (Temporary Disabled, but coming soon)"
+mdl_waves_mdl_exchange_enabled = false
+
+wallet = "mdl-example.wlt" # REQUIRED: path to local hot wallet file
 # max_decimals = 3  # Number of decimal places to truncate MDL to
 # tx_confirmation_check_wait = "5s"
 send_enabled = true # Disable this to disable sending of coins (all other processing functions normally)
@@ -71,5 +129,5 @@ host = "127.0.0.1:7711"
 # fake sender and scanner with admin interface adding fake deposits,
 # and viewing and confirmed mdl transactions
 sender = false
-scanner = true
+scanner = false
 #http_addr = "127.0.0.1:4121"

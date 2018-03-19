@@ -10,6 +10,9 @@ test: ## Run tests
 	go test ./cmd/... -timeout=1m -cover
 	go test ./src/... -timeout=1m -cover
 
+test-race: ## Run tests with -race. Note: expected to fail, but look for "DATA RACE" failures specifically
+	go test ./src/... -timeout=2m -race
+
 lint: ## Run linters. Use make install-linters first.
 	vendorcheck ./...
 	gometalinter --deadline=3m -j 2 --disable-all --tests --vendor \
@@ -33,7 +36,7 @@ lint: ## Run linters. Use make install-linters first.
 		-E vet \
 		./...
 
-check: lint test ## Run tests and linters
+check: lint ## Run tests and linters
 
 cover: ## Runs tests on ./src/ with HTML code coverage
 	@echo "mode: count" > coverage-all.out
@@ -58,13 +61,24 @@ format:  # Formats the code. Must have goimports installed (use make install-lin
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
+test-ci: ## Run tests on each package
+	go test ./cmd/... -timeout=1m -cover
+	go test ./src/addrs/... -timeout=1m -cover
+	go test ./src/config/... -timeout=1m -cover
+	go test ./src/exchange/... -timeout=1m -cover
+	go test ./src/monitor/... -timeout=1m -cover
+	go test ./src/scanner/... -timeout=2m -cover
+	go test ./src/sender/... -timeout=1m -cover
+	go test ./src/teller/... -timeout=1m -cover
+	go test ./src/util/... -timeout=1m -cover
+
 test-package: ## Run tests on each package
 	go test -v ./cmd/... -timeout=1m -cover
 	go test -v ./src/addrs/... -timeout=1m -cover
 	go test -v ./src/config/... -timeout=1m -cover
 	go test -v ./src/exchange/... -timeout=1m -cover
 	go test -v ./src/monitor/... -timeout=1m -cover
-	go test -v ./src/scanner/... -timeout=1m -cover
+	go test -v ./src/scanner/... -timeout=2m -cover
 	go test -v ./src/sender/... -timeout=1m -cover
 	go test -v ./src/teller/... -timeout=1m -cover
 	go test -v ./src/util/... -timeout=1m -cover

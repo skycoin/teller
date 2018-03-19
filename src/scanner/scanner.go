@@ -6,6 +6,9 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/skycoin/skycoin/src/api/cli"
+	"github.com/skycoin/skycoin/src/api/webrpc"
+	"github.com/skycoin/skycoin/src/visor"
 )
 
 // Scanner provids apis for interacting with a scan service
@@ -20,6 +23,17 @@ type BtcRPCClient interface {
 	GetBlockHash(int64) (*chainhash.Hash, error)
 	GetBlockCount() (int64, error)
 	Shutdown()
+}
+
+// SkyRPCClient rpcclient interface
+type SkyRPCClient interface {
+	Send(recvAddr string, amount uint64) (string, error)
+	GetTransaction(txid string) (*webrpc.TxnResult, error)
+	GetBlocks(start, end uint64) (*visor.ReadableBlocks, error)
+	GetBlocksBySeq(seq uint64) (*visor.ReadableBlock, error)
+	GetLastBlocks() (*visor.ReadableBlock, error)
+	Shutdown()
+	SendBatch(saList []cli.SendAmount) (string, error)
 }
 
 // EthRPCClient rpcclient interface
@@ -61,5 +75,5 @@ func (d Deposit) ID() string {
 
 // GetCoinTypes returns supported coin types
 func GetCoinTypes() []string {
-	return []string{CoinTypeBTC, CoinTypeETH}
+	return []string{CoinTypeBTC, CoinTypeETH, CoinTypeSKY}
 }

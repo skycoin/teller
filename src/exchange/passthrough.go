@@ -213,6 +213,8 @@ func (p *Passthrough) checkBalance(di DepositInfo) error {
 		quantity = quantity.Mul(decimal.New(SatoshisPerBTC, 0))
 	case scanner.CoinTypeETH:
 		quantity = quantity.Mul(decimal.New(WeiPerETH, 0))
+	case scanner.CoinTypeSKY:
+		quantity = quantity.Mul(decimal.New(DropletsPerSKY, 0))
 	default:
 		return scanner.ErrUnsupportedCoinType
 	}
@@ -250,8 +252,9 @@ func (p *Passthrough) checkOrder(orderID int) (string, error) {
 }
 
 // clearOrders cancels all pending orders
-func clearOrders() error {
-	return nil
+func (p *Passthrough) clearOrders() error {
+	_, err := p.exchangeClient.CancelAll()
+	return err
 }
 
 // fillOrder buys one order at a time from the exchange
@@ -281,7 +284,7 @@ beginOrderLoop:
 		// Clear any pending orders by cancelling them
 		// TODO -- if any orders actually ended up completed, match the orderID
 		// with the deposit that made them, and update the deposit
-		if err := clearOrders(); err != nil {
+		if err := p.clearOrders(); err != nil {
 			return di, err
 		}
 

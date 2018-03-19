@@ -414,6 +414,13 @@ func (s *Send) calculateMDLDroplets(di DepositInfo) (uint64, error) {
 			log.WithError(err).Error("CalculateEthMDLValue failed")
 			return 0, err
 		}
+	case scanner.CoinTypeSKY:
+		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
+		mdlAmt, err = CalculateSkyMDLValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
+		if err != nil {
+			log.WithError(err).Error("CalculateSkyMDLValue failed")
+			return 0, err
+		}
 	default:
 		log.WithError(scanner.ErrUnsupportedCoinType).Error()
 		return 0, scanner.ErrUnsupportedCoinType

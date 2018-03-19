@@ -122,7 +122,7 @@ func (s *dummySender) setTxConfirmed(txid string) {
 
 func (s *dummySender) Balance() (*cli.Balance, error) {
 	return &cli.Balance{
-		Coins: "100.000000",
+		Coins: "1000.000000",
 		Hours: "100",
 	}, nil
 }
@@ -162,9 +162,11 @@ func (scan *dummyScanner) stop() {
 const (
 	testMDLBtcRate      = "100" // 100 MDL per BTC
 	testMDLEthRate      = "10"  // 10 MDL per ETH
+	testMDLSkyRate      = "100" // 100 MDL per SKY
 	testMaxDecimals     = 0
 	testMDLAddr         = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
 	testMDLAddr2        = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
+	testMDLAddr3        = "2Dc7kXtwBLr8GL4TSZKFCJM3xqEwnqH6m67"
 	testWalletFile      = "test.wlt"
 	dbScanTimeout       = time.Second * 3
 	statusCheckTimeout  = time.Second * 3
@@ -178,6 +180,7 @@ var (
 		BuyMethod:               config.BuyMethodDirect,
 		MDLBtcExchangeRate:      testMDLBtcRate,
 		MDLEthExchangeRate:      testMDLEthRate,
+		MDLSkyExchangeRate:      testMDLSkyRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 		Wallet:                  testWalletFile,
 		SendEnabled:             true,
@@ -190,10 +193,13 @@ func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 
 	bscr := newDummyScanner()
 	escr := newDummyScanner()
+	sscr := newDummyScanner()
 	multiplexer := scanner.NewMultiplexer(log)
 	err = multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 	err = multiplexer.AddScanner(escr, scanner.CoinTypeETH)
+	require.NoError(t, err)
+	err = multiplexer.AddScanner(sscr, scanner.CoinTypeSKY)
 	require.NoError(t, err)
 
 	go testutil.CheckError(t, multiplexer.Multiplex)
@@ -227,6 +233,7 @@ func closeMultiplexer(e *Exchange) {
 	mp := e.Receiver.(*Receive).multiplexer
 	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).stop()
 	mp.GetScanner(scanner.CoinTypeETH).(*dummyScanner).stop()
+	mp.GetScanner(scanner.CoinTypeSKY).(*dummyScanner).stop()
 	mp.Shutdown()
 }
 
@@ -243,10 +250,13 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 
 	bscr := newDummyScanner()
 	escr := newDummyScanner()
+	sscr := newDummyScanner()
 	multiplexer := scanner.NewMultiplexer(log)
 	err := multiplexer.AddScanner(bscr, scanner.CoinTypeBTC)
 	require.NoError(t, err)
 	err = multiplexer.AddScanner(escr, scanner.CoinTypeETH)
+	require.NoError(t, err)
+	err = multiplexer.AddScanner(sscr, scanner.CoinTypeSKY)
 	require.NoError(t, err)
 
 	go testutil.CheckError(t, multiplexer.Multiplex)
@@ -429,6 +439,138 @@ func TestExchangeRunSend(t *testing.T) {
 	expectedDeposit = DepositInfo{
 		Seq:            1,
 		CoinType:       scanner.CoinTypeBTC,
+		UpdatedAt:      di.UpdatedAt,
+		Status:         StatusDone,
+		MDLAddress:     mdlAddr,
+		DepositAddress: dn.Deposit.Address,
+		DepositID:      dn.Deposit.ID(),
+		Txid:           txid,
+		MDLSent:        100e6,
+		BuyMethod:      config.BuyMethodDirect,
+		ConversionRate: testMDLBtcRate,
+		DepositValue:   dn.Deposit.Value,
+		Deposit:        dn.Deposit,
+	}
+
+	require.Equal(t, expectedDeposit, di)
+	closeMultiplexer(e)
+}
+
+func TestExchangeSkyRunSend(t *testing.T) {
+	e, shutdown, _ := runExchange(t)
+	defer shutdown()
+	defer e.Shutdown()
+
+	mdlAddr := testMDLAddr3
+	skyAddr := "foo-sky-addr"
+	mustBindAddressSky(t, e.store, mdlAddr, skyAddr)
+
+	var value = int64(1e6)
+	mdlSent, err := CalculateSkyMDLValue(value, testMDLSkyRate, testMaxDecimals)
+	require.NoError(t, err)
+	txid := e.Sender.(*Send).sender.(*dummySender).predictTxid(t, mdlAddr, mdlSent)
+
+	dn := scanner.DepositNote{
+		Deposit: scanner.Deposit{
+			CoinType: scanner.CoinTypeSKY,
+			Address:  skyAddr,
+			Value:    value,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        2,
+		},
+		ErrC: make(chan error, 1),
+	}
+	mp := e.Receiver.(*Receive).multiplexer
+	mp.GetScanner(scanner.CoinTypeSKY).(*dummyScanner).addDeposit(dn)
+
+	// First loop calls saveIncomingDeposit
+	// nil is written to ErrC after this method finishes
+	err = <-dn.ErrC
+	require.NoError(t, err)
+
+	// Second loop calls processWaitSendDeposit
+	// It sends the coins, then confirms them
+
+	// Periodically check the database until we observe the sent deposit
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range time.Tick(dbCheckWaitTime) {
+			di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
+			log.Printf("loop getDepositInfo %v %v\n", di, err)
+			require.NoError(t, err)
+
+			if di.Status == StatusWaitConfirm {
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(dbScanTimeout):
+		t.Fatal("Waiting for sent deposit timed out")
+	}
+
+	// Check DepositInfo
+	di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
+	require.NoError(t, err)
+
+	require.NotEmpty(t, di.UpdatedAt)
+
+	expectedDeposit := DepositInfo{
+		Seq:            1,
+		CoinType:       scanner.CoinTypeSKY,
+		UpdatedAt:      di.UpdatedAt,
+		Status:         StatusWaitConfirm,
+		MDLAddress:     mdlAddr,
+		DepositAddress: dn.Deposit.Address,
+		DepositID:      dn.Deposit.ID(),
+		Txid:           txid,
+		MDLSent:        100e6,
+		BuyMethod:      config.BuyMethodDirect,
+		ConversionRate: testMDLSkyRate,
+		DepositValue:   dn.Deposit.Value,
+		Deposit:        dn.Deposit,
+	}
+
+	require.Equal(t, expectedDeposit, di)
+
+	// Mark the deposit as confirmed
+	e.Sender.(*Send).sender.(*dummySender).setTxConfirmed(txid)
+
+	// Periodically check the database until we observe the confirmed deposit
+	done = make(chan struct{})
+	go func() {
+		defer close(done)
+		for range time.Tick(dbCheckWaitTime) {
+			di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
+			require.NoError(t, err)
+
+			if di.Status == StatusDone {
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(dbScanTimeout):
+		t.Fatal("Waiting for confirmed deposit timed out")
+	}
+
+	checkExchangerStatus(t, e, nil)
+
+	// Check DepositInfo
+	di, err = e.store.(*Store).getDepositInfo(dn.Deposit.ID())
+	require.NoError(t, err)
+
+	require.NotEmpty(t, di.UpdatedAt)
+
+	expectedDeposit = DepositInfo{
+		Seq:            1,
+		CoinType:       scanner.CoinTypeSKY,
 		UpdatedAt:      di.UpdatedAt,
 		Status:         StatusDone,
 		MDLAddress:     mdlAddr,

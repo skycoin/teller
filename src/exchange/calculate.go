@@ -14,7 +14,7 @@ import (
 const (
 	// SatoshisPerBTC is the number of satoshis per 1 BTC
 	SatoshisPerBTC int64 = 1e8
-	// dropletsPerSKY is the number of droplets per 1 SKY
+	// DropletsPerSKY is the number of droplets per 1 SKY
 	DropletsPerSKY int64 = 1e6
 	// WeiPerETH is the number of wei per 1 ETH
 	WeiPerETH int64 = 1e18
@@ -92,8 +92,11 @@ func CalculateEthMDLValue(wei *big.Int, mdlPerETH string, maxDecimals int) (uint
 	return uint64(amt), nil
 }
 
-func CalculateSkyMDLValue(droplets *big.Int, mdlPerSKY string, maxDecimals int) (uint64, error) {
-	if droplets.Sign() < 0 {
+// CalculateSkyMDLValue returns the amount of MDL (in droplets) to give for an
+// amount of SKY.
+// Rate is measured in MDL per SKY
+func CalculateSkyMDLValue(droplets int64, mdlPerSKY string, maxDecimals int) (uint64, error) {
+	if droplets < 0 {
 		return 0, errors.New("droplets must be greater than or equal to 0")
 	}
 	if maxDecimals < 0 {
@@ -105,17 +108,12 @@ func CalculateSkyMDLValue(droplets *big.Int, mdlPerSKY string, maxDecimals int) 
 		return 0, err
 	}
 
-	sky := decimal.NewFromBigInt(droplets, 0)
-	skyToDroplets := decimal.New(DropletsPerSKY, 0)
-	sky = sky.DivRound(skyToDroplets, 8)
+	sky := decimal.New(droplets, 0)
 
 	mdl := sky.Mul(rate)
 	mdl = mdl.Truncate(int32(maxDecimals))
 
-	mdlToDroplets := decimal.New(droplet.Multiplier, 0)
-	droplts := mdl.Mul(mdlToDroplets)
-
-	amt := droplts.IntPart()
+	amt := mdl.IntPart()
 	if amt < 0 {
 		// This should never occur, but double check before we convert to uint64,
 		// otherwise we would send all the coins due to integer wrapping.
@@ -125,7 +123,11 @@ func CalculateSkyMDLValue(droplets *big.Int, mdlPerSKY string, maxDecimals int) 
 	return uint64(amt), nil
 }
 
+// CalculateWavesMDLValue returns the amount of MDL (in droplets) to give for an
+// amount of WAVES.
+// Rate is measured in MDL per WAVES
 func CalculateWavesMDLValue(wei *big.Int, mdlPerWaves string, maxDecimals int) (uint64, error) {
+	// FIXME: method need to be properly implemented
 	if wei.Sign() < 0 {
 		return 0, errors.New("wei must be greater than or equal to 0")
 	}

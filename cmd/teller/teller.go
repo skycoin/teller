@@ -1,4 +1,4 @@
-// MDL teller, which provides service of monitoring deposites in different crypto
+// MDL teller, which provides service of monitoring deposits in different crypto
 // and sending mdl coins
 package main
 
@@ -104,6 +104,27 @@ func createEthScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 	return ethScanner, nil
 }
 
+func createSkyScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.SKYScanner, error) {
+	skyrpc := scanner.NewSkyClient(cfg.SkyRPC.Server, cfg.SkyRPC.Port)
+
+	err := scanStore.AddSupportedCoin(scanner.CoinTypeSKY)
+	if err != nil {
+		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeSKY) failed")
+		return nil, err
+	}
+
+	skyScanner, err := scanner.NewSkycoinScanner(log, scanStore, skyrpc, scanner.Config{
+		ScanPeriod:            cfg.SkyScanner.ScanPeriod,
+		ConfirmationsRequired: cfg.SkyScanner.ConfirmationsRequired,
+		InitialScanHeight:     cfg.SkyScanner.InitialScanHeight,
+	})
+	if err != nil {
+		log.WithError(err).Error("Open skyscan service failed")
+		return nil, err
+	}
+	return skyScanner, nil
+}
+
 func run() error {
 	cur, err := user.Current()
 	if err != nil {
@@ -180,12 +201,16 @@ func run() error {
 
 	var btcScanner *scanner.BTCScanner
 	var ethScanner *scanner.ETHScanner
+	var skyScanner *scanner.SKYScanner
 	var scanService scanner.Scanner
 	var scanEthService scanner.Scanner
+	var scanSkyService scanner.Scanner
+
 	var sendService *sender.SendService
 	var sendRPC sender.Sender
 	var btcAddrMgr *addrs.Addrs
 	var ethAddrMgr *addrs.Addrs
+	var skyAddrMgr *addrs.Addrs
 
 	//create multiplexer to manage scanner
 	multiplexer := scanner.NewMultiplexer(log)
@@ -217,6 +242,11 @@ func run() error {
 			background("btcScanner.Run", errC, btcScanner.Run)
 
 			scanService = btcScanner
+
+			if err := multiplexer.AddScanner(scanService, scanner.CoinTypeBTC); err != nil {
+				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeBTC)
+				return err
+			}
 		}
 
 		// enable eth scanner
@@ -236,11 +266,25 @@ func run() error {
 				return err
 			}
 		}
-	}
 
-	if err := multiplexer.AddScanner(scanService, scanner.CoinTypeBTC); err != nil {
-		log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeBTC)
-		return err
+		// enable sky scanner
+		if cfg.SkyRPC.Enabled {
+			skyScanner, err = createSkyScanner(rusloggger, cfg, scanStore)
+			if err != nil {
+				log.WithError(err).Error("create sky scanner failed")
+				return err
+			}
+
+			background("skyScanner.Run", errC, skyScanner.Run)
+
+			scanSkyService = skyScanner
+
+			if err := multiplexer.AddScanner(scanSkyService, scanner.CoinTypeSKY); err != nil {
+				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeSKY)
+				return err
+			}
+		}
+
 	}
 
 	background("multiplex.Run", errC, multiplexer.Multiplex)
@@ -344,6 +388,25 @@ func run() error {
 		}
 	}
 
+	if cfg.SkyRPC.Enabled {
+		// create skycoin address manager
+		f, err := ioutil.ReadFile(cfg.SkyAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit skycoin address list failed")
+			return err
+		}
+
+		skyAddrMgr, err = addrs.NewSKYAddrs(log, db, bytes.NewReader(f))
+		if err != nil {
+			log.WithError(err).Error("Create skycoin deposit address manager failed")
+			return err
+		}
+		if err := addrManager.PushGenerator(skyAddrMgr, scanner.CoinTypeSKY); err != nil {
+			log.WithError(err).Error("add sky address manager failed")
+			return err
+		}
+	}
+
 	tellerServer := teller.New(log, exchangeClient, addrManager, cfg)
 
 	// Run the service
@@ -353,7 +416,7 @@ func run() error {
 	monitorCfg := monitor.Config{
 		Addr: cfg.AdminPanel.Host,
 	}
-	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, exchangeClient, btcScanner)
+	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, skyAddrMgr, exchangeClient, btcScanner)
 
 	background("monitorService.Run", errC, monitorService.Run)
 
@@ -391,13 +454,19 @@ func run() error {
 		ethScanner.Shutdown()
 	}
 
+	// close the scan service
+	if skyScanner != nil {
+		log.Info("Shutting down skyScanner")
+		skyScanner.Shutdown()
+	}
+
 	// close exchange service
 	log.Info("Shutting down exchangeClient")
 	exchangeClient.Shutdown()
 
 	// close the mdl send service
 	if sendService != nil {
-		log.Info("Shutting down sendService")
+		log.Info("Shutting down MDL sendService")
 		sendService.Shutdown()
 	}
 

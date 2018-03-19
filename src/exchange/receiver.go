@@ -15,6 +15,7 @@ func init() {
 	cfg := config.MDLExchanger{
 		MDLBtcExchangeRate: "1",
 		MDLEthExchangeRate: "2",
+		MDLSkyExchangeRate: "3",
 	}
 	for _, ct := range scanner.GetCoinTypes() {
 		rate, err := getRate(cfg, ct)
@@ -195,14 +196,16 @@ func getRate(cfg config.MDLExchanger, coinType string) (string, error) {
 		return cfg.MDLBtcExchangeRate, nil
 	case scanner.CoinTypeETH:
 		return cfg.MDLEthExchangeRate, nil
+	case scanner.CoinTypeSKY:
+		return cfg.MDLSkyExchangeRate, nil
 	default:
 		return "", scanner.ErrUnsupportedCoinType
 	}
 }
 
 // BindAddress binds deposit address with mdl address, and
-// add the btc/eth address to scan service, when detect deposit coin
-// to the btc/eth address, will send specific mdl to the binded
+// add the btc/eth/sky address to scan service, when detect deposit coin
+// to the btc/eth/sky address, will send specific mdl to the binded
 // mdl address
 func (r *Receive) BindAddress(mdlAddr, depositAddr, coinType, buyMethod string) (*BoundAddress, error) {
 	if err := config.ValidateBuyMethod(buyMethod); err != nil {

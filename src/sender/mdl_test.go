@@ -31,10 +31,15 @@ func newDummyMDLClient() *dummyMDLClient {
 }
 
 func (ds *dummyMDLClient) BroadcastTransaction(tx *coin.Transaction) (string, error) {
+	ds.Lock()
+	defer ds.Unlock()
 	return ds.broadcastTxTxid, ds.broadcastTxErr
 }
 
 func (ds *dummyMDLClient) CreateTransaction(destAddr string, coins uint64) (*coin.Transaction, error) {
+	ds.Lock()
+	defer ds.Unlock()
+
 	if ds.createTxErr != nil {
 		return nil, ds.createTxErr
 	}
