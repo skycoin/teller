@@ -571,7 +571,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 		}
 
 		rate = s.cfg.MDLExchanger.MDLSkyExchangeRate
-		dropletsPerSKY, err := exchange.CalculateSkyMDLValue(big.NewInt(exchange.DropletsPerSKY), rate, maxDecimals)
+		dropletsPerSKY, err := exchange.CalculateSkyMDLValue(exchange.DropletsPerSKY, rate, maxDecimals)
 		if err != nil {
 			log.WithError(err).Error("exchange.CalculateSkyMDLValue failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)

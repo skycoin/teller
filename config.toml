@@ -61,7 +61,7 @@ confirmations_required = 1
 [sky_scanner]
 scan_period = "5s"
 initial_scan_height=18224
-confirmations_required = 1
+confirmations_required = 0
 
 [waves_scanner]
 scan_period = "5s"
@@ -74,22 +74,26 @@ initial_scan_height=4654259
 confirmations_required = 1
 
 [mdl_exchanger]
-mdl_btc_exchange_rate = "454545.454" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
+mdl_btc_exchange_name = "BTC"
+mdl_btc_exchange_rate = "168000" # REQUIRED: MDL/BTC exchange rate as a string, can be an int, float or a rational fraction
 mdl_btc_exchange_rate_usd = "" # TODO:
-mdl_btc_exchange_label = "Bitcoin (Under Maintenance)"
+mdl_btc_exchange_label = "Bitcoin"
 mdl_btc_exchange_enabled = true
 
-mdl_eth_exchange_rate = "10000" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
+mdl_eth_exchange_name = "ETH"
+mdl_eth_exchange_rate = "1100" # REQUIRED: MDL/ETH exchange rate as a string, can be an int, float or a rational fraction
 mdl_eth_exchange_rate_usd = ""  # TODO:
-mdl_eth_exchange_label = "Ethereum (Syncing)"
-mdl_eth_exchange_enabled = false
+mdl_eth_exchange_label = "Ethereum"
+mdl_eth_exchange_enabled = true
 
-mdl_sky_exchange_rate = "100" # REQUIRED: MDL/SKY exchange rate as a string, can be an int, float or a rational fraction
+mdl_sky_exchange_name = "SKY"
+mdl_sky_exchange_rate = "188" # REQUIRED: MDL/SKY exchange rate as a string, can be an int, float or a rational fraction
 mdl_sky_exchange_rate_usd = ""  # TODO:
-mdl_sky_exchange_label = "Skycoin (Experimental)"
-mdl_sky_exchange_enabled = false
+mdl_sky_exchange_label = "Skycoin"
+mdl_sky_exchange_enabled = true
 
-mdl_waves_exchange_rate = "100" # REQUIRED: MDL/WAVES exchange rate as a string, can be an int, float or a rational fraction
+mdl_waves_exchange_name = "WAVES"
+mdl_waves_exchange_rate = "88" # REQUIRED: MDL/WAVES exchange rate as a string, can be an int, float or a rational fraction
 mdl_waves_exchange_rate_usd = ""  # TODO:
 mdl_waves_exchange_label = "Waves (Temporary Disabled)"
 mdl_waves_exchange_enabled = false
