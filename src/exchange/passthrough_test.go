@@ -86,7 +86,7 @@ func createDepositStatusWaitPassthrough(t *testing.T, p *Passthrough) DepositInf
 	return depositInfo
 }
 
-func createDepositStatusWaitPassthroughOrderComplete(t *testing.T, p *Passthrough) DepositInfo {
+func createDepositStatusWaitPassthroughOrderComplete(t *testing.T, p *Passthrough, orderID c2cx.OrderID) DepositInfo {
 	depositInfo := createDepositStatusWaitPassthrough(t, p)
 
 	depositInfo, err := p.store.UpdateDepositInfo(depositInfo.DepositID, func(di DepositInfo) DepositInfo {
@@ -124,28 +124,7 @@ func TestPassthroughStartupFailure(t *testing.T) {
 	getOrderByStatusErr := errors.New("GetOrderByStatus failure")
 	mockClient.On("GetOrderByStatus", c2cx.BtcSky, c2cx.StatusAll).Return(nil, getOrderByStatusErr)
 
-	_, err = p.store.BindAddress(testSkyAddr, "btc-address", scanner.CoinTypeBTC, config.BuyMethodPassthrough)
-	require.NoError(t, err)
-
-	depositInfo, err := p.store.GetOrCreateDepositInfo(scanner.Deposit{
-		CoinType:  scanner.CoinTypeBTC,
-		Address:   "btc-address",
-		Value:     1000000,
-		Height:    400000,
-		Tx:        "btc-tx-id",
-		N:         1,
-		Processed: true,
-	}, defaultPassthroughCfg.SkyBtcExchangeRate)
-	require.NoError(t, err)
-
-	depositInfo, err = p.store.UpdateDepositInfo(depositInfo.DepositID, func(di DepositInfo) DepositInfo {
-		di.Status = StatusWaitPassthrough
-		di.Passthrough.ExchangeName = PassthroughExchangeC2CX
-		di.Passthrough.RequestedAmount = calculateRequestedAmount(di).String()
-		di.Passthrough.Order.CustomerID = di.DepositID
-		return di
-	})
-	require.NoError(t, err)
+	createDepositStatusWaitPassthrough(t, p)
 
 	err = p.Run()
 	require.Error(t, err)
