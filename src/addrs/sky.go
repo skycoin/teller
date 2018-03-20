@@ -7,6 +7,7 @@ import (
 
 	"errors"
 
+	"github.com/MDLlife/teller/src/util/dbutil"
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/skycoin/src/cipher"
@@ -15,13 +16,15 @@ import (
 const skyBucketKey = "used_sky_address"
 
 // NewSKYAddrs returns an Addrs loaded with SKY addresses
-func NewSKYAddrs(log logrus.FieldLogger, db *bolt.DB, addrsReader io.Reader) (*Addrs, error) {
-	loader, err := loadSKYAddresses(addrsReader)
+func NewSKYAddrs(log logrus.FieldLogger, db *bolt.DB, path string) (*Addrs, error) {
+	loader, err := dbutil.ReadLines(path)
 	if err != nil {
+		log.WithError(err).Error("Load deposit skycoin address list failed")
 		return nil, err
 	}
 	return NewAddrs(log, db, loader, skyBucketKey)
 }
+
 
 func loadSKYAddresses(addrsReader io.Reader) ([]string, error) {
 	var addrs struct {
