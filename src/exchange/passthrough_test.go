@@ -188,6 +188,11 @@ func TestCalculateRequestedAmount(t *testing.T) {
 		out  string
 	}{
 		{
+			name: "zero",
+			in:   0,
+			out:  "0",
+		},
+		{
 			name: "1 satoshis too small, truncated",
 			in:   1,
 			out:  "0",
@@ -238,6 +243,55 @@ func TestCalculateRequestedAmount(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			amt := calculateRequestedAmount(tc.in)
 			require.Equal(t, tc.out, amt.String())
+		})
+	}
+}
+
+func TestCalculateSkyBought(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		out  uint64
+		err  error
+	}{
+		{
+			name: "negative amount",
+			in:   "-1",
+			err:  errCompletedAmountNegative,
+		},
+		{
+			name: "one",
+			in:   "1",
+			out:  1e6,
+		},
+		{
+			name: "fractional",
+			in:   "1.23456",
+			out:  1234560,
+		},
+		{
+			name: "fractional exceeding 6 decimal places",
+			in:   "1.23456789",
+			out:  1234567,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			completedAmt, err := decimal.NewFromString(tc.in)
+			require.NoError(t, err)
+
+			amt, err := calculateSkyBought(&c2cx.Order{
+				CompletedAmount: completedAmt,
+			})
+
+			if tc.err != nil {
+				require.Equal(t, tc.err, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.out, amt)
 		})
 	}
 }

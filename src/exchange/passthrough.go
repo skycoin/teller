@@ -35,7 +35,8 @@ var (
 	// ErrFatalOrderStatus is returned if an order has a fatal status
 	ErrFatalOrderStatus = errors.New("Fatal order status")
 
-	errQuit = errors.New("quit")
+	errCompletedAmountNegative = errors.New("Calculated amount of SKY bought is unexpectedly negative")
+	errQuit                    = errors.New("quit")
 )
 
 // Passthrough implements a Processor. For each deposit, it buys a corresponding amount
@@ -485,14 +486,6 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 	return updates, nil
 }
 
-// calculateRequestedAmount converts the amount of satoshis to a decimal amount, truncated to the maximum
-// precision allowed by the c2cx API for this orderbook
-func calculateRequestedAmount(depositValue int64) decimal.Decimal {
-	amount := decimal.New(depositValue, -int32(SatoshiExponent))
-	amount = amount.Truncate(int32(c2cx.TradePairRulesTable[c2cx.BtcSky].PricePrecision))
-	return amount
-}
-
 // placeOrder places an order on the exchange and returns the OrderID
 func (p *Passthrough) placeOrder(di DepositInfo) (c2cx.OrderID, error) {
 	if di.CoinType != scanner.CoinTypeBTC {
@@ -616,6 +609,14 @@ waitCompletedLoop:
 	return di, nil
 }
 
+// calculateRequestedAmount converts the amount of satoshis to a decimal amount, truncated to the maximum
+// precision allowed by the c2cx API for this orderbook
+func calculateRequestedAmount(depositValue int64) decimal.Decimal {
+	amount := decimal.New(depositValue, -int32(SatoshiExponent))
+	amount = amount.Truncate(int32(c2cx.TradePairRulesTable[c2cx.BtcSky].PricePrecision))
+	return amount
+}
+
 // calculateSkyBought returns the amount of SKY bought in droplets
 // The amount of SKY bought is in order.CompletedAmount
 // This amount does is not adjusted for the C2CX commission, which is not
@@ -625,7 +626,7 @@ func calculateSkyBought(order *c2cx.Order) (uint64, error) {
 	// Convert CompletedAmount from whole skycoin to satoshis
 	skyBought := order.CompletedAmount.Mul(decimal.New(droplet.Multiplier, 0)).IntPart()
 	if skyBought < 0 {
-		return 0, errors.New("Calculated amount of SKY bought is unexpectedly negative")
+		return 0, errCompletedAmountNegative
 	}
 	return uint64(skyBought), nil
 }
