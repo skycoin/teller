@@ -1,6 +1,8 @@
 package testutil
 
 import (
+	"crypto/rand"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -45,4 +47,12 @@ func NewLogger(t *testing.T) (*logrus.Logger, *logrus_test.Hook) {
 	hook := logrus_test.NewLocal(log)
 
 	return log, hook
+}
+
+// RandString returns a random string
+func RandString(t *testing.T, n int) string {
+	b := make([]byte, n)
+	_, err := rand.Read(b)
+	require.NoError(t, err)
+	return fmt.Sprintf("%x", b)
 }

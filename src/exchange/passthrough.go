@@ -534,7 +534,6 @@ waitCompletedLoop:
 		case <-p.quit:
 			return di, errQuit
 		case <-time.After(checkOrderWait):
-			var err error
 			order, err := p.exchangeClient.GetOrderInfo(c2cx.BtcSky, c2cx.OrderID(orderID))
 			if err != nil {
 				log.WithError(err).Error("exchangeClient.GetOrderInfo failed")
