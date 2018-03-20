@@ -112,6 +112,8 @@ func TestStoreNewStore(t *testing.T) {
 		require.NotNil(t, tx.Bucket(DepositInfoBkt))
 		require.NotNil(t, tx.Bucket(MustGetBindAddressBkt(scanner.CoinTypeBTC)))
 		require.NotNil(t, tx.Bucket(MustGetBindAddressBkt(scanner.CoinTypeETH)))
+		require.NotNil(t, tx.Bucket(MustGetBindAddressBkt(scanner.CoinTypeSKY)))
+		require.NotNil(t, tx.Bucket(MustGetBindAddressBkt(scanner.CoinTypeWAVES)))
 		require.NotNil(t, tx.Bucket(MDLDepositSeqsIndexBkt))
 		require.NotNil(t, tx.Bucket(BtcTxsBkt))
 		return nil
@@ -210,6 +212,16 @@ func mustBindAddressSky(t *testing.T, s Storer, mdlAddr, addr string) {
 	require.Equal(t, config.BuyMethodDirect, boundAddr.BuyMethod)
 }
 
+func mustBindAddressWaves(t *testing.T, s Storer, mdlAddr, addr string) {
+	boundAddr, err := s.BindAddress(mdlAddr, addr, scanner.CoinTypeWAVES, config.BuyMethodDirect)
+	require.NoError(t, err)
+	require.NotNil(t, boundAddr)
+	require.Equal(t, mdlAddr, boundAddr.MDLAddress)
+	require.Equal(t, addr, boundAddr.Address)
+	require.Equal(t, scanner.CoinTypeWAVES, boundAddr.CoinType)
+	require.Equal(t, config.BuyMethodDirect, boundAddr.BuyMethod)
+}
+
 func TestStoreBindAddress(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
@@ -273,6 +285,43 @@ func TestStoreSkyBindAddress(t *testing.T) {
 			MDLAddress: "sa12",
 			Address:    "ba12",
 			CoinType:   scanner.CoinTypeSKY,
+			BuyMethod:  config.BuyMethodDirect,
+		}, addrs[0])
+
+		return nil
+	})
+	require.NoError(t, err)
+
+	// A mdl address can have multiple addresses bound to it
+	mustBindAddressSky(t, s, "sa12", "ba22")
+}
+
+func TestStoreWavesBindAddress(t *testing.T) {
+	s, shutdown := newTestStore(t)
+	defer shutdown()
+
+	mustBindAddressWaves(t, s, "sa12", "ba12")
+
+	// check bucket
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bktName := MustGetBindAddressBkt(scanner.CoinTypeWAVES)
+		var ba BoundAddress
+		err := dbutil.GetBucketObject(tx, bktName, "ba12", &ba)
+		require.NoError(t, err)
+		require.Equal(t, BoundAddress{
+			MDLAddress: "sa12",
+			Address:    "ba12",
+			CoinType:   scanner.CoinTypeWAVES,
+			BuyMethod:  config.BuyMethodDirect,
+		}, ba)
+
+		var addrs []BoundAddress
+		err = dbutil.GetBucketObject(tx, MDLDepositSeqsIndexBkt, "sa12", &addrs)
+		require.NoError(t, err)
+		require.Equal(t, BoundAddress{
+			MDLAddress: "sa12",
+			Address:    "ba12",
+			CoinType:   scanner.CoinTypeWAVES,
 			BuyMethod:  config.BuyMethodDirect,
 		}, addrs[0])
 
@@ -377,6 +426,38 @@ func TestStoreGetBindAddress(t *testing.T) {
 			nil,
 			scanner.CoinTypeSKY,
 		},
+		{
+			"get wavesaddr1",
+			"wavesaddr1",
+			"mdladdr123",
+			true,
+			nil,
+			scanner.CoinTypeWAVES,
+		},
+		{
+			"get wavesaddr2",
+			"wavesaddr2",
+			"mdladdr223",
+			true,
+			nil,
+			scanner.CoinTypeWAVES,
+		},
+		{
+			"get wavesaddr3",
+			"wavesaddr3",
+			"mdladdr223",
+			true,
+			nil,
+			scanner.CoinTypeWAVES,
+		},
+		{
+			"get wavesaddr not exist",
+			"skyaddr423",
+			"",
+			false,
+			nil,
+			scanner.CoinTypeWAVES,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -385,6 +466,8 @@ func TestStoreGetBindAddress(t *testing.T) {
 			if tc.expectMDLAddr != "" {
 				if tc.coinType == scanner.CoinTypeSKY {
 					mustBindAddressSky(t, s, tc.expectMDLAddr, tc.coinAddr)
+				} else if tc.coinType == scanner.CoinTypeWAVES {
+					mustBindAddressWaves(t, s, tc.expectMDLAddr, tc.coinAddr)
 				} else {
 					mustBindAddress(t, s, tc.expectMDLAddr, tc.coinAddr)
 				}
@@ -789,6 +872,64 @@ func TestStoreSkyGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 	require.Equal(t, di, existsDi)
 }
 
+func TestStoreWavesGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
+	s, shutdown := newTestStore(t)
+	defer shutdown()
+
+	di := DepositInfo{
+		CoinType:       scanner.CoinTypeWAVES,
+		Status:         StatusWaitSend,
+		DepositAddress: "foo-waves-addr",
+		DepositID:      "foo-tx:1",
+		MDLAddress:     "foo-mdl-addr",
+		DepositValue:   1e6,
+		BuyMethod:      config.BuyMethodDirect,
+		ConversionRate: testMDLWavesRate,
+		Deposit: scanner.Deposit{
+			CoinType: scanner.CoinTypeWAVES,
+			Address:  "foo-sky-addr",
+			Value:    1e6,
+			Height:   20,
+			Tx:       "foo-tx",
+			N:        1,
+		},
+	}
+
+	_, err := s.addDepositInfo(di)
+	require.NoError(t, err)
+
+	// Check the saved deposit info
+	foundDi, err := s.getDepositInfo(di.DepositID)
+	require.NoError(t, err)
+	// Seq and UpdatedAt should be set by addDepositInfo
+	require.Equal(t, uint64(1), foundDi.Seq)
+	require.NotEmpty(t, foundDi.UpdatedAt)
+
+	// Other fields should be unchanged
+	di.Seq = foundDi.Seq
+	di.UpdatedAt = foundDi.UpdatedAt
+	require.Equal(t, di, foundDi)
+
+	// GetOrCreateDepositInfo, deposit info exists
+	dv := scanner.Deposit{
+		CoinType: scanner.CoinTypeWAVES,
+		Address:  di.Deposit.Address + "-2",
+		Value:    di.Deposit.Value * 2,
+		Height:   di.Deposit.Height + 1,
+		Tx:       di.Deposit.Tx,
+		N:        di.Deposit.N,
+	}
+	require.Equal(t, di.Deposit.ID(), dv.ID())
+
+	differentRate := "112233"
+	require.NotEqual(t, differentRate, di.ConversionRate)
+	existsDi, err := s.GetOrCreateDepositInfo(dv, differentRate)
+	require.NoError(t, err)
+
+	// di.Deposit won't be changed
+	require.Equal(t, di, existsDi)
+}
+
 func TestStoreGetOrCreateDepositInfoNoBoundMDLAddr(t *testing.T) {
 	s, shutdown := newTestStore(t)
 	defer shutdown()
@@ -841,9 +982,12 @@ func TestStoreGetMDLBindAddresses(t *testing.T) {
 	skyAddr1 := "skyaddr1"
 	mustBindAddressSky(t, s, mdlAddr, skyAddr1)
 
+	wavesAddr1 := "wavesaddr1"
+	mustBindAddressWaves(t, s, mdlAddr, wavesAddr1)
+
 	addrs, err = s.GetMDLBindAddresses(mdlAddr)
 	require.NoError(t, err)
-	require.Len(t, addrs, 3)
+	require.Len(t, addrs, 4)
 	require.Equal(t, addrs[0], BoundAddress{
 		Address:    btcAddr1,
 		MDLAddress: mdlAddr,
@@ -862,6 +1006,13 @@ func TestStoreGetMDLBindAddresses(t *testing.T) {
 		MDLAddress: mdlAddr,
 		BuyMethod:  config.BuyMethodDirect,
 		CoinType:   scanner.CoinTypeSKY,
+	})
+
+	require.Equal(t, addrs[3], BoundAddress{
+		Address:    wavesAddr1,
+		MDLAddress: mdlAddr,
+		BuyMethod:  config.BuyMethodDirect,
+		CoinType:   scanner.CoinTypeWAVES,
 	})
 
 }

@@ -74,6 +74,26 @@ func testNewSkyAddrManager(t *testing.T, db *bolt.DB, log *logrus.Logger) (*Addr
 	return etha, addresses
 }
 
+func testNewWavesAddrManager(t *testing.T, db *bolt.DB, log *logrus.Logger) (*Addrs, []string) {
+	addresses := []string{
+		"3PJaDyprvekvPXPuAtxrapacuDJopgJRaU3",
+	}
+
+	wavesA, err := NewAddrs(log, db, addresses, "test_bucket_sky")
+	require.NoError(t, err)
+
+	addrMap := make(map[string]struct{}, len(wavesA.addresses))
+	for _, a := range wavesA.addresses {
+		addrMap[a] = struct{}{}
+	}
+
+	for _, addr := range addresses {
+		_, ok := addrMap[addr]
+		require.True(t, ok)
+	}
+	return wavesA, addresses
+}
+
 func TestNewBtcAddrs(t *testing.T) {
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
@@ -209,10 +229,12 @@ func TestAddrManager(t *testing.T) {
 	btcGen, btcAddresses := testNewBtcAddrManager(t, db, log)
 	ethGen, ethAddresses := testNewEthAddrManager(t, db, log)
 	skyGen, skyAddresses := testNewSkyAddrManager(t, db, log)
+	wavesGen, wavesAddresses := testNewWavesAddrManager(t, db, log)
 
 	typeB := "TOKENB"
 	typeE := "TOKENE"
 	typeS := "TOKENS"
+	typeW := "TOKENW"
 
 	addrManager := NewAddrManager()
 	//add generator to addrManager
@@ -221,6 +243,8 @@ func TestAddrManager(t *testing.T) {
 	err = addrManager.PushGenerator(ethGen, typeE)
 	require.NoError(t, err)
 	err = addrManager.PushGenerator(skyGen, typeS)
+	require.NoError(t, err)
+	err = addrManager.PushGenerator(wavesGen, typeW)
 	require.NoError(t, err)
 
 	addrMap := make(map[string]struct{})
@@ -271,6 +295,17 @@ func TestAddrManager(t *testing.T) {
 		require.True(t, ok)
 	}
 	_, err = addrManager.NewAddress(typeS)
+	require.Equal(t, ErrDepositAddressEmpty, err)
+
+	// run out all addresses of typeE
+	for i := 0; i < len(wavesAddresses); i++ {
+		addr, err := addrManager.NewAddress(typeW)
+		require.NoError(t, err)
+		// check if the addr still in the address pool
+		_, ok := addrMap[addr]
+		require.True(t, ok)
+	}
+	_, err = addrManager.NewAddress(typeW)
 	require.Equal(t, ErrDepositAddressEmpty, err)
 
 	//check not exists cointype

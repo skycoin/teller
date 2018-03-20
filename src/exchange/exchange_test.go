@@ -163,6 +163,7 @@ const (
 	testMDLBtcRate      = "100" // 100 MDL per BTC
 	testMDLEthRate      = "10"  // 10 MDL per ETH
 	testMDLSkyRate      = "100" // 100 MDL per SKY
+	testMDLWavesRate      = "100" // 100 MDL per SKY
 	testMaxDecimals     = 0
 	testMDLAddr         = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
 	testMDLAddr2        = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"

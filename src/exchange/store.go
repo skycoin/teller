@@ -43,6 +43,8 @@ func GetBindAddressBkt(coinType string) ([]byte, error) {
 		suffix = "eth"
 	case scanner.CoinTypeSKY:
 		suffix = "sky"
+	case scanner.CoinTypeWAVES:
+		suffix = "waves"
 	default:
 		return nil, scanner.ErrUnsupportedCoinType
 	}
@@ -557,6 +559,7 @@ func (s *Store) getMDLBindAddressesTx(tx *bolt.Tx, mdlAddr string) ([]BoundAddre
 }
 
 // GetDepositStats returns BTC received and MDL sent
+//TODO: figure out how to enable deposit stats for other coins
 func (s *Store) GetDepositStats() (int64, int64, error) {
 	var totalBTCReceived int64
 	var totalMDLSent int64

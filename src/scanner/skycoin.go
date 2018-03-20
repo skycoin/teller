@@ -11,11 +11,7 @@ import (
 
 	"strconv"
 
-	"fmt"
-
-	"github.com/MDLlife/MDL/src/cipher"
 	"github.com/sirupsen/logrus"
-	"github.com/skycoin/skycoin/src/api/cli"
 	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/visor"
 )
@@ -217,25 +213,6 @@ func NewSkyClient(server, port string) *SkyClient {
 	}
 }
 
-// Send sends coins to recv address
-func (c *SkyClient) Send(recvAddr string, amount uint64) (string, error) {
-	// validate the recvAddr
-	if _, err := cipher.DecodeBase58Address(recvAddr); err != nil {
-		return "", err
-	}
-
-	if amount == 0 {
-		return "", fmt.Errorf("Can't send %d coins", amount)
-	}
-
-	sendAmount := cli.SendAmount{
-		Addr:  recvAddr,
-		Coins: amount,
-	}
-
-	return cli.SendFromWallet(c.skyRPCClient, c.walletFile, c.changeAddr, []cli.SendAmount{sendAmount})
-}
-
 // GetTransaction returns transaction by txid
 func (c *SkyClient) GetTransaction(txid string) (*webrpc.TxnResult, error) {
 	return c.skyRPCClient.GetTransactionByID(txid)
@@ -285,20 +262,4 @@ func (c *SkyClient) GetLastBlocks() (*visor.ReadableBlock, error) {
 
 // Shutdown the node
 func (c *SkyClient) Shutdown() {
-}
-
-// SendBatch sends coins to batch recv address
-func (c *SkyClient) SendBatch(saList []cli.SendAmount) (string, error) {
-	// validate the recvAddr
-	for _, sendAmount := range saList {
-		if _, err := cipher.DecodeBase58Address(sendAmount.Addr); err != nil {
-			return "", err
-		}
-		if sendAmount.Coins == 0 {
-			return "", fmt.Errorf("Can't send %d coins", sendAmount.Coins)
-		}
-
-	}
-
-	return cli.SendFromWallet(c.skyRPCClient, c.walletFile, c.changeAddr, saList)
 }

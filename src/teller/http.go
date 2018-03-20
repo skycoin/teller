@@ -586,9 +586,8 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		// FIXME: WeiPerETH
 		rate = s.cfg.MDLExchanger.MDLWavesExchangeRate
-		dropletsPerWAVES, err := exchange.CalculateWavesMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
+		dropletsPerWAVES, err := exchange.CalculateWavesMDLValue(exchange.DropletsPerWAVES, rate, maxDecimals)
 		if err != nil {
 			log.WithError(err).Error("exchange.CalculateWavesMDLValue failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
@@ -601,9 +600,8 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		// FIXME: WeiPerETH
-		rate = s.cfg.MDLExchanger.MDLWavesExchangeRate
-		dropletsPerWAVESMDL, err := exchange.CalculateWavesMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
+		rate = s.cfg.MDLExchanger.MDLWavesMDLExchangeRate
+		dropletsPerWAVESMDL, err := exchange.CalculateWavesMDLValue(exchange.DropletsPerWAVES, rate, maxDecimals)
 		if err != nil {
 			log.WithError(err).Error("exchange.CalculateWavesMDLValue failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)

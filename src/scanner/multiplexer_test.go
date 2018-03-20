@@ -16,6 +16,7 @@ var (
 	ErrBtcScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeBTC)
 	ErrEthScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeETH)
 	ErrSKYScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeSKY)
+	ErrWAVESScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeWAVES)
 	ErrNilScanner              = errors.New("nil scanner")
 )
 
@@ -85,6 +86,23 @@ func testAddSKYScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	return nDeposits
 }
 
+func testAddWAVESScanAddresses(t *testing.T, m *Multiplexer) int64 {
+	var nDeposits int64
+	// This address has 0 deposits
+	err := m.AddScanAddress("3PRDjxHwETEhYXM3tjVMU4oYhfj3dqT6Vuw", CoinTypeWAVES)
+	require.NoError(t, err)
+	nDeposits = nDeposits + 2
+
+	// This address has:
+	// 1 deposit, in block 235206
+	// 1 deposit, in block 235207
+	err = m.AddScanAddress("3P9dUze9nHRdfoKhFrZYKdsSpwW9JoE6Mzf", CoinTypeWAVES)
+	require.NoError(t, err)
+	nDeposits = nDeposits + 5
+
+	return nDeposits
+}
+
 func testAddBtcScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*BTCScanner, func()) {
 	scr, shutdown := setupBtcScanner(t, db)
 	err := m.AddScanner(scr, CoinTypeBTC)
@@ -128,6 +146,24 @@ func testAddSKYScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*SKYScanner, 
 
 	//add wrong scanner
 	err = m.AddScanner(nil, CoinTypeSKY)
+	require.Equal(t, ErrNilScanner, err)
+	return scr, shutdown
+}
+
+func testAddWAVESScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*WAVESScanner, func()) {
+	scr, shutdown := setupWavesScanner(t, db)
+	err := m.AddScanner(scr, CoinTypeWAVES)
+	require.NoError(t, err)
+	count := m.GetScannerCount()
+
+	//add btc again, should be error
+	err = m.AddScanner(scr, CoinTypeWAVES)
+	require.Equal(t, ErrWAVESScannerAlreadyExists, err)
+	//scanner count no change
+	require.Equal(t, count, m.GetScannerCount())
+
+	//add wrong scanner
+	err = m.AddScanner(nil, CoinTypeWAVES)
 	require.Equal(t, ErrNilScanner, err)
 	return scr, shutdown
 }
@@ -228,6 +264,54 @@ func TestMultiplexerOnlySKY(t *testing.T) {
 	<-done
 }
 
+func TestMultiplexerOnlyWAVES(t *testing.T) {
+	//init sky db
+	wavesDB := openDummyWavesDB(t)
+	defer testutil.CheckError(t, wavesDB.Close)
+
+	//create logger
+	log, _ := testutil.NewLogger(t)
+	//create multiplexer
+	m := NewMultiplexer(log)
+
+	//add sky scanner to multiplexer
+	scr, shutdown := testAddWAVESScanner(t, wavesDB, m)
+	defer shutdown()
+
+	nDeposits := testAddWAVESScanAddresses(t, m)
+
+	go testutil.CheckError(t, m.Multiplex)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var dvs []DepositNote
+		for dv := range m.GetDeposit() {
+			dvs = append(dvs, dv)
+			dv.ErrC <- nil
+		}
+
+		require.Equal(t, nDeposits, int64(len(dvs)))
+	}()
+
+	// Wait for at least twice as long as the number of deposits to process
+	// If there are few deposits, wait at least 5 seconds
+	// This only needs to wait at least 1 second normally, but if testing
+	// with -race, it needs to wait 5.
+	shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * nDeposits * 3)
+	if shutdownWait < minShutdownWait {
+		shutdownWait = minShutdownWait
+	}
+
+	time.AfterFunc(shutdownWait, func() {
+		scr.Shutdown()
+		m.Shutdown()
+	})
+	err := scr.Run()
+	require.NoError(t, err)
+	<-done
+}
+
 func TestMultiplexerForAll(t *testing.T) {
 	//init btc db
 	btcDB := openDummyBtcDB(t)
@@ -237,6 +321,9 @@ func TestMultiplexerForAll(t *testing.T) {
 	defer testutil.CheckError(t, ethDB.Close)
 
 	skyDB := openDummySkyDB(t)
+	defer testutil.CheckError(t, skyDB.Close)
+
+	wavesDB := openDummyWavesDB(t)
 	defer testutil.CheckError(t, skyDB.Close)
 
 	//create logger
@@ -256,12 +343,17 @@ func TestMultiplexerForAll(t *testing.T) {
 	skyscr, skyshutdown := testAddSKYScanner(t, skyDB, m)
 	defer skyshutdown()
 
+	//add WAVES scanner to multiplexer
+	wavesscr, wavesshutdown := testAddWAVESScanner(t, wavesDB, m)
+	defer wavesshutdown()
+
 	// 2 scanner in multiplexer
 	require.Equal(t, 3, m.GetScannerCount())
 
 	nDepositsBtc := testAddBtcScanAddresses(t, m)
 	nDepositsEth := testAddEthScanAddresses(t, m)
 	nDepositsSKY := testAddSKYScanAddresses(t, m)
+	nDepositsSWAVES := testAddWAVESScanAddresses(t, m)
 
 	go func() {
 		err := m.Multiplex()
@@ -277,19 +369,20 @@ func TestMultiplexerForAll(t *testing.T) {
 			dv.ErrC <- nil
 		}
 
-		require.Equal(t, nDepositsBtc+nDepositsEth+nDepositsSKY, int64(len(dvs)))
+		require.Equal(t, nDepositsBtc+nDepositsEth+nDepositsSKY+nDepositsSWAVES, int64(len(dvs)))
 	}()
 
 	// Wait for at least twice as long as the number of deposits to process
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * (nDepositsBtc + nDepositsEth + nDepositsSKY) * 3)
+	shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * (nDepositsBtc + nDepositsEth + nDepositsSKY + nDepositsSWAVES) * 3)
 	if shutdownWait < minShutdownWait {
 		shutdownWait = minShutdownWait
 	}
 
 	time.AfterFunc(shutdownWait, func() {
+		wavesscr.Shutdown()
 		skyscr.Shutdown()
 		ethscr.Shutdown()
 		scr.Shutdown()
