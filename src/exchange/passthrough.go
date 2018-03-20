@@ -51,7 +51,14 @@ type Passthrough struct {
 	done             chan struct{}
 	statusLock       sync.RWMutex
 	status           error
-	exchangeClient   *c2cx.Client
+	exchangeClient   C2CXClient
+}
+
+// C2CXClient defines an interface for c2cx.Client
+type C2CXClient interface {
+	GetOrderByStatus(c2cx.TradePair, c2cx.OrderStatus) ([]c2cx.Order, error)
+	GetOrderInfo(c2cx.TradePair, c2cx.OrderID) (*c2cx.Order, error)
+	MarketBuy(c2cx.TradePair, decimal.Decimal, *string) (c2cx.OrderID, error)
 }
 
 // NewPassthrough creates Passthrough
@@ -72,7 +79,7 @@ func NewPassthrough(log logrus.FieldLogger, cfg config.SkyExchanger, store Store
 		exchangeClient: &c2cx.Client{
 			Key:    cfg.C2CX.Key,
 			Secret: cfg.C2CX.Secret,
-			Debug:  true,
+			Debug:  false,
 		},
 	}, nil
 }
