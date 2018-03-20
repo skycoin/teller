@@ -5,20 +5,24 @@ import (
 	"testing"
 	"time"
 
-	"fmt"
-
 	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/teller/src/util/dbutil"
 	"github.com/skycoin/teller/src/util/testutil"
 
+	"encoding/binary"
+
+	"github.com/skycoin/skycoin/src/cipher/encoder"
+	"github.com/skycoin/skycoin/src/coin"
 	"github.com/skycoin/skycoin/src/visor"
-	"github.com/skycoin/skycoin/src/visor/blockdb"
 )
 
 var (
-	errNoSkyBlockHash = errors.New("no block found for height")
+	dummySkyBlocksBktName = []byte("blocks")
+	dummySkyTreeBktName   = []byte("block_tree")
+	errNoSkyBlockHash     = errors.New("no block found for hash")
+	errNoSkyBlockHeight   = errors.New("no block found for height")
 )
 
 type dummySkyrpcclient struct {
@@ -37,7 +41,7 @@ type dummySkyrpcclient struct {
 
 func openDummySkyDB(t *testing.T) *bolt.DB {
 	// Blocks 0 through 180 are stored in this DB
-	db, err := bolt.Open("./sky.db", 0600, nil)
+	db, err := bolt.Open("./sky.db", 0600, &bolt.Options{ReadOnly: true})
 	require.NoError(t, err)
 	return db
 }
@@ -61,7 +65,6 @@ func (dsc *dummySkyrpcclient) GetBlockCount() (int64, error) {
 }
 
 func (dsc *dummySkyrpcclient) GetBlockVerboseTx(seq uint64) (*visor.ReadableBlock, error) {
-	//TODO (therealssj): refactor this to directly read from the database
 	if seq > 0 && seq == dsc.blockNextHeightMissingOnceAt && !dsc.hasSetMissingHeight {
 		dsc.hasSetMissingHeight = true
 		return nil, errNoSkyBlockHash
@@ -72,21 +75,54 @@ func (dsc *dummySkyrpcclient) GetBlockVerboseTx(seq uint64) (*visor.ReadableBloc
 		return nil, dsc.blockVerboseTxError
 	}
 
-	blockChain, err := blockdb.NewBlockchain(dsc.db, visor.DefaultWalker)
-	if err != nil {
+	var block *visor.ReadableBlock
+	if err := dsc.db.View(func(tx *bolt.Tx) error {
+		var err error
+
+		// tree bucket cursor
+		c := tx.Bucket(dummySkyTreeBktName).Cursor()
+		// search for the required key, need to first convert depth to []byte
+		_, pairsBin := c.Seek(Itob(seq))
+		if pairsBin == nil {
+			return errNoSkyBlockHeight
+		}
+		pairs := []coin.HashPair{}
+		// deserialize from binary to hashpair
+		if err := encoder.DeserializeRaw(pairsBin, &pairs); err != nil {
+			return err
+		}
+		// get hash from hashpair
+		hash := visor.DefaultWalker(pairs)
+
+		// block bucket cursor
+		bc := tx.Bucket(dummySkyBlocksBktName).Cursor()
+		// search for required hash
+		_, bin := bc.Seek(hash[:])
+		if bin == nil {
+			return errNoSkyBlockHash
+		}
+
+		// deserialize from binary to block
+		cblock := coin.Block{}
+		if err := encoder.DeserializeRaw(bin, &cblock); err != nil {
+			return err
+		}
+
+		// covert coin.Block to readableblock
+		block, err = visor.NewReadableBlock(&cblock)
+		return err
+	}); err != nil {
 		return nil, err
 	}
 
-	block, err := blockChain.GetBlockBySeq(seq)
-	if err != nil {
-		return nil, err
-	}
+	return block, nil
+}
 
-	if block == nil {
-		return nil, errNoSkyBlockHash
-	}
-
-	return visor.NewReadableBlock(&block.Block)
+// Itob converts uint64 to bytes
+func Itob(v uint64) []byte {
+	b := make([]byte, 8)
+	binary.BigEndian.PutUint64(b, uint64(v))
+	return b
 }
 
 func (dsc *dummySkyrpcclient) Shutdown() {}
@@ -96,7 +132,7 @@ func setupSkyScannerWithDB(t *testing.T, skyDB *bolt.DB, db *bolt.DB) *SKYScanne
 
 	rpc := newDummySkyrpcclient(skyDB)
 
-	rpc.blockCount = 180
+	rpc.blockCount = 179
 
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
@@ -160,8 +196,6 @@ func testSkyScannerRunProcessedLoop(t *testing.T, scr *SKYScanner, nDeposits int
 			dv.ErrC <- nil
 		}
 
-		fmt.Println(nDeposits)
-		fmt.Println(len(dvs))
 		require.Equal(t, nDeposits, len(dvs))
 
 		// check all deposits
@@ -252,7 +286,7 @@ func testSkyScannerInitialGetBlockHashError(t *testing.T, skyDB *bolt.DB) {
 
 	err := scr.Run()
 	require.Error(t, err)
-	require.Equal(t, errNoSkyBlockHash, err)
+	require.Equal(t, errNoSkyBlockHeight, err)
 }
 
 func testSkyScannerGetBlockCountErrorRetry(t *testing.T, skyDB *bolt.DB) {
