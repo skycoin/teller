@@ -7,11 +7,11 @@ profile = false
 enabled = true
 # logfile = "./teller.log"  # logfile can be an absolute path or relative to the working directory
 dbfile = "teller.db"  # dbfile is saved inside ~/.teller-mdl, do not include a path
-btc_addresses = "btc_addresses.txt" # REQUIRED: path to btc addresses file
-eth_addresses = "eth_addresses.txt" # REQUIRED: path to eth addresses file
-sky_addresses = "sky_addresses.txt"
-waves_addresses = "waves_addresses.txt"
-waves_mdl_addresses = "waves_addresses.txt"
+btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
+eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses file
+sky_addresses = "example_sky_addresses.json"
+waves_addresses = "example_waves_addresses.json"
+waves_mdl_addresses = "example_waves_addresses.json"
 
 [teller]
 max_bound_addrs = 2 # 0 means unlimited
@@ -22,10 +22,10 @@ address = "127.0.0.1:8330"
 
 [btc_rpc]
 enabled = true
-server = "23.92.24.9:8334"
-user = "YnWD3EmQAOw11IOrUJwWxAThAyobwLC" # REQUIRED
-pass = "f*Z\"[1215o{qKW{Buj/wheO8@h.}j*u" # REQUIRED
-cert = "../rpc2.cert" # REQUIRED
+server = "localhost:8004"
+user = "1" # REQUIRED
+pass = "1" # REQUIRED
+cert = "no.cert" # REQUIRED
 
 [eth_rpc]
 enabled = true
