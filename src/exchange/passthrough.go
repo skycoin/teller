@@ -632,7 +632,7 @@ func calculateSkyBought(order *c2cx.Order) (uint64, error) {
 }
 
 // calculateBtcSpent returns the amount of BTC spent in satoshis.
-// The amount spent can less than the amount requested to be spent, due to the
+// The amount spent can be less than the amount requested to be spent, due to the
 // minimum BTC price of the smallest purchasable unit of SKY on the exchange.
 func calculateBtcSpent(order *c2cx.Order) int64 {
 	btcSpentDec := order.CompletedAmount.Mul(order.AvgPrice)

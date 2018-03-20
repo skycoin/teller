@@ -295,3 +295,65 @@ func TestCalculateSkyBought(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateBtcSpent(t *testing.T) {
+	cases := []struct {
+		name   string
+		bought string
+		price  string
+		out    int64
+	}{
+		{
+			name:   "negative",
+			bought: "-1",
+			price:  "0.002",
+			out:    200000,
+		},
+		{
+			name:   "zero bought",
+			bought: "0",
+			price:  "0.002",
+			out:    0,
+		},
+		{
+			name:   "zero price",
+			bought: "1",
+			price:  "0",
+			out:    0,
+		},
+		{
+			name:   "normal",
+			bought: "32.43",
+			price:  "0.00189",
+			out:    6129270,
+		},
+		{
+			name:   "normal",
+			bought: "32.43",
+			price:  "0.00189",
+			out:    6129270,
+		},
+		{
+			name:   "truncated",
+			bought: "332.43",
+			price:  "0.0018777",
+			out:    62420381,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			completedAmt, err := decimal.NewFromString(tc.bought)
+			require.NoError(t, err)
+
+			avgPrice, err := decimal.NewFromString(tc.price)
+			require.NoError(t, err)
+
+			spent := calculateBtcSpent(&c2cx.Order{
+				CompletedAmount: completedAmt,
+				AvgPrice:        avgPrice,
+			})
+			require.Equal(t, tc.out, spent)
+		})
+	}
+}
