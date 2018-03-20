@@ -133,7 +133,7 @@ func NewPassthroughExchange(log logrus.FieldLogger, cfg config.SkyExchanger, sto
 		store:     store,
 		cfg:       cfg,
 		quit:      make(chan struct{}),
-		done:      make(chan struct{}),
+		done:      make(chan struct{}, 1),
 		Receiver:  receiver,
 		Processor: processor,
 		Sender:    sender,
@@ -154,8 +154,6 @@ func (e *Exchange) Run() error {
 
 	errC := make(chan error, 3)
 	var wg sync.WaitGroup
-
-	// TODO FIXME -- exchange.Exchanger does not shut down properly when an error is returned by Run() here
 
 	wg.Add(1)
 	go func() {
@@ -189,6 +187,7 @@ func (e *Exchange) Run() error {
 	case <-e.quit:
 	case err = <-errC:
 		e.log.WithError(err).Error("Terminating early")
+		return err
 	}
 
 	wg.Wait()

@@ -28,7 +28,7 @@ specifying an order in terms of SKY volume and price.
 */
 
 const (
-	checkOrderWait = time.Second
+	checkOrderWait = time.Second * 2
 )
 
 var (
@@ -68,7 +68,7 @@ func NewPassthrough(log logrus.FieldLogger, cfg config.SkyExchanger, store Store
 		internalDeposits: make(chan DepositInfo, 100),
 		deposits:         make(chan DepositInfo, 100),
 		quit:             make(chan struct{}),
-		done:             make(chan struct{}),
+		done:             make(chan struct{}, 1),
 		exchangeClient: &c2cx.Client{
 			Key:    cfg.C2CX.Key,
 			Secret: cfg.C2CX.Secret,
@@ -86,8 +86,6 @@ func (p *Passthrough) Run() error {
 		p.done <- struct{}{}
 	}()
 
-	var wg sync.WaitGroup
-
 	// Look for deposits that had an order placed, but for which we failed to record the OrderID
 	// This could have occured if a DB save had failed or the process was interrupted at the wrong time.
 	// Recovery will record the missing order data and set the status to StatusWaitPassthroughOrderComplete
@@ -96,8 +94,6 @@ func (p *Passthrough) Run() error {
 		log.WithError(err).Error("fixUnrecordedOrders failed")
 		return err
 	}
-
-	// TODO FIXME -- exchange.Exchanger does not shut down properly when an error is returned by Run() here
 
 	if len(recoveredDeposits) > 0 {
 		log.WithField("recoveredDeposits", len(recoveredDeposits)).Info("Recovered unrecorded orders for deposits")
@@ -121,6 +117,8 @@ func (p *Passthrough) Run() error {
 		log.WithError(err).Error("GetDepositInfoArray failed")
 		return err
 	}
+
+	var wg sync.WaitGroup
 
 	wg.Add(1)
 	go func() {

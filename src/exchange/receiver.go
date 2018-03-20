@@ -66,7 +66,7 @@ func NewReceive(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, m
 		multiplexer: multiplexer,
 		deposits:    make(chan DepositInfo, 100),
 		quit:        make(chan struct{}),
-		done:        make(chan struct{}),
+		done:        make(chan struct{}, 1),
 	}, nil
 }
 
