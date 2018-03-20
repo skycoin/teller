@@ -130,3 +130,53 @@ func TestPassthroughStartupFailure(t *testing.T) {
 	require.Error(t, err)
 	require.Equal(t, getOrderByStatusErr, err)
 }
+
+func TestPassthroughFixUnrecordedOrders(t *testing.T) {
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
+
+	log, _ := testutil.NewLogger(t)
+	store, err := NewStore(log, db)
+	require.NoError(t, err)
+
+	receiver := newMockReceiver()
+
+	p, err := NewPassthrough(log, defaultPassthroughCfg, store, receiver)
+	require.NoError(t, err)
+
+	mockClient := &MockC2CXClient{}
+	p.exchangeClient = mockClient
+
+	di := createDepositStatusWaitPassthrough(t, p)
+	require.NotEmpty(t, di.Passthrough.Order.CustomerID)
+
+	orderID := 1234
+	otherCID := "abcd"
+
+	orders := []c2cx.Order{
+		{
+			OrderID: c2cx.OrderID(orderID),
+			CID:     &otherCID,
+		},
+		{
+			OrderID: c2cx.OrderID(orderID + 1),
+			CID:     nil,
+		},
+		{
+			OrderID: c2cx.OrderID(orderID + 2),
+			CID:     &di.Passthrough.Order.CustomerID,
+		},
+	}
+
+	mockClient.On("GetOrderByStatus", c2cx.BtcSky, c2cx.StatusAll).Return(orders, nil)
+
+	updates, err := p.fixUnrecordedOrders()
+	require.NoError(t, err)
+
+	require.Len(t, updates, 1)
+
+	updatedDi := updates[0]
+	require.Equal(t, di.DepositID, updatedDi.DepositID)
+	require.Equal(t, StatusWaitPassthroughOrderComplete, updatedDi.Status)
+	require.Equal(t, fmt.Sprint(orderID+2), updatedDi.Passthrough.Order.OrderID)
+}
