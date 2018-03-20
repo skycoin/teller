@@ -77,7 +77,7 @@ func createDepositStatusWaitPassthrough(t *testing.T, p *Passthrough) DepositInf
 	depositInfo, err := p.store.UpdateDepositInfo(depositInfo.DepositID, func(di DepositInfo) DepositInfo {
 		di.Status = StatusWaitPassthrough
 		di.Passthrough.ExchangeName = PassthroughExchangeC2CX
-		di.Passthrough.RequestedAmount = calculateRequestedAmount(di).String()
+		di.Passthrough.RequestedAmount = calculateRequestedAmount(di.DepositValue).String()
 		di.Passthrough.Order.CustomerID = di.DepositID
 		return di
 	})
@@ -179,4 +179,65 @@ func TestPassthroughFixUnrecordedOrders(t *testing.T) {
 	require.Equal(t, di.DepositID, updatedDi.DepositID)
 	require.Equal(t, StatusWaitPassthroughOrderComplete, updatedDi.Status)
 	require.Equal(t, fmt.Sprint(orderID+2), updatedDi.Passthrough.Order.OrderID)
+}
+
+func TestCalculateRequestedAmount(t *testing.T) {
+	cases := []struct {
+		name string
+		in   int64
+		out  string
+	}{
+		{
+			name: "1 satoshis too small, truncated",
+			in:   1,
+			out:  "0",
+		},
+		{
+			name: "10 satoshis too small, truncated",
+			in:   10,
+			out:  "0",
+		},
+		{
+			name: "100 satoshis too small, truncated",
+			in:   100,
+			out:  "0",
+		},
+		{
+			name: "1000 satoshis smallest value that won't truncate",
+			in:   1000,
+			out:  "0.00001",
+		},
+		{
+			name: "10000 satoshis",
+			in:   10000,
+			out:  "0.0001",
+		},
+		{
+			name: "100000 satoshis",
+			in:   100000,
+			out:  "0.001",
+		},
+		{
+			name: "1000000 satoshis",
+			in:   1000000,
+			out:  "0.1",
+		},
+		{
+			name: "10000000 satoshis (1 BTC)",
+			in:   10000000,
+			out:  "1",
+		},
+		{
+			name: "mixed with truncation",
+			in:   92045678111,
+			out:  "92.04567",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			amt := calculateRequestedAmount(tc.in)
+			require.Equal(t, tc.out, amt.String())
+		})
+	}
 }

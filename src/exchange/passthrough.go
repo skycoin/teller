@@ -327,7 +327,7 @@ func (p *Passthrough) handleDepositInfoState(di DepositInfo) (DepositInfo, error
 		di, err := p.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
 			di.Status = StatusWaitPassthrough
 			di.Passthrough.ExchangeName = PassthroughExchangeC2CX
-			di.Passthrough.RequestedAmount = calculateRequestedAmount(di).String()
+			di.Passthrough.RequestedAmount = calculateRequestedAmount(di.DepositValue).String()
 			di.Passthrough.Order.CustomerID = di.DepositID
 			return di
 		})
@@ -487,8 +487,8 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 
 // calculateRequestedAmount converts the amount of satoshis to a decimal amount, truncated to the maximum
 // precision allowed by the c2cx API for this orderbook
-func calculateRequestedAmount(di DepositInfo) decimal.Decimal {
-	amount := decimal.New(di.DepositValue, -int32(SatoshiExponent))
+func calculateRequestedAmount(depositValue int64) decimal.Decimal {
+	amount := decimal.New(depositValue, -int32(SatoshiExponent))
 	amount = amount.Truncate(int32(c2cx.TradePairRulesTable[c2cx.BtcSky].PricePrecision))
 	return amount
 }
