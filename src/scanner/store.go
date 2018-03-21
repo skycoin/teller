@@ -18,6 +18,8 @@ const (
 	CoinTypeETH = "ETH"
 	// CoinTypeSKY is SKY coin type
 	CoinTypeSKY = "SKY"
+	// CoinTypeWAVE is WAVE coin type
+	CoinTypeWAVE = "WAVE"
 )
 
 var (

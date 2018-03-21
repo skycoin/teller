@@ -82,7 +82,7 @@ type Storer interface {
 	UpdateDepositInfo(string, func(DepositInfo) DepositInfo) (DepositInfo, error)
 	UpdateDepositInfoCallback(string, func(DepositInfo) DepositInfo, func(DepositInfo) error) (DepositInfo, error)
 	GetMDLBindAddresses(string) ([]BoundAddress, error)
-	GetDepositStats() (int64, int64, error)
+	GetDepositStats() (*DepositStats, error)
 }
 
 // Store storage for exchange
@@ -556,10 +556,9 @@ func (s *Store) getMDLBindAddressesTx(tx *bolt.Tx, mdlAddr string) ([]BoundAddre
 	return addrs, nil
 }
 
-// GetDepositStats returns BTC received and MDL sent
-func (s *Store) GetDepositStats() (int64, int64, error) {
-	var totalBTCReceived int64
-	var totalMDLSent int64
+// GetDepositStats returns Coins received and MDL sent
+func (s *Store) GetDepositStats() (stats *DepositStats, err error) {
+	stats = &DepositStats{0,0,0,0,0}
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		return dbutil.ForEach(tx, DepositInfoBkt, func(k, v []byte) error {
@@ -568,16 +567,23 @@ func (s *Store) GetDepositStats() (int64, int64, error) {
 				return err
 			}
 
-			if dpi.CoinType == scanner.CoinTypeBTC {
-				totalBTCReceived += dpi.DepositValue
+			switch dpi.CoinType {
+			case scanner.CoinTypeBTC:
+				stats.TotalBTCReceived += dpi.DepositValue
+			case scanner.CoinTypeETH:
+				stats.TotalETHReceived += dpi.DepositValue
+			case scanner.CoinTypeSKY:
+				stats.TotalSKYReceived += dpi.DepositValue
+			case scanner.CoinTypeWAVE:
+				stats.TotalWAVEReceived += dpi.DepositValue
 			}
-			totalMDLSent += int64(dpi.MDLSent)
+			stats.TotalMDLSent += int64(dpi.MDLSent)
 
 			return nil
 		})
 	}); err != nil {
-		return -1, -1, err
+		return nil, err
 	}
 
-	return totalBTCReceived, totalMDLSent, nil
+	return stats, nil
 }
