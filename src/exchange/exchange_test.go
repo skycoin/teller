@@ -246,7 +246,7 @@ func runExchange(t *testing.T, buyMethod string) (*Exchange, func(), *logrus_tes
 	return e, shutdown, hook
 }
 
-func runExchangeMockStore(t *testing.T, buyMethod string) (*Exchange, func(), *logrus_test.Hook) {
+func runExchangeMockStore(t *testing.T, buyMethod string) (*Exchange, func(), *logrus_test.Hook) { // nolint: unparam
 	store := &MockStore{}
 	log, hook := testutil.NewLogger(t)
 

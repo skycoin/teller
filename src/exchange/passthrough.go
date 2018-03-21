@@ -109,7 +109,7 @@ func (p *Passthrough) Run() error {
 	}()
 
 	// Look for deposits that had an order placed, but for which we failed to record the OrderID
-	// This could have occured if a DB save had failed or the process was interrupted at the wrong time.
+	// This could have occurred if a DB save had failed or the process was interrupted at the wrong time.
 	// Recovery will record the missing order data and set the status to StatusWaitPassthroughOrderComplete
 	recoveredDeposits, err := p.fixUnrecordedOrders()
 	if err != nil {
@@ -659,8 +659,6 @@ waitCompletedLoop:
 			}
 		}
 	}
-
-	return di, nil
 }
 
 // calculateRequestedAmount converts the amount of satoshis to a decimal amount, truncated to the maximum
