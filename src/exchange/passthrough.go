@@ -36,6 +36,13 @@ var (
 	errQuit                    = errors.New("quit")
 )
 
+const (
+	actionRetry            = "retry"
+	actionRetryRatelimited = "retry_ratelimited"
+	actionFail             = "fail"
+	actionQuit             = "quit"
+)
+
 // Passthrough implements a Processor. For each deposit, it buys a corresponding amount
 // from c2cx.com, then tells the sender to send the amount bought.
 type Passthrough struct {
@@ -175,31 +182,25 @@ queueWaitPassthroughDeposits:
 
 func (p *Passthrough) runBuy() {
 	log := p.log.WithField("goroutine", "runBuy")
-loop:
 	for {
 		select {
 		case <-p.quit:
 			log.Info("quit")
 			return
 		case d := <-p.internalDeposits:
-			d, err := p.processWaitDecideDeposit(d)
+			d, err := p.processDeposit(d)
 			log := log.WithField("depositInfo", d)
 
-			switch err {
-			case nil:
+			if err != nil {
+				msg := "handleDeposit failed, this deposit will be reprocessed when teller is restarted"
+				if d.Status == StatusDone {
+					msg = "handleDeposit failed, this deposit will never be reprocessed. If this is a mistake, you must recover manually"
+				}
+				log.WithError(err).Error(msg)
+			} else {
 				log.Info("Deposit processed")
 				p.deposits <- d
-
-			case ErrFatalOrderStatus:
-				log.WithError(err).Error("handleDeposit failed, this deposit will never be reprocessed")
-				continue loop
-
-			default:
-				msg := "handleDeposit failed, this deposit will not be reprocessed until teller is restarted."
-				log.WithError(err).Error(msg)
-				continue loop
 			}
-
 		}
 	}
 }
@@ -232,13 +233,13 @@ func (p *Passthrough) Deposits() <-chan DepositInfo {
 	return p.deposits
 }
 
-// processWaitDecideDeposit advances a single deposit through these states:
+// processDeposit advances a single deposit through these states:
 // StatusWaitDecide -> StatusWaitPassthrough
 // StatusWaitPassthrough -> StatusWaitPassthroughOrderComplete
 // StatusWaitPassthroughOrderComplete -> StatusWaitSend
-func (p *Passthrough) processWaitDecideDeposit(di DepositInfo) (DepositInfo, error) {
+func (p *Passthrough) processDeposit(di DepositInfo) (DepositInfo, error) {
 	log := p.log.WithField("depositInfo", di)
-	log.Info("Processing StatusWaitDecide deposit")
+	log.Info("processDeposit")
 
 	for {
 		select {
@@ -255,73 +256,74 @@ func (p *Passthrough) processWaitDecideDeposit(di DepositInfo) (DepositInfo, err
 
 		p.setStatus(err)
 
-		retry := "retry"
-		retryRatelimited := "retry_ratelimited"
-		fail := "fail"
-		quit := "quit"
-
-		var action string
-		switch e := err.(type) {
-		case c2cx.APIError:
-			// Retry a c2cx.APIError by default
-			action = retry
-
-			// If the error is because the BTC volume for the order is too low, fail
-			if strings.HasPrefix(e.Message, "limit value:") {
-				action = fail
-			}
-
-			if e.Message == "Too Many Requests" {
-				action = retryRatelimited
-			}
-
-		case c2cx.Error:
-			// Retry any other c2cx.Error by default.
-			// Includes net.Error, which can occur if the network or remote server are unavailable.
-			// Includes a JSON parsing error, since sometimes the C2CX API will respond with XML.
-			action = retry
-
-		case net.Error:
-			// Treat net.Error errors as temporary,
-			action = retry
-
-		default:
-			switch err {
-			case nil:
-			case errQuit:
-				action = quit
-			default:
-				action = fail
-			}
-		}
+		action := errorAction(err)
 
 		if err != nil && err != errQuit {
 			log.WithField("action", action).WithError(err).Error("handleDepositInfoState failed")
 		}
 
 		switch action {
-		case retry:
+		case actionRetry:
 			select {
 			case <-time.After(p.cfg.C2CX.RequestFailureWait):
 			case <-p.quit:
 				return di, nil
 			}
-		case retryRatelimited:
+		case actionRetryRatelimited:
 			select {
 			case <-time.After(p.cfg.C2CX.RatelimitWait):
 			case <-p.quit:
 				return di, nil
 			}
-		case fail:
+		case actionFail:
 			return di, err
-		case quit:
+		case actionQuit:
 			return di, nil
 		}
 
-		if di.Status == StatusWaitSend {
+		if di.Status == StatusWaitSend || di.Status == StatusDone {
 			return di, nil
 		}
 	}
+}
+
+func errorAction(err error) string {
+	var action string
+	switch e := err.(type) {
+	case c2cx.APIError:
+		// Retry a c2cx.APIError by default
+		action = actionRetry
+
+		// If the error is because the BTC volume for the order is too low, fail
+		if strings.HasPrefix(e.Message, "limit value:") {
+			action = actionFail
+		}
+
+		if e.Message == "Too Many Requests" {
+			action = actionRetryRatelimited
+		}
+
+	case c2cx.Error:
+		// Retry any other c2cx.Error by default.
+		// Includes net.Error, which can occur if the network or remote server are unavailable.
+		// Includes a JSON parsing error, since sometimes the C2CX API will respond with XML.
+		action = actionRetry
+
+	case net.Error:
+		// Treat net.Error errors as temporary,
+		action = actionRetry
+
+	default:
+		switch err {
+		case nil:
+		case errQuit:
+			action = actionQuit
+		default:
+			action = actionFail
+		}
+	}
+
+	return action
 }
 
 func (p *Passthrough) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
@@ -411,29 +413,33 @@ func (p *Passthrough) handleDepositInfoState(di DepositInfo) (DepositInfo, error
 		case errQuit:
 			return di, err
 
-		case ErrFatalOrderStatus:
-			// TODO -- If we discover that an order can become fatal unexpectedly
-			// and want to reprocess it, we'll need to adjust the customerID before retrying.
-			// This is also a problem if an order can be partially completed then become fatal.
-			// If an order can become fatal, we'll process it manually and
-			// figure out a solution to reprocessing.
-			di, err = p.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
-				newDepositInfo.Status = StatusDone
-				newDepositInfo.Error = err.Error()
-				return newDepositInfo
-			})
-			if err != nil {
-				log.WithError(err).Error("UpdateDepositInfo set StatusDone failed")
-				return di, err
-			}
-
-			log = log.WithField("depositInfo", di)
-			log.WithError(err).Error("Fatal order status, DepositInfo status set to StatusDone")
-
-			return di, ErrFatalOrderStatus
-
 		default:
 			log.WithError(err).Error("waitOrderComplete failed")
+
+			action := errorAction(err)
+
+			switch action {
+			case actionFail:
+				// TODO -- If we discover that an order can become fatal unexpectedly
+				// and want to reprocess it, we'll need to adjust the customerID before retrying.
+				// This is also a problem if an order can be partially completed then become fatal.
+				// If an order can become fatal, we'll process it manually and
+				// figure out a solution to reprocessing.
+				var updateErr error
+				di, updateErr = p.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
+					newDepositInfo.Status = StatusDone
+					newDepositInfo.Error = err.Error()
+					return newDepositInfo
+				})
+				if updateErr != nil {
+					log.WithError(updateErr).Error("UpdateDepositInfo set StatusDone failed")
+					return di, updateErr
+				}
+
+				log = log.WithField("depositInfo", di)
+				log.WithError(err).Error("Fatal order status, DepositInfo status set to StatusDone")
+			}
+
 			return di, err
 		}
 

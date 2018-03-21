@@ -3,7 +3,6 @@ package exchange
 import (
 	"errors"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"testing"
@@ -184,7 +183,7 @@ var (
 	}
 )
 
-func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
+func newTestExchange(t *testing.T, buyMethod string, log *logrus.Logger, db *bolt.DB) *Exchange {
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
 
@@ -198,15 +197,25 @@ func newTestExchange(t *testing.T, log *logrus.Logger, db *bolt.DB) *Exchange {
 
 	go testutil.CheckError(t, multiplexer.Multiplex)
 
-	e, err := NewDirectExchange(log, defaultCfg, store, multiplexer, newDummySender())
+	var e *Exchange
+	switch buyMethod {
+	case config.BuyMethodDirect:
+		e, err = NewDirectExchange(log, defaultCfg, store, multiplexer, newDummySender())
+	case config.BuyMethodPassthrough:
+		e, err = NewPassthroughExchange(log, defaultPassthroughCfg, store, multiplexer, newDummySender())
+		e.Processor.(*Passthrough).exchangeClient = &MockC2CXClient{}
+	default:
+		t.Fatalf("Invalid buyMethod %s", buyMethod)
+	}
+
 	require.NoError(t, err)
 	return e
 }
 
-func setupExchange(t *testing.T, log *logrus.Logger) (*Exchange, func(), func()) {
+func setupExchange(t *testing.T, buyMethod string, log *logrus.Logger) (*Exchange, func(), func()) {
 	db, shutdownDB := testutil.PrepareDB(t)
 
-	e := newTestExchange(t, log, db)
+	e := newTestExchange(t, buyMethod, log, db)
 
 	done := make(chan struct{})
 	run := func() {
@@ -230,14 +239,14 @@ func closeMultiplexer(e *Exchange) {
 	mp.Shutdown()
 }
 
-func runExchange(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
+func runExchange(t *testing.T, buyMethod string) (*Exchange, func(), *logrus_test.Hook) {
 	log, hook := testutil.NewLogger(t)
-	e, run, shutdown := setupExchange(t, log)
+	e, run, shutdown := setupExchange(t, buyMethod, log)
 	go run()
 	return e, shutdown, hook
 }
 
-func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
+func runExchangeMockStore(t *testing.T, buyMethod string) (*Exchange, func(), *logrus_test.Hook) {
 	store := &MockStore{}
 	log, hook := testutil.NewLogger(t)
 
@@ -251,7 +260,17 @@ func runExchangeMockStore(t *testing.T) (*Exchange, func(), *logrus_test.Hook) {
 
 	go testutil.CheckError(t, multiplexer.Multiplex)
 
-	e, err := NewDirectExchange(log, defaultCfg, store, multiplexer, newDummySender())
+	var e *Exchange
+	switch buyMethod {
+	case config.BuyMethodDirect:
+		e, err = NewDirectExchange(log, defaultCfg, store, multiplexer, newDummySender())
+	case config.BuyMethodPassthrough:
+		e, err = NewPassthroughExchange(log, defaultPassthroughCfg, store, multiplexer, newDummySender())
+		e.Processor.(*Passthrough).exchangeClient = &MockC2CXClient{}
+	default:
+		t.Fatalf("Invalid buyMethod %s", buyMethod)
+	}
+
 	require.NoError(t, err)
 
 	done := make(chan struct{})
@@ -300,7 +319,7 @@ loop:
 
 func TestExchangeRunShutdown(t *testing.T) {
 	// Tests a simple start and stop, with no scanner activity
-	e, shutdown, _ := runExchange(t)
+	e, shutdown, _ := runExchange(t, config.BuyMethodDirect)
 	defer shutdown()
 	defer e.Shutdown()
 	closeMultiplexer(e)
@@ -308,14 +327,14 @@ func TestExchangeRunShutdown(t *testing.T) {
 
 func TestExchangeRunScannerClosed(t *testing.T) {
 	// Tests that there is no problem when the scanner closes
-	e, shutdown, _ := runExchange(t)
+	e, shutdown, _ := runExchange(t, config.BuyMethodDirect)
 	defer shutdown()
 	defer e.Shutdown()
 	closeMultiplexer(e)
 }
 
 func TestExchangeRunSend(t *testing.T) {
-	e, shutdown, _ := runExchange(t)
+	e, shutdown, _ := runExchange(t, config.BuyMethodDirect)
 	defer shutdown()
 	defer e.Shutdown()
 
@@ -356,7 +375,6 @@ func TestExchangeRunSend(t *testing.T) {
 		defer close(done)
 		for range time.Tick(dbCheckWaitTime) {
 			di, err := e.store.(*Store).getDepositInfo(dn.Deposit.ID())
-			log.Printf("loop getDepositInfo %v %v\n", di, err)
 			require.NoError(t, err)
 
 			if di.Status == StatusWaitConfirm {
@@ -452,7 +470,7 @@ func TestExchangeUpdateBroadcastTxFailure(t *testing.T) {
 	// Test that we save the rate when first creating, not on send
 	// To do this, force the sender to return errors to block the transition to
 	// StatusWaitConfirm
-	e, shutdown, _ := runExchange(t)
+	e, shutdown, _ := runExchange(t, config.BuyMethodDirect)
 	defer shutdown()
 	defer e.Shutdown()
 
@@ -511,7 +529,7 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 	// Test that we save the rate when first creating, not on send
 	// To do this, force the sender to return errors to block the transition to
 	// StatusWaitConfirm
-	e, shutdown, _ := runExchange(t)
+	e, shutdown, _ := runExchange(t, config.BuyMethodDirect)
 	defer shutdown()
 	defer e.Shutdown()
 
@@ -567,7 +585,7 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 }
 
 func TestExchangeTxConfirmFailure(t *testing.T) {
-	e, shutdown, _ := runExchange(t)
+	e, shutdown, _ := runExchange(t, config.BuyMethodDirect)
 	defer shutdown()
 	defer e.Shutdown()
 
@@ -649,7 +667,7 @@ func TestExchangeTxConfirmFailure(t *testing.T) {
 }
 
 func TestExchangeQuitBeforeConfirm(t *testing.T) {
-	e, shutdown, _ := runExchange(t)
+	e, shutdown, _ := runExchange(t, config.BuyMethodDirect)
 	defer shutdown()
 
 	skyAddr := testSkyAddr
@@ -742,7 +760,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 	// or the deposit value is so small that it is worth less than 1 SKY after
 	// rate conversion.
 	// The scanner should never do this, but we must handle it in case it happens
-	e, shutdown, hook := runExchange(t)
+	e, shutdown, hook := runExchange(t, config.BuyMethodDirect)
 	defer shutdown()
 
 	skyAddr := testSkyAddr
@@ -840,7 +858,7 @@ func TestExchangeSendZeroCoins(t *testing.T) {
 
 func testExchangeRunProcessDepositBacklog(t *testing.T, dis []DepositInfo, configureSender func(*Exchange, DepositInfo)) {
 	log, _ := testutil.NewLogger(t)
-	e, run, shutdown := setupExchange(t, log)
+	e, run, shutdown := setupExchange(t, config.BuyMethodDirect, log)
 
 	updatedDis := make([]DepositInfo, 0, len(dis))
 	for _, di := range dis {
@@ -1126,7 +1144,7 @@ func TestExchangeProcessWaitDecideDeposits(t *testing.T) {
 
 func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 	// Tests that we log a message and continue if saveIncomingDeposit fails
-	e, shutdown, hook := runExchangeMockStore(t)
+	e, shutdown, hook := runExchangeMockStore(t, config.BuyMethodDirect)
 	defer shutdown()
 	didShutdown := false
 	defer func() {
@@ -1177,7 +1195,7 @@ func TestExchangeSaveIncomingDepositCreateDepositFailed(t *testing.T) {
 
 func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 	// Tests that we log a message and continue if processWaitSendDeposit fails
-	e, shutdown, hook := runExchangeMockStore(t)
+	e, shutdown, hook := runExchangeMockStore(t, config.BuyMethodDirect)
 	defer shutdown()
 	didShutdown := false
 	defer func() {
@@ -1276,7 +1294,7 @@ func TestExchangeProcessWaitSendDepositFailed(t *testing.T) {
 
 func TestExchangeProcessWaitSendNoSkyAddrBound(t *testing.T) {
 	// Tests that we log a message and continue if processWaitSendDeposit fails
-	e, shutdown, hook := runExchange(t)
+	e, shutdown, hook := runExchange(t, config.BuyMethodDirect)
 	defer shutdown()
 	defer e.Shutdown()
 
