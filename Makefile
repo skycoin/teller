@@ -8,7 +8,7 @@ teller: ## Run teller. To add arguments, do 'make ARGS="--foo" teller'.
 
 test: ## Run tests
 	go test ./cmd/... -timeout=1m -cover
-	go test ./src/... -timeout=1m -cover
+	go test ./src/... -timeout=2m -cover
 
 test-race: ## Run tests with -race. Note: expected to fail, but look for "DATA RACE" failures specifically
 	go test ./src/... -timeout=2m -race

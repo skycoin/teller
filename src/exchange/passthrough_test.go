@@ -995,17 +995,22 @@ func TestCalculateRequestedAmount(t *testing.T) {
 		{
 			name: "1000000 satoshis",
 			in:   1000000,
-			out:  "0.1",
+			out:  "0.01",
 		},
 		{
 			name: "10000000 satoshis (1 BTC)",
 			in:   10000000,
+			out:  "0.1",
+		},
+		{
+			name: "100000000 satoshis (1 BTC)",
+			in:   100000000,
 			out:  "1",
 		},
 		{
 			name: "mixed with truncation",
 			in:   92045678111,
-			out:  "92.04567",
+			out:  "920.45678",
 		},
 	}
 
@@ -1077,7 +1082,7 @@ func TestCalculateBtcSpent(t *testing.T) {
 			name:   "negative",
 			bought: "-1",
 			price:  "0.002",
-			out:    200000,
+			out:    -200000,
 		},
 		{
 			name:   "zero bought",

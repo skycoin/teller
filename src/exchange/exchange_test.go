@@ -1378,6 +1378,7 @@ func TestExchangeCreateTransaction(t *testing.T) {
 		SkyAddress:     "",
 		DepositValue:   1e8,
 		ConversionRate: "100",
+		BuyMethod:      config.BuyMethodDirect,
 	}
 
 	_, err = s.Sender.(*Send).createTransaction(di)
@@ -1389,6 +1390,7 @@ func TestExchangeCreateTransaction(t *testing.T) {
 		SkyAddress:     "2GgFvqoyk9RjwVzj8tqfcXVXB4orBwoc9qv",
 		DepositValue:   1,
 		ConversionRate: "100",
+		BuyMethod:      config.BuyMethodDirect,
 	}
 	_, err = s.Sender.(*Send).createTransaction(di)
 	require.Equal(t, ErrEmptySendAmount, err)
@@ -1399,6 +1401,7 @@ func TestExchangeCreateTransaction(t *testing.T) {
 		SkyAddress:     "2GgFvqoyk9RjwVzj8tqfcXVXB4orBwoc9qv",
 		DepositValue:   1e8,
 		ConversionRate: "100",
+		BuyMethod:      config.BuyMethodDirect,
 	}
 	// Make sure DepositInfo.ConversionRate != s.cfg.SkyBtcExchangeRate, to confirm
 	// that the DepositInfo's ConversionRate is used instead of cfg.SkyBtcExchangeRate
