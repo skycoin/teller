@@ -5,9 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
+
+	"github.com/MDLlife/teller/src/util/dbutil"
 
 	"github.com/MDLlife/MDL/src/cipher"
 )
@@ -15,13 +16,15 @@ import (
 const btcBucketKey = "used_btc_address"
 
 // NewBTCAddrs returns an Addrs loaded with BTC addresses
-func NewBTCAddrs(log logrus.FieldLogger, db *bolt.DB, addrsReader io.Reader) (*Addrs, error) {
-	loader, err := loadBTCAddresses(addrsReader)
+func NewBTCAddrs(log logrus.FieldLogger, db *bolt.DB, path string) (*Addrs, error) {
+	loader, err := dbutil.ReadLines(path)
 	if err != nil {
+		log.WithError(err).Error("Load deposit bitcoin address list failed")
 		return nil, err
 	}
 	return NewAddrs(log, db, loader, btcBucketKey)
 }
+
 
 func loadBTCAddresses(addrsReader io.Reader) ([]string, error) {
 	var addrs struct {
