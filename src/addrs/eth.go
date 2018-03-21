@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/MDLlife/teller/src/util/dbutil"
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 )
@@ -14,9 +15,10 @@ import (
 const ethBucketKey = "used_eth_address"
 
 // NewETHAddrs returns an Addrs loaded with ETH addresses
-func NewETHAddrs(log logrus.FieldLogger, db *bolt.DB, addrsReader io.Reader) (*Addrs, error) {
-	loader, err := loadETHAddresses(addrsReader)
+func NewETHAddrs(log logrus.FieldLogger, db *bolt.DB, path string) (*Addrs, error) {
+	loader, err := dbutil.ReadLines(path)
 	if err != nil {
+		log.WithError(err).Error("Load deposit ethereum address list failed")
 		return nil, err
 	}
 	return NewAddrs(log, db, loader, ethBucketKey)

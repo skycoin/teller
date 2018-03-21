@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -352,13 +351,8 @@ func run() error {
 
 	if cfg.BtcRPC.Enabled {
 		// create bitcoin address manager
-		f, err := ioutil.ReadFile(cfg.BtcAddresses)
-		if err != nil {
-			log.WithError(err).Error("Load deposit bitcoin address list failed")
-			return err
-		}
 
-		btcAddrMgr, err = addrs.NewBTCAddrs(log, db, bytes.NewReader(f))
+		btcAddrMgr, err = addrs.NewBTCAddrs(log, db, cfg.BtcAddresses)
 		if err != nil {
 			log.WithError(err).Error("Create bitcoin deposit address manager failed")
 			return err
@@ -371,13 +365,7 @@ func run() error {
 
 	if cfg.EthRPC.Enabled {
 		// create ethcoin address manager
-		f, err := ioutil.ReadFile(cfg.EthAddresses)
-		if err != nil {
-			log.WithError(err).Error("Load deposit ethcoin address list failed")
-			return err
-		}
-
-		ethAddrMgr, err = addrs.NewETHAddrs(log, db, bytes.NewReader(f))
+		ethAddrMgr, err = addrs.NewETHAddrs(log, db, cfg.EthAddresses)
 		if err != nil {
 			log.WithError(err).Error("Create ethcoin deposit address manager failed")
 			return err
@@ -390,13 +378,7 @@ func run() error {
 
 	if cfg.SkyRPC.Enabled {
 		// create skycoin address manager
-		f, err := ioutil.ReadFile(cfg.SkyAddresses)
-		if err != nil {
-			log.WithError(err).Error("Load deposit skycoin address list failed")
-			return err
-		}
-
-		skyAddrMgr, err = addrs.NewSKYAddrs(log, db, bytes.NewReader(f))
+		skyAddrMgr, err = addrs.NewSKYAddrs(log, db, cfg.SkyAddresses)
 		if err != nil {
 			log.WithError(err).Error("Create skycoin deposit address manager failed")
 			return err

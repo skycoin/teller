@@ -281,15 +281,12 @@ func (e *Exchange) GetBindNum(mdlAddr string) (int, error) {
 
 // GetDepositStats returns deposit status
 func (e *Exchange) GetDepositStats() (*DepositStats, error) {
-	tbr, tss, err := e.store.GetDepositStats()
+	stats, err := e.store.GetDepositStats()
 	if err != nil {
 		return nil, err
 	}
 
-	return &DepositStats{
-		TotalBTCReceived: tbr,
-		TotalMDLSent:     tss,
-	}, nil
+	return stats, nil
 }
 
 // Balance returns the number of coins left in the OTC wallet
