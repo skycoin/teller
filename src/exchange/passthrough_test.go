@@ -253,7 +253,7 @@ func TestPassthroughLoadExistingDeposits(t *testing.T) {
 		require.Equal(t, uint64(345e4), deposit.Passthrough.SkyBought)
 		require.Equal(t, int64(693450), deposit.Passthrough.DepositValueSpent)
 		require.True(t, deposit.Passthrough.Order.Final)
-		require.NotNil(t, deposit.Passthrough.Order.Original)
+		require.NotEmpty(t, deposit.Passthrough.Order.Original)
 		require.Empty(t, deposit.Error)
 	}
 
@@ -272,7 +272,7 @@ func TestPassthroughLoadExistingDeposits(t *testing.T) {
 		require.Equal(t, uint64(123e4), deposit.Passthrough.SkyBought)
 		require.Equal(t, int64(223860), deposit.Passthrough.DepositValueSpent)
 		require.True(t, deposit.Passthrough.Order.Final)
-		require.NotNil(t, deposit.Passthrough.Order.Original)
+		require.NotEmpty(t, deposit.Passthrough.Order.Original)
 		require.Empty(t, deposit.Error)
 	}
 
@@ -355,7 +355,7 @@ func TestPassthroughOrderNotCompleted(t *testing.T) {
 		require.Equal(t, uint64(123e4), deposit.Passthrough.SkyBought)
 		require.Equal(t, int64(223860), deposit.Passthrough.DepositValueSpent)
 		require.True(t, deposit.Passthrough.Order.Final)
-		require.NotNil(t, deposit.Passthrough.Order.Original)
+		require.NotEmpty(t, deposit.Passthrough.Order.Original)
 		require.Empty(t, deposit.Error)
 
 		// Check serialized original order
@@ -363,10 +363,8 @@ func TestPassthroughOrderNotCompleted(t *testing.T) {
 		deposit, err := p.store.(*Store).getDepositInfo(deposit.DepositID)
 		require.NoError(t, err)
 
-		require.NotNil(t, deposit.Passthrough.Order.Original)
-
 		var order c2cx.Order
-		err = json.Unmarshal(deposit.Passthrough.Order.Original, &order)
+		err = json.Unmarshal([]byte(deposit.Passthrough.Order.Original), &order)
 		require.NoError(t, err)
 		compareOrder(t, orderComplete, &order)
 	}
@@ -454,10 +452,10 @@ func TestPassthroughOrderFatalStatus(t *testing.T) {
 	require.Equal(t, int64(0), deposit.Passthrough.DepositValueSpent)
 	require.True(t, deposit.Passthrough.Order.Final)
 	require.Equal(t, ErrFatalOrderStatus.Error(), deposit.Error)
-	require.NotNil(t, deposit.Passthrough.Order.Original)
+	require.NotEmpty(t, deposit.Passthrough.Order.Original)
 
 	var order c2cx.Order
-	err = json.Unmarshal(deposit.Passthrough.Order.Original, &order)
+	err = json.Unmarshal([]byte(deposit.Passthrough.Order.Original), &order)
 	require.NoError(t, err)
 	compareOrder(t, orderFatal, &order)
 
@@ -639,7 +637,7 @@ func testPassthroughRetryError(t *testing.T, getOrderInfoErr error) {
 		require.Equal(t, uint64(123e4), deposit.Passthrough.SkyBought)
 		require.Equal(t, int64(223860), deposit.Passthrough.DepositValueSpent)
 		require.True(t, deposit.Passthrough.Order.Final)
-		require.NotNil(t, deposit.Passthrough.Order.Original)
+		require.NotEmpty(t, deposit.Passthrough.Order.Original)
 		require.Empty(t, deposit.Error)
 
 		// Check serialized original order
@@ -647,10 +645,8 @@ func testPassthroughRetryError(t *testing.T, getOrderInfoErr error) {
 		deposit, err := p.store.(*Store).getDepositInfo(deposit.DepositID)
 		require.NoError(t, err)
 
-		require.NotNil(t, deposit.Passthrough.Order.Original)
-
 		var order c2cx.Order
-		err = json.Unmarshal(deposit.Passthrough.Order.Original, &order)
+		err = json.Unmarshal([]byte(deposit.Passthrough.Order.Original), &order)
 		require.NoError(t, err)
 		compareOrder(t, orderComplete, &order)
 	}
@@ -796,7 +792,7 @@ func TestPassthroughExchangeRunSend(t *testing.T) {
 				Price:           orderComplete.AvgPrice.String(),
 				Status:          orderComplete.Status.String(),
 				Final:           true,
-				Original:        orderCompleteBytes,
+				Original:        string(orderCompleteBytes),
 			},
 		},
 	}
@@ -860,7 +856,7 @@ func TestPassthroughExchangeRunSend(t *testing.T) {
 				Price:           orderComplete.AvgPrice.String(),
 				Status:          orderComplete.Status.String(),
 				Final:           true,
-				Original:        orderCompleteBytes,
+				Original:        string(orderCompleteBytes),
 			},
 		},
 	}

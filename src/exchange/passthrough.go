@@ -638,7 +638,7 @@ waitCompletedLoop:
 				if err != nil {
 					log.WithError(err).Error("Failed to marshal original order to JSON")
 				} else {
-					di.Passthrough.Order.Original = json.RawMessage(originalData)
+					di.Passthrough.Order.Original = string(originalData)
 				}
 
 				return di, nil
@@ -652,7 +652,7 @@ waitCompletedLoop:
 				if err != nil {
 					log.WithError(err).Error("Failed to marshal original order to JSON")
 				} else {
-					di.Passthrough.Order.Original = json.RawMessage(originalData)
+					di.Passthrough.Order.Original = string(originalData)
 				}
 
 				return di, ErrFatalOrderStatus
