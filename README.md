@@ -102,13 +102,13 @@ Description of the config file:
 * `btc_scanner.scan_period` [duration]: How often to scan for blocks.
 * `btc_scanner.initial_scan_height` [int]: Begin scanning from this BTC blockchain height.
 * `btc_scanner.confirmations_required` [int]: Number of confirmations required before sending skycoins for a BTC deposit.
-* `sky_exchanger.sky_btc_exchange_rate` [string]: How much SKY to send per BTC. This can be written as an integer, float, or a rational fraction.
-* `sky_exchanger.max_decimals` [int]: Number of decimal places to truncate SKY to.
 * `eth_rpc.server` [string]: Host address of the geth node.
 * `eth_rpc.port` [string]: Host port of the geth node.
 * `eth_scanner.scan_period` [duration]: How often to scan for ethereum blocks.
 * `eth_scanner.initial_scan_height` [int]: Begin scanning from this ETH blockchain height.
 * `eth_scanner.confirmations_required` [int]: Number of confirmations required before sending skycoins for a ETH deposit.
+* `sky_exchanger.max_decimals` [int]: Number of decimal places to truncate SKY to.
+* `sky_exchanger.sky_btc_exchange_rate` [string]: How much SKY to send per BTC. This can be written as an integer, float, or a rational fraction.
 * `sky_exchanger.sky_eth_exchange_rate` [string]: How much SKY to send per ETH. This can be written as an integer, float, or a rational fraction.
 * `sky_exchanger.wallet` [string]: Filepath of the skycoin hot wallet. See [setup skycoin hot wallet](#setup-skycoin-hot-wallet).
 * `sky_exchanger.tx_confirmation_check_wait` [duration]: How often to check for a sent skycoin transaction's confirmation.
@@ -118,6 +118,7 @@ Description of the config file:
 * `sky_exchanger.exchange_client.secret` [string]: C2CX API secret key.  Required if `sky_exchanger.buy_method` is "passthrough".
 * `sky_exchanger.exchange_client.request_failure_wait` [duration]: How long to wait after a request failure to C2CX.
 * `sky_exchanger.exchange_client.ratelimit_wait` [duration]: How long to wait after being ratelimited by the C2CX API.
+* `sky_exchanger.exchange_client.check_order_wait` [duration]: How long to wait between requests to check order status on C2CX.
 * `sky_exchanger.exchange_client.btc_minimum_volume` [decimal]: Minimum BTC volume allowed for a deposit. C2CX's minimum is variable, this should be set to some higher arbitrary value to avoid making a failed order.
 * `web.behind_proxy` [bool]: Set true if running behind a proxy.
 * `web.static_dir` [string]: Location of static web assets.

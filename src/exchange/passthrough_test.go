@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -31,6 +32,7 @@ var (
 			Secret:             "c2cx-secret",
 			RequestFailureWait: time.Millisecond * 30,
 			RatelimitWait:      time.Millisecond * 60,
+			CheckOrderWait:     time.Millisecond * 10,
 			BtcMinimumVolume:   decimal.New(1, -3),
 		},
 	}
@@ -153,20 +155,20 @@ func TestPassthroughFixUnrecordedOrders(t *testing.T) {
 	require.NotEmpty(t, di.Passthrough.Order.CustomerID)
 
 	orderID := 1234
-	otherCID := "abcd"
+	otherCustomerID := "abcd"
 
 	orders := []c2cx.Order{
 		{
-			OrderID: c2cx.OrderID(orderID),
-			CID:     &otherCID,
+			OrderID:    c2cx.OrderID(orderID),
+			CustomerID: &otherCustomerID,
 		},
 		{
-			OrderID: c2cx.OrderID(orderID + 1),
-			CID:     nil,
+			OrderID:    c2cx.OrderID(orderID + 1),
+			CustomerID: nil,
 		},
 		{
-			OrderID: c2cx.OrderID(orderID + 2),
-			CID:     &di.Passthrough.Order.CustomerID,
+			OrderID:    c2cx.OrderID(orderID + 2),
+			CustomerID: &di.Passthrough.Order.CustomerID,
 		},
 	}
 
@@ -183,7 +185,7 @@ func TestPassthroughFixUnrecordedOrders(t *testing.T) {
 	require.Equal(t, fmt.Sprint(orderID+2), updatedDi.Passthrough.Order.OrderID)
 }
 
-func TestLoadExistingDeposits(t *testing.T) {
+func TestPassthroughLoadExistingDeposits(t *testing.T) {
 	// Tests that existing StatusWaitPassthrough and StatusWaitPassthroughOrderComplete
 	// deposits are loaded and processed.
 	db, shutdown := testutil.PrepareDB(t)
@@ -217,7 +219,7 @@ func TestLoadExistingDeposits(t *testing.T) {
 
 	orderWaitPassthrough := &c2cx.Order{
 		OrderID:         orderIDWaitPassthrough,
-		CID:             &diWaitPassthrough.Passthrough.Order.CustomerID,
+		CustomerID:      &diWaitPassthrough.Passthrough.Order.CustomerID,
 		Status:          c2cx.StatusCompleted,
 		CompletedAmount: decimal.New(123, -2),
 		AvgPrice:        decimal.New(182, -5),
@@ -225,7 +227,7 @@ func TestLoadExistingDeposits(t *testing.T) {
 
 	orderWaitPassthroughOrderComplete := &c2cx.Order{
 		OrderID:         orderIDWaitPassthroughOrderComplete,
-		CID:             &diWaitPassthroughOrderComplete.Passthrough.Order.CustomerID,
+		CustomerID:      &diWaitPassthroughOrderComplete.Passthrough.Order.CustomerID,
 		Status:          c2cx.StatusCompleted,
 		CompletedAmount: decimal.New(345, -2),
 		AvgPrice:        decimal.New(201, -5),
@@ -266,7 +268,7 @@ func TestLoadExistingDeposits(t *testing.T) {
 		require.Equal(t, int64(693450), deposit.Passthrough.DepositValueSpent)
 		require.True(t, deposit.Passthrough.Order.Final)
 		require.NotNil(t, deposit.Passthrough.Order.Original)
-		require.IsType(t, c2cx.Order{}, deposit.Passthrough.Order.Original)
+		require.Empty(t, deposit.Error)
 	}
 
 	select {
@@ -285,7 +287,7 @@ func TestLoadExistingDeposits(t *testing.T) {
 		require.Equal(t, int64(223860), deposit.Passthrough.DepositValueSpent)
 		require.True(t, deposit.Passthrough.Order.Final)
 		require.NotNil(t, deposit.Passthrough.Order.Original)
-		require.IsType(t, c2cx.Order{}, deposit.Passthrough.Order.Original)
+		require.Empty(t, deposit.Error)
 	}
 
 	select {
@@ -297,6 +299,228 @@ func TestLoadExistingDeposits(t *testing.T) {
 	p.Shutdown()
 
 	wg.Wait()
+}
+
+func TestPassthroughOrderNotCompleted(t *testing.T) {
+	// Tests that it loops until an order status is completed
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
+
+	log, _ := testutil.NewLogger(t)
+	store, err := NewStore(log, db)
+	require.NoError(t, err)
+
+	receiver := newMockReceiver()
+
+	p, err := NewPassthrough(log, defaultPassthroughCfg, store, receiver)
+	require.NoError(t, err)
+
+	mockClient := &MockC2CXClient{}
+	p.exchangeClient = mockClient
+
+	orderID := c2cx.OrderID(1234)
+
+	di := createDepositStatusWaitPassthroughOrderComplete(t, p, testSkyAddr, 0, orderID)
+
+	orderIncomplete := &c2cx.Order{
+		OrderID:    orderID,
+		CustomerID: &di.Passthrough.Order.CustomerID,
+		Status:     c2cx.StatusPartial,
+	}
+
+	orderComplete := &c2cx.Order{
+		OrderID:         orderID,
+		CustomerID:      &di.Passthrough.Order.CustomerID,
+		Status:          c2cx.StatusCompleted,
+		CompletedAmount: decimal.New(123, -2),
+		AvgPrice:        decimal.New(182, -5),
+	}
+
+	mockClient.On("GetOrderByStatus", c2cx.BtcSky, c2cx.StatusAll).Return(nil, nil)
+
+	// Return an order with each of the possible "wait" statuses
+	incompleteStatuses := []c2cx.OrderStatus{
+		c2cx.StatusPartial,
+		c2cx.StatusPending,
+		c2cx.StatusActive,
+		c2cx.StatusSuspended,
+		c2cx.StatusTriggerPending,
+		c2cx.StatusStopLossPending,
+	}
+	for _, s := range incompleteStatuses {
+		order := orderIncomplete
+		order.Status = s
+		mockClient.On("GetOrderInfo", c2cx.BtcSky, orderID).Return(order, nil).Once()
+	}
+
+	// Return an order with a "complete" status
+	mockClient.On("GetOrderInfo", c2cx.BtcSky, orderID).Return(orderComplete, nil).Once()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := p.Run()
+		require.NoError(t, err)
+	}()
+
+	// Deposits should be found on .Deposits() in the correct order and with StatusWaitSend
+	timeout := time.Second * 6
+	select {
+	case <-time.After(timeout):
+		t.Fatal("Timed out waiting for the deposit to process")
+	case deposit := <-p.Deposits():
+		// The first deposit should be the StatusWaitPassthroughOrderComplete one
+		require.Equal(t, di.DepositID, deposit.DepositID)
+		require.Equal(t, StatusWaitSend, deposit.Status)
+		require.Equal(t, c2cx.StatusCompleted.String(), deposit.Passthrough.Order.Status)
+		require.Equal(t, fmt.Sprint(orderID), deposit.Passthrough.Order.OrderID)
+		require.Equal(t, di.DepositID, deposit.Passthrough.Order.CustomerID)
+		require.Equal(t, "0.00182", deposit.Passthrough.Order.Price)
+		require.Equal(t, "1.23", deposit.Passthrough.Order.CompletedAmount)
+		require.Equal(t, uint64(123e4), deposit.Passthrough.SkyBought)
+		require.Equal(t, int64(223860), deposit.Passthrough.DepositValueSpent)
+		require.True(t, deposit.Passthrough.Order.Final)
+		require.NotNil(t, deposit.Passthrough.Order.Original)
+		require.Empty(t, deposit.Error)
+
+		// Check serialized original order
+
+		deposit, err := p.store.(*Store).getDepositInfo(deposit.DepositID)
+		require.NoError(t, err)
+
+		require.NotNil(t, deposit.Passthrough.Order.Original)
+
+		var order c2cx.Order
+		err = json.Unmarshal(deposit.Passthrough.Order.Original, &order)
+		require.NoError(t, err)
+		compareOrder(t, orderComplete, &order)
+	}
+
+	select {
+	case <-p.Deposits():
+		t.Fatal("Did not expect a deposit")
+	default:
+	}
+
+	p.Shutdown()
+
+	wg.Wait()
+}
+
+func TestPassthroughOrderFatalStatus(t *testing.T) {
+	// Tests that if an order has a fatal status, the deposit skips to StatusDone
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
+
+	log, _ := testutil.NewLogger(t)
+	store, err := NewStore(log, db)
+	require.NoError(t, err)
+
+	receiver := newMockReceiver()
+
+	p, err := NewPassthrough(log, defaultPassthroughCfg, store, receiver)
+	require.NoError(t, err)
+
+	mockClient := &MockC2CXClient{}
+	p.exchangeClient = mockClient
+
+	orderID := c2cx.OrderID(1234)
+
+	di := createDepositStatusWaitPassthroughOrderComplete(t, p, testSkyAddr, 0, orderID)
+
+	orderFatal := &c2cx.Order{
+		OrderID:         orderID,
+		CustomerID:      &di.Passthrough.Order.CustomerID,
+		Status:          c2cx.StatusExpired,
+		CompletedAmount: decimal.New(123, -2),
+		AvgPrice:        decimal.New(182, -5),
+	}
+
+	mockClient.On("GetOrderByStatus", c2cx.BtcSky, c2cx.StatusAll).Return(nil, nil)
+
+	// Return an order with a "fatal" status
+	mockClient.On("GetOrderInfo", c2cx.BtcSky, orderID).Return(orderFatal, nil).Once()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := p.Run()
+		require.NoError(t, err)
+	}()
+
+	// Periodically check the database until we observe the sent deposit
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range time.Tick(dbCheckWaitTime) {
+			deposit, err := p.store.(*Store).getDepositInfo(di.DepositID)
+			require.NoError(t, err)
+
+			if deposit.Status == StatusDone {
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(dbScanTimeout):
+		t.Fatal("Waiting for sent deposit timed out")
+	}
+
+	deposit, err := p.store.(*Store).getDepositInfo(di.DepositID)
+	require.NoError(t, err)
+
+	require.Equal(t, di.DepositID, deposit.DepositID)
+	require.Equal(t, StatusDone, deposit.Status)
+	require.Equal(t, c2cx.StatusExpired.String(), deposit.Passthrough.Order.Status)
+	require.Equal(t, fmt.Sprint(orderID), deposit.Passthrough.Order.OrderID)
+	require.Equal(t, di.DepositID, deposit.Passthrough.Order.CustomerID)
+	require.Equal(t, "", deposit.Passthrough.Order.Price)
+	require.Equal(t, "", deposit.Passthrough.Order.CompletedAmount)
+	require.Equal(t, uint64(0), deposit.Passthrough.SkyBought)
+	require.Equal(t, int64(0), deposit.Passthrough.DepositValueSpent)
+	require.True(t, deposit.Passthrough.Order.Final)
+	require.Equal(t, ErrFatalOrderStatus.Error(), deposit.Error)
+	require.NotNil(t, deposit.Passthrough.Order.Original)
+
+	var order c2cx.Order
+	err = json.Unmarshal(deposit.Passthrough.Order.Original, &order)
+	require.NoError(t, err)
+	compareOrder(t, orderFatal, &order)
+
+	p.Shutdown()
+
+	wg.Wait()
+}
+
+func compareOrder(t *testing.T, a, b *c2cx.Order) {
+	require.True(t, a.Amount.Equal(b.Amount))
+	require.True(t, a.AvgPrice.Equal(b.AvgPrice))
+	require.True(t, a.CompletedAmount.Equal(b.CompletedAmount))
+	require.True(t, a.Fee.Equal(b.Fee))
+	require.True(t, a.CreateDate.Equal(b.CreateDate))
+	require.True(t, a.CompleteDate.Equal(b.CompleteDate))
+	require.Equal(t, a.OrderID, b.OrderID)
+	require.True(t, a.Price.Equal(b.Price))
+	require.Equal(t, a.Status, b.Status)
+	require.Equal(t, a.Type, b.Type)
+
+	if a.Trigger == nil {
+		require.Nil(t, b.Trigger)
+	} else {
+		require.True(t, a.Trigger.Equal(*b.Trigger))
+	}
+
+	if a.CustomerID == nil {
+		require.Nil(t, b.CustomerID)
+	} else {
+		require.Equal(t, *a.CustomerID, *b.CustomerID)
+	}
+
+	require.Equal(t, a.Source, b.Source)
 }
 
 func TestCalculateRequestedAmount(t *testing.T) {

@@ -50,6 +50,7 @@ key = "" # REQUIRED if buy_method = "passthrough"
 secret = "" # REQUIRED if buy_method = "passthrough"
 # request_failure_wait = "10s" # how long to wait after receiving a c2cx request error
 # ratelimit_wait = "30s" # how long to wait after being ratelimited by the c2cx API
+# check_order_wait = "2s" # how long to wait between requests to check order status on c2cx
 # btc_minimum_volume = "0.005"
 
 [web]

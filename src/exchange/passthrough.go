@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
@@ -26,10 +27,6 @@ Passthrough is implemented by making "market" buy orders on c2cx.com
 specifying an order in terms of SKY volume and price.
 
 */
-
-const (
-	checkOrderWait = time.Second * 2
-)
 
 var (
 	// ErrFatalOrderStatus is returned if an order has a fatal status
@@ -66,6 +63,16 @@ type C2CXClient interface {
 func NewPassthrough(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, receiver Receiver) (*Passthrough, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
+	}
+
+	if cfg.C2CX.RequestFailureWait == 0 {
+		cfg.C2CX.RequestFailureWait = time.Second * 10
+	}
+	if cfg.C2CX.RatelimitWait == 0 {
+		cfg.C2CX.RatelimitWait = time.Second * 30
+	}
+	if cfg.C2CX.CheckOrderWait == 0 {
+		cfg.C2CX.CheckOrderWait = time.Second * 2
 	}
 
 	return &Passthrough{
@@ -168,6 +175,7 @@ queueWaitPassthroughDeposits:
 
 func (p *Passthrough) runBuy() {
 	log := p.log.WithField("goroutine", "runBuy")
+loop:
 	for {
 		select {
 		case <-p.quit:
@@ -176,15 +184,22 @@ func (p *Passthrough) runBuy() {
 		case d := <-p.internalDeposits:
 			d, err := p.processWaitDecideDeposit(d)
 			log := log.WithField("depositInfo", d)
-			if err != nil {
-				msg := "handleDeposit failed. This deposit will not be reprocessed until teller is restarted."
+
+			switch err {
+			case nil:
+				log.Info("Deposit processed")
+				p.deposits <- d
+
+			case ErrFatalOrderStatus:
+				log.WithError(err).Error("handleDeposit failed, this deposit will never be reprocessed")
+				continue loop
+
+			default:
+				msg := "handleDeposit failed, this deposit will not be reprocessed until teller is restarted."
 				log.WithError(err).Error(msg)
-				continue
+				continue loop
 			}
 
-			log.WithField("depositInfo", d).Info("Deposit processed")
-
-			p.deposits <- d
 		}
 	}
 }
@@ -379,27 +394,48 @@ func (p *Passthrough) handleDepositInfoState(di DepositInfo) (DepositInfo, error
 
 		switch err {
 		case nil:
+			di, err = p.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
+				newDepositInfo.Status = StatusWaitSend
+				return newDepositInfo
+			})
+			if err != nil {
+				log.WithError(err).Error("UpdateDepositInfo set StatusWaitSend failed")
+				return di, err
+			}
+
+			log = log.WithField("depositInfo", di)
+			log.Info("DepositInfo status set to StatusWaitSend")
+
+			return di, nil
+
 		case errQuit:
 			return di, err
+
 		case ErrFatalOrderStatus:
-			log.WithError(err).Error("Fatal order status")
+			// TODO -- If we discover that an order can become fatal unexpectedly
+			// and want to reprocess it, we'll need to adjust the customerID before retrying.
+			// This is also a problem if an order can be partially completed then become fatal.
+			// If an order can become fatal, we'll process it manually and
+			// figure out a solution to reprocessing.
+			di, err = p.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
+				newDepositInfo.Status = StatusDone
+				newDepositInfo.Error = err.Error()
+				return newDepositInfo
+			})
+			if err != nil {
+				log.WithError(err).Error("UpdateDepositInfo set StatusDone failed")
+				return di, err
+			}
+
+			log = log.WithField("depositInfo", di)
+			log.WithError(err).Error("Fatal order status, DepositInfo status set to StatusDone")
+
+			return di, ErrFatalOrderStatus
+
 		default:
 			log.WithError(err).Error("waitOrderComplete failed")
 			return di, err
 		}
-
-		di, err = p.store.UpdateDepositInfo(di.DepositID, func(di DepositInfo) DepositInfo {
-			newDepositInfo.Status = StatusWaitSend
-			return newDepositInfo
-		})
-		if err != nil {
-			log.WithError(err).Error("UpdateDepositInfo set StatusWaitSend failed")
-			return di, err
-		}
-
-		log.Info("DepositInfo status set to StatusWaitSend")
-
-		return di, nil
 
 	default:
 		err := ErrDepositStatusInvalid
@@ -416,7 +452,7 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 	// or an unexpected interruption of the process.
 	// Unforuntately we cannot search orders by CustomerID directly, and
 	// have to scan all orders to find one matching the customer ID.
-	// Here, we query all c2cx orders and see if any have a CID that matches
+	// Here, we query all c2cx orders and see if any have a CustomerID that matches
 	// a DepositInfo whose status is StatusWaitPassthrough.
 	var updates []DepositInfo
 
@@ -451,7 +487,7 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 	// Is that how this parameter works?
 
 	// Get all orders
-	// If any's CID matches the DepositInfo's, update that DepositInfo
+	// If any's CustomerID matches the DepositInfo's, update that DepositInfo
 	log.Info("Calling GetOrderByStatus to recover placed orders")
 	orders, err := p.exchangeClient.GetOrderByStatus(c2cx.BtcSky, c2cx.StatusAll)
 	if err != nil {
@@ -460,11 +496,11 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 	}
 
 	for _, o := range orders {
-		if o.CID == nil {
+		if o.CustomerID == nil {
 			continue
 		}
 
-		di, ok := cidToDeposits[*o.CID]
+		di, ok := cidToDeposits[*o.CustomerID]
 		if !ok {
 			continue
 		}
@@ -533,7 +569,7 @@ waitCompletedLoop:
 		select {
 		case <-p.quit:
 			return di, errQuit
-		case <-time.After(checkOrderWait):
+		case <-time.After(p.cfg.C2CX.CheckOrderWait):
 			order, err := p.exchangeClient.GetOrderInfo(c2cx.BtcSky, c2cx.OrderID(orderID))
 			if err != nil {
 				log.WithError(err).Error("exchangeClient.GetOrderInfo failed")
@@ -551,8 +587,8 @@ waitCompletedLoop:
 				return di, err
 			}
 
-			if order.CID == nil || *order.CID != di.Passthrough.Order.CustomerID {
-				err := errors.New("order.CID != di.Passthrough.Order.CustomerID unexpectedly")
+			if order.CustomerID == nil || *order.CustomerID != di.Passthrough.Order.CustomerID {
+				err := errors.New("order.CustomerID != di.Passthrough.Order.CustomerID unexpectedly")
 				log.WithError(err).Error()
 				return di, err
 			}
@@ -588,10 +624,16 @@ waitCompletedLoop:
 
 				di.Passthrough.Order.Status = order.Status.String()
 				di.Passthrough.Order.Final = true
-				di.Passthrough.Order.Original = *order
 
 				di.Passthrough.Order.CompletedAmount = order.CompletedAmount.String()
 				di.Passthrough.Order.Price = order.AvgPrice.String()
+
+				originalData, err := json.Marshal(order)
+				if err != nil {
+					log.WithError(err).Error("Failed to marshal original order to JSON")
+				} else {
+					di.Passthrough.Order.Original = json.RawMessage(originalData)
+				}
 
 				return di, nil
 
@@ -599,7 +641,14 @@ waitCompletedLoop:
 				log.WithError(ErrFatalOrderStatus).Error("Fatal status encountered")
 				di.Passthrough.Order.Status = order.Status.String()
 				di.Passthrough.Order.Final = true
-				di.Passthrough.Order.Original = *order
+
+				originalData, err := json.Marshal(order)
+				if err != nil {
+					log.WithError(err).Error("Failed to marshal original order to JSON")
+				} else {
+					di.Passthrough.Order.Original = json.RawMessage(originalData)
+				}
+
 				return di, ErrFatalOrderStatus
 			}
 		}

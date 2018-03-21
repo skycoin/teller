@@ -1,6 +1,7 @@
 package exchange
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -114,13 +115,13 @@ type PassthroughData struct {
 
 // PassthroughOrder encapsulates 3rd party exchange order data
 type PassthroughOrder struct {
-	CustomerID      string      `json:"customer_id"`
-	OrderID         string      `json:"order_id"`
-	CompletedAmount string      `json:"completed_amount"`
-	Price           string      `json:"price"`
-	Status          string      `json:"status"`
-	Final           bool        `json:"final"`
-	Original        interface{} `json:"original"`
+	CustomerID      string          `json:"customer_id"`
+	OrderID         string          `json:"order_id"`
+	CompletedAmount string          `json:"completed_amount"`
+	Price           string          `json:"price"`
+	Status          string          `json:"status"`
+	Final           bool            `json:"final"`
+	Original        json.RawMessage `json:"original"`
 }
 
 // DepositStats records overall statistics about deposits

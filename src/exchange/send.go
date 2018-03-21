@@ -407,27 +407,39 @@ func (s *Send) handleDepositInfoState(di DepositInfo) (DepositInfo, error) {
 }
 
 func (s *Send) calculateSkyDroplets(di DepositInfo) (uint64, error) {
-	log := s.log
+	log := s.log.WithField("depositInfo", di)
 	var err error
 	var skyAmt uint64
-	switch di.CoinType {
-	case scanner.CoinTypeBTC:
-		skyAmt, err = CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
-		if err != nil {
-			log.WithError(err).Error("CalculateBtcSkyValue failed")
-			return 0, err
+
+	switch di.BuyMethod {
+	case config.BuyMethodPassthrough:
+		skyAmt = di.Passthrough.SkyBought
+
+	case config.BuyMethodDirect:
+		switch di.CoinType {
+		case scanner.CoinTypeBTC:
+			skyAmt, err = CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
+			if err != nil {
+				log.WithError(err).Error("CalculateBtcSkyValue failed")
+				return 0, err
+			}
+		case scanner.CoinTypeETH:
+			//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
+			skyAmt, err = CalculateEthSkyValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
+			if err != nil {
+				log.WithError(err).Error("CalculateEthSkyValue failed")
+				return 0, err
+			}
+		default:
+			log.WithError(scanner.ErrUnsupportedCoinType).Error()
+			return 0, scanner.ErrUnsupportedCoinType
 		}
-	case scanner.CoinTypeETH:
-		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
-		skyAmt, err = CalculateEthSkyValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
-		if err != nil {
-			log.WithError(err).Error("CalculateEthSkyValue failed")
-			return 0, err
-		}
+
 	default:
-		log.WithError(scanner.ErrUnsupportedCoinType).Error()
-		return 0, scanner.ErrUnsupportedCoinType
+		log.WithError(config.ErrInvalidBuyMethod).Error()
+		return 0, config.ErrInvalidBuyMethod
 	}
+
 	return skyAmt, nil
 }
 
