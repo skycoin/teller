@@ -13,9 +13,9 @@ import (
 func init() {
 	// Assert that getRate() handles all coin types
 	cfg := config.MDLExchanger{
-		MDLBtcExchangeRate: "1",
-		MDLEthExchangeRate: "2",
-		MDLSkyExchangeRate: "3",
+		MDLBtcExchangeRate:   "1",
+		MDLEthExchangeRate:   "2",
+		MDLSkyExchangeRate:   "3",
 		MDLWavesExchangeRate: "4",
 	}
 	for _, ct := range scanner.GetCoinTypes() {

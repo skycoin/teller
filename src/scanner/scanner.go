@@ -6,9 +6,9 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/modeneis/waves-go-client/model"
 	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/visor"
-	"github.com/modeneis/waves-go-client/model"
 )
 
 // Scanner provids apis for interacting with a scan service

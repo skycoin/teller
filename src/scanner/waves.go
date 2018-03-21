@@ -4,7 +4,6 @@
 //
 package scanner
 
-
 import (
 	"time"
 
@@ -12,13 +11,12 @@ import (
 
 	"github.com/modeneis/waves-go-client/client"
 	"github.com/modeneis/waves-go-client/model"
-	"log"
 )
 
 // WAVESScanner blockchain scanner to check if there're deposit coins
 type WAVESScanner struct {
-	log          logrus.FieldLogger
-	Base         CommonScanner
+	log            logrus.FieldLogger
+	Base           CommonScanner
 	wavesRPCClient WavesRPCClient
 }
 
@@ -28,8 +26,8 @@ func NewWavescoinScanner(log logrus.FieldLogger, store Storer, client WavesRPCCl
 
 	return &WAVESScanner{
 		wavesRPCClient: client,
-		log:          log.WithField("prefix", "scanner.waves"),
-		Base:         bs,
+		log:            log.WithField("prefix", "scanner.waves"),
+		Base:           bs,
 	}, nil
 }
 
@@ -101,14 +99,9 @@ func wavesBlock2CommonBlock(block *model.Blocks) (*CommonBlock, error) {
 		cv.Value = tx.Amount
 		cv.Addresses = []string{tx.Recipient}
 
-		log.Println("cv, ", cv)
 		cbTx.Vout = append(cbTx.Vout, cv)
-
-		log.Println("cbTx, ", cbTx)
 		cb.RawTx = append(cb.RawTx, cbTx)
 	}
-
-	log.Println(cb)
 
 	return &cb, nil
 }
@@ -120,7 +113,7 @@ func (s *WAVESScanner) GetBlockCount() (int64, error) {
 		return 0, err
 	}
 
-	return int64(rb.Blocksize), nil
+	return int64(rb.Height), nil
 }
 
 // getBlock returns block of given hash
@@ -201,36 +194,34 @@ func (s *WAVESScanner) GetDeposit() <-chan DepositNote {
 
 // WavesClient provides methods for sending coins
 type WavesClient struct {
-	walletFile   string
-	changeAddr   string
+	walletFile string
+	changeAddr string
 }
-
 
 // GetTransaction returns transaction by txid
 func (c *WavesClient) GetTransaction(txid string) (*model.Transactions, error) {
-	transaction,_, err := client.NewTransactionsService().GetTransactionsInfoID(txid)
-	return transaction,err
+	transaction, _, err := client.NewTransactionsService().GetTransactionsInfoID(txid)
+	return transaction, err
 }
 
 // GetBlocks get blocks from RPC
 func (c *WavesClient) GetBlocks(start, end int64) (blocks *[]model.Blocks, err error) {
-	blocks,_, err = client.NewBlocksService().GetBlocksSeqFromTo(start,end)
+	blocks, _, err = client.NewBlocksService().GetBlocksSeqFromTo(start, end)
 	return blocks, err
 }
 
 // GetBlocksBySeq get blocks by seq
 func (c *WavesClient) GetBlocksBySeq(seq int64) (block *model.Blocks, err error) {
-	block,_, err = client.NewBlocksService().GetBlocksAtHeight(seq)
+	block, _, err = client.NewBlocksService().GetBlocksAtHeight(seq)
 	return block, err
 }
 
 // GetLastBlocks get last blocks
 func (c *WavesClient) GetLastBlocks() (blocks *model.Blocks, err error) {
-	blocks,_, err = client.NewBlocksService().GetBlocksLast()
+	blocks, _, err = client.NewBlocksService().GetBlocksLast()
 	return blocks, err
 }
 
 // Shutdown the node
 func (c *WavesClient) Shutdown() {
 }
-

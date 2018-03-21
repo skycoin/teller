@@ -887,7 +887,7 @@ func TestStoreWavesGetOrCreateDepositInfoAlreadyExists(t *testing.T) {
 		ConversionRate: testMDLWavesRate,
 		Deposit: scanner.Deposit{
 			CoinType: scanner.CoinTypeWAVES,
-			Address:  "foo-sky-addr",
+			Address:  "foo-waves-addr",
 			Value:    1e6,
 			Height:   20,
 			Tx:       "foo-tx",
@@ -947,6 +947,15 @@ func TestStoreGetOrCreateDepositInfoNoBoundMDLAddr(t *testing.T) {
 	dv = scanner.Deposit{
 		Address:  "foo-sky-addr",
 		CoinType: scanner.CoinTypeSKY,
+	}
+
+	_, err = s.GetOrCreateDepositInfo(dv, rate)
+	require.Error(t, err)
+	require.Equal(t, err, ErrNoBoundAddress)
+
+	dv = scanner.Deposit{
+		Address:  "foo-waves-addr",
+		CoinType: scanner.CoinTypeWAVES,
 	}
 
 	_, err = s.GetOrCreateDepositInfo(dv, rate)

@@ -13,11 +13,11 @@ import (
 )
 
 var (
-	ErrBtcScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeBTC)
-	ErrEthScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeETH)
-	ErrSKYScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeSKY)
+	ErrBtcScannerAlreadyExists   = fmt.Errorf("scanner of coinType %s already exists", CoinTypeBTC)
+	ErrEthScannerAlreadyExists   = fmt.Errorf("scanner of coinType %s already exists", CoinTypeETH)
+	ErrSKYScannerAlreadyExists   = fmt.Errorf("scanner of coinType %s already exists", CoinTypeSKY)
 	ErrWAVESScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeWAVES)
-	ErrNilScanner              = errors.New("nil scanner")
+	ErrNilScanner                = errors.New("nil scanner")
 )
 
 func testAddBtcScanAddresses(t *testing.T, m *Multiplexer) int64 {

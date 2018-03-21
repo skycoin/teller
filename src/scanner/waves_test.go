@@ -1,6 +1,5 @@
 package scanner
 
-
 import (
 	"errors"
 	"testing"
@@ -9,14 +8,13 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
 
-
 	"github.com/MDLlife/teller/src/util/dbutil"
 	"github.com/MDLlife/teller/src/util/testutil"
 
 	"log"
 
-	"github.com/modeneis/waves-go-client/model"
 	"github.com/modeneis/waves-go-client/client"
+	"github.com/modeneis/waves-go-client/model"
 )
 
 var (
@@ -48,9 +46,9 @@ type dummyWavesrpcclient struct {
 	//hasSetMissingHash          bool
 
 	//log          logrus.FieldLogger
-	Base         CommonScanner
-	walletFile   string
-	changeAddr   string
+	Base       CommonScanner
+	walletFile string
+	changeAddr string
 }
 
 func openDummyWavesDB(t *testing.T) *bolt.DB {
@@ -80,7 +78,6 @@ func setupWavesScannerWithDB(t *testing.T, wavesDB *bolt.DB, db *bolt.DB) *WAVES
 
 	return scr
 }
-
 
 func setupWavesScanner(t *testing.T, wavesDB *bolt.DB) (*WAVESScanner, func()) {
 	db, shutdown := testutil.PrepareDB(t)
@@ -151,16 +148,17 @@ func testWavesScannerRun(t *testing.T, scr *WAVESScanner) {
 	// This address has 0 deposits
 	err := scr.AddScanAddress("3PFTGLDvE7rQfWtgSzBt7NS4NXXMQ1gUufs", CoinTypeWAVES)
 	require.NoError(t, err)
-	nDeposits = nDeposits + 2
+	nDeposits = nDeposits + 1
 
 	// This address has:
 	// 1 deposit, in block 2325212
 	err = scr.AddScanAddress("3P9dUze9nHRdfoKhFrZYKdsSpwW9JoE6Mzf", CoinTypeWAVES)
 	require.NoError(t, err)
-	nDeposits = nDeposits + 5
+	nDeposits = nDeposits + 1
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
+	scr.Base.(*BaseScanner).Cfg.DepositBufferSize = 1
 	log.Println("DepositBufferSize, ", scr.Base.(*BaseScanner).Cfg.DepositBufferSize)
 	require.True(t, scr.Base.(*BaseScanner).Cfg.DepositBufferSize < nDeposits)
 
@@ -213,9 +211,9 @@ func testWavesScannerConfirmationsRequired(t *testing.T, wavesDB *bolt.DB) {
 	// 2 deposits in block 2325212
 	// Only blocks 2325212  are processed, because blockCount is set
 	// to 2325214 and the confirmations required is set to 1
-	err := scr.AddScanAddress("3PFTGLDvE7rQfWtgSzBt7NS4NXXMQ1gUufs", CoinTypeWAVES)
+	err := scr.AddScanAddress("3P9dUze9nHRdfoKhFrZYKdsSpwW9JoE6Mzf", CoinTypeWAVES)
 	require.NoError(t, err)
-	nDeposits = nDeposits + 5
+	nDeposits = nDeposits + 1
 
 	// has't enough deposit
 	require.True(t, scr.Base.(*BaseScanner).Cfg.DepositBufferSize > nDeposits)
@@ -261,7 +259,7 @@ func testWavesScannerDuplicateDepositScans(t *testing.T, wavesDB *bolt.DB) {
 	scr := setupWavesScannerWithDB(t, wavesDB, db)
 	err := scr.AddScanAddress("3PRDjxHwETEhYXM3tjVMU4oYhfj3dqT6Vuw", CoinTypeWAVES)
 	require.NoError(t, err)
-	nDeposits = nDeposits + 5
+	nDeposits = nDeposits + 4
 
 	testWavesScannerRunProcessedLoop(t, scr, nDeposits)
 
@@ -333,13 +331,17 @@ func testWavesScannerProcessDepositError(t *testing.T, wavesDB *bolt.DB) {
 
 	nDeposits := 0
 
-	scr.Base.(*BaseScanner).Cfg.DepositBufferSize = 4
+	scr.Base.(*BaseScanner).Cfg.DepositBufferSize = 1
 
 	// This address has:
 	// 9 deposits in block 2325213
-	err := scr.AddScanAddress("fyqX5YuwXMUs4GEUE3LjLyhrqvNztFHQ4B", CoinTypeWAVES)
+	err := scr.AddScanAddress("3PRDjxHwETEhYXM3tjVMU4oYhfj3dqT6Vuw", CoinTypeWAVES)
 	require.NoError(t, err)
-	nDeposits = nDeposits + 5
+	nDeposits = nDeposits + 2
+
+	err = scr.AddScanAddress("3P9dUze9nHRdfoKhFrZYKdsSpwW9JoE6Mzf", CoinTypeWAVES)
+	require.NoError(t, err)
+	nDeposits = nDeposits + 3
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
@@ -368,7 +370,8 @@ func testWavesScannerProcessDepositError(t *testing.T, wavesDB *bolt.DB) {
 
 				require.False(t, d.Processed)
 				require.Equal(t, CoinTypeWAVES, d.CoinType)
-				require.Equal(t, "fyqX5YuwXMUs4GEUE3LjLyhrqvNztFHQ4B", d.Address)
+				require.Contains(t, []string{"3PRDjxHwETEhYXM3tjVMU4oYhfj3dqT6Vuw", "3P9dUze9nHRdfoKhFrZYKdsSpwW9JoE6Mzf"}, d.Address)
+
 				if d.Value != 0 { //value(0x87b127ee022abcf9881b9bad6bb6aac25229dff0) = 0
 					require.NotEmpty(t, d.Value)
 				}
@@ -482,28 +485,26 @@ func TestWavesScanner(t *testing.T) {
 	})
 }
 
-
 // GetTransaction returns transaction by txid
 func (c *dummyWavesrpcclient) GetTransaction(txid string) (*model.Transactions, error) {
-	transaction,_, err := client.NewTransactionsService().GetTransactionsInfoID(txid)
-	return transaction,err
+	transaction, _, err := client.NewTransactionsService().GetTransactionsInfoID(txid)
+	return transaction, err
 }
 
 func (c *dummyWavesrpcclient) GetBlocks(start, end int64) (*[]model.Blocks, error) {
-	blocks,_, err := client.NewBlocksService().GetBlocksSeqFromTo(start,end)
+	blocks, _, err := client.NewBlocksService().GetBlocksSeqFromTo(start, end)
 	return blocks, err
 }
 
 func (c *dummyWavesrpcclient) GetBlocksBySeq(seq int64) (*model.Blocks, error) {
-	block,_, err := client.NewBlocksService().GetBlocksAtHeight(seq)
+	block, _, err := client.NewBlocksService().GetBlocksAtHeight(seq)
 	return block, err
 }
 
 func (c *dummyWavesrpcclient) GetLastBlocks() (*model.Blocks, error) {
-	blocks,_, err := client.NewBlocksService().GetBlocksLast()
+	blocks, _, err := client.NewBlocksService().GetBlocksLast()
 	return blocks, err
 }
 
 func (c *dummyWavesrpcclient) Shutdown() {
 }
-
