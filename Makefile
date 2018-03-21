@@ -67,7 +67,7 @@ test-ci: ## Run tests on each package
 	go test ./src/config/... -timeout=1m -cover
 	go test ./src/exchange/... -timeout=1m -cover
 	go test ./src/monitor/... -timeout=1m -cover
-	go test ./src/scanner/... -timeout=4m -cover
+	go test ./src/scanner/... -timeout=5m -cover
 	go test ./src/sender/... -timeout=1m -cover
 	go test ./src/teller/... -timeout=1m -cover
 	go test ./src/util/... -timeout=1m -cover

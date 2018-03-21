@@ -8,11 +8,11 @@ import (
 	"errors"
 
 	"github.com/boltdb/bolt"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/cipher/base58"
 	"golang.org/x/crypto/blake2b"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const wavesBucketKey = "used_waves_address"
