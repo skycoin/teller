@@ -381,6 +381,7 @@
   packages = [
     "acme",
     "acme/autocert",
+    "blake2b",
     "pbkdf2",
     "ripemd160",
     "ssh/terminal"
@@ -448,6 +449,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c92323541dbd5860414f18ce7bda65ce9c3d24030a2e6971363fabca96d46f7a"
+  inputs-digest = "581ba7af509b04ba1816f186fa3eadf4be372b501828027dcaef4ff6398a49ef"
   solver-name = "gps-cdcl"
   solver-version = 1

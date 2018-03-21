@@ -67,3 +67,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/modeneis/waves-go-client"
+
+[[constraint]]
+  branch = "master"
+  name = "golang.org/x/crypto"

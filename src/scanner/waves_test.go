@@ -53,7 +53,7 @@ type dummyWavesrpcclient struct {
 
 func openDummyWavesDB(t *testing.T) *bolt.DB {
 	// Blocks 2325205 through 2325214 are stored in this DB
-	db, err := bolt.Open("./sky.db", 0600, nil)
+	db, err := bolt.Open("./waves.db", 0600, nil)
 	require.NoError(t, err)
 	return db
 }

@@ -79,7 +79,7 @@ func testNewWavesAddrManager(t *testing.T, db *bolt.DB, log *logrus.Logger) (*Ad
 		"3PJaDyprvekvPXPuAtxrapacuDJopgJRaU3",
 	}
 
-	wavesA, err := NewAddrs(log, db, addresses, "test_bucket_sky")
+	wavesA, err := NewAddrs(log, db, addresses, "test_bucket_waves")
 	require.NoError(t, err)
 
 	addrMap := make(map[string]struct{}, len(wavesA.addresses))
@@ -280,7 +280,7 @@ func TestAddrManager(t *testing.T) {
 	_, err = addrManager.NewAddress(typeE)
 	require.Equal(t, ErrDepositAddressEmpty, err)
 
-	//set typeE address into map
+	//set typeS address into map
 	addrMap = make(map[string]struct{})
 	for _, a := range skyAddresses {
 		addrMap[a] = struct{}{}
@@ -296,6 +296,12 @@ func TestAddrManager(t *testing.T) {
 	}
 	_, err = addrManager.NewAddress(typeS)
 	require.Equal(t, ErrDepositAddressEmpty, err)
+
+	//set typeW address into map
+	addrMap = make(map[string]struct{})
+	for _, a := range wavesAddresses {
+		addrMap[a] = struct{}{}
+	}
 
 	// run out all addresses of typeE
 	for i := 0; i < len(wavesAddresses); i++ {

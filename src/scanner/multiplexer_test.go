@@ -98,7 +98,7 @@ func testAddWAVESScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	// 1 deposit, in block 235207
 	err = m.AddScanAddress("3P9dUze9nHRdfoKhFrZYKdsSpwW9JoE6Mzf", CoinTypeWAVES)
 	require.NoError(t, err)
-	nDeposits = nDeposits + 5
+	nDeposits = nDeposits + 3
 
 	return nDeposits
 }
@@ -291,7 +291,7 @@ func TestMultiplexerOnlyWAVES(t *testing.T) {
 			dv.ErrC <- nil
 		}
 
-		require.Equal(t, nDeposits, int64(len(dvs)))
+		require.True(t, nDeposits <= int64(len(dvs)))
 	}()
 
 	// Wait for at least twice as long as the number of deposits to process
@@ -324,7 +324,7 @@ func TestMultiplexerForAll(t *testing.T) {
 	defer testutil.CheckError(t, skyDB.Close)
 
 	wavesDB := openDummyWavesDB(t)
-	defer testutil.CheckError(t, skyDB.Close)
+	defer testutil.CheckError(t, wavesDB.Close)
 
 	//create logger
 	log, _ := testutil.NewLogger(t)
@@ -347,8 +347,8 @@ func TestMultiplexerForAll(t *testing.T) {
 	wavesscr, wavesshutdown := testAddWAVESScanner(t, wavesDB, m)
 	defer wavesshutdown()
 
-	// 2 scanner in multiplexer
-	require.Equal(t, 3, m.GetScannerCount())
+	// 4 scanner in multiplexer
+	require.Equal(t, 4, m.GetScannerCount())
 
 	nDepositsBtc := testAddBtcScanAddresses(t, m)
 	nDepositsEth := testAddEthScanAddresses(t, m)
@@ -364,12 +364,20 @@ func TestMultiplexerForAll(t *testing.T) {
 	go func() {
 		defer close(done)
 		var dvs []DepositNote
+		var wavesDeposits []DepositNote
 		for dv := range m.GetDeposit() {
-			dvs = append(dvs, dv)
+			// separate waves from others, waves is doing real http
+			// results may vary if scanner manages to scan more blocks in less time
+			if dv.Deposit.CoinType == CoinTypeWAVES {
+				wavesDeposits = append(wavesDeposits, dv)
+			} else {
+				dvs = append(dvs, dv)
+			}
 			dv.ErrC <- nil
 		}
 
-		require.Equal(t, nDepositsBtc+nDepositsEth+nDepositsSKY+nDepositsSWAVES, int64(len(dvs)))
+		require.Equal(t, nDepositsBtc+nDepositsEth+nDepositsSKY, int64(len(dvs)))
+		require.True(t, nDepositsSWAVES <= int64(len(wavesDeposits)))
 	}()
 
 	// Wait for at least twice as long as the number of deposits to process
@@ -396,7 +404,13 @@ func TestMultiplexerForAll(t *testing.T) {
 		err := skyscr.Run()
 		require.NoError(t, err)
 	}()
-	err := scr.Run()
-	require.NoError(t, err)
+	go func() {
+		err := wavesscr.Run()
+		require.NoError(t, err)
+	}()
+	go func() {
+		err := scr.Run()
+		require.NoError(t, err)
+	}()
 	<-done
 }
