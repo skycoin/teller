@@ -680,6 +680,65 @@ func TestPassthroughRetryNetError(t *testing.T) {
 	testPassthroughRetryError(t, getOrderInfoErr)
 }
 
+func TestPassthroughShutdownWhileCheckingOrderStatus(t *testing.T) {
+	// Tests that passthrough shuts down safely while waiting to check order status
+	// This will confirm quit error propagation handling
+	p, shutdown, mockClient, _ := setupPassthrough(t)
+	defer shutdown()
+
+	p.cfg.C2CX.CheckOrderWait = time.Second * 60
+
+	orderID := c2cx.OrderID(1234)
+	di := createDepositStatusWaitPassthroughOrderComplete(t, p, testSkyAddr, 0, orderID)
+
+	orderIncomplete := &c2cx.Order{
+		OrderID:    orderID,
+		CustomerID: &di.Passthrough.Order.CustomerID,
+		Status:     c2cx.StatusPending,
+	}
+
+	mockClient.On("GetOrderByStatus", c2cx.BtcSky, c2cx.StatusAll).Return(nil, nil).Once()
+	mockClient.On("GetOrderInfo", c2cx.BtcSky, orderID).Return(orderIncomplete, nil)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := p.Run()
+		require.NoError(t, err)
+	}()
+
+	// Wait enough time for the deposit to be in the step where it is waiting for the order status check
+	time.Sleep(time.Second * 3)
+
+	select {
+	case <-p.Deposits():
+		t.Fatal("Did not expect a deposit")
+	default:
+	}
+
+	p.Shutdown()
+
+	wg.Wait()
+
+	// Check the deposit in the store
+	deposit, err := p.store.(*Store).getDepositInfo(di.DepositID)
+	require.NoError(t, err)
+
+	require.Equal(t, di.DepositID, deposit.DepositID)
+	require.Equal(t, StatusWaitPassthroughOrderComplete, deposit.Status)
+	require.Empty(t, deposit.Passthrough.Order.Status)
+	require.Equal(t, fmt.Sprint(orderID), deposit.Passthrough.Order.OrderID)
+	require.Equal(t, di.DepositID, deposit.Passthrough.Order.CustomerID)
+	require.Empty(t, deposit.Passthrough.Order.Price)
+	require.Empty(t, deposit.Passthrough.Order.CompletedAmount)
+	require.Equal(t, uint64(0), deposit.Passthrough.SkyBought)
+	require.Equal(t, int64(0), deposit.Passthrough.DepositValueSpent)
+	require.False(t, deposit.Passthrough.Order.Final)
+	require.Empty(t, deposit.Passthrough.Order.Original)
+	require.Empty(t, deposit.Error)
+}
+
 func TestPassthroughExchangeRunSend(t *testing.T) {
 	// Tests an Exchanger configured with Passthrough end-to-end
 	e, shutdown, _ := runExchange(t, config.BuyMethodPassthrough)
