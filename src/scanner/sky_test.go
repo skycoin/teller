@@ -132,7 +132,7 @@ func setupSkyScannerWithDB(t *testing.T, skyDB *bolt.DB, db *bolt.DB) *SKYScanne
 
 	rpc := newDummySkyrpcclient(skyDB)
 
-	rpc.blockCount = 179
+	rpc.blockCount = 180
 
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
