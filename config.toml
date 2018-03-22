@@ -28,12 +28,12 @@ pass = "1" # REQUIRED
 cert = "no.cert" # REQUIRED
 
 [eth_rpc]
-enabled = true
+enabled = false
 server = "127.0.0.1" # REQUIRED
 port = "8545" # REQUIRED
 
 [sky_rpc]
-enabled = false
+enabled = true
 server = "127.0.0.1" # REQUIRED
 port = "6430" # REQUIRED
 

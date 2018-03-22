@@ -269,7 +269,7 @@ class Distribution extends React.Component {
                     <FormattedMessage
                       id="distribution.rate"
                       values={{
-                        rate: +(this.currentCoinPrice()),
+                        rate: +(888),
                         coinType: this.state.coinType,
                       }}
                     /> "(approx. $0.05 USD per 1 MDL)"

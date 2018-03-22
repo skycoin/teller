@@ -1,12 +1,12 @@
 package addrs
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 
 	"errors"
 
+	"github.com/MDLlife/teller/src/util"
 	"github.com/boltdb/bolt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/sirupsen/logrus"
@@ -26,20 +26,17 @@ func NewWAVESAddrs(log logrus.FieldLogger, db *bolt.DB, addrsReader io.Reader) (
 	return NewAddrs(log, db, loader, wavesBucketKey)
 }
 
-func loadWAVESAddresses(addrsReader io.Reader) ([]string, error) {
-	var addrs struct {
-		Addresses []string `json:"waves_addresses"`
+func loadWAVESAddresses(addrsReader io.Reader) (addrs []string, err error) {
+	addrs, err = util.ReadLines(addrsReader)
+	if err != nil {
+		return nil, fmt.Errorf("Decode loaded address failed: %v", err)
 	}
 
-	if err := json.NewDecoder(addrsReader).Decode(&addrs); err != nil {
-		return nil, fmt.Errorf("Decode loaded address json failed: %v", err)
-	}
-
-	if err := verifyWAVESAddresses(addrs.Addresses); err != nil {
+	if err := verifyWAVESAddresses(addrs); err != nil {
 		return nil, err
 	}
 
-	return addrs.Addresses, nil
+	return addrs, nil
 }
 
 //func validWAVESCheckSum(s string) error {
