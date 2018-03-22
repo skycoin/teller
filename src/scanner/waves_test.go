@@ -13,10 +13,11 @@ import (
 
 	"log"
 
+	"encoding/json"
+	"fmt"
+
 	"github.com/modeneis/waves-go-client/client"
 	"github.com/modeneis/waves-go-client/model"
-	"fmt"
-	"encoding/json"
 )
 
 var (

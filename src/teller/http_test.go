@@ -253,7 +253,7 @@ func TestExchangeBindHandler(t *testing.T) {
 			http.MethodPost,
 			"/api/bind",
 			http.StatusBadRequest,
-			"Invalid waves address: Invalid base58 character",
+			"Invalid mdl address: Invalid base58 character",
 			nil,
 			"",
 			bindRequest{
@@ -270,7 +270,7 @@ func TestExchangeBindHandler(t *testing.T) {
 			nil,
 			"",
 			bindRequest{
-				MDLAddr:  "3PJaDyprvekvPXPuAtxrapacuDJopgJRaU3",
+				MDLAddr:  "2fFvHziBN2DKCnJRF1sjJ81z2kAJK8idSoT",
 				CoinType: scanner.CoinTypeWAVES,
 			},
 		},
@@ -296,6 +296,9 @@ func TestExchangeBindHandler(t *testing.T) {
 			httpServ := &HTTPServer{
 				cfg: config.Config{
 					SkyRPC: config.SkyRPC{
+						Enabled: true,
+					},
+					WavesRPC: config.WavesRPC{
 						Enabled: true,
 					},
 				},

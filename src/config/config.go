@@ -63,18 +63,18 @@ type Config struct {
 
 	Teller Teller `mapstructure:"teller"`
 
-	MDLRPC      MDLRPC `mapstructure:"mdl_rpc"`
-	BtcRPC      BtcRPC `mapstructure:"btc_rpc"`
-	EthRPC      EthRPC `mapstructure:"eth_rpc"`
-	SkyRPC      SkyRPC `mapstructure:"sky_rpc"`
-	WavesRPC    SkyRPC `mapstructure:"waves_rpc"`
-	WavesMDLRPC SkyRPC `mapstructure:"waves__mdl_rpc"`
+	MDLRPC      MDLRPC   `mapstructure:"mdl_rpc"`
+	BtcRPC      BtcRPC   `mapstructure:"btc_rpc"`
+	EthRPC      EthRPC   `mapstructure:"eth_rpc"`
+	SkyRPC      SkyRPC   `mapstructure:"sky_rpc"`
+	WavesRPC    WavesRPC `mapstructure:"waves_rpc"`
+	WavesMDLRPC WavesRPC `mapstructure:"waves_mdl_rpc"`
 
-	BtcScanner      BtcScanner `mapstructure:"btc_scanner"`
-	EthScanner      EthScanner `mapstructure:"eth_scanner"`
-	SkyScanner      SkyScanner `mapstructure:"sky_scanner"`
-	WavesScanner    SkyScanner `mapstructure:"waves_scanner"`
-	WavesMDLScanner SkyScanner `mapstructure:"waves_mdl_scanner"`
+	BtcScanner      BtcScanner   `mapstructure:"btc_scanner"`
+	EthScanner      EthScanner   `mapstructure:"eth_scanner"`
+	SkyScanner      SkyScanner   `mapstructure:"sky_scanner"`
+	WavesScanner    SkyScanner   `mapstructure:"waves_scanner"`
+	WavesMDLScanner WavesScanner `mapstructure:"waves_mdl_scanner"`
 
 	MDLExchanger MDLExchanger `mapstructure:"mdl_exchanger"`
 
