@@ -3,7 +3,6 @@
 # Some values have no defaults and must be filled in
 
 debug = true
-profile = false
 # logfile = "./teller.log"  # logfile can be an absolute path or relative to the working directory
 # dbfile = "teller.db"  # dbfile is saved inside ~/.teller-skycoin, do not include a path
 btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
@@ -45,6 +44,14 @@ wallet = "example.wlt" # REQUIRED: path to local hot wallet file
 # tx_confirmation_check_wait = "5s"
 # send_enabled = true # Disable this to disable sending of coins (all other processing functions normally)
 # buy_method = "direct" # Options are "direct" or "passthrough"
+
+[sky_exchanger.c2cx]
+key = "" # REQUIRED if buy_method = "passthrough"
+secret = "" # REQUIRED if buy_method = "passthrough"
+# request_failure_wait = "10s" # how long to wait after receiving a c2cx request error
+# ratelimit_wait = "30s" # how long to wait after being ratelimited by the c2cx API
+# check_order_wait = "2s" # how long to wait between requests to check order status on c2cx
+# btc_minimum_volume = "0.005"
 
 [web]
 # behind_proxy = false  # This must be set to true when behind a proxy for ratelimiting to work

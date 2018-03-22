@@ -17,22 +17,10 @@ import (
 )
 
 var (
-	errQuit = errors.New("Scanner quit")
-
 	// ErrBtcdTxindexDisabled is returned if RawTx is missing from GetBlockVerboseResult,
 	// which happens if txindex is not enabled in btcd.
 	ErrBtcdTxindexDisabled = errors.New("len(block.RawTx) == 0, make sure txindex is enabled in btcd")
-	// ErrEmptyBlock returns when no more new blocks
-	ErrEmptyBlock = errors.New("empty block")
 )
-
-// Config scanner config info
-type Config struct {
-	ScanPeriod            time.Duration // scan period in seconds
-	DepositBufferSize     int           // size of GetDeposit() channel
-	InitialScanHeight     int64         // what blockchain height to begin scanning from
-	ConfirmationsRequired int64         // how many confirmations to wait for block
-}
 
 // BTCScanner blockchain scanner to check if there're deposit coins
 type BTCScanner struct {

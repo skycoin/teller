@@ -30,10 +30,6 @@ var (
 	ErrDepositStatusInvalid = errors.New("Deposit status cannot be handled")
 	// ErrNoBoundAddress is returned if no skycoin address is bound to a deposit's address
 	ErrNoBoundAddress = errors.New("Deposit has no bound skycoin address")
-	// ErrLowExchangeBalance is returned if the trading exchange is supposed to have more coins than it does.
-	ErrLowExchangeBalance = errors.New("Exchange has less coins than it should")
-	// ErrNoAsksAvailable is returned if there are no ask orders available on the exchange orderbook
-	ErrNoAsksAvailable = errors.New("No ask orders available")
 )
 
 // DepositFilter filters deposits
@@ -137,7 +133,7 @@ func NewPassthroughExchange(log logrus.FieldLogger, cfg config.SkyExchanger, sto
 		store:     store,
 		cfg:       cfg,
 		quit:      make(chan struct{}),
-		done:      make(chan struct{}),
+		done:      make(chan struct{}, 1),
 		Receiver:  receiver,
 		Processor: processor,
 		Sender:    sender,
@@ -191,6 +187,7 @@ func (e *Exchange) Run() error {
 	case <-e.quit:
 	case err = <-errC:
 		e.log.WithError(err).Error("Terminating early")
+		return err
 	}
 
 	wg.Wait()

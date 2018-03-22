@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -8,9 +9,24 @@ import (
 )
 
 const (
-	blockScanPeriod   = time.Second * 5
-	depositBufferSize = 100
+	defaultBlockScanPeriod = time.Second * 5
+	depositBufferSize      = 100
 )
+
+var (
+	errQuit = errors.New("Scanner quit")
+
+	// ErrEmptyBlock returns when no more new blocks
+	ErrEmptyBlock = errors.New("empty block")
+)
+
+// Config scanner config info
+type Config struct {
+	ScanPeriod            time.Duration // scan period in seconds
+	DepositBufferSize     int           // size of GetDeposit() channel
+	InitialScanHeight     int64         // what blockchain height to begin scanning from
+	ConfirmationsRequired int64         // how many confirmations to wait for block
+}
 
 // CommonScanner defines the interface a scanner should implement
 type CommonScanner interface {
@@ -65,12 +81,13 @@ type CommonBlock struct {
 // NewBaseScanner creates base scanner instance
 func NewBaseScanner(store Storer, log logrus.FieldLogger, coinType string, cfg Config) *BaseScanner {
 	if cfg.ScanPeriod == 0 {
-		cfg.ScanPeriod = blockScanPeriod
+		cfg.ScanPeriod = defaultBlockScanPeriod
 	}
 
 	if cfg.DepositBufferSize == 0 {
 		cfg.DepositBufferSize = depositBufferSize
 	}
+
 	return &BaseScanner{
 		log:             log,
 		store:           store,

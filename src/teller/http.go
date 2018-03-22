@@ -510,12 +510,16 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 // ConfigResponse http response for /api/config
 type ConfigResponse struct {
 	Enabled                  bool   `json:"enabled"`
+	BtcEnabled               bool   `json:"btc_enabled"`
+	EthEnabled               bool   `json:"eth_enabled"`
 	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
 	EthConfirmationsRequired int64  `json:"eth_confirmations_required"`
 	MaxBoundAddresses        int    `json:"max_bound_addrs"`
 	SkyBtcExchangeRate       string `json:"sky_btc_exchange_rate"`
 	SkyEthExchangeRate       string `json:"sky_eth_exchange_rate"`
 	MaxDecimals              int    `json:"max_decimals"`
+	BuyMethod                string `json:"buy_method"`
+	BtcMinimumVolume         string `json:"btc_minimum_volume"`
 }
 
 // ConfigHandler returns the teller configuration
@@ -562,12 +566,16 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 
 		if err := httputil.JSONResponse(w, ConfigResponse{
 			Enabled:                  s.cfg.Teller.BindEnabled,
+			BtcEnabled:               s.cfg.BtcRPC.Enabled,
+			EthEnabled:               s.cfg.EthRPC.Enabled,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
 			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
 			SkyBtcExchangeRate:       skyPerBTC,
 			SkyEthExchangeRate:       skyPerETH,
 			MaxDecimals:              maxDecimals,
 			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
+			BuyMethod:                s.cfg.SkyExchanger.BuyMethod,
+			BtcMinimumVolume:         s.cfg.SkyExchanger.C2CX.BtcMinimumVolume.String(),
 		}); err != nil {
 			log.WithError(err).Error(err)
 		}

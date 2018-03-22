@@ -66,7 +66,7 @@ func NewReceive(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer, m
 		multiplexer: multiplexer,
 		deposits:    make(chan DepositInfo, 100),
 		quit:        make(chan struct{}),
-		done:        make(chan struct{}),
+		done:        make(chan struct{}, 1),
 	}, nil
 }
 
@@ -93,8 +93,13 @@ func (r *Receive) Run() error {
 	// Queue the saved StatusWaitDecide deposits
 	// This will block if there are too many waiting deposits, make sure that
 	// the Processor is running to receive them
+queueWaitDecideDeposits:
 	for _, di := range waitDecideDeposits {
-		r.deposits <- di
+		select {
+		case <-r.quit:
+			break queueWaitDecideDeposits
+		case r.deposits <- di:
+		}
 	}
 
 	var wg sync.WaitGroup

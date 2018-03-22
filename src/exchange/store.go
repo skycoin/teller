@@ -367,7 +367,7 @@ func (s *Store) addDepositInfoTx(tx *bolt.Tx, di DepositInfo) (DepositInfo, erro
 	return updatedDi, nil
 }
 
-// getDepositInfo returns depsoit info of given address
+// getDepositInfo returns deposit info of given address
 func (s *Store) getDepositInfo(btcTx string) (DepositInfo, error) {
 	var di DepositInfo
 
@@ -380,7 +380,7 @@ func (s *Store) getDepositInfo(btcTx string) (DepositInfo, error) {
 	return di, err
 }
 
-// getDepositInfoTx returns depsoit info of given address
+// getDepositInfoTx returns deposit info of given address
 func (s *Store) getDepositInfoTx(tx *bolt.Tx, btcTx string) (DepositInfo, error) {
 	var dpi DepositInfo
 
