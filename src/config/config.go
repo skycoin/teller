@@ -364,6 +364,12 @@ func (c Config) Validate() error {
 				oops("eth_rpc.port missing")
 			}
 		}
+
+		if c.SkyScanner.Enabled {
+			if c.SkyRPC.Address == "" {
+				oops("sky_rpc.address missing")
+			}
+		}
 	}
 
 	if c.BtcScanner.ConfirmationsRequired < 0 {
@@ -378,10 +384,16 @@ func (c Config) Validate() error {
 	if c.EthScanner.InitialScanHeight < 0 {
 		oops("eth_scanner.initial_scan_height must be >= 0")
 	}
+	if c.SkyScanner.InitialScanHeight < 0 {
+		oops("sky_scanner.initial_scan_height must be >= 0")
+	}
 
 	if c.SkyExchanger.BuyMethod == BuyMethodPassthrough {
-		if c.EthRPC.Enabled {
-			oops("eth_rpc must be disabled for buy_method passthrough")
+		if c.EthScanner.Enabled {
+			oops("eth_scanner must be disabled for buy_method passthrough")
+		}
+		if c.SkyScanner.Enabled {
+			oops("sky_scanner must be disabled for buy_method passthrough")
 		}
 	}
 

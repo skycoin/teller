@@ -517,6 +517,7 @@ type ConfigResponse struct {
 	Enabled                  bool   `json:"enabled"`
 	BtcEnabled               bool   `json:"btc_enabled"`
 	EthEnabled               bool   `json:"eth_enabled"`
+	SkyEnabled               bool   `json:"sky_enabled"`
 	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
 	EthConfirmationsRequired int64  `json:"eth_confirmations_required"`
 	MaxBoundAddresses        int    `json:"max_bound_addrs"`
@@ -571,8 +572,9 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 
 		if err := httputil.JSONResponse(w, ConfigResponse{
 			Enabled:                  s.cfg.Teller.BindEnabled,
-			BtcEnabled:               s.cfg.BtcRPC.Enabled,
-			EthEnabled:               s.cfg.EthRPC.Enabled,
+			BtcEnabled:               s.cfg.BtcScanner.Enabled,
+			EthEnabled:               s.cfg.EthScanner.Enabled,
+			SkyEnabled:               s.cfg.SkyScanner.Enabled,
 			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
 			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
 			SkyBtcExchangeRate:       skyPerBTC,

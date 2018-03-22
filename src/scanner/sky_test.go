@@ -228,8 +228,8 @@ func testSkyScannerRunProcessedLoop(t *testing.T, scr *SKYScanner, nDeposits int
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
 	shutdownWait := scr.Base.(*BaseScanner).Cfg.ScanPeriod * time.Duration(nDeposits*2)
-	if shutdownWait < minShutdownWait {
-		shutdownWait = minShutdownWait
+	if shutdownWait < *minShutdownWait {
+		shutdownWait = *minShutdownWait
 	}
 
 	time.AfterFunc(shutdownWait, func() {
@@ -358,8 +358,8 @@ func testSkyScannerProcessDepositError(t *testing.T, skyDB *bolt.DB) {
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
 	shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * nDeposits * 2)
-	if shutdownWait < minShutdownWait {
-		shutdownWait = minShutdownWait
+	if shutdownWait < *minShutdownWait {
+		shutdownWait = *minShutdownWait
 	}
 
 	time.AfterFunc(shutdownWait, func() {
