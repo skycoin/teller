@@ -37,6 +37,11 @@ func TestDecimalFromString(t *testing.T) {
 		},
 
 		{
+			s:      "0.001",
+			result: decimal.New(100, -5),
+		},
+
+		{
 			s:      "1/10",
 			result: decimal.New(1, -1),
 		},
@@ -85,6 +90,132 @@ func TestWei2Gwei(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result := Gwei2Wei(tc.gwei)
 			require.Equal(t, 0, tc.wei.Cmp(result), "%v == %v", tc.wei, result)
+		})
+	}
+}
+
+func TestIntToBTC(t *testing.T) {
+	cases := []struct {
+		i      int64
+		result decimal.Decimal
+	}{
+		{
+			i:      100000000,
+			result: decimal.New(1, 0),
+		},
+
+		{
+			i:      1000,
+			result: decimal.New(1000, -int32(8)),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%v", tc.i), func(t *testing.T) {
+			d := IntToBTC(tc.i)
+			require.True(t, tc.result.Equal(d))
+			require.Equal(t, d.String(), tc.result.String())
+		})
+	}
+}
+
+// ???? 18 is limit of int64 length
+func TestIntToETH(t *testing.T) {
+	cases := []struct {
+		i      int64
+		result decimal.Decimal
+	}{
+		{
+			i:      1000000000000000000,
+			result: decimal.New(1, 0),
+		},
+
+		{
+			i:      1000,
+			result: decimal.New(1000, -int32(18)),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%v", tc.i), func(t *testing.T) {
+			d := IntToETH(tc.i)
+			require.True(t, tc.result.Equal(d))
+			require.Equal(t, d.String(), tc.result.String())
+		})
+	}
+}
+
+func TestIntToSKY(t *testing.T) {
+	cases := []struct {
+		i      int64
+		result decimal.Decimal
+	}{
+		{
+			i:      1000000,
+			result: decimal.New(1, 0),
+		},
+
+		{
+			i:      1000,
+			result: decimal.New(1000, -int32(6)),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%v", tc.i), func(t *testing.T) {
+			d := IntToSKY(tc.i)
+			require.True(t, tc.result.Equal(d))
+			require.Equal(t, d.String(), tc.result.String())
+		})
+	}
+}
+
+func TestIntToWAVES(t *testing.T) {
+	cases := []struct {
+		i      int64
+		result decimal.Decimal
+	}{
+		{
+			i:      100000000,
+			result: decimal.New(1, 0),
+		},
+
+		{
+			i:      1000,
+			result: decimal.New(1000, -int32(8)),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%v", tc.i), func(t *testing.T) {
+			d := IntToWAV(tc.i)
+			require.True(t, tc.result.Equal(d))
+			require.Equal(t, d.String(), tc.result.String())
+		})
+	}
+}
+
+func TestIntToMDL(t *testing.T) {
+	cases := []struct {
+		i      int64
+		result decimal.Decimal
+	}{
+		{
+			i:      1000000,
+			result: decimal.New(1, 0),
+		},
+
+		{
+			i:      1000,
+			result: decimal.New(1000, -int32(6)),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(fmt.Sprintf("%v", tc.i), func(t *testing.T) {
+			d := IntToMDL(tc.i)
+			require.True(t, tc.result.Equal(d))
+			require.Equal(t, d.String(), tc.result.String())
 		})
 	}
 }
