@@ -13,6 +13,7 @@ import (
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/cipher/base58"
 	"golang.org/x/crypto/blake2b"
+	"github.com/MDLlife/teller/src/util"
 )
 
 const wavesBucketKey = "used_waves_address"
