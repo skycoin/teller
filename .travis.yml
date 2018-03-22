@@ -8,4 +8,5 @@ install:
   - make install-linters
 
 script:
-  - make ARGS="-parallel=1" check
+  # The awk pipe removes duplicate lines from the log output, there can be many of them
+  - make PARALLEL="-parallel=1" MIN_SHUTDOWN_WAIT="-min-shutdown-wait=12s" check | cut -d " " -f 2- | awk '!a[$0]++'
