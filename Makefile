@@ -7,8 +7,8 @@ teller: ## Run teller. To add arguments, do 'make ARGS="--foo" teller'.
 	go run cmd/teller/teller.go ${ARGS}
 
 test: ## Run tests
-	go test ./cmd/... -timeout=1m -cover
-	go test ./src/... -timeout=2m -cover
+	go test ./cmd/... -timeout=1m -cover ${ARGS}
+	go test ./src/... -timeout=3m -cover ${ARGS}
 
 test-race: ## Run tests with -race. Note: expected to fail, but look for "DATA RACE" failures specifically
 	go test ./src/... -timeout=2m -race
