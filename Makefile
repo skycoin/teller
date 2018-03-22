@@ -7,11 +7,26 @@ teller: ## Run teller. To add arguments, do 'make ARGS="--foo" teller'.
 	go run cmd/teller/teller.go ${ARGS}
 
 test: ## Run tests
-	go test ./cmd/... -timeout=1m -cover ${ARGS}
-	go test ./src/... -timeout=4m -cover ${ARGS}
+	go test ./cmd/... -timeout=1m -cover ${PARALLEL}
+	go test ./src/addrs/... -timeout=30s -cover ${PARALLEL}
+	go test ./src/config/... -timeout=30s -cover ${PARALLEL}
+	go test ./src/exchange/... -timeout=4m -cover ${PARALLEL}
+	go test ./src/monitor/... -timeout=30s -cover ${PARALLEL}
+	go test ./src/scanner/... -timeout=4m -cover ${PARALLEL} ${MIN_SHUTDOWN_WAIT}
+	go test ./src/sender/... -timeout=1m -cover ${PARALLEL}
+	go test ./src/teller/... -timeout=30s -cover ${PARALLEL}
+	go test ./src/util/... -timeout=30s -cover ${PARALLEL}
 
 test-race: ## Run tests with -race. Note: expected to fail, but look for "DATA RACE" failures specifically
-	go test ./src/... -timeout=4m -race -min-shutdown-wait=5s
+	go test ./cmd/... -timeout=1m -race ${PARALLEL}
+	go test ./src/addrs/... -timeout=30s -race ${PARALLEL}
+	go test ./src/config/... -timeout=30s -race ${PARALLEL}
+	go test ./src/exchange/... -timeout=4m -race ${PARALLEL}
+	go test ./src/monitor/... -timeout=30s -race ${PARALLEL}
+	go test ./src/scanner/... -timeout=4m -race ${PARALLEL} ${MIN_SHUTDOWN_WAIT}
+	go test ./src/sender/... -timeout=1m -race ${PARALLEL}
+	go test ./src/teller/... -timeout=30s -race ${PARALLEL}
+	go test ./src/util/... -timeout=30s -race ${PARALLEL}
 
 lint: ## Run linters. Use make install-linters first.
 	vendorcheck ./...
