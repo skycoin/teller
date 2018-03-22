@@ -6,9 +6,9 @@ import (
 	"io"
 	"strings"
 
+	"github.com/MDLlife/teller/src/util"
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
-	"github.com/MDLlife/teller/src/util"
 )
 
 const ethBucketKey = "used_eth_address"

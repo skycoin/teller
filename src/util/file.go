@@ -1,11 +1,11 @@
 package util
 
 import (
-	"io"
 	"bufio"
-	"strings"
-	"io/ioutil"
 	"bytes"
+	"io"
+	"io/ioutil"
+	"strings"
 )
 
 // ReadLines reads io.Reader line by line, not for huge lines

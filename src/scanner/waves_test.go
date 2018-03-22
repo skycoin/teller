@@ -68,7 +68,7 @@ func setupWavesScannerWithDB(t *testing.T, wavesDB *bolt.DB, db *bolt.DB) *WAVES
 
 	// Block 2 doesn't exist in db
 	cfg := Config{
-		ScanPeriod:            time.Millisecond * 10,
+		ScanPeriod:            time.Millisecond * 5,
 		DepositBufferSize:     5,
 		InitialScanHeight:     924610,
 		ConfirmationsRequired: 0,

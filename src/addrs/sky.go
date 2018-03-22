@@ -6,10 +6,10 @@ import (
 
 	"errors"
 
+	"github.com/MDLlife/teller/src/util"
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 	"github.com/skycoin/skycoin/src/cipher"
-	"github.com/MDLlife/teller/src/util"
 )
 
 const skyBucketKey = "used_sky_address"

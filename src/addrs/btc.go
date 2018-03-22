@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 
