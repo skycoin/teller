@@ -1,22 +1,21 @@
 package addrs
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"strings"
 
-	"github.com/MDLlife/teller/src/util/dbutil"
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
+	"github.com/MDLlife/teller/src/util"
 )
 
 const ethBucketKey = "used_eth_address"
 
 // NewETHAddrs returns an Addrs loaded with ETH addresses
-func NewETHAddrs(log logrus.FieldLogger, db *bolt.DB, path string) (*Addrs, error) {
-	loader, err := dbutil.ReadLines(path)
+func NewETHAddrs(log logrus.FieldLogger, db *bolt.DB, addrsReader io.Reader) (*Addrs, error) {
+	loader, err := loadETHAddresses(addrsReader)
 	if err != nil {
 		log.WithError(err).Error("Load deposit ethereum address list failed")
 		return nil, err
@@ -24,20 +23,17 @@ func NewETHAddrs(log logrus.FieldLogger, db *bolt.DB, path string) (*Addrs, erro
 	return NewAddrs(log, db, loader, ethBucketKey)
 }
 
-func loadETHAddresses(addrsReader io.Reader) ([]string, error) {
-	var addrs struct {
-		Addresses []string `json:"eth_addresses"`
+func loadETHAddresses(addrsReader io.Reader) (addrs []string, err error) {
+	addrs, err = util.ReadLines(addrsReader)
+	if err != nil {
+		return nil, fmt.Errorf("Decode loaded address failed: %v", err)
 	}
 
-	if err := json.NewDecoder(addrsReader).Decode(&addrs); err != nil {
-		return nil, fmt.Errorf("Decode loaded address json failed: %v", err)
-	}
-
-	if err := verifyETHAddresses(addrs.Addresses); err != nil {
+	if err := verifyETHAddresses(addrs); err != nil {
 		return nil, err
 	}
 
-	return addrs.Addresses, nil
+	return addrs, nil
 }
 
 // https://github.com/ethereum/go-ethereum/blob/2db97986460c57ba74a563d97a704a45a270df7d/common/icap.go
