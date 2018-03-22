@@ -136,11 +136,11 @@ func (c *dummySkyrpcclient) GetLastBlocks() (*visor.ReadableBlock, error) {
 func (c *dummySkyrpcclient) Shutdown() {
 }
 
-func setupSkyScannerWithNonExistInitHeight(t *testing.T, skyDB *bolt.DB, db *bolt.DB) *SKYScanner {
+func setupSkyScannerWithNonExistInitHeight(t *testing.T, db *bolt.DB) *SKYScanner {
 	log, _ := testutil.NewLogger(t)
 
 	// Blocks 0 through 1 are stored in sky.db
-	rpc := newDummySkyrpcclient(t, skyDB)
+	rpc := newDummySkyrpcclient(t, db)
 
 	// 1 is the highest block in the test data sky.db
 	rpc.blockCount = 1
@@ -513,10 +513,7 @@ func testSkyScannerProcessDepositError(t *testing.T, skyDB *bolt.DB) {
 func testSkyScannerInitialGetBlockHashError(t *testing.T, skyDB *bolt.DB) {
 	// Test that scanner.Run() returns an error if the initial GetBlockHash
 	// based upon scanner.Base.Cfg.InitialScanHeight fails
-	db, shutdown := testutil.PrepareDB(t)
-	defer shutdown()
-
-	scr := setupSkyScannerWithNonExistInitHeight(t, skyDB, db)
+	scr := setupSkyScannerWithNonExistInitHeight(t, skyDB)
 
 	err := scr.Run()
 	require.Error(t, err)

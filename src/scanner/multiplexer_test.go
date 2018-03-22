@@ -91,14 +91,14 @@ func testAddWAVESScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	// This address has 0 deposits
 	err := m.AddScanAddress("3PRDjxHwETEhYXM3tjVMU4oYhfj3dqT6Vuw", CoinTypeWAVES)
 	require.NoError(t, err)
-	nDeposits = nDeposits + 2
+	nDeposits = nDeposits + 1
 
 	// This address has:
 	// 1 deposit, in block 235206
 	// 1 deposit, in block 235207
 	err = m.AddScanAddress("3P9dUze9nHRdfoKhFrZYKdsSpwW9JoE6Mzf", CoinTypeWAVES)
 	require.NoError(t, err)
-	nDeposits = nDeposits + 3
+	nDeposits = nDeposits + 1
 
 	return nDeposits
 }
@@ -291,7 +291,7 @@ func TestMultiplexerOnlyWAVES(t *testing.T) {
 			dv.ErrC <- nil
 		}
 
-		require.True(t, nDeposits <= int64(len(dvs)))
+		require.Equal(t, nDeposits, int64(len(dvs)))
 	}()
 
 	// Wait for at least twice as long as the number of deposits to process
@@ -377,7 +377,7 @@ func TestMultiplexerForAll(t *testing.T) {
 		}
 
 		require.Equal(t, nDepositsBtc+nDepositsEth+nDepositsSKY, int64(len(dvs)))
-		require.True(t, nDepositsSWAVES <= int64(len(wavesDeposits)))
+		require.Equal(t, nDepositsSWAVES, int64(len(wavesDeposits)))
 	}()
 
 	// Wait for at least twice as long as the number of deposits to process

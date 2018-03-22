@@ -123,7 +123,7 @@ func TestRunMonitor(t *testing.T) {
 	}
 
 	log, _ := testutil.NewLogger(t)
-	m := New(log, cfg, &dummyBtcAddrMgr{10}, &dummyEthAddrMgr{10}, &dummySkyAddrMgr{10},&dummyWavesAddrMgr{}, &dummyDps, &dummyScanAddrs{})
+	m := New(log, cfg, &dummyBtcAddrMgr{10}, &dummyEthAddrMgr{10}, &dummySkyAddrMgr{10}, &dummyWavesAddrMgr{}, &dummyDps, &dummyScanAddrs{})
 
 	time.AfterFunc(1*time.Second, func() {
 		rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/address"))
