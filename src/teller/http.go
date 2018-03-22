@@ -394,17 +394,17 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		switch bindReq.CoinType {
 		case scanner.CoinTypeBTC:
 			if !s.cfg.BtcRPC.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon", scanner.CoinTypeBTC))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, there seems to be an issue. The selected coin type %s is not enabled. We are working on a fix, please try again in a couple of hours", scanner.CoinTypeBTC))
 				return
 			}
 		case scanner.CoinTypeETH:
 			if !s.cfg.EthRPC.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon", scanner.CoinTypeETH))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, there seems to be an issue. The selected coin type %s is not enabled. We are working on a fix, please try again in a couple of hours", scanner.CoinTypeETH))
 				return
 			}
 		case scanner.CoinTypeSKY:
 			if !s.cfg.SkyRPC.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon", scanner.CoinTypeSKY))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, there seems to be an issue. The selected coin type %s is not enabled. We are working on a fix, please try again in a couple of hours", scanner.CoinTypeSKY))
 				return
 			}
 		case "":
