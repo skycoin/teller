@@ -16,14 +16,12 @@ eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses f
 # address = "127.0.0.1:6430"
 
 [btc_rpc]
-# enabled = true
 # server = "127.0.0.1:8334"
 user = "" # REQUIRED
 pass = "" # REQUIRED
 cert = "" # REQUIRED
 
 [eth_rpc]
-# enabled = false
 server = "" # REQUIRED
 port = "" # REQUIRED
 
@@ -31,10 +29,13 @@ port = "" # REQUIRED
 # scan_period = "20s"
 # initial_scan_height = 492478
 # confirmations_required = 1
+# enabled = true
+
 [eth_scanner]
 # scan_period = "5s"
 # initial_scan_height =4654259
 # confirmations_required = 1
+# enabled = false
 
 [sky_exchanger]
 sky_btc_exchange_rate = "500" # REQUIRED: SKY/BTC exchange rate as a string, can be an int, float or a rational fraction
