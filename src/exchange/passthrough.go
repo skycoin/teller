@@ -671,11 +671,11 @@ func calculateRequestedAmount(depositValue int64) decimal.Decimal {
 
 // calculateSkyBought returns the amount of SKY bought in droplets
 // The amount of SKY bought is in order.CompletedAmount
-// This amount does is not adjusted for the C2CX commission, which is not
+// This amount is not adjusted for the C2CX commission, which is not
 // known through the API, so the actual amount bought is less.
 // For now, ignore the commission and eat the fee.
 func calculateSkyBought(order *c2cx.Order) (uint64, error) {
-	// Convert CompletedAmount from whole skycoin to satoshis
+	// Convert CompletedAmount from whole skycoin to droplets
 	skyBought := order.CompletedAmount.Mul(decimal.New(droplet.Multiplier, 0)).IntPart()
 	if skyBought < 0 {
 		return 0, errCompletedAmountNegative
