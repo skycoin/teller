@@ -28,6 +28,7 @@ import (
 	"github.com/MDLlife/teller/src/sender"
 	"github.com/MDLlife/teller/src/teller"
 	"github.com/MDLlife/teller/src/util/logger"
+	"github.com/MDLlife/teller/src/util"
 )
 
 func main() {
@@ -211,7 +212,7 @@ func run() error {
 	var ethAddrMgr *addrs.Addrs
 	var skyAddrMgr *addrs.Addrs
 
-	//create multiplexer to manage scanner
+	// create multiplexer to manage scanner
 	multiplexer := scanner.NewMultiplexer(log)
 
 	dummyMux := http.NewServeMux()
@@ -351,8 +352,13 @@ func run() error {
 
 	if cfg.BtcRPC.Enabled {
 		// create bitcoin address manager
+		r, err := util.LoadFileToReader(cfg.BtcAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit bitcoin address list failed")
+			return err
+		}
 
-		btcAddrMgr, err = addrs.NewBTCAddrs(log, db, cfg.BtcAddresses)
+		btcAddrMgr, err = addrs.NewBTCAddrs(log, db, r)
 		if err != nil {
 			log.WithError(err).Error("Create bitcoin deposit address manager failed")
 			return err
@@ -365,7 +371,13 @@ func run() error {
 
 	if cfg.EthRPC.Enabled {
 		// create ethcoin address manager
-		ethAddrMgr, err = addrs.NewETHAddrs(log, db, cfg.EthAddresses)
+		r, err := util.LoadFileToReader(cfg.EthAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit ethcoin address list failed")
+			return err
+		}
+
+		ethAddrMgr, err = addrs.NewETHAddrs(log, db, r)
 		if err != nil {
 			log.WithError(err).Error("Create ethcoin deposit address manager failed")
 			return err
@@ -378,7 +390,13 @@ func run() error {
 
 	if cfg.SkyRPC.Enabled {
 		// create skycoin address manager
-		skyAddrMgr, err = addrs.NewSKYAddrs(log, db, cfg.SkyAddresses)
+		r, err := util.LoadFileToReader(cfg.SkyAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit skycoin address list failed")
+			return err
+		}
+
+		skyAddrMgr, err = addrs.NewSKYAddrs(log, db, r)
 		if err != nil {
 			log.WithError(err).Error("Create skycoin deposit address manager failed")
 			return err
