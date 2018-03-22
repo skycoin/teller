@@ -8,4 +8,4 @@ install:
   - make install-linters
 
 script:
-  - make ARGS="-parallel=1" check
+  - make ARGS="-parallel=1 -min-shutdown-wait=12s" check

@@ -230,10 +230,11 @@ func testEthScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
 	shutdownWait := scr.Base.(*BaseScanner).Cfg.ScanPeriod * time.Duration(nDeposits*2)
-	if shutdownWait < minShutdownWait {
-		shutdownWait = minShutdownWait
+	if shutdownWait < *minShutdownWait {
+		shutdownWait = *minShutdownWait
 	}
 
+	t.Logf("shutdownWait=%s", shutdownWait)
 	time.AfterFunc(shutdownWait, func() {
 		scr.Shutdown()
 	})
@@ -486,8 +487,8 @@ func testEthScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
 	shutdownWait := scr.Base.(*BaseScanner).Cfg.ScanPeriod * time.Duration(nDeposits*2)
-	if shutdownWait < minShutdownWait {
-		shutdownWait = minShutdownWait
+	if shutdownWait < *minShutdownWait {
+		shutdownWait = *minShutdownWait
 	}
 
 	time.AfterFunc(shutdownWait, func() {

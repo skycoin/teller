@@ -8,10 +8,10 @@ teller: ## Run teller. To add arguments, do 'make ARGS="--foo" teller'.
 
 test: ## Run tests
 	go test ./cmd/... -timeout=1m -cover ${ARGS}
-	go test ./src/... -timeout=3m -cover ${ARGS}
+	go test ./src/... -timeout=4m -cover ${ARGS}
 
 test-race: ## Run tests with -race. Note: expected to fail, but look for "DATA RACE" failures specifically
-	go test ./src/... -timeout=2m -race
+	go test ./src/... -timeout=4m -race -min-shutdown-wait=5s
 
 lint: ## Run linters. Use make install-linters first.
 	vendorcheck ./...

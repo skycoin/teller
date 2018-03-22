@@ -3,6 +3,7 @@ package scanner
 import (
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"testing"
 	"time"
@@ -17,9 +18,7 @@ import (
 )
 
 const (
-	minShutdownWait = time.Second * 2 // set to time.Second * 5 when using -race
-
-	// Run some tests in parallel
+	// Run some tests in parallel. To effectively disable, use -parallel=1
 	parallel = true
 )
 
@@ -27,6 +26,9 @@ var (
 	dummyBlocksBktName = []byte("blocks")
 
 	errNoBlockHash = errors.New("no block hash found for height")
+
+	minShutdownWait = flag.Duration("min-shutdown-wait", time.Second*2,
+		"minimum amount of time to wait before shutting down a scanner and checking its output. increase on slow systems or when using -race")
 )
 
 type dummyBtcrpcclient struct {
@@ -205,8 +207,8 @@ func testBtcScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
 	shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * nDeposits * 3)
-	if shutdownWait < minShutdownWait {
-		shutdownWait = minShutdownWait
+	if shutdownWait < *minShutdownWait {
+		shutdownWait = *minShutdownWait
 	}
 
 	time.AfterFunc(shutdownWait, func() {
@@ -475,8 +477,8 @@ func testBtcScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
 	shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * nDeposits * 2)
-	if shutdownWait < minShutdownWait {
-		shutdownWait = minShutdownWait
+	if shutdownWait < *minShutdownWait {
+		shutdownWait = *minShutdownWait
 	}
 
 	time.AfterFunc(shutdownWait, func() {
