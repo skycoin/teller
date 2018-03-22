@@ -13,7 +13,6 @@ import (
 	"github.com/skycoin/skycoin/src/cipher"
 	"github.com/skycoin/skycoin/src/cipher/base58"
 	"golang.org/x/crypto/blake2b"
-	"github.com/MDLlife/teller/src/util"
 )
 
 const wavesBucketKey = "used_waves_address"
@@ -40,13 +39,13 @@ func loadWAVESAddresses(addrsReader io.Reader) (addrs []string, err error) {
 	return addrs, nil
 }
 
-//func validWAVESCheckSum(s string) error {
-//	if len(s) != 35 {
-//		fmt.Println("validWAVESCheckSum, ", len(s))
-//		return errors.New("Invalid address length")
-//	}
-//	return nil
-//}
+// func validWAVESCheckSum(s string) error {
+// 	if len(s) != 35 {
+// 		fmt.Println("validWAVESCheckSum, ", len(s))
+// 		return errors.New("Invalid address length")
+// 	}
+// 	return nil
+// }
 
 // https://github.com/wavesplatform/Waves/wiki/Data-Structures#address
 func verifyWAVESAddresses(addrs []string) error {
@@ -61,9 +60,9 @@ func verifyWAVESAddresses(addrs []string) error {
 			return fmt.Errorf("Duplicate deposit address `%s`", addr)
 		}
 
-		//if err := validWAVESCheckSum(addr); err != nil {
-		//	return fmt.Errorf("Invalid deposit address `%s`: %v", addr, err)
-		//}
+		// if err := validWAVESCheckSum(addr); err != nil {
+		// 	return fmt.Errorf("Invalid deposit address `%s`: %v", addr, err)
+		// }
 
 		b, err := base58.Base582Hex(addr)
 		if err != nil {
@@ -88,10 +87,10 @@ func addressFromBytes(b []byte) (addr cipher.Address, err error) {
 		}
 	}()
 
-	//1	Version 		(0x01)			Byte	0	1
-	//2	Address scheme 	0x54 or 0x57 	Byte	1	1
-	//3	Public key hash					Bytes	2	20
-	//4	Checksum						Bytes	22	4
+	// 1	Version 		(0x01)			Byte	0	1
+	// 2	Address scheme 	0x54 or 0x57 	Byte	1	1
+	// 3	Public key hash					Bytes	2	20
+	// 4	Checksum						Bytes	22	4
 
 	if len(b) != 1+1+20+4 {
 		return cipher.Address{}, errors.New("Invalid address length")
@@ -114,7 +113,7 @@ func addressFromBytes(b []byte) (addr cipher.Address, err error) {
 	return a, nil
 }
 
-//Public key hash is first 20 bytes of SecureHash of public key bytes.
+// Public key hash is first 20 bytes of SecureHash of public key bytes.
 // Checksum is first 4 bytes of SecureHash of version, scheme and hash bytes.
 // SecureHash is hash function Keccak256(Blake2b256(data)).
 func secureHash(data []byte) cipher.Checksum {
