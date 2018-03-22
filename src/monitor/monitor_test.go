@@ -246,7 +246,7 @@ var statsDpis = []exchange.DepositInfo{
 }
 var statsCfg = Config{
 	"localhost:7908",
-	10, 10, 10, 10, 10,
+	10, 11, 12, 13, 14,
 }
 
 func TestMonitorDepositStats(t *testing.T) {
@@ -296,31 +296,12 @@ func TestMonitorWebReadyDepositStats(t *testing.T) {
 		err = json.NewDecoder(rsp.Body).Decode(&webStats)
 		require.NoError(t, err)
 
-		// have a "1" error on string end
-		var s string
-		s = webStats.TotalBTCReceived
-		s = s[:len(s)-1] + "0"
-		require.Equal(t, s, "1.0000000")
-
-		s = webStats.TotalETHReceived
-		s = s[:len(s)-1] + "0"
-		require.Equal(t, s, "0.00000200000000000")
-
-		s = webStats.TotalSKYReceived
-		s = s[:len(s)-1] + "0"
-		require.Equal(t, s, "3.00000")
-
-		s = webStats.TotalWAVEReceived
-		s = s[:len(s)-1] + "0"
-		require.Equal(t, s, "0.0400000")
-
-		s = webStats.TotalMDLSent
-		s = s[:len(s)-1] + "0"
-		require.Equal(t, s, "0.00140")
-
-		s = webStats.TotalUSDReceived
-		s = s[:len(s)-1] + "0"
-		require.Equal(t, s, "0.0000700")
+		require.Equal(t,"1.0000001", webStats.TotalBTCReceived)
+		require.Equal(t,"0.000002000000000011", webStats.TotalETHReceived)
+		require.Equal(t, "3.000012", webStats.TotalSKYReceived)
+		require.Equal(t,"0.04000013", webStats.TotalWAVEReceived)
+		require.Equal(t,"0.001414", webStats.TotalMDLSent)
+		require.Equal(t,"0.0000707", webStats.TotalUSDReceived)
 
 		testutil.CheckError(t, rsp.Body.Close)
 
