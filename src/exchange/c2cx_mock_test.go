@@ -12,6 +12,28 @@ type MockC2CXClient struct {
 	mock.Mock
 }
 
+func (_m *MockC2CXClient) GetBalanceSummary() (*c2cx.BalanceSummary, error) {
+	ret := _m.Called()
+
+	var r0 *c2cx.BalanceSummary
+	if rf, ok := ret.Get(0).(func() *c2cx.BalanceSummary); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*c2cx.BalanceSummary)
+		}
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func() error); ok {
+		r1 = rf()
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // GetOrderByStatus provides a mock function with given fields: _a0, _a1
 func (_m *MockC2CXClient) GetOrderByStatus(_a0 c2cx.TradePair, _a1 c2cx.OrderStatus) ([]c2cx.Order, error) {
 	ret := _m.Called(_a0, _a1)
