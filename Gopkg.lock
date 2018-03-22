@@ -220,7 +220,7 @@
     "exchange",
     "exchange/c2cx"
   ]
-  revision = "fb7c8354b98198ce2aeeee565b84412976b9c8ad"
+  revision = "69947cf6cd312fad27a103c2cda31907e83f8077"
 
 [[projects]]
   name = "github.com/skycoin/skycoin"
@@ -363,7 +363,7 @@
     "unix",
     "windows"
   ]
-  revision = "7ceb54c8418b8f9cdf0177b511d5cbb06e9fae39"
+  revision = "c488ab1dd8481ef762f96a79a9577c27825be697"
 
 [[projects]]
   name = "golang.org/x/text"

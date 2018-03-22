@@ -14,6 +14,7 @@ import (
 
 	"github.com/shopspring/decimal"
 	logrus_test "github.com/sirupsen/logrus/hooks/test"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/skycoin/exchange-api/exchange/c2cx"
@@ -220,9 +221,18 @@ func TestPassthroughLoadExistingDeposits(t *testing.T) {
 	}
 
 	// GetOrderByStatus should return no matching orders
-	mockClient.On("GetOrderByStatus", c2cx.BtcSky, c2cx.StatusAll).Return(nil, nil)
+	mockClient.On("GetOrderByStatus", c2cx.BtcSky, c2cx.StatusAll).Return(nil, nil).Once()
 
-	mockClient.On("MarketBuy", c2cx.BtcSky, decimal.New(7, -3), &diWaitPassthrough.Passthrough.Order.CustomerID).Return(orderIDWaitPassthrough, nil)
+	mockClient.On("GetBalanceSummary").Return(&c2cx.BalanceSummary{
+		Balance: c2cx.Balances{
+			Btc: decimal.New(5, 0),
+		},
+	}, nil).Once()
+
+	requestedAmount := calculateRequestedAmount(diWaitPassthrough.DepositValue)
+	mockClient.On("MarketBuy", c2cx.BtcSky, mock.MatchedBy(func(v decimal.Decimal) bool {
+		return v.Equal(requestedAmount)
+	}), &diWaitPassthrough.Passthrough.Order.CustomerID).Return(orderIDWaitPassthrough, nil).Once()
 
 	// GetOrderInfo returns twice, successful deposits
 	mockClient.On("GetOrderInfo", c2cx.BtcSky, orderIDWaitPassthrough).Return(orderWaitPassthrough, nil)
@@ -680,6 +690,98 @@ func TestPassthroughRetryNetError(t *testing.T) {
 	testPassthroughRetryError(t, getOrderInfoErr)
 }
 
+func TestPassthroughRetryInsufficientBalance(t *testing.T) {
+	// Tests that it retries while balance is insufficient on the exchange
+	p, shutdown, mockClient, _ := setupPassthrough(t)
+	defer shutdown()
+
+	di := createDepositStatusWaitPassthrough(t, p, testSkyAddr, 0)
+
+	mockClient.On("GetOrderByStatus", c2cx.BtcSky, c2cx.StatusAll).Return(nil, nil)
+
+	requestedAmount := calculateRequestedAmount(di.DepositValue)
+
+	// First call will have insufficient balance
+	mockClient.On("GetBalanceSummary").Return(&c2cx.BalanceSummary{
+		Balance: c2cx.Balances{
+			Btc: requestedAmount.Div(decimal.New(2, 0)),
+		},
+	}, nil).Once()
+
+	// Second call will have sufficient balance
+	mockClient.On("GetBalanceSummary").Return(&c2cx.BalanceSummary{
+		Balance: c2cx.Balances{
+			Btc: requestedAmount,
+		},
+	}, nil).Once()
+
+	orderID := c2cx.OrderID(1234)
+
+	mockClient.On("MarketBuy", c2cx.BtcSky, mock.MatchedBy(func(v decimal.Decimal) bool {
+		return v.Equal(requestedAmount)
+	}), &di.DepositID).Return(orderID, nil)
+
+	orderComplete := &c2cx.Order{
+		OrderID:         orderID,
+		CustomerID:      &di.DepositID,
+		Status:          c2cx.StatusCompleted,
+		CompletedAmount: decimal.New(123, -2),
+		AvgPrice:        decimal.New(182, -5),
+	}
+
+	// Return an order with a "complete" status
+	mockClient.On("GetOrderInfo", c2cx.BtcSky, orderID).Return(orderComplete, nil).Once()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		err := p.Run()
+		require.NoError(t, err)
+	}()
+
+	// Deposits should be found on .Deposits() in the correct order and with StatusWaitSend
+	timeout := time.Second * 6
+	select {
+	case <-time.After(timeout):
+		t.Fatal("Timed out waiting for the deposit to process")
+	case deposit := <-p.Deposits():
+		// The first deposit should be the StatusWaitPassthroughOrderComplete one
+		require.Equal(t, di.DepositID, deposit.DepositID)
+		require.Equal(t, StatusWaitSend, deposit.Status)
+		require.Equal(t, c2cx.StatusCompleted.String(), deposit.Passthrough.Order.Status)
+		require.Equal(t, fmt.Sprint(orderID), deposit.Passthrough.Order.OrderID)
+		require.Equal(t, di.DepositID, deposit.Passthrough.Order.CustomerID)
+		require.Equal(t, "0.00182", deposit.Passthrough.Order.Price)
+		require.Equal(t, "1.23", deposit.Passthrough.Order.CompletedAmount)
+		require.Equal(t, uint64(123e4), deposit.Passthrough.SkyBought)
+		require.Equal(t, int64(223860), deposit.Passthrough.DepositValueSpent)
+		require.True(t, deposit.Passthrough.Order.Final)
+		require.NotEmpty(t, deposit.Passthrough.Order.Original)
+		require.Empty(t, deposit.Error)
+
+		// Check serialized original order
+
+		deposit, err := p.store.(*Store).getDepositInfo(deposit.DepositID)
+		require.NoError(t, err)
+
+		var order c2cx.Order
+		err = json.Unmarshal([]byte(deposit.Passthrough.Order.Original), &order)
+		require.NoError(t, err)
+		compareOrder(t, orderComplete, &order)
+	}
+
+	select {
+	case <-p.Deposits():
+		t.Fatal("Did not expect a deposit")
+	default:
+	}
+
+	p.Shutdown()
+
+	wg.Wait()
+}
+
 func TestPassthroughShutdownWhileCheckingOrderStatus(t *testing.T) {
 	// Tests that passthrough shuts down safely while waiting to check order status
 	// This will confirm quit error propagation handling
@@ -775,12 +877,18 @@ func TestPassthroughExchangeRunSend(t *testing.T) {
 	orderCompleteBytes, err := json.Marshal(orderComplete)
 	require.NoError(t, err)
 
-	requestedAmount := decimal.New(134, -5)
-	require.True(t, requestedAmount.Equal(decimal.New(dn.Deposit.Value, -int32(SatoshiExponent))))
+	requestedAmount := calculateRequestedAmount(dn.Deposit.Value)
 
 	mockClient := e.Processor.(*Passthrough).exchangeClient.(*MockC2CXClient)
 	mockClient.On("GetOrderByStatus", c2cx.BtcSky, c2cx.StatusAll).Return(nil, nil).Once()
-	mockClient.On("MarketBuy", c2cx.BtcSky, requestedAmount, &customerID).Return(orderID, nil)
+	mockClient.On("GetBalanceSummary").Return(&c2cx.BalanceSummary{
+		Balance: c2cx.Balances{
+			Btc: decimal.New(5, 0),
+		},
+	}, nil).Once()
+	mockClient.On("MarketBuy", c2cx.BtcSky, mock.MatchedBy(func(v decimal.Decimal) bool {
+		return v.Equal(requestedAmount)
+	}), &customerID).Return(orderID, nil)
 	mockClient.On("GetOrderInfo", c2cx.BtcSky, orderID).Return(orderComplete, nil).Once()
 
 	skySent, err := calculateSkyBought(orderComplete)

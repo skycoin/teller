@@ -31,6 +31,8 @@ specifying an order in terms of SKY volume and price.
 var (
 	// ErrFatalOrderStatus is returned if an order has a fatal status
 	ErrFatalOrderStatus = errors.New("Fatal order status")
+	// ErrInsufficientExchangeBalance is returned if there is an insufficient balance in the exchange account to place an order
+	ErrInsufficientExchangeBalance = errors.New("Exchange balance is insufficient")
 
 	errCompletedAmountNegative = errors.New("Calculated amount of SKY bought is unexpectedly negative")
 	errQuit                    = errors.New("quit")
@@ -61,6 +63,7 @@ type Passthrough struct {
 
 // C2CXClient defines an interface for c2cx.Client
 type C2CXClient interface {
+	GetBalanceSummary() (*c2cx.BalanceSummary, error)
 	GetOrderByStatus(c2cx.TradePair, c2cx.OrderStatus) ([]c2cx.Order, error)
 	GetOrderInfo(c2cx.TradePair, c2cx.OrderID) (*c2cx.Order, error)
 	MarketBuy(c2cx.TradePair, decimal.Decimal, *string) (c2cx.OrderID, error)
@@ -318,6 +321,8 @@ func errorAction(err error) string {
 		case nil:
 		case errQuit:
 			action = actionQuit
+		case ErrInsufficientExchangeBalance:
+			action = actionRetry
 		default:
 			action = actionFail
 		}
@@ -460,6 +465,7 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 	// have to scan all orders to find one matching the customer ID.
 	// Here, we query all c2cx orders and see if any have a CustomerID that matches
 	// a DepositInfo whose status is StatusWaitPassthrough.
+	log := p.log.WithField("method", "fixUnrecordedOrders")
 	var updates []DepositInfo
 
 	// Check all orders on StatusWaitPassthrough, to see if the order had actually been placed.
@@ -468,16 +474,17 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 		return di.Status == StatusWaitPassthrough
 	})
 	if err != nil {
-		p.log.WithError(err).Error("GetDepositInfoArray failed")
+		log.WithError(err).Error("GetDepositInfoArray failed")
 		return nil, err
 	}
 
+	log = log.WithField("waitPassthroughDeposits", len(deposits))
+
 	if len(deposits) == 0 {
-		p.log.Info("No StatusWaitPassthrough deposits found")
+		log.Info("No StatusWaitPassthrough deposits found")
 		return nil, nil
 	}
 
-	log := p.log.WithField("waitPassthroughDeposits", len(deposits))
 	log.Info("Found StatusWaitPassthrough deposits")
 
 	cidToDeposits := make(map[string]DepositInfo, len(deposits))
@@ -530,18 +537,31 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 
 // placeOrder places an order on the exchange and returns the OrderID
 func (p *Passthrough) placeOrder(di DepositInfo) (c2cx.OrderID, error) {
+	log := p.log.WithField("depositInfo", di)
+
 	if di.CoinType != scanner.CoinTypeBTC {
+		log.WithError(scanner.ErrUnsupportedCoinType).Error()
 		return 0, scanner.ErrUnsupportedCoinType
 	}
 
 	// The CustomerID should be saved on the DepositInfo prior to calling placeOrder
 	if di.Passthrough.Order.CustomerID == "" {
-		return 0, errors.New("CustomerID is not set on DepositInfo.Passthrough")
+		err := errors.New("CustomerID is not set on DepositInfo.Passthrough")
+		log.WithError(err).Error()
+		return 0, err
 	}
 
 	amount, err := decimal.NewFromString(di.Passthrough.RequestedAmount)
 	if err != nil {
-		p.log.WithField("depositInfo", di).WithError(err).Error("Could not parse DepositInfo.RequestedAmount")
+		log.WithError(err).Error("Could not parse DepositInfo.RequestedAmount")
+		return 0, err
+	}
+
+	// Check the balance on the exchange.
+	// Market orders will be automatically cancelled if there is insufficient balance,
+	// and our system cannot resubmit a cancelled order.
+	if err := p.checkBalance(amount); err != nil {
+		log.WithError(err).Error()
 		return 0, err
 	}
 
@@ -549,10 +569,31 @@ func (p *Passthrough) placeOrder(di DepositInfo) (c2cx.OrderID, error) {
 
 	orderID, err := p.exchangeClient.MarketBuy(c2cx.BtcSky, amount, &customerID)
 	if err != nil {
+		log.WithError(err).Error("MarketBuy failed")
 		return 0, err
 	}
 
 	return orderID, nil
+}
+
+// checkBalance checks that there is a sufficient balance in the exchange account to place an order
+func (p *Passthrough) checkBalance(amount decimal.Decimal) error {
+	balances, err := p.exchangeClient.GetBalanceSummary()
+	if err != nil {
+		return err
+	}
+
+	spendable := balances.Spendable()
+	if amount.GreaterThan(spendable.Btc) {
+		err := ErrInsufficientExchangeBalance
+		p.log.WithFields(logrus.Fields{
+			"amount":  amount.String(),
+			"balance": spendable.Btc.String(),
+		}).WithError(err).Error()
+		return err
+	}
+
+	return nil
 }
 
 // waitOrderComplete checks an order's status, waiting until it reaches a terminal state
