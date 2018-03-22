@@ -567,17 +567,19 @@ func (s *Store) GetDepositStats() (stats *DepositStats, err error) {
 				return err
 			}
 
-			switch dpi.CoinType {
-			case scanner.CoinTypeBTC:
-				stats.TotalBTCReceived += dpi.DepositValue
-			case scanner.CoinTypeETH:
-				stats.TotalETHReceived += dpi.DepositValue
-			case scanner.CoinTypeSKY:
-				stats.TotalSKYReceived += dpi.DepositValue
-			case scanner.CoinTypeWAVE:
-				stats.TotalWAVEReceived += dpi.DepositValue
+			if dpi.Status == StatusDone { // count only processed
+				switch dpi.CoinType {
+				case scanner.CoinTypeBTC:
+					stats.TotalBTCReceived += dpi.DepositValue
+				case scanner.CoinTypeETH:
+					stats.TotalETHReceived += dpi.DepositValue
+				case scanner.CoinTypeSKY:
+					stats.TotalSKYReceived += dpi.DepositValue
+				case scanner.CoinTypeWAVE:
+					stats.TotalWAVEReceived += dpi.DepositValue
+				}
+				stats.TotalMDLSent += int64(dpi.MDLSent)
 			}
-			stats.TotalMDLSent += int64(dpi.MDLSent)
 
 			return nil
 		})

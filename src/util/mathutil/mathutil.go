@@ -58,3 +58,28 @@ func ParseRate(rate string) (decimal.Decimal, error) {
 
 	return r, nil
 }
+
+// IntToBTC decimal
+func IntToBTC(i int64) decimal.Decimal {
+	return decimal.New(i, -int32(8))
+}
+
+// IntToWAV decimal
+func IntToWAV(i int64) decimal.Decimal {
+	return decimal.New(i, -int32(8))
+}
+
+// IntToETH decimal
+func IntToETH(i int64) decimal.Decimal {
+	return decimal.New(i, -int32(18))
+}
+
+// IntToSKY decimal
+func IntToSKY(i int64) decimal.Decimal {
+	return decimal.New(i, -int32(6))
+}
+
+// IntToMDL decimal
+func IntToMDL(i int64) decimal.Decimal {
+	return decimal.New(i, -int32(6))
+}

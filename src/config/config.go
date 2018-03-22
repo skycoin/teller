@@ -88,7 +88,7 @@ type Config struct {
 // SupportedCrypto is used in the UI to build a list of supported Cryptos
 type SupportedCrypto struct {
 	Name            string `json:"name"`
-	Label           string `json:"label"` //i18n label for translation
+	Label           string `json:"label"` // i18n label for translation
 	Enabled         bool   `json:"enabled"`
 	ExchangeRateUSD string `json:"exchange_rate_usd"`
 	ExchangeRate    string `json:"exchange_rate"`
@@ -258,13 +258,13 @@ func (c MDLExchanger) validate() []error {
 		errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_sky_exchange_rate invalid: %v", err))
 	}
 
-	//if _, err := mathutil.ParseRate(c.MDLWavesExchangeRate); err != nil {
-	//	errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_waves_exchange_rate invalid: %v", err))
-	//}
+	// if _, err := mathutil.ParseRate(c.MDLWavesExchangeRate); err != nil {
+	// 	errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_waves_exchange_rate invalid: %v", err))
+	// }
 	//
-	//if _, err := mathutil.ParseRate(c.MDLWavesMDLExchangeRate); err != nil {
-	//	errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_waves_mdl_exchange_rate invalid: %v", err))
-	//}
+	// if _, err := mathutil.ParseRate(c.MDLWavesMDLExchangeRate); err != nil {
+	// 	errs = append(errs, fmt.Errorf("mdl_exchanger.mdl_waves_mdl_exchange_rate invalid: %v", err))
+	// }
 
 	if c.MaxDecimals < 0 {
 		errs = append(errs, errors.New("mdl_exchanger.max_decimals can't be negative"))
@@ -342,7 +342,12 @@ func (c Web) Validate() error {
 
 // AdminPanel config for the admin panel AdminPanel
 type AdminPanel struct {
-	Host string `mapstructure:"host"`
+	Host          string `mapstructure:"host"`
+	FixBtcValue   int64  `mapstructure:"fix_btc_value"`
+	FixEthValue   int64  `mapstructure:"fix_eth_value"`
+	FixSkyValue   int64  `mapstructure:"fix_sky_value"`
+	FixWavesValue int64  `mapstructure:"fix_waves_value"`
+	FixMdlValue   int64  `mapstructure:"fix_mdl_value"`
 }
 
 // Dummy config for the fake sender and scanner
@@ -598,6 +603,11 @@ func setDefaults() {
 
 	// AdminPanel
 	viper.SetDefault("admin_panel.host", "127.0.0.1:7711")
+	viper.SetDefault("admin_panel.fix_btc_value", 0)
+	viper.SetDefault("admin_panel.fix_eth_value", 0)
+	viper.SetDefault("admin_panel.fix_sky_value", 0)
+	viper.SetDefault("admin_panel.fix_waves_value", 0)
+	viper.SetDefault("admin_panel.fix_mdl_value", 0)
 
 	// DummySender
 	viper.SetDefault("dummy.http_addr", "127.0.0.1:4121")

@@ -13,6 +13,8 @@ import (
 	"github.com/MDLlife/teller/src/exchange"
 	"github.com/MDLlife/teller/src/util/httputil"
 	"github.com/MDLlife/teller/src/util/logger"
+	"github.com/shopspring/decimal"
+	"github.com/MDLlife/teller/src/util/mathutil"
 )
 
 const (
@@ -42,22 +44,37 @@ type ScanAddressGetter interface {
 	GetScanAddresses() ([]string, error)
 }
 
+// WebReadyStats deposit struct for api
+type WebReadyStats struct {
+	TotalBTCReceived  string `json:"btc"`
+	TotalETHReceived  string `json:"eth"`
+	TotalSKYReceived  string `json:"sky"`
+	TotalWAVEReceived string `json:"waves"`
+	TotalUSDReceived  string `json:"usd"`
+	TotalMDLSent      string `json:"mdl"`
+}
+
 // Config configuration info for monitor service
 type Config struct {
-	Addr string
+	Addr          string
+	FixBtcValue   int64
+	FixEthValue   int64
+	FixSkyValue   int64
+	FixWavesValue int64
+	FixMdlValue   int64
 }
 
 // Monitor monitor service struct
 type Monitor struct {
-	log logrus.FieldLogger
+	log            logrus.FieldLogger
 	AddrManager
 	EthAddrManager AddrManager
 	SkyAddrManager AddrManager
 	DepositStatusGetter
 	ScanAddressGetter
-	cfg  Config
-	ln   *http.Server
-	quit chan struct{}
+	cfg            Config
+	ln             *http.Server
+	quit           chan struct{}
 }
 
 // New creates monitor service
@@ -107,6 +124,7 @@ func (m *Monitor) setupMux() *http.ServeMux {
 	mux.Handle("/api/address", httputil.LogHandler(m.log, m.addressHandler()))
 	mux.Handle("/api/deposit_status", httputil.LogHandler(m.log, m.depositStatus()))
 	mux.Handle("/api/stats", httputil.LogHandler(m.log, m.statsHandler()))
+	mux.Handle("/api/web-stats", httputil.LogHandler(m.log, m.webStatsHandler()))
 	return mux
 }
 
@@ -245,6 +263,52 @@ func (m *Monitor) statsHandler() http.HandlerFunc {
 		}
 
 		if err := httputil.JSONResponse(w, ts); err != nil {
+			log.WithError(err).Error("Write json response failed")
+			return
+		}
+	}
+}
+
+// stats returns all deposit stats prepared for web, including total BTC, ETH, SKY, WAVES received, total MDL sent and USD approximately received based on MDL.
+// Method: GET
+// URI: /api/web-stats
+func (m *Monitor) webStatsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			httputil.ErrResponse(w, http.StatusMethodNotAllowed)
+			return
+		}
+
+		ts, err := m.GetDepositStats()
+		if err != nil {
+			log.WithError(err).Error("GetDepositStats failed")
+			httputil.ErrResponse(w, http.StatusInternalServerError)
+			return
+		}
+
+		ts.TotalBTCReceived = ts.TotalBTCReceived + m.cfg.FixBtcValue
+		ts.TotalETHReceived = ts.TotalETHReceived + m.cfg.FixEthValue
+		ts.TotalSKYReceived = ts.TotalSKYReceived + m.cfg.FixSkyValue
+		ts.TotalWAVEReceived = ts.TotalWAVEReceived + m.cfg.FixWavesValue
+		ts.TotalMDLSent = ts.TotalMDLSent + m.cfg.FixMdlValue
+
+		mdl := mathutil.IntToMDL(ts.TotalMDLSent)
+		usd := mdl.Mul(decimal.NewFromFloat(0.05))
+
+		ws := &WebReadyStats{
+			mathutil.IntToBTC(ts.TotalBTCReceived).String(),
+			mathutil.IntToETH(ts.TotalETHReceived).String(),
+			mathutil.IntToSKY(ts.TotalSKYReceived).String(),
+			mathutil.IntToWAV(ts.TotalWAVEReceived).String(),
+			usd.String(),
+			mdl.String(),
+		}
+
+		if err := httputil.JSONResponse(w, ws); err != nil {
 			log.WithError(err).Error("Write json response failed")
 			return
 		}
