@@ -403,6 +403,7 @@ func run() error {
 		FixWavesValue: cfg.AdminPanel.FixWavesValue,
 		FixMdlValue:   cfg.AdminPanel.FixMdlValue,
 		FixUsdValue:   cfg.AdminPanel.FixUsdValue,
+		FixTxValue:    cfg.AdminPanel.FixTxValue,
 	}
 	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, skyAddrMgr, exchangeClient, btcScanner)
 

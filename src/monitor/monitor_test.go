@@ -58,7 +58,7 @@ func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositF
 }
 
 func (dps dummyDepositStatusGetter) GetDepositStats() (*exchange.DepositStats, error) {
-	stats := &exchange.DepositStats{0, 0, 0, 0, 0}
+	stats := &exchange.DepositStats{0, 0, 0, 0, 0, 0}
 
 	for _, dpi := range dps.dpis {
 		if dpi.Status == exchange.StatusDone { // count only processed
@@ -73,6 +73,7 @@ func (dps dummyDepositStatusGetter) GetDepositStats() (*exchange.DepositStats, e
 				stats.TotalWAVEReceived += dpi.DepositValue
 			}
 			stats.TotalMDLSent += int64(dpi.MDLSent)
+			stats.TotalTransactions++
 		}
 	}
 
@@ -120,7 +121,7 @@ func TestRunMonitor(t *testing.T) {
 
 	cfg := Config{
 		"localhost:7908",
-		0, 0, 0, 0, 0, "0",
+		0, 0, 0, 0, 0, "0", 0,
 	}
 
 	log, _ := testutil.NewLogger(t)
@@ -246,7 +247,7 @@ var statsDpis = []exchange.DepositInfo{
 }
 var statsCfg = Config{
 	"localhost:7908",
-	10, 11, 12, 13, 14, "10.5",
+	10, 11, 12, 13, 14, "10.5", 10,
 }
 
 func TestMonitorDepositStats(t *testing.T) {
@@ -267,6 +268,7 @@ func TestMonitorDepositStats(t *testing.T) {
 		require.Equal(t, statsDpis[2].DepositValue, stats.TotalETHReceived)
 		require.Equal(t, statsDpis[3].DepositValue, stats.TotalSKYReceived)
 		require.Equal(t, statsDpis[4].DepositValue, stats.TotalWAVEReceived)
+		require.Equal(t, 4, stats.TotalTransactions)
 
 		mdlTotal := statsDpis[1].MDLSent + statsDpis[2].MDLSent + statsDpis[3].MDLSent + statsDpis[4].MDLSent
 		require.Equal(t, mdlTotal, stats.TotalMDLSent)
@@ -302,6 +304,7 @@ func TestMonitorWebReadyDepositStats(t *testing.T) {
 		require.Equal(t, "0.04000013", webStats.TotalWAVEReceived)
 		require.Equal(t, "0.001414", webStats.TotalMDLSent)
 		require.Equal(t, "10.5000707", webStats.TotalUSDReceived)
+		require.Equal(t, 14, webStats.TotalTransactions)
 
 		testutil.CheckError(t, rsp.Body.Close)
 

@@ -558,7 +558,7 @@ func (s *Store) getMDLBindAddressesTx(tx *bolt.Tx, mdlAddr string) ([]BoundAddre
 
 // GetDepositStats returns Coins received and MDL sent
 func (s *Store) GetDepositStats() (stats *DepositStats, err error) {
-	stats = &DepositStats{0,0,0,0,0}
+	stats = &DepositStats{0, 0, 0, 0, 0, 0}
 
 	if err := s.db.View(func(tx *bolt.Tx) error {
 		return dbutil.ForEach(tx, DepositInfoBkt, func(k, v []byte) error {
@@ -579,6 +579,7 @@ func (s *Store) GetDepositStats() (stats *DepositStats, err error) {
 					stats.TotalWAVEReceived += dpi.DepositValue
 				}
 				stats.TotalMDLSent += int64(dpi.MDLSent)
+				stats.TotalTransactions++
 			}
 
 			return nil

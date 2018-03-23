@@ -52,6 +52,7 @@ type WebReadyStats struct {
 	TotalWAVEReceived string `json:"waves"`
 	TotalUSDReceived  string `json:"usd"`
 	TotalMDLSent      string `json:"mdl"`
+	TotalTransactions int64  `json:"tx"`
 }
 
 // Config configuration info for monitor service
@@ -63,6 +64,7 @@ type Config struct {
 	FixWavesValue int64
 	FixMdlValue   int64
 	FixUsdValue   string
+	FixTxValue    int64
 }
 
 // Monitor monitor service struct
@@ -296,6 +298,7 @@ func (m *Monitor) webStatsHandler() http.HandlerFunc {
 		ts.TotalSKYReceived = ts.TotalSKYReceived + m.cfg.FixSkyValue
 		ts.TotalWAVEReceived = ts.TotalWAVEReceived + m.cfg.FixWavesValue
 		ts.TotalMDLSent = ts.TotalMDLSent + m.cfg.FixMdlValue
+		ts.TotalTransactions = ts.TotalTransactions + m.cfg.FixTxValue
 
 		mdl := mathutil.IntToMDL(ts.TotalMDLSent)
 		fixUsd, err := mathutil.DecimalFromString(m.cfg.FixUsdValue)
@@ -312,6 +315,7 @@ func (m *Monitor) webStatsHandler() http.HandlerFunc {
 			mathutil.IntToWAV(ts.TotalWAVEReceived).String(),
 			usd.String(),
 			mdl.String(),
+			ts.TotalTransactions,
 		}
 
 		if err := httputil.JSONResponse(w, ws); err != nil {

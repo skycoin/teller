@@ -349,6 +349,7 @@ type AdminPanel struct {
 	FixWavesValue int64  `mapstructure:"fix_waves_value"`
 	FixMdlValue   int64  `mapstructure:"fix_mdl_value"`
 	FixUsdValue   string `mapstructure:"fix_usd_value"`
+	FixTxValue    int64  `mapstructure:"fix_tx_value"`
 }
 
 // Dummy config for the fake sender and scanner
@@ -610,6 +611,7 @@ func setDefaults() {
 	viper.SetDefault("admin_panel.fix_waves_value", 0)
 	viper.SetDefault("admin_panel.fix_mdl_value", 0)
 	viper.SetDefault("admin_panel.fix_usd_value", "0")
+	viper.SetDefault("admin_panel.fix_tx_value", 0)
 
 	// DummySender
 	viper.SetDefault("dummy.http_addr", "127.0.0.1:4121")

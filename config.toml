@@ -128,6 +128,7 @@ fix_sky_value = 0 # OPTIONAL: SKY in int64 format
 fix_waves_value = 0 # OPTIONAL: WAVES in int64 format
 fix_mdl_value = 0 # OPTIONAL: MDL in int64 format
 fix_usd_value = "" # OPTIONAL: UDS in string format, example "-3.25"
+fix_tx_value = 0 # OPTIONAL: number of transactions in int64 format
 
 [dummy]
 # fake sender and scanner with admin interface adding fake deposits,
