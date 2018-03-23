@@ -21,14 +21,14 @@ bind_enabled = true # Disable this to prevent binding of new addresses
 address = "127.0.0.1:8330"
 
 [btc_rpc]
-enabled = true
+enabled = false
 server = "localhost:8004"
 user = "1" # REQUIRED
 pass = "1" # REQUIRED
 cert = "no.cert" # REQUIRED
 
 [eth_rpc]
-enabled = true
+enabled = false
 server = "127.0.0.1" # REQUIRED
 port = "8545" # REQUIRED
 
@@ -127,7 +127,7 @@ fix_eth_value = 0 # OPTIONAL: ETH in int64 format (gwei)
 fix_sky_value = 0 # OPTIONAL: SKY in int64 format
 fix_waves_value = 0 # OPTIONAL: WAVES in int64 format
 fix_mdl_value = 0 # OPTIONAL: MDL in int64 format
-fix_usd_value = "" # OPTIONAL: UDS in string format, example "-3.25"
+fix_usd_value = 0 # OPTIONAL: UDS in string format, example "-3.25"
 fix_tx_value = 0 # OPTIONAL: number of transactions in int64 format
 
 [dummy]
