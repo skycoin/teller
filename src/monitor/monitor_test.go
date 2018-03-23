@@ -216,31 +216,31 @@ func TestRunMonitor(t *testing.T) {
 var statsDpis = []exchange.DepositInfo{
 	{
 		CoinType:     scanner.CoinTypeBTC,
-		DepositValue: 1000000,
+		DepositValue: 10000,
 		MDLSent:      100,
 		Status:       exchange.StatusWaitConfirm,
 	},
 	{
 		CoinType:     scanner.CoinTypeBTC,
-		DepositValue: 100000000,
+		DepositValue: 100000,
 		MDLSent:      200,
 		Status:       exchange.StatusDone,
 	},
 	{
 		CoinType:     scanner.CoinTypeETH,
-		DepositValue: 2000000000000,
+		DepositValue: 200000,
 		MDLSent:      300,
 		Status:       exchange.StatusDone,
 	},
 	{
 		CoinType:     scanner.CoinTypeSKY,
-		DepositValue: 3000000,
+		DepositValue: 30000,
 		MDLSent:      400,
 		Status:       exchange.StatusDone,
 	},
 	{
 		CoinType:     scanner.CoinTypeWAVE,
-		DepositValue: 4000000,
+		DepositValue: 4000,
 		MDLSent:      500,
 		Status:       exchange.StatusDone,
 	},
@@ -259,6 +259,7 @@ func TestMonitorDepositStats(t *testing.T) {
 	time.AfterFunc(1*time.Second, func() {
 		rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/stats"))
 		require.NoError(t, err)
+		defer testutil.CheckError(t, rsp.Body.Close)
 		require.Equal(t, http.StatusOK, rsp.StatusCode)
 
 		var stats exchange.DepositStats
@@ -268,12 +269,14 @@ func TestMonitorDepositStats(t *testing.T) {
 		require.Equal(t, statsDpis[2].DepositValue, stats.TotalETHReceived)
 		require.Equal(t, statsDpis[3].DepositValue, stats.TotalSKYReceived)
 		require.Equal(t, statsDpis[4].DepositValue, stats.TotalWAVEReceived)
-		require.Equal(t, 4, stats.TotalTransactions)
+		if stats.TotalTransactions != 4 {
+			t.Fail()
+		}
 
 		mdlTotal := statsDpis[1].MDLSent + statsDpis[2].MDLSent + statsDpis[3].MDLSent + statsDpis[4].MDLSent
-		require.Equal(t, mdlTotal, stats.TotalMDLSent)
-
-		testutil.CheckError(t, rsp.Body.Close)
+		if mdlTotal != uint64(stats.TotalMDLSent) {
+			t.Fail()
+		}
 
 		m.Shutdown()
 	})
@@ -292,21 +295,23 @@ func TestMonitorWebReadyDepositStats(t *testing.T) {
 	time.AfterFunc(1*time.Second, func() {
 		rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/web-stats"))
 		require.NoError(t, err)
+		defer testutil.CheckError(t, rsp.Body.Close)
 		require.Equal(t, http.StatusOK, rsp.StatusCode)
 
 		var webStats WebReadyStats
 		err = json.NewDecoder(rsp.Body).Decode(&webStats)
 		require.NoError(t, err)
 
-		require.Equal(t, "1.0000001", webStats.TotalBTCReceived)
-		require.Equal(t, "0.000002000000000011", webStats.TotalETHReceived)
-		require.Equal(t, "3.000012", webStats.TotalSKYReceived)
-		require.Equal(t, "0.04000013", webStats.TotalWAVEReceived)
-		require.Equal(t, "0.001414", webStats.TotalMDLSent)
-		require.Equal(t, "10.5000707", webStats.TotalUSDReceived)
-		require.Equal(t, 14, webStats.TotalTransactions)
-
-		testutil.CheckError(t, rsp.Body.Close)
+		// dirty hack because test loops in require.equal
+		if webStats.TotalBTCReceived != "0.0010001" ||
+			webStats.TotalETHReceived != "0.000200011" ||
+			webStats.TotalSKYReceived != "0.030012" ||
+			webStats.TotalWAVEReceived != "0.00004013" ||
+			webStats.TotalMDLSent != "0.001414" ||
+			webStats.TotalUSDReceived != "10.5000707" ||
+			webStats.TotalTransactions != 14 {
+			t.Fail()
+		}
 
 		m.Shutdown()
 	})
