@@ -135,9 +135,9 @@ func createWAVESScanner(log logrus.FieldLogger, cfg config.Config, scanStore *sc
 	}
 
 	wavesScanner, err := scanner.NewWavescoinScanner(log, scanStore, wavesrpc, scanner.Config{
-		ScanPeriod:            cfg.SkyScanner.ScanPeriod,
-		ConfirmationsRequired: cfg.SkyScanner.ConfirmationsRequired,
-		InitialScanHeight:     cfg.SkyScanner.InitialScanHeight,
+		ScanPeriod:            cfg.WavesScanner.ScanPeriod,
+		ConfirmationsRequired: cfg.WavesScanner.ConfirmationsRequired,
+		InitialScanHeight:     cfg.WavesScanner.InitialScanHeight,
 	})
 	if err != nil {
 		log.WithError(err).Error("Open wavesScanner service failed")
