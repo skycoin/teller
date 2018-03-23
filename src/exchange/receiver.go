@@ -13,9 +13,10 @@ import (
 func init() {
 	// Assert that getRate() handles all coin types
 	cfg := config.MDLExchanger{
-		MDLBtcExchangeRate: "1",
-		MDLEthExchangeRate: "2",
-		MDLSkyExchangeRate: "3",
+		MDLBtcExchangeRate:   "1",
+		MDLEthExchangeRate:   "2",
+		MDLSkyExchangeRate:   "3",
+		MDLWavesExchangeRate: "4",
 	}
 	for _, ct := range scanner.GetCoinTypes() {
 		rate, err := getRate(cfg, ct)
@@ -198,6 +199,8 @@ func getRate(cfg config.MDLExchanger, coinType string) (string, error) {
 		return cfg.MDLEthExchangeRate, nil
 	case scanner.CoinTypeSKY:
 		return cfg.MDLSkyExchangeRate, nil
+	case scanner.CoinTypeWAVES:
+		return cfg.MDLWavesExchangeRate, nil
 	default:
 		return "", scanner.ErrUnsupportedCoinType
 	}

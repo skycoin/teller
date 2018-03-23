@@ -135,6 +135,16 @@ class Distribution extends React.Component {
     });
   }
 
+  currentCoinPrice() {
+    switch (this.state.coinType) {
+      case "BTC": return this.supported[0].exchange_rate;
+      case "ETH": return this.supported[1].exchange_rate;
+      case "SKY": return this.supported[2].exchange_rate;
+      case "WAVES": return this.supported[3].exchange_rate;
+    }
+    return "1"
+  }
+
   checkStatus() {
     if (!this.state.mdlAddress) {
       return alert(
@@ -248,18 +258,18 @@ class Distribution extends React.Component {
                     value={this.state.coinType}
                     onChange={this.handleCoinTypeChange}
                     options={[
-                      { value: 'BTC', label: 'Bitcoin (Under Maintenance)', disabled: true },
-                      { value: 'ETH', label: 'ETH' },
-                      { value: 'BTC', label: 'SKY', disabled: false },
-                      { value: 'BTC', label: 'WAVES (Temporary Disabled)', disabled: true },
-                      { value: 'BTC', label: 'MDL.life (pre-MDL token on Waves)', disabled: true },
+                      { value: 'BTC', label: 'Bitcoin', disabled: true },
+                      { value: 'ETH', label: 'Ethereum', disabled: true  },
+                      { value: 'SKY', label: 'Skycoin', disabled: true },
+                      { value: 'WAVES', label: 'Waves (Temporary Disabled)', disabled: true },
+                      { value: 'MDL.life', label: 'MDL.life (pre-MDL token on Waves)', disabled: true },
                     ]}
                   />
                   <Text heavy color="grey" fontSize={[2, 3]}>
                     <FormattedMessage
                       id="distribution.rate"
                       values={{
-                        rate: +(this.state.coinType == 'ETH' ?  this.state.mdl_eth_exchange_rate : this.state.mdl_btc_exchange_rate),
+                        rate: +(0),
                         coinType: this.state.coinType,
                       }}
                     /> "(approx. $0.05 USD per 1 MDL)"

@@ -1,23 +1,22 @@
 package addrs
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 
-	"github.com/MDLlife/teller/src/util/dbutil"
-
 	"github.com/MDLlife/MDL/src/cipher"
+	"github.com/MDLlife/teller/src/util"
 )
 
 const btcBucketKey = "used_btc_address"
 
 // NewBTCAddrs returns an Addrs loaded with BTC addresses
-func NewBTCAddrs(log logrus.FieldLogger, db *bolt.DB, path string) (*Addrs, error) {
-	loader, err := dbutil.ReadLines(path)
+func NewBTCAddrs(log logrus.FieldLogger, db *bolt.DB, addrsReader io.Reader) (*Addrs, error) {
+	loader, err := loadBTCAddresses(addrsReader)
 	if err != nil {
 		log.WithError(err).Error("Load deposit bitcoin address list failed")
 		return nil, err
@@ -25,21 +24,17 @@ func NewBTCAddrs(log logrus.FieldLogger, db *bolt.DB, path string) (*Addrs, erro
 	return NewAddrs(log, db, loader, btcBucketKey)
 }
 
-
-func loadBTCAddresses(addrsReader io.Reader) ([]string, error) {
-	var addrs struct {
-		Addresses []string `json:"btc_addresses"`
+func loadBTCAddresses(addrsReader io.Reader) (addrs []string, err error) {
+	addrs, err = util.ReadLines(addrsReader)
+	if err != nil {
+		return nil, fmt.Errorf("Decode loaded address failed: %v", err)
 	}
 
-	if err := json.NewDecoder(addrsReader).Decode(&addrs); err != nil {
-		return nil, fmt.Errorf("Decode loaded address json failed: %v", err)
-	}
-
-	if err := verifyBTCAddresses(addrs.Addresses); err != nil {
+	if err := verifyBTCAddresses(addrs); err != nil {
 		return nil, err
 	}
 
-	return addrs.Addresses, nil
+	return addrs, nil
 }
 
 func verifyBTCAddresses(addrs []string) error {

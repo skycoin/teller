@@ -43,6 +43,8 @@ func GetBindAddressBkt(coinType string) ([]byte, error) {
 		suffix = "eth"
 	case scanner.CoinTypeSKY:
 		suffix = "sky"
+	case scanner.CoinTypeWAVES:
+		suffix = "waves"
 	default:
 		return nil, scanner.ErrUnsupportedCoinType
 	}
@@ -567,20 +569,17 @@ func (s *Store) GetDepositStats() (stats *DepositStats, err error) {
 				return err
 			}
 
-			if dpi.Status == StatusDone { // count only processed
-				switch dpi.CoinType {
-				case scanner.CoinTypeBTC:
-					stats.TotalBTCReceived += dpi.DepositValue
-				case scanner.CoinTypeETH:
-					stats.TotalETHReceived += dpi.DepositValue
-				case scanner.CoinTypeSKY:
-					stats.TotalSKYReceived += dpi.DepositValue
-				case scanner.CoinTypeWAVE:
-					stats.TotalWAVEReceived += dpi.DepositValue
-				}
-				stats.TotalMDLSent += int64(dpi.MDLSent)
-				stats.TotalTransactions++
+			switch dpi.CoinType {
+			case scanner.CoinTypeBTC:
+				stats.TotalBTCReceived += dpi.DepositValue
+			case scanner.CoinTypeETH:
+				stats.TotalETHReceived += dpi.DepositValue
+			case scanner.CoinTypeSKY:
+				stats.TotalSKYReceived += dpi.DepositValue
+			case scanner.CoinTypeWAVES:
+				stats.TotalWAVESReceived += dpi.DepositValue
 			}
+			stats.TotalMDLSent += int64(dpi.MDLSent)
 
 			return nil
 		})
