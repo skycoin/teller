@@ -58,18 +58,26 @@ func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositF
 }
 
 func (dps dummyDepositStatusGetter) GetDepositStats() (*exchange.DepositStats, error) {
-	var totalBTCReceived int64
-	var totalMDLSent int64
+	stats := &exchange.DepositStats{0, 0, 0, 0, 0, 0}
+
 	for _, dpi := range dps.dpis {
-		if dpi.CoinType == scanner.CoinTypeBTC {
-			totalBTCReceived += dpi.DepositValue
+		if dpi.Status == exchange.StatusDone { // count only processed
+			switch dpi.CoinType {
+			case scanner.CoinTypeBTC:
+				stats.TotalBTCReceived += dpi.DepositValue
+			case scanner.CoinTypeETH:
+				stats.TotalETHReceived += dpi.DepositValue
+			case scanner.CoinTypeSKY:
+				stats.TotalSKYReceived += dpi.DepositValue
+			case scanner.CoinTypeWAVE:
+				stats.TotalWAVEReceived += dpi.DepositValue
+			}
+			stats.TotalMDLSent += int64(dpi.MDLSent)
+			stats.TotalTransactions++
 		}
-		totalMDLSent += int64(dpi.MDLSent)
 	}
-	return &exchange.DepositStats{
-		TotalBTCReceived: totalBTCReceived,
-		TotalMDLSent:     totalMDLSent,
-	}, nil
+
+	return stats, nil
 }
 
 type dummyScanAddrs struct {
@@ -113,6 +121,7 @@ func TestRunMonitor(t *testing.T) {
 
 	cfg := Config{
 		"localhost:7908",
+		0, 0, 0, 0, 0, "0", 0,
 	}
 
 	log, _ := testutil.NewLogger(t)
@@ -194,6 +203,110 @@ func TestRunMonitor(t *testing.T) {
 				}
 			})
 		}
+
+		m.Shutdown()
+	})
+
+	if err := m.Run(); err != nil {
+		return
+	}
+}
+
+// data for stats tests
+var statsDpis = []exchange.DepositInfo{
+	{
+		CoinType:     scanner.CoinTypeBTC,
+		DepositValue: 1000000,
+		MDLSent:      100,
+		Status:       exchange.StatusWaitConfirm,
+	},
+	{
+		CoinType:     scanner.CoinTypeBTC,
+		DepositValue: 100000000,
+		MDLSent:      200,
+		Status:       exchange.StatusDone,
+	},
+	{
+		CoinType:     scanner.CoinTypeETH,
+		DepositValue: 2000000000000,
+		MDLSent:      300,
+		Status:       exchange.StatusDone,
+	},
+	{
+		CoinType:     scanner.CoinTypeSKY,
+		DepositValue: 3000000,
+		MDLSent:      400,
+		Status:       exchange.StatusDone,
+	},
+	{
+		CoinType:     scanner.CoinTypeWAVE,
+		DepositValue: 4000000,
+		MDLSent:      500,
+		Status:       exchange.StatusDone,
+	},
+}
+var statsCfg = Config{
+	"localhost:7908",
+	10, 11, 12, 13, 14, "10.5", 10,
+}
+
+func TestMonitorDepositStats(t *testing.T) {
+	dummyDps := dummyDepositStatusGetter{dpis: statsDpis}
+
+	log, _ := testutil.NewLogger(t)
+	m := New(log, statsCfg, &dummyBtcAddrMgr{10}, &dummyEthAddrMgr{10}, &dummySkyAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
+
+	time.AfterFunc(1*time.Second, func() {
+		rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/stats"))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rsp.StatusCode)
+
+		var stats exchange.DepositStats
+		err = json.NewDecoder(rsp.Body).Decode(&stats)
+		require.NoError(t, err)
+		require.Equal(t, statsDpis[1].DepositValue, stats.TotalBTCReceived)
+		require.Equal(t, statsDpis[2].DepositValue, stats.TotalETHReceived)
+		require.Equal(t, statsDpis[3].DepositValue, stats.TotalSKYReceived)
+		require.Equal(t, statsDpis[4].DepositValue, stats.TotalWAVEReceived)
+		require.Equal(t, 4, stats.TotalTransactions)
+
+		mdlTotal := statsDpis[1].MDLSent + statsDpis[2].MDLSent + statsDpis[3].MDLSent + statsDpis[4].MDLSent
+		require.Equal(t, mdlTotal, stats.TotalMDLSent)
+
+		testutil.CheckError(t, rsp.Body.Close)
+
+		m.Shutdown()
+	})
+
+	if err := m.Run(); err != nil {
+		return
+	}
+}
+
+func TestMonitorWebReadyDepositStats(t *testing.T) {
+	dummyDps := dummyDepositStatusGetter{dpis: statsDpis}
+
+	log, _ := testutil.NewLogger(t)
+	m := New(log, statsCfg, &dummyBtcAddrMgr{10}, &dummyEthAddrMgr{10}, &dummySkyAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
+
+	time.AfterFunc(1*time.Second, func() {
+		rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/web-stats"))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, rsp.StatusCode)
+
+		var webStats WebReadyStats
+		err = json.NewDecoder(rsp.Body).Decode(&webStats)
+		require.NoError(t, err)
+
+		require.Equal(t, "1.0000001", webStats.TotalBTCReceived)
+		require.Equal(t, "0.000002000000000011", webStats.TotalETHReceived)
+		require.Equal(t, "3.000012", webStats.TotalSKYReceived)
+		require.Equal(t, "0.04000013", webStats.TotalWAVEReceived)
+		require.Equal(t, "0.001414", webStats.TotalMDLSent)
+		require.Equal(t, "10.5000707", webStats.TotalUSDReceived)
+		require.Equal(t, 14, webStats.TotalTransactions)
+
+		testutil.CheckError(t, rsp.Body.Close)
 
 		m.Shutdown()
 	})
