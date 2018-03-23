@@ -15,6 +15,7 @@ import (
 	"github.com/MDLlife/teller/src/util/logger"
 	"github.com/shopspring/decimal"
 	"github.com/MDLlife/teller/src/util/mathutil"
+	"encoding/json"
 )
 
 const (
@@ -26,6 +27,8 @@ const (
 	serverReadTimeout  = time.Second * 10
 	serverWriteTimeout = time.Second * 60
 	serverIdleTimeout  = time.Second * 120
+
+	cryptocompareFrequency = time.Minute * 5
 )
 
 // AddrManager interface provides apis to access resource of btc address
@@ -55,6 +58,25 @@ type WebReadyStats struct {
 	TotalTransactions int64  `json:"tx"`
 }
 
+// ETH course
+type CryptocompareResponse struct {
+	Response string              `json:"Response"`
+	Data     []CryptocompareData `json:"Data"`
+}
+
+type CryptocompareData struct {
+	Time       uint32  `json:"time"`
+	Close      float32 `json:"close"`
+	High       float32 `json:"high"`
+	Low        float32 `json:"low"`
+	Open       float32 `json:"open"`
+	VolumeFrom float32 `json:"volumefrom"`
+	VolumeTo   float32 `json:"volumeto"`
+}
+
+var cryptocompareETHtoUSDcourse float32 = 510.0
+var cryptocompareUpdateTime = time.Now().Add(-time.Hour)
+
 // Config configuration info for monitor service
 type Config struct {
 	Addr          string
@@ -63,7 +85,7 @@ type Config struct {
 	FixSkyValue   int64
 	FixWavesValue int64
 	FixMdlValue   int64
-	FixUsdValue   string
+	FixUsdValue   decimal.Decimal
 	FixTxValue    int64
 }
 
@@ -128,6 +150,7 @@ func (m *Monitor) setupMux() *http.ServeMux {
 	mux.Handle("/api/deposit_status", httputil.LogHandler(m.log, m.depositStatus()))
 	mux.Handle("/api/stats", httputil.LogHandler(m.log, m.statsHandler()))
 	mux.Handle("/api/web-stats", httputil.LogHandler(m.log, m.webStatsHandler()))
+	mux.Handle("/api/eth-total-stats", httputil.LogHandler(m.log, m.ethTotalStatsHandler()))
 	return mux
 }
 
@@ -272,6 +295,37 @@ func (m *Monitor) statsHandler() http.HandlerFunc {
 	}
 }
 
+var updateEthToUSDCourse = func(log logrus.FieldLogger) {
+	if cryptocompareUpdateTime.After(time.Now().Add(-cryptocompareFrequency)) {
+		return
+	}
+
+	timeout := time.Duration(1 * time.Second)
+	client := http.Client{
+		Timeout: timeout,
+	}
+	rsp, err := client.Get("https://min-api.cryptocompare.com/data/histominute?fsym=ETH&limit=1&tsym=USD")
+	if err != nil {
+		log.Error("Can't connect to https://min-api.cryptocompare.com/data/histominute?fsym=ETH&limit=1&tsym=USD Error: " + err.Error())
+	} else {
+		if rsp.StatusCode == http.StatusOK {
+			defer rsp.Body.Close()
+
+			var jResponse CryptocompareResponse
+			if err := json.NewDecoder(rsp.Body).Decode(&jResponse); err != nil {
+				log.Error("Can't parse min-api.cryptocompare json response")
+			} else {
+				if len(jResponse.Data) > 0 {
+					cryptocompareETHtoUSDcourse = jResponse.Data[0].Close
+					cryptocompareUpdateTime = time.Now()
+				}
+			}
+		} else {
+			log.Error("Response Status of  min-api.cryptocompare :" + rsp.Status + "\n\t body: ")
+		}
+	}
+}
+
 // stats returns all deposit stats prepared for web, including total BTC, ETH, SKY, WAVES received, total MDL sent and USD approximately received based on MDL.
 // Method: GET
 // URI: /api/web-stats
@@ -301,12 +355,7 @@ func (m *Monitor) webStatsHandler() http.HandlerFunc {
 		ts.TotalTransactions = ts.TotalTransactions + m.cfg.FixTxValue
 
 		mdl := mathutil.IntToMDL(ts.TotalMDLSent)
-		fixUsd, err := mathutil.DecimalFromString(m.cfg.FixUsdValue)
-		if err != nil {
-			fixUsd = decimal.New(0, 0)
-			m.log.Error("Can't convert fix_usd_value: " + m.cfg.FixUsdValue + " to decimal")
-		}
-		usd := mdl.Mul(decimal.NewFromFloat(0.05)).Add(fixUsd)
+		usd := mdl.Mul(decimal.NewFromFloat(0.05)).Add(m.cfg.FixUsdValue)
 
 		ws := &WebReadyStats{
 			mathutil.IntToBTC(ts.TotalBTCReceived).String(),
@@ -319,6 +368,41 @@ func (m *Monitor) webStatsHandler() http.HandlerFunc {
 		}
 
 		if err := httputil.JSONResponse(w, ws); err != nil {
+			log.WithError(err).Error("Write json response failed")
+			return
+		}
+	}
+}
+
+// stats returns all deposit stats prepared for web, including total BTC, ETH, SKY, WAVES received, total MDL sent and USD approximately received based on MDL.
+// Method: GET
+// URI: /api/eth-total-stats
+func (m *Monitor) ethTotalStatsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			httputil.ErrResponse(w, http.StatusMethodNotAllowed)
+			return
+		}
+
+		ts, err := m.GetDepositStats()
+		if err != nil {
+			log.WithError(err).Error("GetDepositStats failed")
+			httputil.ErrResponse(w, http.StatusInternalServerError)
+			return
+		}
+
+		// update course
+		updateEthToUSDCourse(log)
+
+		mdl := mathutil.IntToMDL(ts.TotalMDLSent)
+		usd := mdl.Mul(decimal.NewFromFloat(0.05)).Add(m.cfg.FixUsdValue)
+		eth := usd.Div(decimal.NewFromFloat(float64(cryptocompareETHtoUSDcourse)))
+
+		if err := httputil.JSONResponse(w, map[string]string{"eth": eth.String()}); err != nil {
 			log.WithError(err).Error("Write json response failed")
 			return
 		}

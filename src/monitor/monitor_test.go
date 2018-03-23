@@ -12,6 +12,8 @@ import (
 	"github.com/MDLlife/teller/src/exchange"
 	"github.com/MDLlife/teller/src/scanner"
 	"github.com/MDLlife/teller/src/util/testutil"
+	"github.com/sirupsen/logrus"
+	"github.com/shopspring/decimal"
 )
 
 type dummyBtcAddrMgr struct {
@@ -121,7 +123,7 @@ func TestRunMonitor(t *testing.T) {
 
 	cfg := Config{
 		"localhost:7908",
-		0, 0, 0, 0, 0, "0", 0,
+		0, 0, 0, 0, 0, decimal.New(0, 0), 0,
 	}
 
 	log, _ := testutil.NewLogger(t)
@@ -247,7 +249,7 @@ var statsDpis = []exchange.DepositInfo{
 }
 var statsCfg = Config{
 	"localhost:7908",
-	10, 11, 12, 13, 14, "10.5", 10,
+	10, 11, 12, 13, 14, decimal.NewFromFloat(10.5), 10,
 }
 
 func TestMonitorDepositStats(t *testing.T) {
@@ -319,4 +321,73 @@ func TestMonitorWebReadyDepositStats(t *testing.T) {
 	if err := m.Run(); err != nil {
 		return
 	}
+}
+
+func TestMonitorUpdateEthToUSDCourse(t *testing.T) {
+	cryptocompareETHtoUSDcourse = float32(0)
+
+	log, _ := testutil.NewLogger(t)
+
+	updateEthToUSDCourse(log)
+
+	log.Print(cryptocompareETHtoUSDcourse)
+	require.NotEqual(t, float32(0), cryptocompareETHtoUSDcourse)
+}
+
+func TestMonitorEthTotalStatsHandler(t *testing.T) {
+	updateEthToUSDCourse = func(log logrus.FieldLogger) {}
+	cryptocompareETHtoUSDcourse = 100
+
+	dummyDps := dummyDepositStatusGetter{dpis: statsDpis}
+
+	log, _ := testutil.NewLogger(t)
+	m := New(log, statsCfg, &dummyBtcAddrMgr{10}, &dummyEthAddrMgr{10}, &dummySkyAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
+	err := setupTestServer(m)
+
+	require.NoError(t, err)
+
+	rsp, err := http.Get(fmt.Sprintf("http://localhost:7908/api/eth-total-stats"))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, rsp.StatusCode)
+
+	var j map[string]string
+	err = json.NewDecoder(rsp.Body).Decode(&j)
+	require.NoError(t, err)
+
+	require.Equal(t, map[string]string{"eth": "0.1050007"}, j)
+
+	defer func() {
+		testutil.CheckError(t, rsp.Body.Close)
+		m.Shutdown()
+		timer := time.NewTimer(time.Second * 5)
+		<-timer.C
+	}()
+}
+
+func setupTestServer(m *Monitor) error {
+	mux := m.setupMux()
+
+	m.ln = &http.Server{
+		Addr:         m.cfg.Addr,
+		Handler:      mux,
+		ReadTimeout:  serverReadTimeout,
+		WriteTimeout: serverWriteTimeout,
+		IdleTimeout:  serverIdleTimeout,
+	}
+
+	go func() {
+		m.ln.ListenAndServe()
+	}()
+
+	go func() {
+		if err := m.Run(); err != nil {
+			return
+		}
+	}()
+
+	timer := time.NewTimer(time.Second * 1)
+	<-timer.C
+
+	return nil
+
 }
