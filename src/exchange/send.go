@@ -415,14 +415,12 @@ func (s *Send) calculateMDLDroplets(di DepositInfo) (uint64, error) {
 			return 0, err
 		}
 	case scanner.CoinTypeSKY:
-		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
 		mdlAmt, err = CalculateSkyMDLValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
 		if err != nil {
 			log.WithError(err).Error("CalculateSkyMDLValue failed")
 			return 0, err
 		}
 	case scanner.CoinTypeWAVES:
-		//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
 		mdlAmt, err = CalculateWavesMDLValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
 		if err != nil {
 			log.WithError(err).Error("CalculateWavesMDLValue failed")
