@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/MDLlife/MDL/src/util/droplet"
+	"github.com/shopspring/decimal"
 )
 
 func TestCalculateMDLValue(t *testing.T) {
@@ -768,12 +770,18 @@ func TestCalculateWavesMDLValue(t *testing.T) {
 		result      uint64
 		err         error
 	}{
-		//{
-		//	maxDecimals: 0,
-		//	droplets:    1e7,
-		//	rate:        "88",
-		//	result:      88e6,
-		//},
+		{
+			maxDecimals: 0,
+			droplets:    10000000,
+			rate:        "88",
+			result:      8800000,
+		},
+		{
+			maxDecimals: 0,
+			droplets:    20000000,
+			rate:        "88",
+			result:      17600000,
+		},
 		{
 			maxDecimals: 0,
 			droplets:    -1,
@@ -1022,8 +1030,18 @@ func TestCalculateWavesMDLValue(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			result, err := CalculateWavesMDLValue(tc.droplets, tc.rate, tc.maxDecimals)
 			if tc.err == nil {
+
+				mdlAmtCoins, err := droplet.ToString(result)
+				if err != nil {
+					t.Error("droplet.ToString failed")
+					return
+				}
+				d := decimal.New(int64(tc.result), -6)
+				resultStr := d.StringFixed(6)
+
 				require.NoError(t, err)
-				require.Equal(t, tc.result, result, "%d != %d   -> %d != %d", tc.result, result, float64(tc.result), float64(result))
+				require.Equal(t, resultStr, mdlAmtCoins, "expected(%s) != actual(%s)")
+				require.Equal(t, tc.result, result, "%d != %d")
 			} else {
 				require.Error(t, err)
 				require.Equal(t, tc.err, err)

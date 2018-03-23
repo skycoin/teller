@@ -141,12 +141,17 @@ func CalculateWavesMDLValue(droplets int64, mdlPerWaves string, maxDecimals int)
 		return 0, err
 	}
 
-	sky := decimal.New(droplets, 0)
+	waves := decimal.New(droplets, 0)
+	wavesToSatoshi := decimal.New(1e7, 0)
+	waves = waves.DivRound(wavesToSatoshi, 8)
 
-	mdl := sky.Mul(rate)
+	mdl := waves.Mul(rate)
 	mdl = mdl.Truncate(int32(maxDecimals))
 
-	amt := mdl.IntPart()
+	mdlToDroplets := decimal.New(1e5, 0)
+	dropletsMDL := mdl.Mul(mdlToDroplets)
+
+	amt := dropletsMDL.IntPart()
 	if amt < 0 {
 		// This should never occur, but double check before we convert to uint64,
 		// otherwise we would send all the coins due to integer wrapping.
