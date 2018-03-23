@@ -258,10 +258,10 @@ class Distribution extends React.Component {
                     value={this.state.coinType}
                     onChange={this.handleCoinTypeChange}
                     options={[
-                      { value: 'BTC', label: 'Bitcoin (Under Maintenance)', disabled: true },
-                      { value: 'ETH', label: 'ETH' },
-                      { value: 'SKY', label: 'SKY' },
-                      { value: 'WAVES', label: 'WAVES (Experimental)'},
+                      { value: 'BTC', label: 'Bitcoin', disabled: true },
+                      { value: 'ETH', label: 'Ethereum', disabled: true  },
+                      { value: 'SKY', label: 'Skycoin', disabled: true },
+                      { value: 'WAVES', label: 'Waves (Temporary Disabled)', disabled: true },
                       { value: 'MDL.life', label: 'MDL.life (pre-MDL token on Waves)', disabled: true },
                     ]}
                   />
@@ -269,7 +269,7 @@ class Distribution extends React.Component {
                     <FormattedMessage
                       id="distribution.rate"
                       values={{
-                        rate: +(888),
+                        rate: +(0),
                         coinType: this.state.coinType,
                       }}
                     /> "(approx. $0.05 USD per 1 MDL)"
