@@ -326,34 +326,6 @@ func TestMonitorWebReadyDepositStats(t *testing.T) {
 
 }
 
-func setupTestServer(m *Monitor) error {
-	mux := m.setupMux()
-
-	m.ln = &http.Server{
-		Addr:         m.cfg.Addr,
-		Handler:      mux,
-		ReadTimeout:  serverReadTimeout,
-		WriteTimeout: serverWriteTimeout,
-		IdleTimeout:  serverIdleTimeout,
-	}
-
-	go func() {
-		m.ln.ListenAndServe()
-	}()
-
-	go func() {
-		if err := m.Run(); err != nil {
-			return
-		}
-	}()
-
-	timer := time.NewTimer(time.Second * 1)
-	<-timer.C
-
-	return nil
-
-}
-
 func TestMonitorUpdateEthToUSDCourse(t *testing.T) {
 	cryptocompareETHtoUSDcourse = float32(0)
 
@@ -372,7 +344,7 @@ func TestMonitorEthTotalStatsHandler(t *testing.T) {
 	dummyDps := dummyDepositStatusGetter{dpis: statsDpis}
 
 	log, _ := testutil.NewLogger(t)
-	m := New(log, statsCfg, &dummyBtcAddrMgr{10}, &dummyEthAddrMgr{10}, &dummySkyAddrMgr{10}, &dummyDps, &dummyScanAddrs{})
+	m := New(log, statsCfg, &dummyBtcAddrMgr{10}, &dummyEthAddrMgr{10}, &dummySkyAddrMgr{10}, &dummyWavesAddrMgr{10},&dummyDps, &dummyScanAddrs{})
 	err := setupTestServer(m)
 
 	require.NoError(t, err)
