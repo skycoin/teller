@@ -223,31 +223,31 @@ func TestRunMonitor(t *testing.T) {
 var statsDpis = []exchange.DepositInfo{
 	{
 		CoinType:     scanner.CoinTypeBTC,
-		DepositValue: 1000000,
+		DepositValue: 10000,
 		MDLSent:      100,
 		Status:       exchange.StatusWaitConfirm,
 	},
 	{
 		CoinType:     scanner.CoinTypeBTC,
-		DepositValue: 100000000,
+		DepositValue: 100000,
 		MDLSent:      200,
 		Status:       exchange.StatusDone,
 	},
 	{
 		CoinType:     scanner.CoinTypeETH,
-		DepositValue: 2000000000000,
+		DepositValue: 200000,
 		MDLSent:      300,
 		Status:       exchange.StatusDone,
 	},
 	{
 		CoinType:     scanner.CoinTypeSKY,
-		DepositValue: 3000000,
+		DepositValue: 30000,
 		MDLSent:      400,
 		Status:       exchange.StatusDone,
 	},
 	{
 		CoinType:     scanner.CoinTypeWAVES,
-		DepositValue: 4000000,
+		DepositValue: 4000,
 		MDLSent:      500,
 		Status:       exchange.StatusDone,
 	},
@@ -307,13 +307,13 @@ func TestMonitorWebReadyDepositStats(t *testing.T) {
 	err = json.NewDecoder(rsp.Body).Decode(&webStats)
 	require.NoError(t, err)
 
-	require.Equal(t, "1.0000001", webStats.TotalBTCReceived)
-	require.Equal(t, "0.000002000000000011", webStats.TotalETHReceived)
-	require.Equal(t, "3.000012", webStats.TotalSKYReceived)
-	require.Equal(t, "0.04000013", webStats.TotalWAVESReceived)
+	require.Equal(t, "0.0010001", webStats.TotalBTCReceived)
+	require.Equal(t, "0.000200011", webStats.TotalETHReceived)
+	require.Equal(t, "0.030012", webStats.TotalSKYReceived)
+	require.Equal(t, "0.00004013", webStats.TotalWAVESReceived)
 	require.Equal(t, "0.001414", webStats.TotalMDLSent)
 	require.Equal(t, "10.5000707", webStats.TotalUSDReceived)
-	//require.Equal(t, 14, webStats.TotalTransactions)
+	require.Equal(t, int64(14), webStats.TotalTransactions)
 
 	defer func() {
 		testutil.CheckError(t, rsp.Body.Close)
