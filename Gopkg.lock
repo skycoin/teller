@@ -99,6 +99,12 @@
   version = "v1.1.0"
 
 [[projects]]
+  name = "github.com/dghubble/sling"
+  packages = ["."]
+  revision = "eb56e89ac5088bebb12eef3cb4b293300f43608b"
+  version = "v1.1.0"
+
+[[projects]]
   name = "github.com/ethereum/go-ethereum"
   packages = [
     ".",
@@ -130,6 +136,12 @@
   packages = ["."]
   revision = "259ab82a6cad3992b4e21ff5cac294ccb06474bc"
   version = "v1.7.0"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/google/go-querystring"
+  packages = ["query"]
+  revision = "53e6ce116135b80d037921a7fdd5138cf32d7a8a"
 
 [[projects]]
   name = "github.com/google/gops"
@@ -205,6 +217,15 @@
   revision = "06020f85339e21b2478f756a78e295255ffa4d6a"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/modeneis/waves-go-client"
+  packages = [
+    "client",
+    "model"
+  ]
+  revision = "845b419520227ef2322ee1a7498079662a6ae846"
+
+[[projects]]
   name = "github.com/op/go-logging"
   packages = ["."]
   revision = "b2cb9fa56473e98db8caba80237377e83fe44db5"
@@ -264,7 +285,6 @@
 [[projects]]
   name = "github.com/skycoin/skycoin"
   packages = [
-    "src/api/cli",
     "src/api/webrpc",
     "src/cipher",
     "src/cipher/base58",
@@ -361,6 +381,7 @@
   packages = [
     "acme",
     "acme/autocert",
+    "blake2b",
     "pbkdf2",
     "ripemd160",
     "ssh/terminal"
@@ -428,6 +449,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "2df3ae97df59acee10b868b52a2e28ba846bd02b5061a23aa6dfc8df11fe4eb9"
+  inputs-digest = "581ba7af509b04ba1816f186fa3eadf4be372b501828027dcaef4ff6398a49ef"
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -135,6 +135,16 @@ class Distribution extends React.Component {
     });
   }
 
+  currentCoinPrice() {
+    switch (this.state.coinType) {
+      case "BTC": return this.supported[0].exchange_rate;
+      case "ETH": return this.supported[1].exchange_rate;
+      case "SKY": return this.supported[2].exchange_rate;
+      case "WAVES": return this.supported[3].exchange_rate;
+    }
+    return "1"
+  }
+
   checkStatus() {
     if (!this.state.mdlAddress) {
       return alert(

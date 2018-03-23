@@ -8,4 +8,4 @@ install:
   - make test-ci
 
 script:
-  #- make lint
+  - make lint || true # do not break build

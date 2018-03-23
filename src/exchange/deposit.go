@@ -117,12 +117,12 @@ type PassthroughOrder struct {
 
 // DepositStats records overall statistics about deposits
 type DepositStats struct {
-	TotalBTCReceived  int64 `json:"total_btc_received"`
-	TotalETHReceived  int64 `json:"total_eth_received"`
-	TotalSKYReceived  int64 `json:"total_sky_received"`
-	TotalWAVEReceived int64 `json:"total_waves_received"`
-	TotalMDLSent      int64 `json:"total_mdl_sent"`
-	TotalTransactions int64 `json:"total_transactions"`
+	TotalBTCReceived   int64 `json:"total_btc_received"`
+	TotalETHReceived   int64 `json:"total_eth_received"`
+	TotalSKYReceived   int64 `json:"total_sky_received"`
+	TotalWAVESReceived int64 `json:"total_waves_received"`
+	TotalMDLSent       int64 `json:"total_mdl_sent"`
+	TotalTransactions  int64 `json:"total_transactions"`
 }
 
 // ValidateForStatus does a consistency check of the data based upon the Status value

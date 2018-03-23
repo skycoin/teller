@@ -223,7 +223,7 @@ func TestExchangeBindHandler(t *testing.T) {
 		Body           bindRequest
 	}{
 		{
-			"400 invalid MDL address",
+			"400 invalid SKY address",
 			http.MethodPost,
 			"/api/bind",
 			http.StatusBadRequest,
@@ -248,6 +248,32 @@ func TestExchangeBindHandler(t *testing.T) {
 				CoinType: scanner.CoinTypeSKY,
 			},
 		},
+		{
+			"400 invalid WAVES address",
+			http.MethodPost,
+			"/api/bind",
+			http.StatusBadRequest,
+			"Invalid mdl address: Invalid base58 character",
+			nil,
+			"",
+			bindRequest{
+				MDLAddr:  "foo-addr",
+				CoinType: scanner.CoinTypeWAVES,
+			},
+		},
+		{
+			"403 address binding disabled (makes sure its possible to bind addr)",
+			http.MethodPost,
+			"/api/bind",
+			http.StatusForbidden,
+			"Address binding is disabled",
+			nil,
+			"",
+			bindRequest{
+				MDLAddr:  "2fFvHziBN2DKCnJRF1sjJ81z2kAJK8idSoT",
+				CoinType: scanner.CoinTypeWAVES,
+			},
+		},
 	}
 
 	for _, tc := range tt {
@@ -270,6 +296,9 @@ func TestExchangeBindHandler(t *testing.T) {
 			httpServ := &HTTPServer{
 				cfg: config.Config{
 					SkyRPC: config.SkyRPC{
+						Enabled: true,
+					},
+					WavesRPC: config.WavesRPC{
 						Enabled: true,
 					},
 				},

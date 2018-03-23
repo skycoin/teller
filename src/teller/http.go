@@ -394,17 +394,22 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		switch bindReq.CoinType {
 		case scanner.CoinTypeBTC:
 			if !s.cfg.BtcRPC.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon", scanner.CoinTypeBTC))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, there seems to be an issue. The selected coin type %s is not enabled. We are working on a fix, please try again in a couple of hours", scanner.CoinTypeBTC))
 				return
 			}
 		case scanner.CoinTypeETH:
 			if !s.cfg.EthRPC.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon", scanner.CoinTypeETH))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, there seems to be an issue. The selected coin type %s is not enabled. We are working on a fix, please try again in a couple of hours", scanner.CoinTypeETH))
 				return
 			}
 		case scanner.CoinTypeSKY:
 			if !s.cfg.SkyRPC.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, some issues. It seems currently coin type %s is not enabled. We're working on fixing it, please try again soon", scanner.CoinTypeSKY))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, there seems to be an issue. The selected coin type %s is not enabled. We are working on a fix, please try again in a couple of hours", scanner.CoinTypeSKY))
+				return
+			}
+		case scanner.CoinTypeWAVES:
+			if !s.cfg.WavesRPC.Enabled {
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("Oops, there seems to be an issue. The selected coin type %s is not enabled. We are working on a fix, please try again in a couple of hours", scanner.CoinTypeWAVES))
 				return
 			}
 		case "":
@@ -586,9 +591,8 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		// FIXME: WeiPerETH
 		rate = s.cfg.MDLExchanger.MDLWavesExchangeRate
-		dropletsPerWAVES, err := exchange.CalculateWavesMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
+		dropletsPerWAVES, err := exchange.CalculateWavesMDLValue(exchange.DropletsPerWAVES, rate, maxDecimals)
 		if err != nil {
 			log.WithError(err).Error("exchange.CalculateWavesMDLValue failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)
@@ -601,9 +605,8 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		// FIXME: WeiPerETH
-		rate = s.cfg.MDLExchanger.MDLWavesExchangeRate
-		dropletsPerWAVESMDL, err := exchange.CalculateWavesMDLValue(big.NewInt(exchange.WeiPerETH), rate, maxDecimals)
+		rate = s.cfg.MDLExchanger.MDLWavesMDLExchangeRate
+		dropletsPerWAVESMDL, err := exchange.CalculateWavesMDLValue(exchange.DropletsPerWAVES, rate, maxDecimals)
 		if err != nil {
 			log.WithError(err).Error("exchange.CalculateWavesMDLValue failed")
 			errorResponse(ctx, w, http.StatusInternalServerError, errInternalServerError)

@@ -215,6 +215,8 @@ func (p *Passthrough) checkBalance(di DepositInfo) error {
 		quantity = quantity.Mul(decimal.New(WeiPerETH, 0))
 	case scanner.CoinTypeSKY:
 		quantity = quantity.Mul(decimal.New(DropletsPerSKY, 0))
+	case scanner.CoinTypeWAVES:
+		quantity = quantity.Mul(decimal.New(DropletsPerSKY, 0))
 	default:
 		return scanner.ErrUnsupportedCoinType
 	}

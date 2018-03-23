@@ -27,6 +27,7 @@ import (
 	"github.com/MDLlife/teller/src/scanner"
 	"github.com/MDLlife/teller/src/sender"
 	"github.com/MDLlife/teller/src/teller"
+	"github.com/MDLlife/teller/src/util"
 	"github.com/MDLlife/teller/src/util/logger"
 )
 
@@ -72,7 +73,7 @@ func createBtcScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 		InitialScanHeight:     cfg.BtcScanner.InitialScanHeight,
 	})
 	if err != nil {
-		log.WithError(err).Error("Open scan service failed")
+		log.WithError(err).Error("Open btcScanner service failed")
 		return nil, err
 	}
 	return btcScanner, nil
@@ -97,7 +98,7 @@ func createEthScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 		InitialScanHeight:     cfg.EthScanner.InitialScanHeight,
 	})
 	if err != nil {
-		log.WithError(err).Error("Open ethscan service failed")
+		log.WithError(err).Error("Open ethScanner service failed")
 		return nil, err
 	}
 	return ethScanner, nil
@@ -118,10 +119,31 @@ func createSkyScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 		InitialScanHeight:     cfg.SkyScanner.InitialScanHeight,
 	})
 	if err != nil {
-		log.WithError(err).Error("Open skyscan service failed")
+		log.WithError(err).Error("Open skyScanner service failed")
 		return nil, err
 	}
 	return skyScanner, nil
+}
+
+func createWAVESScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.WAVESScanner, error) {
+	wavesrpc := new(scanner.WavesClient)
+
+	err := scanStore.AddSupportedCoin(scanner.CoinTypeWAVES)
+	if err != nil {
+		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeWAVES) failed")
+		return nil, err
+	}
+
+	wavesScanner, err := scanner.NewWavescoinScanner(log, scanStore, wavesrpc, scanner.Config{
+		ScanPeriod:            cfg.WavesScanner.ScanPeriod,
+		ConfirmationsRequired: cfg.WavesScanner.ConfirmationsRequired,
+		InitialScanHeight:     cfg.WavesScanner.InitialScanHeight,
+	})
+	if err != nil {
+		log.WithError(err).Error("Open wavesScanner service failed")
+		return nil, err
+	}
+	return wavesScanner, nil
 }
 
 func run() error {
@@ -201,15 +223,20 @@ func run() error {
 	var btcScanner *scanner.BTCScanner
 	var ethScanner *scanner.ETHScanner
 	var skyScanner *scanner.SKYScanner
+	var wavesScanner *scanner.WAVESScanner
+
 	var scanService scanner.Scanner
 	var scanEthService scanner.Scanner
 	var scanSkyService scanner.Scanner
+	var scanWavesService scanner.Scanner
 
 	var sendService *sender.SendService
 	var sendRPC sender.Sender
+
 	var btcAddrMgr *addrs.Addrs
 	var ethAddrMgr *addrs.Addrs
 	var skyAddrMgr *addrs.Addrs
+	var wavesAddrMgr *addrs.Addrs
 
 	// create multiplexer to manage scanner
 	multiplexer := scanner.NewMultiplexer(log)
@@ -284,6 +311,24 @@ func run() error {
 			}
 		}
 
+		// enable waves scanner
+		if cfg.WavesRPC.Enabled {
+			wavesScanner, err = createWAVESScanner(rusloggger, cfg, scanStore)
+			if err != nil {
+				log.WithError(err).Error("create waves scanner failed")
+				return err
+			}
+
+			background("wavesScanner.Run", errC, wavesScanner.Run)
+
+			scanWavesService = wavesScanner
+
+			if err := multiplexer.AddScanner(scanWavesService, scanner.CoinTypeWAVES); err != nil {
+				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeWAVES)
+				return err
+			}
+		}
+
 	}
 
 	background("multiplex.Run", errC, multiplexer.Multiplex)
@@ -351,8 +396,13 @@ func run() error {
 
 	if cfg.BtcRPC.Enabled {
 		// create bitcoin address manager
+		r, err := util.LoadFileToReader(cfg.BtcAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit bitcoin address list failed")
+			return err
+		}
 
-		btcAddrMgr, err = addrs.NewBTCAddrs(log, db, cfg.BtcAddresses)
+		btcAddrMgr, err = addrs.NewBTCAddrs(log, db, r)
 		if err != nil {
 			log.WithError(err).Error("Create bitcoin deposit address manager failed")
 			return err
@@ -365,7 +415,13 @@ func run() error {
 
 	if cfg.EthRPC.Enabled {
 		// create ethcoin address manager
-		ethAddrMgr, err = addrs.NewETHAddrs(log, db, cfg.EthAddresses)
+		r, err := util.LoadFileToReader(cfg.EthAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit ethcoin address list failed")
+			return err
+		}
+
+		ethAddrMgr, err = addrs.NewETHAddrs(log, db, r)
 		if err != nil {
 			log.WithError(err).Error("Create ethcoin deposit address manager failed")
 			return err
@@ -378,13 +434,38 @@ func run() error {
 
 	if cfg.SkyRPC.Enabled {
 		// create skycoin address manager
-		skyAddrMgr, err = addrs.NewSKYAddrs(log, db, cfg.SkyAddresses)
+		r, err := util.LoadFileToReader(cfg.SkyAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit skycoin address list failed")
+			return err
+		}
+
+		skyAddrMgr, err = addrs.NewSKYAddrs(log, db, r)
 		if err != nil {
 			log.WithError(err).Error("Create skycoin deposit address manager failed")
 			return err
 		}
 		if err := addrManager.PushGenerator(skyAddrMgr, scanner.CoinTypeSKY); err != nil {
 			log.WithError(err).Error("add sky address manager failed")
+			return err
+		}
+	}
+
+	if cfg.WavesRPC.Enabled {
+		// create skycoin address manager
+		r, err := util.LoadFileToReader(cfg.WavesAddresses)
+		if err != nil {
+			log.WithError(err).Error("Load deposit waves address list failed")
+			return err
+		}
+
+		wavesAddrMgr, err = addrs.NewWAVESAddrs(log, db, r)
+		if err != nil {
+			log.WithError(err).Error("Create waves deposit address manager failed")
+			return err
+		}
+		if err := addrManager.PushGenerator(wavesAddrMgr, scanner.CoinTypeWAVES); err != nil {
+			log.WithError(err).Error("add waves address manager failed")
 			return err
 		}
 	}
@@ -405,7 +486,7 @@ func run() error {
 		FixUsdValue:   cfg.AdminPanel.FixUsdValue,
 		FixTxValue:    cfg.AdminPanel.FixTxValue,
 	}
-	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, skyAddrMgr, exchangeClient, btcScanner)
+	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, skyAddrMgr, wavesAddrMgr, exchangeClient, btcScanner)
 
 	background("monitorService.Run", errC, monitorService.Run)
 
@@ -447,6 +528,12 @@ func run() error {
 	if skyScanner != nil {
 		log.Info("Shutting down skyScanner")
 		skyScanner.Shutdown()
+	}
+
+	// close the scan service
+	if wavesScanner != nil {
+		log.Info("Shutting down wavesScanner")
+		wavesScanner.Shutdown()
 	}
 
 	// close exchange service

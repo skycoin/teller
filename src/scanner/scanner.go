@@ -6,7 +6,7 @@ import (
 	"github.com/btcsuite/btcd/btcjson"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/skycoin/skycoin/src/api/cli"
+	"github.com/modeneis/waves-go-client/model"
 	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/visor"
 )
@@ -27,13 +27,20 @@ type BtcRPCClient interface {
 
 // SkyRPCClient rpcclient interface
 type SkyRPCClient interface {
-	Send(recvAddr string, amount uint64) (string, error)
 	GetTransaction(txid string) (*webrpc.TxnResult, error)
 	GetBlocks(start, end uint64) (*visor.ReadableBlocks, error)
 	GetBlocksBySeq(seq uint64) (*visor.ReadableBlock, error)
 	GetLastBlocks() (*visor.ReadableBlock, error)
 	Shutdown()
-	SendBatch(saList []cli.SendAmount) (string, error)
+}
+
+// WavesRPCClient rpcclient interface
+type WavesRPCClient interface {
+	GetTransaction(txid string) (*model.Transactions, error)
+	GetBlocks(start, end int64) (*[]model.Blocks, error)
+	GetBlocksBySeq(seq int64) (*model.Blocks, error)
+	GetLastBlocks() (*model.Blocks, error)
+	Shutdown()
 }
 
 // EthRPCClient rpcclient interface
@@ -75,5 +82,5 @@ func (d Deposit) ID() string {
 
 // GetCoinTypes returns supported coin types
 func GetCoinTypes() []string {
-	return []string{CoinTypeBTC, CoinTypeETH, CoinTypeSKY}
+	return []string{CoinTypeBTC, CoinTypeETH, CoinTypeSKY, CoinTypeWAVES}
 }
