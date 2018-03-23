@@ -16,12 +16,12 @@ func TestNewSKYAddrsAllValid(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJSON := `
+	addresses := `
 		CDLrMvPcmpdido8cbSFNNgzQXdC97TsgEQ
 		fyqX5YuwXMUs4GEUE3LjLyhrqvNztFHQ4B
 		2Dc7kXtwBLr8GL4TSZKFCJM3xqEwnqH6m67`
 
-	skyAddrMgr, err := NewSKYAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
+	skyAddrMgr, err := NewSKYAddrs(log, db, bytes.NewReader([]byte(addresses)))
 
 	require.Nil(t, err)
 	require.NotNil(t, skyAddrMgr)
@@ -33,13 +33,13 @@ func TestNewSKYAddrsContainsInvalid(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJSON := `
+	addresses := `
 		cBnu9sUvv12dovBmjQKTtfE4rbjMmf3fzW
         bad`
 
 	expectedErr := errors.New("Invalid deposit address `bad`: Invalid address length")
 
-	skyAddrMgr, err := NewSKYAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
+	skyAddrMgr, err := NewSKYAddrs(log, db, bytes.NewReader([]byte(addresses)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
@@ -52,7 +52,7 @@ func TestNewSKYAddrsContainsDuplicated(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJSON := `
+	addresses := `
 		cBnu9sUvv12dovBmjQKTtfE4rbjMmf3fzW
 		fyqX5YuwXMUs4GEUE3LjLyhrqvNztFHQ4B
 		cBnu9sUvv12dovBmjQKTtfE4rbjMmf3fzW
@@ -60,7 +60,7 @@ func TestNewSKYAddrsContainsDuplicated(t *testing.T) {
 
 	expectedErr := errors.New("Duplicate deposit address `cBnu9sUvv12dovBmjQKTtfE4rbjMmf3fzW`")
 
-	skyAddrMgr, err := NewSKYAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
+	skyAddrMgr, err := NewSKYAddrs(log, db, bytes.NewReader([]byte(addresses)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
@@ -73,11 +73,11 @@ func TestNewSKYAddrsContainsNull(t *testing.T) {
 
 	log, _ := testutil.NewLogger(t)
 
-	addressesJSON := ``
+	addresses := ``
 
 	expectedErr := errors.New("No SKY addresses")
 
-	skyAddrMgr, err := NewSKYAddrs(log, db, bytes.NewReader([]byte(addressesJSON)))
+	skyAddrMgr, err := NewSKYAddrs(log, db, bytes.NewReader([]byte(addresses)))
 
 	require.Error(t, err)
 	require.Equal(t, expectedErr, err)
