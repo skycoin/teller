@@ -62,6 +62,7 @@ type Config struct {
 	FixSkyValue   int64
 	FixWavesValue int64
 	FixMdlValue   int64
+	FixUsdValue   string
 }
 
 // Monitor monitor service struct
@@ -297,7 +298,12 @@ func (m *Monitor) webStatsHandler() http.HandlerFunc {
 		ts.TotalMDLSent = ts.TotalMDLSent + m.cfg.FixMdlValue
 
 		mdl := mathutil.IntToMDL(ts.TotalMDLSent)
-		usd := mdl.Mul(decimal.NewFromFloat(0.05))
+		fixUsd, err := mathutil.DecimalFromString(m.cfg.FixUsdValue)
+		if err != nil {
+			fixUsd = decimal.New(0, 0)
+			m.log.Error("Can't convert fix_usd_value: " + m.cfg.FixUsdValue + " to decimal")
+		}
+		usd := mdl.Mul(decimal.NewFromFloat(0.05)).Add(fixUsd)
 
 		ws := &WebReadyStats{
 			mathutil.IntToBTC(ts.TotalBTCReceived).String(),

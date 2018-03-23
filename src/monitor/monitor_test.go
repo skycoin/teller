@@ -120,7 +120,7 @@ func TestRunMonitor(t *testing.T) {
 
 	cfg := Config{
 		"localhost:7908",
-		0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, "0",
 	}
 
 	log, _ := testutil.NewLogger(t)
@@ -246,7 +246,7 @@ var statsDpis = []exchange.DepositInfo{
 }
 var statsCfg = Config{
 	"localhost:7908",
-	10, 11, 12, 13, 14,
+	10, 11, 12, 13, 14, "10.5",
 }
 
 func TestMonitorDepositStats(t *testing.T) {
@@ -296,12 +296,12 @@ func TestMonitorWebReadyDepositStats(t *testing.T) {
 		err = json.NewDecoder(rsp.Body).Decode(&webStats)
 		require.NoError(t, err)
 
-		require.Equal(t,"1.0000001", webStats.TotalBTCReceived)
-		require.Equal(t,"0.000002000000000011", webStats.TotalETHReceived)
+		require.Equal(t, "1.0000001", webStats.TotalBTCReceived)
+		require.Equal(t, "0.000002000000000011", webStats.TotalETHReceived)
 		require.Equal(t, "3.000012", webStats.TotalSKYReceived)
-		require.Equal(t,"0.04000013", webStats.TotalWAVEReceived)
-		require.Equal(t,"0.001414", webStats.TotalMDLSent)
-		require.Equal(t,"0.0000707", webStats.TotalUSDReceived)
+		require.Equal(t, "0.04000013", webStats.TotalWAVEReceived)
+		require.Equal(t, "0.001414", webStats.TotalMDLSent)
+		require.Equal(t, "10.5000707", webStats.TotalUSDReceived)
 
 		testutil.CheckError(t, rsp.Body.Close)
 

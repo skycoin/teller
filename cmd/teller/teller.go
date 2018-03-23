@@ -211,7 +211,7 @@ func run() error {
 	var ethAddrMgr *addrs.Addrs
 	var skyAddrMgr *addrs.Addrs
 
-	//create multiplexer to manage scanner
+	// create multiplexer to manage scanner
 	multiplexer := scanner.NewMultiplexer(log)
 
 	dummyMux := http.NewServeMux()
@@ -396,12 +396,13 @@ func run() error {
 
 	// start monitor service
 	monitorCfg := monitor.Config{
-		Addr: cfg.AdminPanel.Host,
-		FixBtcValue: cfg.AdminPanel.FixBtcValue,
-		FixEthValue: cfg.AdminPanel.FixEthValue,
-		FixSkyValue: cfg.AdminPanel.FixSkyValue,
+		Addr:          cfg.AdminPanel.Host,
+		FixBtcValue:   cfg.AdminPanel.FixBtcValue,
+		FixEthValue:   cfg.AdminPanel.FixEthValue,
+		FixSkyValue:   cfg.AdminPanel.FixSkyValue,
 		FixWavesValue: cfg.AdminPanel.FixWavesValue,
-		FixMdlValue: cfg.AdminPanel.FixMdlValue,
+		FixMdlValue:   cfg.AdminPanel.FixMdlValue,
+		FixUsdValue:   cfg.AdminPanel.FixUsdValue,
 	}
 	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, skyAddrMgr, exchangeClient, btcScanner)
 
