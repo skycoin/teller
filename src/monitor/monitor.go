@@ -13,8 +13,8 @@ import (
 	"github.com/MDLlife/teller/src/exchange"
 	"github.com/MDLlife/teller/src/util/httputil"
 	"github.com/MDLlife/teller/src/util/logger"
-	"github.com/shopspring/decimal"
 	"github.com/MDLlife/teller/src/util/mathutil"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -46,13 +46,13 @@ type ScanAddressGetter interface {
 
 // WebReadyStats deposit struct for api
 type WebReadyStats struct {
-	TotalBTCReceived  string `json:"btc"`
-	TotalETHReceived  string `json:"eth"`
-	TotalSKYReceived  string `json:"sky"`
-	TotalWAVEReceived string `json:"waves"`
-	TotalUSDReceived  string `json:"usd"`
-	TotalMDLSent      string `json:"mdl"`
-	TotalTransactions int64  `json:"tx"`
+	TotalBTCReceived   string `json:"btc"`
+	TotalETHReceived   string `json:"eth"`
+	TotalSKYReceived   string `json:"sky"`
+	TotalWAVESReceived string `json:"waves"`
+	TotalUSDReceived   string `json:"usd"`
+	TotalMDLSent       string `json:"mdl"`
+	TotalTransactions  int64  `json:"tx"`
 }
 
 // Config configuration info for monitor service
@@ -69,16 +69,16 @@ type Config struct {
 
 // Monitor monitor service struct
 type Monitor struct {
-	log            logrus.FieldLogger
+	log logrus.FieldLogger
 	AddrManager
 	EthAddrManager   AddrManager
 	SkyAddrManager   AddrManager
 	WavesAddrManager AddrManager
 	DepositStatusGetter
 	ScanAddressGetter
-	cfg            Config
-	ln             *http.Server
-	quit           chan struct{}
+	cfg  Config
+	ln   *http.Server
+	quit chan struct{}
 }
 
 // New creates monitor service
@@ -298,7 +298,7 @@ func (m *Monitor) webStatsHandler() http.HandlerFunc {
 		ts.TotalBTCReceived = ts.TotalBTCReceived + m.cfg.FixBtcValue
 		ts.TotalETHReceived = ts.TotalETHReceived + m.cfg.FixEthValue
 		ts.TotalSKYReceived = ts.TotalSKYReceived + m.cfg.FixSkyValue
-		ts.TotalWAVEReceived = ts.TotalWAVEReceived + m.cfg.FixWavesValue
+		ts.TotalWAVESReceived = ts.TotalWAVESReceived + m.cfg.FixWavesValue
 		ts.TotalMDLSent = ts.TotalMDLSent + m.cfg.FixMdlValue
 		ts.TotalTransactions = ts.TotalTransactions + m.cfg.FixTxValue
 
@@ -314,7 +314,7 @@ func (m *Monitor) webStatsHandler() http.HandlerFunc {
 			mathutil.IntToBTC(ts.TotalBTCReceived).String(),
 			mathutil.IntToETH(ts.TotalETHReceived).String(),
 			mathutil.IntToSKY(ts.TotalSKYReceived).String(),
-			mathutil.IntToWAV(ts.TotalWAVEReceived).String(),
+			mathutil.IntToWAV(ts.TotalWAVESReceived).String(),
 			usd.String(),
 			mdl.String(),
 			ts.TotalTransactions,

@@ -768,12 +768,12 @@ func TestCalculateWavesMDLValue(t *testing.T) {
 		result      uint64
 		err         error
 	}{
-		{
-			maxDecimals: 0,
-			droplets:    1e7,
-			rate:        "88",
-			result:      88e6,
-		},
+		//{
+		//	maxDecimals: 0,
+		//	droplets:    1e7,
+		//	rate:        "88",
+		//	result:      88e6,
+		//},
 		{
 			maxDecimals: 0,
 			droplets:    -1,

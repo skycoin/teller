@@ -73,7 +73,7 @@ type Config struct {
 	BtcScanner      BtcScanner   `mapstructure:"btc_scanner"`
 	EthScanner      EthScanner   `mapstructure:"eth_scanner"`
 	SkyScanner      SkyScanner   `mapstructure:"sky_scanner"`
-	WavesScanner    WavesScanner   `mapstructure:"waves_scanner"`
+	WavesScanner    WavesScanner `mapstructure:"waves_scanner"`
 	WavesMDLScanner WavesScanner `mapstructure:"waves_mdl_scanner"`
 
 	MDLExchanger MDLExchanger `mapstructure:"mdl_exchanger"`

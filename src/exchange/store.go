@@ -577,7 +577,7 @@ func (s *Store) GetDepositStats() (stats *DepositStats, err error) {
 			case scanner.CoinTypeSKY:
 				stats.TotalSKYReceived += dpi.DepositValue
 			case scanner.CoinTypeWAVES:
-				stats.TotalWAVEReceived += dpi.DepositValue
+				stats.TotalWAVESReceived += dpi.DepositValue
 			}
 			stats.TotalMDLSent += int64(dpi.MDLSent)
 
