@@ -122,6 +122,7 @@ type DepositStats struct {
 	TotalSKYReceived  int64 `json:"total_sky_received"`
 	TotalWAVEReceived int64 `json:"total_waves_received"`
 	TotalMDLSent      int64 `json:"total_mdl_sent"`
+	TotalTransactions int64 `json:"total_transactions"`
 }
 
 // ValidateForStatus does a consistency check of the data based upon the Status value
