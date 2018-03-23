@@ -29,6 +29,8 @@ import (
 	"github.com/MDLlife/teller/src/teller"
 	"github.com/MDLlife/teller/src/util"
 	"github.com/MDLlife/teller/src/util/logger"
+	"github.com/shopspring/decimal"
+	"github.com/MDLlife/teller/src/util/mathutil"
 )
 
 func main() {
@@ -476,6 +478,15 @@ func run() error {
 	background("tellerServer.Run", errC, tellerServer.Run)
 
 	// start monitor service
+	if cfg.AdminPanel.FixUsdValue == "" {
+		cfg.AdminPanel.FixUsdValue = "0"
+	}
+	fixUsdValue, err := mathutil.DecimalFromString(cfg.AdminPanel.FixUsdValue)
+	if err != nil {
+		fixUsdValue = decimal.New(0, 0)
+		log.Error("Can't convert fix_usd_value: '" + cfg.AdminPanel.FixUsdValue + "' to decimal")
+	}
+
 	monitorCfg := monitor.Config{
 		Addr:          cfg.AdminPanel.Host,
 		FixBtcValue:   cfg.AdminPanel.FixBtcValue,
@@ -483,7 +494,7 @@ func run() error {
 		FixSkyValue:   cfg.AdminPanel.FixSkyValue,
 		FixWavesValue: cfg.AdminPanel.FixWavesValue,
 		FixMdlValue:   cfg.AdminPanel.FixMdlValue,
-		FixUsdValue:   cfg.AdminPanel.FixUsdValue,
+		FixUsdValue:   fixUsdValue,
 		FixTxValue:    cfg.AdminPanel.FixTxValue,
 	}
 	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, skyAddrMgr, wavesAddrMgr, exchangeClient, btcScanner)
