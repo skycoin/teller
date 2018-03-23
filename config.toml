@@ -64,7 +64,7 @@ confirmations_required = 0
 
 [waves_scanner]
 scan_period = "5s"
-initial_scan_height=929293
+initial_scan_height=929726
 confirmations_required = 1
 
 [waves_mdl_scanner]
