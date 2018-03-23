@@ -770,11 +770,16 @@ func TestCalculateWavesMDLValue(t *testing.T) {
 	}{
 		{
 			maxDecimals: 0,
+			droplets:    1e7,
+			rate:        "88",
+			result:      88e6,
+		},
+		{
+			maxDecimals: 0,
 			droplets:    -1,
 			rate:        "1",
 			err:         errors.New("droplets must be greater than or equal to 0"),
 		},
-
 		{
 			maxDecimals: 0,
 			droplets:    1,
@@ -1018,7 +1023,7 @@ func TestCalculateWavesMDLValue(t *testing.T) {
 			result, err := CalculateWavesMDLValue(tc.droplets, tc.rate, tc.maxDecimals)
 			if tc.err == nil {
 				require.NoError(t, err)
-				require.Equal(t, tc.result, result, "%d != %d", tc.result, result)
+				require.Equal(t, tc.result, result, "%d != %d   -> %d != %d", tc.result, result, float64(tc.result), float64(result))
 			} else {
 				require.Error(t, err)
 				require.Equal(t, tc.err, err)
