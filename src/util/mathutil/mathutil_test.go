@@ -119,20 +119,20 @@ func TestIntToBTC(t *testing.T) {
 	}
 }
 
-// ???? 18 is limit of int64 length
+// in int64 we store gwei
 func TestIntToETH(t *testing.T) {
 	cases := []struct {
 		i      int64
 		result decimal.Decimal
 	}{
 		{
-			i:      1000000000000000000,
+			i:      1000000000,
 			result: decimal.New(1, 0),
 		},
 
 		{
 			i:      1000,
-			result: decimal.New(1000, -int32(18)),
+			result: decimal.New(1000, -int32(9)),
 		},
 	}
 

@@ -69,9 +69,9 @@ func IntToWAV(i int64) decimal.Decimal {
 	return decimal.New(i, -int32(8))
 }
 
-// IntToETH decimal
+// IntToETH decimal in int64 we store gwei
 func IntToETH(i int64) decimal.Decimal {
-	return decimal.New(i, -int32(18))
+	return decimal.New(i, -int32(9))
 }
 
 // IntToSKY decimal
