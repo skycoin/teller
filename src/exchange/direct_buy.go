@@ -6,6 +6,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/skycoin/teller/src/config"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 // Processor is a component that processes deposits from a Receiver and sends them to a Sender
@@ -81,7 +82,10 @@ func (p *DirectBuy) runUpdateStatus() {
 			updatedDeposit, err := p.updateStatus(d)
 			if err != nil {
 				msg := "updateStatus failed. This deposit will not be reprocessed until teller is restarted."
-				log.WithField("depositInfo", d).WithError(err).Error(msg)
+				log.WithFields(logrus.Fields{
+					"depositInfo": d,
+					"notice":      logger.WatchNotice,
+				}).WithError(err).Error(msg)
 				continue
 			}
 

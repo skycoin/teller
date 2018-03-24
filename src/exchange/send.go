@@ -15,6 +15,7 @@ import (
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
+	"github.com/skycoin/teller/src/util/logger"
 	"github.com/skycoin/teller/src/util/mathutil"
 )
 
@@ -158,7 +159,8 @@ func (s *Send) runSend() {
 		case d := <-s.depositChan:
 			log := log.WithField("depositInfo", d)
 			if err := s.processWaitSendDeposit(d); err != nil {
-				log.WithError(err).Error("processWaitSendDeposit failed. This deposit will not be reprocessed until teller is restarted.")
+				msg := "processWaitSendDeposit failed. This deposit will not be reprocessed until teller is restarted."
+				log.WithField("notice", logger.WatchNotice).WithError(err).Error(msg)
 			}
 		}
 	}

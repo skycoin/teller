@@ -43,6 +43,8 @@
 - [Database structure](#database-structure)
 - [Frontend development](#frontend-development)
 - [Integration testing](#integration-testing)
+- [Monitoring logs](#monitoring-logs)
+- [Passthrough notes](#passthrough-notes)
 
 <!-- /MarkdownTOC -->
 
@@ -742,3 +744,24 @@ See [frontend development README](./web/README.md)
 ## Integration testing
 
 See [integration testing checklist](./integration-testing.md)
+
+## Monitoring logs
+
+To monitor for problems, grep for `ERROR` lines.
+
+For the most critical problems, grep for `notice=WATCH`.
+The logging library [logrus](https://github.com/sirupsen/logrus) does not allow
+a `CRITICAL` log level; this is our substitute.
+
+## Passthrough notes
+
+Passthrough is still in beta. The service logs must be monitored for errors.
+
+One particular problem is that if an order placed on C2CX enters a failed state,
+the system cannot recover automatically.  The operator must resolve the situation
+manually.  This is because each order uses a deposit's unique `DepositID` as
+the order's unique `CustomerID`, so an order cannot be resubmitted for a given
+deposit, since the `CustomerID` cannot be reused.  It is also unclear if an order
+can be partially completed, then enter a failed state. In this case, some of the
+deposit's value may have been spent on the exchange and we would not want to
+resubmit an order for the entire original deposit value.

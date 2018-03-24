@@ -396,7 +396,7 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 				return
 			}
 		case scanner.CoinTypeETH:
-			if !s.cfg.SkyScanner.Enabled {
+			if !s.cfg.EthScanner.Enabled {
 				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeETH))
 				return
 			}

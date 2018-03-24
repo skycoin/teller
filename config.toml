@@ -31,11 +31,13 @@ port = "" # REQUIRED
 # initial_scan_height = 492478
 # confirmations_required = 1
 # enabled = true
+
 [eth_scanner]
 # scan_period = "5s"
 # initial_scan_height =4654259
 # confirmations_required = 1
 # enabled = false
+
 [sky_scanner]
 # scan_period = "5s"
 # initial_scan_height =100
