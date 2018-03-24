@@ -16,6 +16,10 @@ type ctxKey int
 
 const loggerCtxKey ctxKey = iota
 
+// WatchNotice can be included in a log field and grepped for, to provide higher visibility for critical events,
+// since logrus does not provide a CRITICAL field.
+const WatchNotice = "WATCH"
+
 // FromContext return a *logrus.Logger from a context
 func FromContext(ctx context.Context) logrus.FieldLogger {
 	lg := ctx.Value(loggerCtxKey)
