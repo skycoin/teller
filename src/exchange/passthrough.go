@@ -18,6 +18,7 @@ import (
 
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/scanner"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 /*
@@ -200,7 +201,7 @@ func (p *Passthrough) runBuy() {
 				if d.Status == StatusDone {
 					msg = "handleDeposit failed, this deposit will never be reprocessed. If this is a mistake, you must recover manually"
 				}
-				log.WithError(err).Error(msg)
+				log.WithField("notice", logger.WatchNotice).WithError(err).Error(msg)
 			} else {
 				log.Info("Deposit processed")
 				p.deposits <- d
@@ -660,6 +661,7 @@ waitCompletedLoop:
 					p.log.WithFields(logrus.Fields{
 						"order":       order,
 						"depositInfo": di,
+						"notice":      logger.WatchNotice,
 					}).WithError(err).Error("calculateSkyBought failed, no coins will be sent")
 					// Don't return here, continue and update the deposit info
 					// The sender will reject a send of 0 sky later

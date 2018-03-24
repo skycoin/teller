@@ -8,6 +8,7 @@ import (
 
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/scanner"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 func init() {
@@ -142,7 +143,8 @@ func (r *Receive) runReadMultiplexer() {
 		// occurred.  Any unprocessed deposits held by the scanner
 		// will be resent to the exchange when teller is started.
 		if d, err := r.saveIncomingDeposit(dv.Deposit); err != nil {
-			log.WithError(err).Error("saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted.")
+			msg := "saveIncomingDeposit failed. This deposit will not be reprocessed until teller is restarted."
+			log.WithField("notice", logger.WatchNotice).WithError(err).Error(msg)
 			dv.ErrC <- err
 		} else {
 			dv.ErrC <- nil

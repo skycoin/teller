@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
+	"github.com/skycoin/teller/src/util/logger"
 )
 
 const (
@@ -350,7 +351,10 @@ func (s *BaseScanner) Run(
 					}
 
 					msg := "processDeposit failed. This deposit will be reprocessed the next time the scanner is run."
-					s.log.WithField("deposit", dv).WithError(err).Error(msg)
+					s.log.WithFields(logrus.Fields{
+						"deposit": dv,
+						"notice":  logger.WatchNotice,
+					}).WithError(err).Error(msg)
 				}
 			}
 		}
