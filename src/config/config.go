@@ -133,6 +133,7 @@ type SkyExchanger struct {
 	// SKY/BTC exchange rate. Can be an int, float or rational fraction string
 	SkyBtcExchangeRate string `mapstructure:"sky_btc_exchange_rate"`
 	SkyEthExchangeRate string `mapstructure:"sky_eth_exchange_rate"`
+	SkySkyExchangeRate string `mapstructure:"sky_sky_exchange_rate"`
 	// Number of decimal places to truncate SKY to
 	MaxDecimals int `mapstructure:"max_decimals"`
 	// How long to wait before rechecking transaction confirmations
@@ -179,6 +180,10 @@ func (c SkyExchanger) validate() []error {
 
 	if _, err := mathutil.ParseRate(c.SkyEthExchangeRate); err != nil {
 		errs = append(errs, fmt.Errorf("sky_exchanger.sky_eth_exchange_rate invalid: %v", err))
+	}
+
+	if _, err := mathutil.ParseRate(c.SkySkyExchangeRate); err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.sky_sky_exchange_rate invalid: %v", err))
 	}
 
 	if c.MaxDecimals < 0 {

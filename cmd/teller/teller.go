@@ -108,6 +108,7 @@ func createSkyScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 	err := scanStore.AddSupportedCoin(scanner.CoinTypeSKY)
 	if err != nil {
 		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeSKY) failed")
+		return nil, err
 	}
 
 	skyScanner, err := scanner.NewSKYScanner(log, scanStore, skyrpc, scanner.Config{

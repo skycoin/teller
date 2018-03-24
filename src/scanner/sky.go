@@ -1,9 +1,3 @@
-// Package scanner scans bitcoin blockchain and check all transactions
-// to see if there are addresses in vout that can match our deposit addresses.
-// If found, then generate an event and push to deposit event channel
-//
-// current scanner doesn't support reconnect after btcd shutdown, if
-// any error occur when call btcd apis, the scan service will be closed.
 package scanner
 
 import (
@@ -11,9 +5,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"github.com/skycoin/skycoin/src/api/webrpc"
 	"github.com/skycoin/skycoin/src/util/droplet"
 	"github.com/skycoin/skycoin/src/visor"
+	"github.com/skycoin/skycoin/src/gui"
 )
 
 // SKYScanner blockchain scanner to check if there're deposit coins
@@ -24,15 +18,15 @@ type SKYScanner struct {
 	Base CommonScanner
 }
 
-// SkyClient implements the SKYRpcClient interface
+// SkyClient implements the SKYRPCClient interface
 type SkyClient struct {
-	c *webrpc.Client
+	c *gui.Client
 }
 
 // NewSkyClient create a new skyclient instance
 func NewSkyClient(addr string) *SkyClient {
 	skyClient := SkyClient{
-		c: &webrpc.Client{Addr: addr},
+		c: gui.NewClient(addr),
 	}
 	return &skyClient
 }
@@ -96,26 +90,26 @@ func (s *SKYScanner) scanBlock(block *CommonBlock) (int, error) {
 //GetBlockCount returns skycoin block count
 func (sc *SkyClient) GetBlockCount() (int64, error) {
 	// get the last block
-	lastBlock, err := sc.c.GetLastBlocks(1)
+	lastBlock, err := sc.c.LastBlocks(1)
 	if err != nil {
 		logrus.WithError(err).Error("skyClient.GetBlockCount failed")
 		return 0, err
 	}
 
 	// block seq of last block is the block count
-	blockCnt := lastBlock.Blocks[0].Head.BkSeq
+	blockCnt := lastBlock.Blocks[0].Head.BkSeq + 1
 	return int64(blockCnt), nil
 }
 
 // GetBlockVerboseTx returns skycoin block data for a give height
 func (sc *SkyClient) GetBlockVerboseTx(seq uint64) (*visor.ReadableBlock, error) {
-	block, err := sc.c.GetBlocksBySeq([]uint64{seq})
+	block, err := sc.c.BlockBySeq(seq)
 	if err != nil {
 		logrus.WithError(err).Error("skyClient.GetBlockVerboseTx failed")
 		return nil, err
 	}
 
-	return &block.Blocks[0], nil
+	return block, nil
 }
 
 // Shutdown placeholder
