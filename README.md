@@ -497,16 +497,26 @@ Response:
 ```json
 {
     "enabled": true,
-    "btc_enabled": true,
-    "eth_enabled": false,
-    "btc_confirmations_required": 1,
-    "eth_confirmations_required": 5,
-    "max_bound_addrs": 5,
-    "max_decimals": 0,
-    "sky_btc_exchange_rate": "123.000000",
-    "sky_eth_exchange_rate": "30.000000",
     "buy_method": "passthrough",
-    "btc_minimum_volume": "0.005"
+    "max_bound_addrs": 5,
+    "max_decimals": 3,
+    "deposits":
+    {
+        "btc":
+        {
+            "enabled": true,
+            "confirmations_required": 1,
+            "fixed_exchange_rate": "123.000000",
+            "passthrough_minimum_volume": "0.005"
+        },
+        "eth":
+        {
+            "enabled": false,
+            "confirmations_required": 5,
+            "fixed_exchange_rate": "30.000000",
+            "passthrough_minimum_volume": "1.5"
+        }
+    }
 }
 ```
 

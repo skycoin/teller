@@ -1,6 +1,6 @@
-# event.skycoin.net
+# otc.skycoin.net
 
-https://event.skycoin.net
+https://otc.skycoin.net
 
 ## Setup
 
