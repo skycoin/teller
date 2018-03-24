@@ -523,6 +523,7 @@ type ConfigResponse struct {
 	MaxBoundAddresses        int    `json:"max_bound_addrs"`
 	SkyBtcExchangeRate       string `json:"sky_btc_exchange_rate"`
 	SkyEthExchangeRate       string `json:"sky_eth_exchange_rate"`
+	SkySkyExchangeRate       string `json:"sky_sky_exchange_rate"`
 	MaxDecimals              int    `json:"max_decimals"`
 	BuyMethod                string `json:"buy_method"`
 	BtcMinimumVolume         string `json:"btc_minimum_volume"`
@@ -579,6 +580,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
 			SkyBtcExchangeRate:       skyPerBTC,
 			SkyEthExchangeRate:       skyPerETH,
+			SkySkyExchangeRate:       "1",
 			MaxDecimals:              maxDecimals,
 			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
 			BuyMethod:                s.cfg.SkyExchanger.BuyMethod,

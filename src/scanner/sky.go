@@ -5,9 +5,9 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/skycoin/src/gui"
 	"github.com/skycoin/skycoin/src/util/droplet"
 	"github.com/skycoin/skycoin/src/visor"
-	"github.com/skycoin/skycoin/src/gui"
 )
 
 // SKYScanner blockchain scanner to check if there're deposit coins

@@ -28,6 +28,7 @@ var (
 	defaultPassthroughCfg = config.SkyExchanger{
 		SkyBtcExchangeRate:      testSkyBtcRate,
 		SkyEthExchangeRate:      testSkyEthRate,
+		SkySkyExchangeRate:      testSkySkyRate,
 		MaxDecimals:             3,
 		TxConfirmationCheckWait: time.Second,
 		Wallet:                  testWalletFile,

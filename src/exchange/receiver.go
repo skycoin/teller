@@ -15,6 +15,7 @@ func init() {
 	cfg := config.SkyExchanger{
 		SkyBtcExchangeRate: "1",
 		SkyEthExchangeRate: "2",
+		SkySkyExchangeRate: "3",
 	}
 	for _, ct := range scanner.GetCoinTypes() {
 		rate, err := getRate(cfg, ct)

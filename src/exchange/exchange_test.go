@@ -161,6 +161,7 @@ func (scan *dummyScanner) stop() {
 const (
 	testSkyBtcRate      = "100" // 100 SKY per BTC
 	testSkyEthRate      = "10"  // 10 SKY per ETH
+	testSkySkyRate      = "1"   // 10 SKY per ETH
 	testMaxDecimals     = 0
 	testSkyAddr         = "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW"
 	testSkyAddr2        = "hs1pyuNgxDLyLaZsnqzQG9U3DKdJsbzNpn"
@@ -177,6 +178,7 @@ var (
 		BuyMethod:               config.BuyMethodDirect,
 		SkyBtcExchangeRate:      testSkyBtcRate,
 		SkyEthExchangeRate:      testSkyEthRate,
+		SkySkyExchangeRate:      testSkySkyRate,
 		TxConfirmationCheckWait: time.Millisecond * 100,
 		Wallet:                  testWalletFile,
 		SendEnabled:             true,
