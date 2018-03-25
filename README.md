@@ -132,6 +132,7 @@ Description of the config file:
 * `web.auto_tls_host` [string]: Hostname/domain to install an automatic HTTPS certificate for, using Let's Encrypt.
 * `web.tls_cert` [string]: Filepath to TLS certificate. Cannot be used with `web.auto_tls_host`.
 * `web.tls_key` [string]: Filepath to TLS key. Cannot be used with `web.auto_tls_host`.
+* `web.cors_allowed` [array of strings]: List of domains to allow for CORS requests. To allow a desktop wallet to make requests, add the desktop wallet's `127.0.0.1:port` interface.
 * `admin_panel.host` [string] Host address of the admin panel.
 * `dummy.sender` [bool]: Use a fake SKY sender (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
 * `dummy.scanner` [bool]: Use a fake BTC scanner (See ["dummy mode"](#summary-of-setup-for-development-without-btcd-or-skycoind)).
