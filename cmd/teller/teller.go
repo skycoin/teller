@@ -3,7 +3,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -296,38 +295,26 @@ func run() error {
 
 	if cfg.BtcScanner.Enabled {
 		// create bitcoin address manager
-		f, err := ioutil.ReadFile(cfg.BtcAddresses)
-		if err != nil {
-			log.WithError(err).Error("Load deposit bitcoin address list failed")
-			return err
-		}
-
-		btcAddrMgr, err = addrs.NewBTCAddrs(log, db, bytes.NewReader(f))
+		btcAddrMgr, err = addrs.NewBTCAddrs(log, db, cfg.BtcAddresses)
 		if err != nil {
 			log.WithError(err).Error("Create bitcoin deposit address manager failed")
 			return err
 		}
 		if err := addrManager.PushGenerator(btcAddrMgr, scanner.CoinTypeBTC); err != nil {
-			log.WithError(err).Error("add btc address manager failed")
+			log.WithError(err).Error("Add BTC address manager failed")
 			return err
 		}
 	}
 
 	if cfg.EthScanner.Enabled {
-		// create ethcoin address manager
-		f, err := ioutil.ReadFile(cfg.EthAddresses)
-		if err != nil {
-			log.WithError(err).Error("Load deposit ethcoin address list failed")
-			return err
-		}
-
-		ethAddrMgr, err = addrs.NewETHAddrs(log, db, bytes.NewReader(f))
+		// create ethereum address manager
+		ethAddrMgr, err = addrs.NewETHAddrs(log, db, cfg.EthAddresses)
 		if err != nil {
 			log.WithError(err).Error("Create ethcoin deposit address manager failed")
 			return err
 		}
 		if err := addrManager.PushGenerator(ethAddrMgr, scanner.CoinTypeETH); err != nil {
-			log.WithError(err).Error("add eth address manager failed")
+			log.WithError(err).Error("Add ETH address manager failed")
 			return err
 		}
 	}

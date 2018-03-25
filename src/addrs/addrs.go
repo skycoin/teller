@@ -4,6 +4,9 @@ package addrs
 import (
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"strings"
 	"sync"
 
 	"github.com/boltdb/bolt"
@@ -145,4 +148,25 @@ func (a *Addrs) Remaining() uint64 {
 	defer a.RUnlock()
 
 	return uint64(len(a.addresses))
+}
+
+// loadAddresses parses a newline-separated list of addresses, skipping empty lines
+// and lines starting with #
+func loadAddresses(addrsReader io.Reader) ([]string, error) {
+	all, err := ioutil.ReadAll(addrsReader)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to read addresses file: %v", err)
+	}
+
+	// Filter empty lines and comments
+	addrs := strings.Split(string(all), "\n")
+	for i := 0; i < len(addrs); i++ {
+		a := strings.TrimSpace(addrs[i])
+		if a == "" || a[0] == '#' {
+			addrs = append(addrs[:i], addrs[i+1:]...)
+			i--
+		}
+	}
+
+	return addrs, nil
 }

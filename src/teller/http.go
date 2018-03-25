@@ -585,7 +585,7 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 				},
 			},
 		}); err != nil {
-			log.WithError(err).Error(err)
+			log.WithError(err).Error()
 		}
 	}
 }
