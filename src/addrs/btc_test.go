@@ -49,7 +49,10 @@ func TestNewBTCAddrsLoadText(t *testing.T) {
 `
 
 	name := setupTempFile(t, addressesText)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name)
+		require.NoError(t, err)
+	}()
 
 	btcAddrMgr, err := NewBTCAddrs(log, db, name)
 
@@ -86,7 +89,10 @@ func TestNewBTCAddrsAllValid(t *testing.T) {
 	name := setupTempFile(t, addressesJSON)
 	err := os.Rename(name, name+".json")
 	require.NoError(t, err)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name + ".json")
+		require.NoError(t, err)
+	}()
 
 	btcAddrMgr, err := NewBTCAddrs(log, db, name+".json")
 
@@ -122,7 +128,10 @@ func TestNewBtcAddrsContainsInvalid(t *testing.T) {
 	name := setupTempFile(t, addressesJSON)
 	err := os.Rename(name, name+".json")
 	require.NoError(t, err)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name + ".json")
+		require.NoError(t, err)
+	}()
 
 	expectedErr := errors.New("Invalid deposit address `bad`: Invalid address length")
 
@@ -151,7 +160,10 @@ func TestNewBtcAddrsContainsDuplicated(t *testing.T) {
 	name := setupTempFile(t, addressesJSON)
 	err := os.Rename(name, name+".json")
 	require.NoError(t, err)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name + ".json")
+		require.NoError(t, err)
+	}()
 
 	expectedErr := errors.New("Duplicate deposit address `14JwrdSxYXPxSi6crLKVwR4k2dbjfVZ3xj`")
 
@@ -175,7 +187,10 @@ func TestNewBTCAddrsContainsNull(t *testing.T) {
 	name := setupTempFile(t, addressesJSON)
 	err := os.Rename(name, name+".json")
 	require.NoError(t, err)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name + ".json")
+		require.NoError(t, err)
+	}()
 
 	expectedErr := errors.New("No BTC addresses")
 
@@ -197,7 +212,10 @@ func TestNewBTCAddrsBadFormat(t *testing.T) {
 	name := setupTempFile(t, addressesJSON)
 	err := os.Rename(name, name+".json")
 	require.NoError(t, err)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name + ".json")
+		require.NoError(t, err)
+	}()
 
 	expectedErr := errors.New("Decode loaded address json failed: EOF")
 

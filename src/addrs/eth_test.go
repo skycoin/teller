@@ -36,7 +36,10 @@ func TestNewETHAddrsLoadText(t *testing.T) {
 `
 
 	name := setupTempFile(t, addressesText)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name)
+		require.NoError(t, err)
+	}()
 
 	ethAddrMgr, err := NewETHAddrs(log, db, name)
 
@@ -71,7 +74,10 @@ func TestNewETHAddrsAllValid(t *testing.T) {
 	name := setupTempFile(t, addressesJSON)
 	err := os.Rename(name, name+".json")
 	require.NoError(t, err)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name + ".json")
+		require.NoError(t, err)
+	}()
 
 	ethAddrMgr, err := NewETHAddrs(log, db, name+".json")
 
@@ -107,7 +113,10 @@ func TestNewEthAddrsContainsInvalid(t *testing.T) {
 	name := setupTempFile(t, addressesJSON)
 	err := os.Rename(name, name+".json")
 	require.NoError(t, err)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name + ".json")
+		require.NoError(t, err)
+	}()
 
 	expectedErr := errors.New("Invalid deposit address `bad`: Invalid address length")
 
@@ -136,7 +145,10 @@ func TestNewEthAddrsContainsDuplicated(t *testing.T) {
 	name := setupTempFile(t, addressesJSON)
 	err := os.Rename(name, name+".json")
 	require.NoError(t, err)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name + ".json")
+		require.NoError(t, err)
+	}()
 
 	expectedErr := errors.New("Duplicate deposit address `0xc0a51efd9c319dd60d93105ab317eb362017ecb9`")
 
@@ -160,7 +172,10 @@ func TestNewETHAddrsContainsNull(t *testing.T) {
 	name := setupTempFile(t, addressesJSON)
 	err := os.Rename(name, name+".json")
 	require.NoError(t, err)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name + ".json")
+		require.NoError(t, err)
+	}()
 
 	expectedErr := errors.New("No ETH addresses")
 
@@ -182,7 +197,10 @@ func TestNewETHAddrsBadFormat(t *testing.T) {
 	name := setupTempFile(t, addressesJSON)
 	err := os.Rename(name, name+".json")
 	require.NoError(t, err)
-	defer os.Remove(name)
+	defer func() {
+		err := os.Remove(name + ".json")
+		require.NoError(t, err)
+	}()
 
 	expectedErr := errors.New("Decode loaded address json failed: EOF")
 
