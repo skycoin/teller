@@ -15,8 +15,9 @@
     - [Configure teller](#configure-teller)
     - [Running teller without btcd, geth or skyd](#running-teller-without-btcd-geth-or-skyd)
     - [Running teller with Docker](#running-teller-with-docker)
-    - [Generate BTC addresses](#generate-btc-addresses)
-    - [Generate ETH addresses](#generate-eth-addresses)
+    - [Generating deposit addresses](#generating-deposit-addresses)
+        - [Generate BTC addresses](#generate-btc-addresses)
+        - [Generate ETH addresses](#generate-eth-addresses)
     - [Setup skycoin hot wallet](#setup-skycoin-hot-wallet)
     - [Run teller](#run-teller)
     - [Setup skycoin node](#setup-skycoin-node)
@@ -91,8 +92,8 @@ Description of the config file:
 * `profile` [bool]: Enable gops profiler.
 * `logfile` [string]: Log file.  It can be an absolute path or be relative to the working directory.
 * `dbfile` [string]: Database file, saved inside the `~/.teller-skycoin` folder. Do not use a path.
-* `btc_addresses` [string]: Filepath of the btc_addresses.json file. See [generate BTC addresses](#generate-btc-addresses).
-* `eth_addresses` [string]: Filepath of the eth_addresses.json file. See [generate ETH addresses](#generate-eth-addresses).
+* `btc_addresses` [string]: Filepath of the BTC addresses file. See [generate BTC addresses](#generate-btc-addresses).
+* `eth_addresses` [string]: Filepath of the ETH addresses file. See [generate ETH addresses](#generate-eth-addresses).
 * `teller.max_bound_addrs` [int]: Maximum number addresses allowed to bind per skycoin address.
 * `teller.bind_enabled` [bool]: Disable this to prevent binding of new addresses
 * `sky_rpc.address` [string]: Host address of the skycoin node. See [setup skycoin node](#setup-skycoin-node).
@@ -181,18 +182,39 @@ docker run -ti --rm \
 
 Access the dashboard: [http://localhost:7071](http://localhost:7071).
 
-### Generate BTC addresses
+### Generating deposit addresses
 
-Use `tool` to pregenerate a list of bitcoin addresses in a JSON format parseable by teller:
+Deposit address files can be either a JSON file or a text file.
+
+Text files are a newline separate list of addresses.  Empty lines and lines beginning with `#` are ignored.
+
+It will be considered a JSON file if the filename ends with `.json`, otherwise it will be parsed as a text file.
+
+#### Generate BTC addresses
+
+Use `tool` to pregenerate a list of bitcoin addresses parseable by teller.
+
+Generating the text file:
 
 ```sh
-go run cmd/tool/tool.go -json newbtcaddress $seed $num > addresses.json
+go run cmd/tool/tool.go $seed $num > btc_addresses.txt
 ```
 
-Name the `addresses.json` file whatever you want.  Use this file as the
-value of `btc_addresses` in the config file.
+Generating the JSON file:
 
-### Generate ETH addresses
+```sh
+go run cmd/tool/tool.go -json newbtcaddress $seed $num > btc_addresses.json
+```
+
+JSON file format:
+
+```json
+{
+    "btc_addresses": [...]
+}
+```
+
+#### Generate ETH addresses
 
 ```
 Creating a new account
@@ -210,7 +232,8 @@ For non-interactive use the passphrase can be specified with the --password flag
 geth --password <passwordfile> account new
 Note, this is meant to be used for testing only, it is a bad idea to save your password to file or expose in any other way.
 ```
-then put those address into `eth_addresses.json` which format like `btc_addresses.json`
+
+then put those address into an `eth_addresses.txt` or `eth_addresses.json` file.
 
 ### Setup skycoin hot wallet
 
