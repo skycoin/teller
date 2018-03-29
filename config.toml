@@ -71,6 +71,7 @@ https_addr = "" # OPTIONAL: Serve on HTTPS
 auto_tls_host = "" # OPTIONAL: Hostname to use for automatic TLS certs. Used when tls_cert, tls_key unset
 tls_cert = ""
 tls_key = ""
+# cors_allowed = []  # Array of domains to allow in CORS requests
 
 [admin_panel]
 # host = "127.0.0.1:7711"

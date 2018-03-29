@@ -272,9 +272,8 @@ func (s *HTTPServer) setupMux() *http.ServeMux {
 	}
 
 	handleAPI := func(path string, h http.Handler) {
-		// Allow requests from a local skycoin wallet
 		h = cors.New(cors.Options{
-			AllowedOrigins: []string{"http://127.0.0.1:6420"},
+			AllowedOrigins: s.cfg.Web.CORSAllowed,
 		}).Handler(h)
 
 		h = gziphandler.GzipHandler(h)
@@ -514,19 +513,18 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 
 // ConfigResponse http response for /api/config
 type ConfigResponse struct {
+	Enabled           bool                     `json:"enabled"`
+	BuyMethod         string                   `json:"buy_method"`
+	MaxBoundAddresses int                      `json:"max_bound_addrs"`
+	MaxDecimals       int                      `json:"max_decimals"`
+	Deposits          map[string]depositConfig `json:"deposits"`
+}
+
+type depositConfig struct {
 	Enabled                  bool   `json:"enabled"`
-	BtcEnabled               bool   `json:"btc_enabled"`
-	EthEnabled               bool   `json:"eth_enabled"`
-	SkyEnabled               bool   `json:"sky_enabled"`
-	BtcConfirmationsRequired int64  `json:"btc_confirmations_required"`
-	EthConfirmationsRequired int64  `json:"eth_confirmations_required"`
-	MaxBoundAddresses        int    `json:"max_bound_addrs"`
-	SkyBtcExchangeRate       string `json:"sky_btc_exchange_rate"`
-	SkyEthExchangeRate       string `json:"sky_eth_exchange_rate"`
-	SkySkyExchangeRate       string `json:"sky_sky_exchange_rate"`
-	MaxDecimals              int    `json:"max_decimals"`
-	BuyMethod                string `json:"buy_method"`
-	BtcMinimumVolume         string `json:"btc_minimum_volume"`
+	ConfirmationsRequired    int64  `json:"confirmations_required"`
+	ExchangeRate             string `json:"fixed_exchange_rate"`
+	PassthroughMinimumVolume string `json:"passthrough_minimum_volume"`
 }
 
 // ConfigHandler returns the teller configuration
@@ -572,21 +570,32 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 		}
 
 		if err := httputil.JSONResponse(w, ConfigResponse{
-			Enabled:                  s.cfg.Teller.BindEnabled,
-			BtcEnabled:               s.cfg.BtcScanner.Enabled,
-			EthEnabled:               s.cfg.EthScanner.Enabled,
-			SkyEnabled:               s.cfg.SkyScanner.Enabled,
-			BtcConfirmationsRequired: s.cfg.BtcScanner.ConfirmationsRequired,
-			EthConfirmationsRequired: s.cfg.EthScanner.ConfirmationsRequired,
-			SkyBtcExchangeRate:       skyPerBTC,
-			SkyEthExchangeRate:       skyPerETH,
-			SkySkyExchangeRate:       "1",
-			MaxDecimals:              maxDecimals,
-			MaxBoundAddresses:        s.cfg.Teller.MaxBoundAddresses,
-			BuyMethod:                s.cfg.SkyExchanger.BuyMethod,
-			BtcMinimumVolume:         s.cfg.SkyExchanger.C2CX.BtcMinimumVolume.String(),
+			Enabled:           s.cfg.Teller.BindEnabled,
+			BuyMethod:         s.cfg.SkyExchanger.BuyMethod,
+			MaxDecimals:       maxDecimals,
+			MaxBoundAddresses: s.cfg.Teller.MaxBoundAddresses,
+			Deposits: map[string]depositConfig{
+				"btc": {
+					Enabled:                  s.cfg.BtcScanner.Enabled,
+					ConfirmationsRequired:    s.cfg.BtcScanner.ConfirmationsRequired,
+					ExchangeRate:             skyPerBTC,
+					PassthroughMinimumVolume: s.cfg.SkyExchanger.C2CX.BtcMinimumVolume.String(),
+				},
+				"eth": {
+					Enabled:                  s.cfg.EthScanner.Enabled,
+					ConfirmationsRequired:    s.cfg.EthScanner.ConfirmationsRequired,
+					ExchangeRate:             skyPerETH,
+					PassthroughMinimumVolume: "0",
+				},
+        "sky": {
+          Enabled: s.cfg.SkyScanner.Enabled,
+          ConfirmationsRequired: s.cfg.SkyScanner.ConfirmationsRequired,
+          ExchangeRate: s.cfg.SkyExchanger.SkySkyExchangeRate.String(),
+          PassthroughMinimumVolume: "0",
+        },
+			},
 		}); err != nil {
-			log.WithError(err).Error(err)
+			log.WithError(err).Error()
 		}
 	}
 }

@@ -240,9 +240,10 @@ type Web struct {
 	AutoTLSHost      string        `mapstructure:"auto_tls_host"`
 	TLSCert          string        `mapstructure:"tls_cert"`
 	TLSKey           string        `mapstructure:"tls_key"`
-	ThrottleMax      int64         `mapstructure:"throttle_max"` // Maximum number of requests per duration
+	ThrottleMax      int64         `mapstructure:"throttle_max"`
 	ThrottleDuration time.Duration `mapstructure:"throttle_duration"`
 	BehindProxy      bool          `mapstructure:"behind_proxy"`
+	CORSAllowed      []string      `mapstructure:"cors_allowed"`
 }
 
 // Validate validates Web config
@@ -474,6 +475,7 @@ func setDefaults() {
 	viper.SetDefault("web.static_dir", "./web/build")
 	viper.SetDefault("web.throttle_max", int64(60))
 	viper.SetDefault("web.throttle_duration", time.Minute)
+	viper.SetDefault("web.cors_allowed", []string{})
 
 	// AdminPanel
 	viper.SetDefault("admin_panel.host", "127.0.0.1:7711")

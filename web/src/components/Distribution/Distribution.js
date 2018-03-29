@@ -65,7 +65,7 @@ class Distribution extends React.Component {
   checkExchangeStatus() {
     return checkExchangeStatus()
     .then(status => {
-      if (status.error != "") {
+      if (status.error !== "") {
         this.setState({
           disabledReason: "coinsSoldOut",
           balance: status.balance,
@@ -215,7 +215,7 @@ class Distribution extends React.Component {
                   <FormattedMessage
                     id="distribution.rate"
                     values={{
-                      rate: +this.state.sky_btc_exchange_rate,
+                      rate: +this.state.deposits.btc.fixed_exchange_rate,
                     }}
                   />
                 </Text>
