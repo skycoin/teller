@@ -587,12 +587,12 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 					ExchangeRate:             skyPerETH,
 					PassthroughMinimumVolume: "0",
 				},
-        "sky": {
-          Enabled: s.cfg.SkyScanner.Enabled,
-          ConfirmationsRequired: s.cfg.SkyScanner.ConfirmationsRequired,
-          ExchangeRate: s.cfg.SkyExchanger.SkySkyExchangeRate.String(),
-          PassthroughMinimumVolume: "0",
-        },
+				"sky": {
+					Enabled:                  s.cfg.SkyScanner.Enabled,
+					ConfirmationsRequired:    s.cfg.SkyScanner.ConfirmationsRequired,
+					ExchangeRate:             s.cfg.SkyExchanger.SkySkyExchangeRate,
+					PassthroughMinimumVolume: "0",
+				},
 			},
 		}); err != nil {
 			log.WithError(err).Error()

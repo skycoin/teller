@@ -27,21 +27,22 @@ server = "" # REQUIRED
 port = "" # REQUIRED
 
 [btc_scanner]
+# enabled = true
 # scan_period = "20s"
 # initial_scan_height = 492478
 # confirmations_required = 1
-# enabled = true
 
 [eth_scanner]
-# scan_period = "5s"
-# initial_scan_height =4654259
-# confirmations_required = 1
 # enabled = false
+# scan_period = "5s"
+# initial_scan_height = 4654259
+# confirmations_required = 1
 
 [sky_scanner]
-# scan_period = "5s"
-# initial_scan_height =100
 # enabled = false
+# scan_period = "5s"
+# initial_scan_height = 17000
+# confirmations_required = 0
 
 [sky_exchanger]
 sky_btc_exchange_rate = "500" # REQUIRED: SKY/BTC exchange rate as a string, can be an int, float or a rational fraction

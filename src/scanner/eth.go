@@ -26,7 +26,7 @@ import (
 type ETHScanner struct {
 	log       logrus.FieldLogger
 	ethClient EthRPCClient
-	Base      CommonScanner
+	base      commonScanner
 }
 
 // NewETHScanner creates scanner instance
@@ -36,20 +36,20 @@ func NewETHScanner(log logrus.FieldLogger, store Storer, eth EthRPCClient, cfg C
 	return &ETHScanner{
 		ethClient: eth,
 		log:       log.WithField("prefix", "scanner.eth"),
-		Base:      bs,
+		base:      bs,
 	}, nil
 }
 
 // Run starts the scanner
 func (s *ETHScanner) Run() error {
-	return s.Base.Run(s.ethClient.GetBlockCount, s.getBlockAtHeight, s.waitForNextBlock, s.scanBlock)
+	return s.base.Run(s.ethClient.GetBlockCount, s.getBlockAtHeight, s.waitForNextBlock, s.scanBlock)
 }
 
 // Shutdown shutdown the scanner
 func (s *ETHScanner) Shutdown() {
 	s.log.Info("Closing ETH scanner")
 	s.ethClient.Shutdown()
-	s.Base.Shutdown()
+	s.base.Shutdown()
 	s.log.Info("Waiting for ETH scanner to stop")
 	s.log.Info("ETH scanner stopped")
 }
@@ -63,7 +63,7 @@ func (s *ETHScanner) scanBlock(block *CommonBlock) (int, error) {
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.Base.GetStorer().ScanBlock(block, CoinTypeETH)
+	dvs, err := s.base.GetStorer().ScanBlock(block, CoinTypeETH)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -75,9 +75,9 @@ func (s *ETHScanner) scanBlock(block *CommonBlock) (int, error) {
 	n := 0
 	for _, dv := range dvs {
 		select {
-		case s.Base.GetScannedDepositChan() <- dv:
+		case s.base.GetScannedDepositChan() <- dv:
 			n++
-		case <-s.Base.GetQuitChan():
+		case <-s.base.GetQuitChan():
 			return n, errQuit
 		}
 	}
@@ -123,9 +123,9 @@ func (s *ETHScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 		}
 		if err != nil || nextBlock == nil {
 			select {
-			case <-s.Base.GetQuitChan():
+			case <-s.base.GetQuitChan():
 				return nil, errQuit
-			case <-time.After(s.Base.GetScanPeriod()):
+			case <-time.After(s.base.GetScanPeriod()):
 				continue
 			}
 		}
@@ -141,17 +141,17 @@ func (s *ETHScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 
 // AddScanAddress adds new scan address
 func (s *ETHScanner) AddScanAddress(addr, coinType string) error {
-	return s.Base.GetStorer().AddScanAddress(addr, coinType)
+	return s.base.GetStorer().AddScanAddress(addr, coinType)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *ETHScanner) GetScanAddresses() ([]string, error) {
-	return s.Base.GetStorer().GetScanAddresses(CoinTypeETH)
+	return s.base.GetStorer().GetScanAddresses(CoinTypeETH)
 }
 
 // GetDeposit returns deposit value channel.
 func (s *ETHScanner) GetDeposit() <-chan DepositNote {
-	return s.Base.GetDeposit()
+	return s.base.GetDeposit()
 }
 
 // ethBlock2CommonBlock convert ethereum block to common block
@@ -180,7 +180,7 @@ func ethBlock2CommonBlock(block *types.Block) (*CommonBlock, error) {
 		cv := CommonVout{}
 		cv.N = uint32(i)
 		cv.Value = amt
-		cv.Addresses = []string{realaddr}
+		cv.Address = realaddr
 		cbTx.Vout = append(cbTx.Vout, cv)
 		cb.RawTx = append(cb.RawTx, cbTx)
 	}

@@ -111,8 +111,9 @@ func createSkyScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 	}
 
 	skyScanner, err := scanner.NewSKYScanner(log, scanStore, skyrpc, scanner.Config{
-		ScanPeriod:        cfg.SkyScanner.ScanPeriod,
-		InitialScanHeight: cfg.SkyScanner.InitialScanHeight,
+		ScanPeriod:            cfg.SkyScanner.ScanPeriod,
+		ConfirmationsRequired: cfg.EthScanner.ConfirmationsRequired,
+		InitialScanHeight:     cfg.SkyScanner.InitialScanHeight,
 	})
 	if err != nil {
 		log.WithError(err).Error("Open skyscan service failed")
@@ -338,7 +339,7 @@ func run() error {
 		// create bitcoin address manager
 		btcAddrMgr, err = addrs.NewBTCAddrs(log, db, cfg.BtcAddresses)
 		if err != nil {
-			log.WithError(err).Error("Create bitcoin deposit address manager failed")
+			log.WithError(err).Error("Create BTC deposit address manager failed")
 			return err
 		}
 		if err := addrManager.PushGenerator(btcAddrMgr, scanner.CoinTypeBTC); err != nil {
@@ -351,7 +352,7 @@ func run() error {
 		// create ethereum address manager
 		ethAddrMgr, err = addrs.NewETHAddrs(log, db, cfg.EthAddresses)
 		if err != nil {
-			log.WithError(err).Error("Create ethcoin deposit address manager failed")
+			log.WithError(err).Error("Create ETH deposit address manager failed")
 			return err
 		}
 		if err := addrManager.PushGenerator(ethAddrMgr, scanner.CoinTypeETH); err != nil {
@@ -362,19 +363,13 @@ func run() error {
 
 	if cfg.SkyScanner.Enabled {
 		// create sky address manager
-		f, err := ioutil.ReadFile(cfg.SkyAddresses)
+		skyAddrMgr, err = addrs.NewSKYAddrs(log, db, cfg.SkyAddresses)
 		if err != nil {
-			log.WithError(err).Error("Load deposit sky address list failed")
-			return err
-		}
-
-		skyAddrMgr, err = addrs.NewSKYAddrs(log, db, bytes.NewReader(f))
-		if err != nil {
-			log.WithError(err).Error("Create sky deposit address manager failed")
+			log.WithError(err).Error("Create SKY deposit address manager failed")
 			return err
 		}
 		if err := addrManager.PushGenerator(skyAddrMgr, scanner.CoinTypeSKY); err != nil {
-			log.WithError(err).Error("add sky address manager failed")
+			log.WithError(err).Error("Add SKY address manager failed")
 			return err
 		}
 	}

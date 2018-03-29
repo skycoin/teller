@@ -24,6 +24,7 @@
     - [Setup btcd](#setup-btcd)
         - [Configure btcd](#configure-btcd)
         - [Obtain btcd RPC certificate](#obtain-btcd-rpc-certificate)
+        - [BTC scanning notes](#btc-scanning-notes)
     - [Using a reverse proxy to expose teller](#using-a-reverse-proxy-to-expose-teller)
     - [Setup geth](#setup-geth)
         - [Configure geth](#configure-geth)
@@ -309,6 +310,10 @@ Once the RPC interface is enabled (by setting `rpcuser` and `rpcpass`),
 Use the path of the `~/.btcd/rpc.cert` file as the value of `btc_rpc.cert` in teller's config.
 If teller is running on a different machine, you will need to move it there first.
 Do not copy `~/.btcd/rpc.key`, this is a secret key and is not needed by teller.
+
+#### BTC scanning notes
+
+Multisig outputs are not supported. If an output has multiple addresses assigned to it, it is ignored and not considered as a valid deposit.
 
 ### Using a reverse proxy to expose teller
 

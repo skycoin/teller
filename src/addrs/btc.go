@@ -17,8 +17,6 @@ import (
 
 const btcBucketKey = "used_btc_address"
 
-const jsonExtension = ".json"
-
 // NewBTCAddrs returns an Addrs loaded with BTC addresses
 func NewBTCAddrs(log logrus.FieldLogger, db *bolt.DB, addrsFile string) (*Addrs, error) {
 	f, err := ioutil.ReadFile(addrsFile)

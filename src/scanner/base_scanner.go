@@ -30,8 +30,8 @@ type Config struct {
 	ConfirmationsRequired int64         // how many confirmations to wait for block
 }
 
-// CommonScanner defines the interface a scanner should implement
-type CommonScanner interface {
+// commonScanner defines the interface a scanner should implement
+type commonScanner interface {
 	GetScanPeriod() time.Duration
 	GetStorer() Storer
 	GetDeposit() <-chan DepositNote
@@ -61,9 +61,9 @@ type BaseScanner struct {
 
 // CommonVout common transaction output info
 type CommonVout struct {
-	Value     int64
-	N         uint32
-	Addresses []string
+	Value   int64
+	N       uint32
+	Address string
 }
 
 // CommonTx common transaction info
