@@ -46,6 +46,7 @@
 - [Frontend development](#frontend-development)
 - [Integration testing](#integration-testing)
 - [Monitoring logs](#monitoring-logs)
+- [Logrotate integration](#logrotate-integration)
 - [Passthrough notes](#passthrough-notes)
 
 <!-- /MarkdownTOC -->
@@ -93,6 +94,7 @@ Description of the config file:
 * `profile` [bool]: Enable gops profiler.
 * `logfile` [string]: Log file.  It can be an absolute path or be relative to the working directory.
 * `dbfile` [string]: Database file, saved inside the `~/.teller-skycoin` folder. Do not use a path.
+* `pidfile` [string]: PID file, optional. Use for daemon integration.
 * `btc_addresses` [string]: Filepath of the BTC addresses file. See [generate BTC addresses](#generate-btc-addresses).
 * `eth_addresses` [string]: Filepath of the ETH addresses file. See [generate ETH addresses](#generate-eth-addresses).
 * `teller.max_bound_addrs` [int]: Maximum number addresses allowed to bind per skycoin address.
@@ -791,6 +793,12 @@ To monitor for problems, grep for `ERROR` lines.
 For the most critical problems, grep for `notice=WATCH`.
 The logging library [logrus](https://github.com/sirupsen/logrus) does not allow
 a `CRITICAL` log level; this is our substitute.
+
+## Logrotate integration
+
+Set the `pidfile` in the config and use this pid to have logrotated send a SIGHUP to reopen a log file after being rotated.
+See https://github.com/flashmob/go-guerrilla/wiki/Automatic-log-file-management-with-logrotate
+for an example logrotate configuration.
 
 ## Passthrough notes
 

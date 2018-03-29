@@ -55,7 +55,7 @@ func NewLogger(logFilename string, debug bool) (*logrus.Logger, error) {
 	}
 
 	if logFilename != "" {
-		hook, err := NewFileWriteHook(logFilename)
+		hook, err := NewLogrotateFileWriteHook(logFilename)
 		if err != nil {
 			return nil, err
 		}
@@ -79,6 +79,22 @@ type WriteHook struct {
 // NewFileWriteHook returns a new WriteHook for a file
 func NewFileWriteHook(filename string) (*WriteHook, error) {
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WriteHook{
+		w: f,
+		formatter: &TextFormatter{
+			DisableColors: true,
+			FullTimestamp: true,
+		},
+	}, nil
+}
+
+// NewLogrotateFileWriteHook returns a new WriteHook for a logrotate-supporting file
+func NewLogrotateFileWriteHook(filename string) (*WriteHook, error) {
+	f, err := NewLogrotateFile(filename, 0600)
 	if err != nil {
 		return nil, err
 	}

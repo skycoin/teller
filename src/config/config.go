@@ -48,7 +48,8 @@ type Config struct {
 	// Where log is saved
 	LogFilename string `mapstructure:"logfile"`
 	// Where database is saved, inside the ~/.teller-skycoin data directory
-	DBFilename string `mapstructure:"dbfile"`
+	DBFilename  string `mapstructure:"dbfile"`
+	PidFilename string `mapstructure:"pidfile"`
 
 	// Path of BTC addresses JSON file
 	BtcAddresses string `mapstructure:"btc_addresses"`

@@ -16,6 +16,7 @@ import (
 
 	"github.com/boltdb/bolt"
 	btcrpcclient "github.com/btcsuite/btcd/rpcclient"
+	"github.com/facebookgo/pidfile"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 
@@ -52,7 +53,7 @@ func createBtcScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 		Certificates: certs,
 	}, nil)
 	if err != nil {
-		log.WithError(err).Error("Connect btcd failed")
+		log.WithError(err).Error("Connect to btcd failed")
 		return nil, err
 	}
 
@@ -123,6 +124,26 @@ func createSkyScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 	return skyScanner, nil
 }
 
+func createPidFile(log logrus.FieldLogger, cfg config.Config) error {
+	// The pidfile will already be set if the user used -pidfile on the command line,
+	// do not overwrite it in that case.
+	if pidfile.GetPidfilePath() == "" {
+		pidfile.SetPidfilePath(cfg.PidFilename)
+	}
+
+	// Skip if the pidfile is not configured
+	if pidfile.GetPidfilePath() == "" {
+		return nil
+	}
+
+	if err := pidfile.Write(); err != nil {
+		log.WithError(err).Error("Failed to write pid file")
+		return err
+	}
+
+	return nil
+}
+
 func run() error {
 	cur, err := user.Current()
 	if err != nil {
@@ -166,6 +187,13 @@ func run() error {
 	})
 	if err != nil {
 		log.WithError(err).Error("Open db failed")
+		return err
+	}
+
+	// Create pid file. Do this after trying to open the db, which has a file lock on it,
+	// so only one teller instance can run with the same db.
+	if err := createPidFile(log, cfg); err != nil {
+		log.WithError(err).Error("createPidFile failed")
 		return err
 	}
 
