@@ -20,7 +20,7 @@ import Modal, { styles } from 'components/Modal';
 import Text from 'components/Text';
 import media from '../../utils/media';
 
-import { checkStatus, getAddress, getConfig, checkExchangeStatus } from '../../utils/distributionAPI';
+import { checkStatus, getAddress, getConfig, checkHealth } from '../../utils/distributionAPI';
 
 const Wrapper = styled.div`
   background-color: ${COLORS.gray[1]};
@@ -55,17 +55,17 @@ class Distribution extends React.Component {
     this.getAddress = this.getAddress.bind(this);
     this.checkStatus = this.checkStatus.bind(this);
     this.closeModals = this.closeModals.bind(this);
-    this.checkExchangeStatus = this.checkExchangeStatus.bind(this);
+    this.checkHealth = this.checkHealth.bind(this);
   }
 
   componentDidMount() {
-    this.getConfig().then(() => this.checkExchangeStatus());
+    this.getConfig().then(() => this.checkHealth());
   }
 
-  checkExchangeStatus() {
-    return checkExchangeStatus()
+  checkHealth() {
+    return checkHealth()
     .then(status => {
-      if (status.error !== "") {
+      if (status.exchange.sender_error !== "") {
         this.setState({
           disabledReason: "coinsSoldOut",
           balance: status.balance,
@@ -73,7 +73,7 @@ class Distribution extends React.Component {
         });
       } else {
         this.setState({
-          balance: status.balance
+          balance: status.exchange.balance
         });
       }
     });

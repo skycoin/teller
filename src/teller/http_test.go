@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -53,9 +54,19 @@ func (e *fakeExchanger) GetDepositStats() (*exchange.DepositStats, error) {
 	return args.Get(0).(*exchange.DepositStats), args.Error(1)
 }
 
-func (e *fakeExchanger) Status() error {
+func (e *fakeExchanger) SenderStatus() error {
 	args := e.Called()
 	return args.Error(0)
+}
+
+func (e *fakeExchanger) ProcessorStatus() error {
+	args := e.Called()
+	return args.Error(0)
+}
+
+func (e *fakeExchanger) ErroredDeposits() ([]exchange.DepositInfo, error) {
+	args := e.Called()
+	return args.Get(0).([]exchange.DepositInfo), args.Error(1)
 }
 
 func (e *fakeExchanger) Balance() (*cli.Balance, error) {
@@ -69,91 +80,93 @@ func (e *fakeExchanger) Balance() (*cli.Balance, error) {
 	return b.(*cli.Balance), args.Error(1)
 }
 
-func TestExchangeStatusHandler(t *testing.T) {
+func TestHealthHandler(t *testing.T) {
 	tt := []struct {
-		name           string
-		method         string
-		url            string
-		status         int
-		err            string
-		exchangeStatus error
-		errorMsg       string
-		balance        cli.Balance
-		balanceError   error
+		name               string
+		method             string
+		url                string
+		status             int
+		err                string
+		senderStatus       error
+		processorStatus    error
+		senderErrMsg       string
+		balance            cli.Balance
+		balanceError       error
+		erroredDeposits    []exchange.DepositInfo
+		erroredDepositsErr error
 	}{
 		{
-			"405",
-			http.MethodPost,
-			"/api/exchange-status",
-			http.StatusMethodNotAllowed,
-			"Invalid request method",
-			nil,
-			"",
-			cli.Balance{
+			name:   "405",
+			method: http.MethodPost,
+			url:    "/api/health",
+			status: http.StatusMethodNotAllowed,
+			err:    "Invalid request method",
+			balance: cli.Balance{
 				Coins: "100.000000",
 				Hours: "100",
 			},
-			nil,
 		},
 
 		{
-			"200",
-			http.MethodGet,
-			"/api/exchange-status",
-			http.StatusOK,
-			"",
-			nil,
-			"",
-			cli.Balance{
+			name:   "200 with errored deposits",
+			method: http.MethodGet,
+			url:    "/api/health",
+			status: http.StatusOK,
+			balance: cli.Balance{
 				Coins: "100.000000",
 				Hours: "100",
 			},
-			nil,
+			erroredDeposits: make([]exchange.DepositInfo, 3),
 		},
 
 		{
-			"200 status message error ignored, not RPCError",
-			http.MethodGet,
-			"/api/exchange-status",
-			http.StatusOK,
-			"",
-			errors.New("exchange.Status error"),
-			"",
-			cli.Balance{
+			name:         "200 status message error ignored, not RPCError",
+			method:       http.MethodGet,
+			url:          "/api/health",
+			status:       http.StatusOK,
+			senderStatus: errors.New("exchange.Status error"),
+			balance: cli.Balance{
 				Coins: "100.000000",
 				Hours: "100",
 			},
-			nil,
 		},
 
 		{
-			"200 status message error is RPCError",
-			http.MethodGet,
-			"/api/exchange-status",
-			http.StatusOK,
-			"",
-			sender.NewRPCError(errors.New("exchange.Status RPC error")),
-			"exchange.Status RPC error",
-			cli.Balance{
+			name:         "200 status message error is RPCError",
+			method:       http.MethodGet,
+			url:          "/api/health",
+			status:       http.StatusOK,
+			senderStatus: sender.NewRPCError(errors.New("exchange.Status RPC error")),
+			senderErrMsg: "exchange.Status RPC error",
+			balance: cli.Balance{
 				Coins: "100.000000",
 				Hours: "100",
 			},
-			nil,
 		},
 
 		{
-			"200 cli balance error",
-			http.MethodGet,
-			"/api/exchange-status",
-			http.StatusOK,
-			"",
-			nil,
-			"",
-			cli.Balance{
+			name:            "200 status message with processor error",
+			method:          http.MethodGet,
+			url:             "/api/health",
+			status:          http.StatusOK,
+			processorStatus: errors.New("processor error"),
+			balance: cli.Balance{
+				Coins: "100.000000",
+				Hours: "100",
+			},
+		},
+
+		{
+			name:   "200 cli balance error and errored deposits error",
+			method: http.MethodGet,
+			url:    "/api/health",
+			status: http.StatusOK,
+			balance: cli.Balance{
 				Coins: "0.000000",
 				Hours: "0",
 			},
-			errors.New("cli balance error"),
+			balanceError:       errors.New("cli balance error"),
+			erroredDepositsErr: errors.New("errored deposits"),
 		},
 	}
 
@@ -161,7 +174,9 @@ func TestExchangeStatusHandler(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			e := &fakeExchanger{}
 
-			e.On("Status").Return(tc.exchangeStatus)
+			e.On("SenderStatus").Return(tc.senderStatus)
+			e.On("ProcessorStatus").Return(tc.processorStatus)
+			e.On("ErroredDeposits").Return(tc.erroredDeposits, tc.erroredDepositsErr)
 
 			if tc.balanceError == nil {
 				e.On("Balance").Return(&tc.balance, nil)
@@ -179,6 +194,9 @@ func TestExchangeStatusHandler(t *testing.T) {
 				log:       log,
 				exchanger: e,
 			}
+			httpServ.cfg.GitCommit = "git-commit-hash"
+			httpServ.cfg.StartTime = time.Now()
+
 			handler := httpServ.setupMux()
 
 			handler.ServeHTTP(rr, req)
@@ -191,16 +209,28 @@ func TestExchangeStatusHandler(t *testing.T) {
 				return
 			}
 
-			var msg ExchangeStatusResponse
+			processorErrMsg := ""
+			if tc.processorStatus != nil {
+				processorErrMsg = tc.processorStatus.Error()
+			}
+
+			var msg HealthResponse
 			err = json.Unmarshal(rr.Body.Bytes(), &msg)
 			require.NoError(t, err)
 			require.Equal(t, ExchangeStatusResponse{
-				Error: tc.errorMsg,
+				DepositErrorCount: len(tc.erroredDeposits),
+				ProcessorError:    processorErrMsg,
+				SenderError:       tc.senderErrMsg,
 				Balance: ExchangeStatusResponseBalance{
 					Coins: tc.balance.Coins,
 					Hours: tc.balance.Hours,
 				},
-			}, msg)
+			}, msg.ExchangeStatus)
+			require.Equal(t, "git-commit-hash", msg.Version)
+
+			uptime, err := time.ParseDuration(msg.Uptime)
+			require.NoError(t, err)
+			require.True(t, uptime > 0)
 		})
 	}
 

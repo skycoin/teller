@@ -48,8 +48,10 @@ type Exchanger interface {
 	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
 	GetBindNum(skyAddr string) (int, error)
 	GetDepositStats() (*DepositStats, error)
-	Status() error
+	SenderStatus() error
+	ProcessorStatus() error
 	Balance() (*cli.Balance, error)
+	ErroredDeposits() ([]DepositInfo, error)
 }
 
 // Exchange encompasses an entire coin<>skycoin deposit-process-send flow
@@ -294,9 +296,26 @@ func (e *Exchange) Balance() (*cli.Balance, error) {
 	return e.Sender.Balance()
 }
 
-// Status returns the last return value of the processing state
-func (e *Exchange) Status() error {
+// SenderStatus returns the sender's status
+func (e *Exchange) SenderStatus() error {
 	return e.Sender.Status()
+}
+
+// ProcessorStatus returns the processor's status
+func (e *Exchange) ProcessorStatus() error {
+	return e.Processor.Status()
+}
+
+// ErroredDeposits returns deposits with an error status
+func (e *Exchange) ErroredDeposits() ([]DepositInfo, error) {
+	deposits, err := e.store.GetDepositInfoArray(func(di DepositInfo) bool {
+		return di.Error != ""
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return deposits, nil
 }
 
 // BindAddress binds deposit address with skycoin address, and

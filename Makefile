@@ -1,10 +1,16 @@
 .DEFAULT_GOAL := help
-.PHONY: teller test lint check format cover help
+.PHONY: teller build test lint check cover install-linters format cover help
 
 PACKAGES = $(shell find ./src -type d -not -path '\./src')
 
+COMMIT=$$(git rev-parse HEAD)
+GOLDFLAGS="-X main.gitCommit=$(COMMIT)"
+
 teller: ## Run teller. To add arguments, do 'make ARGS="--foo" teller'.
-	go run cmd/teller/teller.go ${ARGS}
+	go run -ldflags $(GOLDFLAGS) cmd/teller/teller.go ${ARGS}
+
+build: ## Build teller binary
+	go build -ldflags $(GOLDFLAGS) cmd/teller/teller.go
 
 test: ## Run tests
 	go test ./cmd/... -timeout=1m -cover ${PARALLEL}
@@ -54,11 +60,8 @@ lint: ## Run linters. Use make install-linters first.
 check: lint test ## Run tests and linters
 
 cover: ## Runs tests on ./src/ with HTML code coverage
-	@echo "mode: count" > coverage-all.out
-	$(foreach pkg,$(PACKAGES),\
-		go test -coverprofile=coverage.out $(pkg);\
-		tail -n +2 coverage.out >> coverage-all.out;)
-	go tool cover -html=coverage-all.out
+	go test -cover -coverprofile=cover.out -coverpkg=github.com/skycoin/teller/... ./src/...
+	go tool cover -html=cover.out
 
 install-linters: ## Install linters
 	go get -u github.com/FiloSottile/vendorcheck
