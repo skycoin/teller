@@ -39,10 +39,10 @@ func NewLogrotateFile(path string, mode os.FileMode) (*LogrotateFile, error) {
 	go func() {
 		signal.Notify(lr.sighup, syscall.SIGHUP)
 
-		for _ = range lr.sighup {
-			fmt.Fprintf(os.Stderr, "%s: Reopening %q\n", time.Now(), lr.path)
+		for range lr.sighup {
+			fmt.Fprintf(os.Stderr, "%s: Reopening %q\n", time.Now(), lr.path) // nolint: gas
 			if err := lr.reopen(); err != nil {
-				fmt.Fprintf(os.Stderr, "%s: Error reopening: %s\n", time.Now(), err)
+				fmt.Fprintf(os.Stderr, "%s: Error reopening: %s\n", time.Now(), err) // nolint: gas
 			}
 		}
 	}()
@@ -51,12 +51,13 @@ func NewLogrotateFile(path string, mode os.FileMode) (*LogrotateFile, error) {
 
 }
 
-func (lr *LogrotateFile) reopen() (err error) {
+func (lr *LogrotateFile) reopen() error {
 	lr.me.Lock()
 	defer lr.me.Unlock()
-	lr.File.Close()
+	lr.File.Close() // nolint: gas,errcheck
+	var err error
 	lr.File, err = os.OpenFile(lr.path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, lr.mode)
-	return
+	return err
 }
 
 // Write will write to the underlying file. It uses a sync.Mutex to ensure
