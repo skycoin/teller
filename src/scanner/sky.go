@@ -15,7 +15,7 @@ type SKYScanner struct {
 	log       logrus.FieldLogger
 	skyClient SkyRPCClient
 	// Deposit value channel, exposed by public API, intended for public consumption
-	Base CommonScanner
+	base commonScanner
 }
 
 // SkyClient implements the SKYRPCClient interface
@@ -38,20 +38,20 @@ func NewSKYScanner(log logrus.FieldLogger, store Storer, sky SkyRPCClient, cfg C
 	return &SKYScanner{
 		skyClient: sky,
 		log:       log.WithField("prefix", "scanner.sky"),
-		Base:      bs,
+		base:      bs,
 	}, nil
 }
 
 // Run begins the SKYScanner
 func (s *SKYScanner) Run() error {
-	return s.Base.Run(s.skyClient.GetBlockCount, s.getBlockAtHeight, s.waitForNextBlock, s.scanBlock)
+	return s.base.Run(s.skyClient.GetBlockCount, s.getBlockAtHeight, s.waitForNextBlock, s.scanBlock)
 }
 
 // Shutdown shutdown the scanner
 func (s *SKYScanner) Shutdown() {
 	s.log.Info("Closing SKY scanner")
 	s.skyClient.Shutdown()
-	s.Base.Shutdown()
+	s.base.Shutdown()
 	s.log.Info("Waiting for SKY scanner to stop")
 	s.log.Info("SKY scanner stopped")
 }
@@ -65,7 +65,7 @@ func (s *SKYScanner) scanBlock(block *CommonBlock) (int, error) {
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.Base.GetStorer().ScanBlock(block, CoinTypeSKY)
+	dvs, err := s.base.GetStorer().ScanBlock(block, CoinTypeSKY)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -77,9 +77,9 @@ func (s *SKYScanner) scanBlock(block *CommonBlock) (int, error) {
 	n := 0
 	for _, dv := range dvs {
 		select {
-		case s.Base.GetScannedDepositChan() <- dv:
+		case s.base.GetScannedDepositChan() <- dv:
 			n++
-		case <-s.Base.GetQuitChan():
+		case <-s.base.GetQuitChan():
 			return n, errQuit
 		}
 	}
@@ -143,7 +143,7 @@ func skyBlock2CommonBlock(block *visor.ReadableBlock) (*CommonBlock, error) {
 			}
 			cv := CommonVout{}
 			cv.Value = int64(amt)
-			cv.Addresses = []string{v.Address}
+			cv.Address = v.Address
 			cbTx.Vout = append(cbTx.Vout, cv)
 		}
 		cb.RawTx = append(cb.RawTx, cbTx)
@@ -177,9 +177,9 @@ func (s *SKYScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 		}
 		if err != nil || nextBlock == nil {
 			select {
-			case <-s.Base.GetQuitChan():
+			case <-s.base.GetQuitChan():
 				return nil, errQuit
-			case <-time.After(s.Base.GetScanPeriod()):
+			case <-time.After(s.base.GetScanPeriod()):
 				continue
 			}
 		}
@@ -195,15 +195,15 @@ func (s *SKYScanner) waitForNextBlock(block *CommonBlock) (*CommonBlock, error) 
 
 // AddScanAddress adds new scan address
 func (s *SKYScanner) AddScanAddress(addr, coinType string) error {
-	return s.Base.GetStorer().AddScanAddress(addr, coinType)
+	return s.base.GetStorer().AddScanAddress(addr, coinType)
 }
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *SKYScanner) GetScanAddresses() ([]string, error) {
-	return s.Base.GetStorer().GetScanAddresses(CoinTypeSKY)
+	return s.base.GetStorer().GetScanAddresses(CoinTypeSKY)
 }
 
 //GetDeposit returns channel of depositnote
 func (s *SKYScanner) GetDeposit() <-chan DepositNote {
-	return s.Base.GetDeposit()
+	return s.base.GetDeposit()
 }

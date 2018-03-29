@@ -20,6 +20,10 @@ var (
 	ErrCoinTypeNotExists = errors.New("Invalid coin type")
 )
 
+const (
+	jsonExtension = ".json"
+)
+
 // AddrGenerator generate new deposit address
 type AddrGenerator interface {
 	NewAddress() (string, error)

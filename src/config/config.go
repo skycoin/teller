@@ -123,9 +123,10 @@ type EthScanner struct {
 // SkyScanner config for SKY Scanner
 type SkyScanner struct {
 	// How often to try to scan for blocks
-	ScanPeriod        time.Duration `mapstructure:"scan_period"`
-	InitialScanHeight int64         `mapstructure:"initial_scan_height"`
-	Enabled           bool          `mapstrucutre:"enabled"`
+	ScanPeriod            time.Duration `mapstructure:"scan_period"`
+	InitialScanHeight     int64         `mapstructure:"initial_scan_height"`
+	ConfirmationsRequired int64         `mapstructure:"confirmations_required"`
+	Enabled               bool          `mapstrucutre:"enabled"`
 }
 
 // SkyExchanger config for skycoin sender
