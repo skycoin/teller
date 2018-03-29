@@ -444,16 +444,22 @@ func setDefaults() {
 	viper.SetDefault("btc_rpc.server", "127.0.0.1:8334")
 
 	// BtcScanner
+	viper.SetDefault("btc_scanner.enabled", true)
 	viper.SetDefault("btc_scanner.scan_period", time.Second*20)
 	viper.SetDefault("btc_scanner.initial_scan_height", int64(492478))
 	viper.SetDefault("btc_scanner.confirmations_required", int64(1))
-	viper.SetDefault("btc_scanner.enabled", true)
 
 	// EthScanner
 	viper.SetDefault("eth_scanner.enabled", false)
+	viper.SetDefault("eth_scanner.scan_period", time.Second*5)
+	viper.SetDefault("eth_scanner.initial_scan_height", int64(4654259))
+	viper.SetDefault("eth_scanner.confirmations_required", int64(1))
 
 	// SkyScanner
 	viper.SetDefault("sky_scanner.enabled", false)
+	viper.SetDefault("sky_scanner.scan_period", time.Second*5)
+	viper.SetDefault("sky_scanner.initial_scan_height", int64(17000))
+	viper.SetDefault("sky_scanner.confirmations_required", int64(0))
 
 	// SkyExchanger
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)

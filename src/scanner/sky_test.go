@@ -199,7 +199,7 @@ func testSkyScannerRunProcessedLoop(t *testing.T, scr *SKYScanner, nDeposits int
 		require.Equal(t, nDeposits, len(dvs))
 
 		// check all deposits
-		err := scr.Base.GetStorer().(*Store).db.View(func(tx *bolt.Tx) error {
+		err := scr.base.GetStorer().(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, DepositBkt, dv.ID(), &d)
@@ -227,7 +227,7 @@ func testSkyScannerRunProcessedLoop(t *testing.T, scr *SKYScanner, nDeposits int
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	shutdownWait := scr.Base.(*BaseScanner).Cfg.ScanPeriod * time.Duration(nDeposits*2)
+	shutdownWait := scr.base.(*BaseScanner).Cfg.ScanPeriod * time.Duration(nDeposits*2)
 	if shutdownWait < *minShutdownWait {
 		shutdownWait = *minShutdownWait
 	}
@@ -259,7 +259,7 @@ func testSkyScannerRun(t *testing.T, scr *SKYScanner) {
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
-	require.True(t, scr.Base.(*BaseScanner).Cfg.DepositBufferSize < nDeposits)
+	require.True(t, scr.base.(*BaseScanner).Cfg.DepositBufferSize < nDeposits)
 
 	testSkyScannerRunProcessedLoop(t, scr, nDeposits)
 }
@@ -278,7 +278,7 @@ func testSkyScannerRunProcessDeposits(t *testing.T, skyDB *bolt.DB) {
 
 func testSkyScannerInitialGetBlockHashError(t *testing.T, skyDB *bolt.DB) {
 	// Test that scanner.Run() returns an error if the initial GetBlockHash
-	// based upon scanner.Base.Cfg.InitialScanHeight fails
+	// based upon scanner.base.Cfg.InitialScanHeight fails
 	db, shutdown := testutil.PrepareDB(t)
 	defer shutdown()
 
@@ -317,7 +317,7 @@ func testSkyScannerProcessDepositError(t *testing.T, skyDB *bolt.DB) {
 
 	// Make sure that the deposit buffer size is less than the number of deposits,
 	// to test what happens when the buffer is full
-	require.True(t, int64(scr.Base.(*BaseScanner).Cfg.DepositBufferSize) < nDeposits)
+	require.True(t, int64(scr.base.(*BaseScanner).Cfg.DepositBufferSize) < nDeposits)
 
 	done := make(chan struct{})
 	go func() {
@@ -331,7 +331,7 @@ func testSkyScannerProcessDepositError(t *testing.T, skyDB *bolt.DB) {
 		require.Equal(t, nDeposits, int64(len(dvs)))
 
 		// check all deposits, none should be marked as "Processed"
-		err := scr.Base.GetStorer().(*Store).db.View(func(tx *bolt.Tx) error {
+		err := scr.base.GetStorer().(*Store).db.View(func(tx *bolt.Tx) error {
 			for _, dv := range dvs {
 				var d Deposit
 				err := dbutil.GetBucketObject(tx, DepositBkt, dv.ID(), &d)
@@ -357,7 +357,7 @@ func testSkyScannerProcessDepositError(t *testing.T, skyDB *bolt.DB) {
 	// If there are few deposits, wait at least 5 seconds
 	// This only needs to wait at least 1 second normally, but if testing
 	// with -race, it needs to wait 5.
-	shutdownWait := time.Duration(int64(scr.Base.(*BaseScanner).Cfg.ScanPeriod) * nDeposits * 2)
+	shutdownWait := time.Duration(int64(scr.base.(*BaseScanner).Cfg.ScanPeriod) * nDeposits * 2)
 	if shutdownWait < *minShutdownWait {
 		shutdownWait = *minShutdownWait
 	}
@@ -422,16 +422,16 @@ func testSkyScannerLoadUnprocessedDeposits(t *testing.T, skyDB *bolt.DB) {
 		Processed: true,
 	}
 
-	err := scr.Base.GetStorer().(*Store).db.Update(func(tx *bolt.Tx) error {
+	err := scr.base.GetStorer().(*Store).db.Update(func(tx *bolt.Tx) error {
 		for _, d := range unprocessedDeposits {
-			if err := scr.Base.GetStorer().(*Store).pushDepositTx(tx, d); err != nil {
+			if err := scr.base.GetStorer().(*Store).pushDepositTx(tx, d); err != nil {
 				require.NoError(t, err)
 				return err
 			}
 		}
 
 		// Add a processed deposit to make sure that processed deposits are filtered
-		return scr.Base.GetStorer().(*Store).pushDepositTx(tx, processedDeposit)
+		return scr.base.GetStorer().(*Store).pushDepositTx(tx, processedDeposit)
 	})
 	require.NoError(t, err)
 

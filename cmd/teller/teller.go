@@ -111,8 +111,9 @@ func createSkyScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 	}
 
 	skyScanner, err := scanner.NewSKYScanner(log, scanStore, skyrpc, scanner.Config{
-		ScanPeriod:        cfg.SkyScanner.ScanPeriod,
-		InitialScanHeight: cfg.SkyScanner.InitialScanHeight,
+		ScanPeriod:            cfg.SkyScanner.ScanPeriod,
+		ConfirmationsRequired: cfg.EthScanner.ConfirmationsRequired,
+		InitialScanHeight:     cfg.SkyScanner.InitialScanHeight,
 	})
 	if err != nil {
 		log.WithError(err).Error("Open skyscan service failed")
