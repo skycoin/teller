@@ -54,8 +54,8 @@
 [[projects]]
   name = "github.com/cenkalti/backoff"
   packages = ["."]
-  revision = "61153c768f31ee5f130071d08fc82b85208528de"
-  version = "v1.1.0"
+  revision = "2ea60e5f094469f9e65adb9cd103795b73ae743e"
+  version = "v2.0.0"
 
 [[projects]]
   name = "github.com/davecgh/go-spew"
@@ -83,8 +83,20 @@
     "rpc",
     "trie"
   ]
-  revision = "b8b9f7f4476a30a0aaf6077daade6ae77f969960"
-  version = "v1.8.2"
+  revision = "329ac18ef617d0238f71637bffe78f028b0f13f7"
+  version = "v1.8.3"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/facebookgo/atomicfile"
+  packages = ["."]
+  revision = "2de1f203e7d5e386a6833233882782932729f27e"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/facebookgo/pidfile"
+  packages = ["."]
+  revision = "f242e2999868dcd267a2b86e49ce1f9cf9e15b16"
 
 [[projects]]
   name = "github.com/fsnotify/fsnotify"
@@ -220,7 +232,7 @@
     "exchange",
     "exchange/c2cx"
   ]
-  revision = "69947cf6cd312fad27a103c2cda31907e83f8077"
+  revision = "0600449fbf871199dfd11f32a3f7d92e64d85b7c"
 
 [[projects]]
   name = "github.com/skycoin/skycoin"
@@ -366,7 +378,7 @@
     "unix",
     "windows"
   ]
-  revision = "91ee8cde435411ca3f1cd365e8f20131aed4d0a1"
+  revision = "13d03a9a82fba647c21a0ef8fba44a795d0f0835"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -408,12 +420,12 @@
 [[projects]]
   name = "gopkg.in/yaml.v2"
   packages = ["."]
-  revision = "7f97868eec74b32b0982dd158a51a446d1da7eb5"
-  version = "v2.1.1"
+  revision = "5420a8b6744d3b0345ab293f6fcba19c978f1183"
+  version = "v2.2.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4f69421aa3b394408a6cdf629817b62c05d1bfdba76e1f60226b7050236ce58f"
+  inputs-digest = "1ffc80124d475746077bd14b73c6e77cf2659617f888dff68fb23bba84b594bd"
   solver-name = "gps-cdcl"
   solver-version = 1

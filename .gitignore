@@ -7,3 +7,4 @@ cert-cache
 *.wlt
 cover.out
 coverage.html
+*.pid
