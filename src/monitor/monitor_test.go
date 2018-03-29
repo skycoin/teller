@@ -87,8 +87,15 @@ type dummyScanAddrs struct {
 	// addrs []string
 }
 
-func (ds dummyScanAddrs) GetScanAddresses(coinType string) ([]string, error) {
+func (ds dummyScanAddrs) GetScanAddresses(string) ([]string, error) {
 	return []string{}, nil
+}
+
+type dummyBackuper struct {
+}
+
+func (bkper *dummyBackuper) Backup() http.HandlerFunc {
+	return nil
 }
 
 func TestRunMonitor(t *testing.T) {
@@ -139,7 +146,7 @@ func TestRunMonitor(t *testing.T) {
 	err = addrMgr.PushGenerator(&dummySkyAddrMgr{12}, config.CoinTypeSKY)
 	require.NoError(t, err)
 
-	m := New(log, cfg, addrMgr, &dummyDps, &dummyScanAddrs{})
+	m := New(log, cfg, addrMgr, &dummyDps, &dummyScanAddrs{}, &dummyBackuper{})
 
 	done := make(chan struct{})
 	go func() {

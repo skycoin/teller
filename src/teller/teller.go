@@ -5,6 +5,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"net/http"
+	"strconv"
+
+	"github.com/boltdb/bolt"
+
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
@@ -24,10 +29,11 @@ type Teller struct {
 	httpServ *HTTPServer // HTTP API
 	quit     chan struct{}
 	done     chan struct{}
+	db       *bolt.DB
 }
 
 // New creates a Teller
-func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrManager *addrs.AddrManager, cfg config.Config) *Teller {
+func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrManager *addrs.AddrManager, cfg config.Config, db *bolt.DB) *Teller {
 	return &Teller{
 		cfg:  cfg.Teller,
 		log:  log.WithField("prefix", "teller"),
@@ -38,6 +44,7 @@ func New(log logrus.FieldLogger, exchanger exchange.Exchanger, addrManager *addr
 			exchanger:   exchanger,
 			addrManager: addrManager,
 		}, exchanger),
+		db: db,
 	}
 }
 
@@ -69,6 +76,21 @@ func (s *Teller) Shutdown() {
 	close(s.quit)
 	s.httpServ.Shutdown()
 	<-s.done
+}
+
+func (s *Teller) Backup() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := s.db.View(func(tx *bolt.Tx) error {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Disposition", `attachment; filename="teller.db"`)
+			w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
+			_, err := tx.WriteTo(w)
+			return err
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
 }
 
 // Service combines Exchanger and AddrGenerator

@@ -40,6 +40,10 @@ type DepositStatusGetter interface {
 	ErroredDeposits() ([]exchange.DepositInfo, error)
 }
 
+type Backuper interface {
+	Backup() http.HandlerFunc
+}
+
 // ScanAddressGetter get scanning address interface
 type ScanAddressGetter interface {
 	GetScanAddresses(string) ([]string, error)
@@ -53,17 +57,19 @@ type Monitor struct {
 	depositStatusGetter DepositStatusGetter
 	cfg                 config.Config
 	ln                  *http.Server
+	Backuper
 	quit                chan struct{}
 }
 
 // New creates monitor service
-func New(log logrus.FieldLogger, cfg config.Config, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
+func New(log logrus.FieldLogger, cfg config.Config, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter, bkper Backuper) *Monitor {
 	return &Monitor{
 		log:                 log.WithField("prefix", "teller.monitor"),
 		cfg:                 cfg,
 		addrManager:         addrManager,
 		depositStatusGetter: dpstget,
 		scanAddressGetter:   sag,
+		Backuper:            bkper,
 		quit:                make(chan struct{}),
 	}
 }
@@ -102,6 +108,7 @@ func (m *Monitor) setupMux() *http.ServeMux {
 	mux.Handle("/api/deposits", httputil.LogHandler(m.log, m.depositsByStatusHandler()))
 	mux.Handle("/api/deposits/errored", httputil.LogHandler(m.log, m.erroredDepositsHandler()))
 	mux.Handle("/api/accounting", httputil.LogHandler(m.log, m.accountingHandler()))
+	mux.Handle("/api/backup", httputil.LogHandler(m.log, m.backupHandler()))
 	return mux
 }
 
@@ -365,4 +372,11 @@ func (m *Monitor) accountingHandler() http.HandlerFunc {
 			return
 		}
 	}
+}
+
+// starts downloading a database backup
+// Method: GET
+// URI: /api/backup
+func (m *Monitor) backupHandler() http.HandlerFunc {
+	return m.Backup()
 }
