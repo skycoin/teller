@@ -54,6 +54,8 @@ type Config struct {
 	BtcAddresses string `mapstructure:"btc_addresses"`
 	// Path of ETH addresses JSON file
 	EthAddresses string `mapstructure:"eth_addresses"`
+	// Path of SKY addresses JSON file
+	SkyAddresses string `mapstructure:"sky_addresses"`
 
 	Teller Teller `mapstructure:"teller"`
 
@@ -63,6 +65,7 @@ type Config struct {
 
 	BtcScanner   BtcScanner   `mapstructure:"btc_scanner"`
 	EthScanner   EthScanner   `mapstructure:"eth_scanner"`
+	SkyScanner   SkyScanner   `mapstructure:"sky_scanner"`
 	SkyExchanger SkyExchanger `mapstructure:"sky_exchanger"`
 
 	Web Web `mapstructure:"web"`
@@ -117,11 +120,20 @@ type EthScanner struct {
 	Enabled               bool          `mapstructure:"enabled"`
 }
 
+// SkyScanner config for SKY Scanner
+type SkyScanner struct {
+	// How often to try to scan for blocks
+	ScanPeriod        time.Duration `mapstructure:"scan_period"`
+	InitialScanHeight int64         `mapstructure:"initial_scan_height"`
+	Enabled           bool          `mapstrucutre:"enabled"`
+}
+
 // SkyExchanger config for skycoin sender
 type SkyExchanger struct {
 	// SKY/BTC exchange rate. Can be an int, float or rational fraction string
 	SkyBtcExchangeRate string `mapstructure:"sky_btc_exchange_rate"`
 	SkyEthExchangeRate string `mapstructure:"sky_eth_exchange_rate"`
+	SkySkyExchangeRate string `mapstructure:"sky_sky_exchange_rate"`
 	// Number of decimal places to truncate SKY to
 	MaxDecimals int `mapstructure:"max_decimals"`
 	// How long to wait before rechecking transaction confirmations
@@ -168,6 +180,10 @@ func (c SkyExchanger) validate() []error {
 
 	if _, err := mathutil.ParseRate(c.SkyEthExchangeRate); err != nil {
 		errs = append(errs, fmt.Errorf("sky_exchanger.sky_eth_exchange_rate invalid: %v", err))
+	}
+
+	if _, err := mathutil.ParseRate(c.SkySkyExchangeRate); err != nil {
+		errs = append(errs, fmt.Errorf("sky_exchanger.sky_sky_exchange_rate invalid: %v", err))
 	}
 
 	if c.MaxDecimals < 0 {
@@ -354,6 +370,12 @@ func (c Config) Validate() error {
 				oops("eth_rpc.port missing")
 			}
 		}
+
+		if c.SkyScanner.Enabled {
+			if c.SkyRPC.Address == "" {
+				oops("sky_rpc.address missing")
+			}
+		}
 	}
 
 	if c.BtcScanner.ConfirmationsRequired < 0 {
@@ -368,10 +390,16 @@ func (c Config) Validate() error {
 	if c.EthScanner.InitialScanHeight < 0 {
 		oops("eth_scanner.initial_scan_height must be >= 0")
 	}
+	if c.SkyScanner.InitialScanHeight < 0 {
+		oops("sky_scanner.initial_scan_height must be >= 0")
+	}
 
 	if c.SkyExchanger.BuyMethod == BuyMethodPassthrough {
 		if c.EthScanner.Enabled {
-			oops("eth_rpc must be disabled for buy_method passthrough")
+			oops("eth_scanner must be disabled for buy_method passthrough")
+		}
+		if c.SkyScanner.Enabled {
+			oops("sky_scanner must be disabled for buy_method passthrough")
 		}
 	}
 
@@ -422,6 +450,9 @@ func setDefaults() {
 
 	// EthScanner
 	viper.SetDefault("eth_scanner.enabled", false)
+
+	// SkyScanner
+	viper.SetDefault("sky_scanner.enabled", false)
 
 	// SkyExchanger
 	viper.SetDefault("sky_exchanger.tx_confirmation_check_wait", time.Second*5)

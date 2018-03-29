@@ -399,6 +399,11 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeETH))
 				return
 			}
+		case scanner.CoinTypeSKY:
+			if !s.cfg.SkyScanner.Enabled {
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeSKY))
+				return
+			}
 		case "":
 			errorResponse(ctx, w, http.StatusBadRequest, errors.New("Missing coin_type"))
 			return
@@ -582,6 +587,12 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 					ExchangeRate:             skyPerETH,
 					PassthroughMinimumVolume: "0",
 				},
+        "sky": {
+          Enabled: s.cfg.SkyScanner.Enabled,
+          ConfirmationsRequired: s.cfg.SkyScanner.ConfirmationsRequired,
+          ExchangeRate: s.cfg.SkyExchanger.SkySkyExchangeRate.String(),
+          PassthroughMinimumVolume: "0",
+        },
 			},
 		}); err != nil {
 			log.WithError(err).Error()

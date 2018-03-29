@@ -16,6 +16,8 @@ const (
 	CoinTypeBTC = "BTC"
 	// CoinTypeETH is ETH coin type
 	CoinTypeETH = "ETH"
+	// CoinTypeSKY is SKY coin type
+	CoinTypeSKY = "SKY"
 )
 
 var (
@@ -39,6 +41,8 @@ func GetScanMetaBkt(coinType string) ([]byte, error) {
 		suffix = "btc"
 	case CoinTypeETH:
 		suffix = "eth"
+	case CoinTypeSKY:
+		suffix = "sky"
 	default:
 		return nil, ErrUnsupportedCoinType
 	}

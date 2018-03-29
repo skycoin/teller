@@ -240,11 +240,13 @@
     "src/daemon/gnet",
     "src/daemon/pex",
     "src/daemon/strand",
+    "src/gui",
     "src/util/droplet",
     "src/util/elapse",
     "src/util/fee",
     "src/util/file",
     "src/util/http",
+    "src/util/iputil",
     "src/util/logging",
     "src/util/utc",
     "src/visor",
@@ -253,7 +255,8 @@
     "src/visor/historydb",
     "src/wallet"
   ]
-  revision = "c86e0afdebd0c06ee8ea8d01ac7dce84fef04ddc"
+  revision = "84098d9ef5cdfa86d325509cf200dd7e45b4a1b4"
+  version = "v0.22.0"
 
 [[projects]]
   name = "github.com/spf13/afero"
@@ -345,7 +348,7 @@
     "ripemd160",
     "ssh/terminal"
   ]
-  revision = "80db560fac1fb3e6ac81dbc7f8ae4c061f5257bd"
+  revision = "88942b9c40a4c9d203b82b3731787b672d6e809b"
 
 [[projects]]
   branch = "master"
@@ -363,7 +366,7 @@
     "unix",
     "windows"
   ]
-  revision = "c488ab1dd8481ef762f96a79a9577c27825be697"
+  revision = "91ee8cde435411ca3f1cd365e8f20131aed4d0a1"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -411,6 +414,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "122bc1cd14c159b46a9053a5c0d563d47f474be33070a2d9927409146757cb33"
+  inputs-digest = "4f69421aa3b394408a6cdf629817b62c05d1bfdba76e1f60226b7050236ce58f"
   solver-name = "gps-cdcl"
   solver-version = 1
