@@ -32,7 +32,7 @@ export const getAddress = skyAddress =>
       throw new Error(error.response.data || 'An unknown error occurred.');
     });
 
-export const checkExchangeStatus = () =>
-  axios.get('/api/exchange-status')
+export const checkHealth = () =>
+  axios.get('/api/health')
     .then(response => response.data)
     .catch((error) => { throw new Error(error.response.data); });

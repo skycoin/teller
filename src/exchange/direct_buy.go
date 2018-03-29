@@ -12,6 +12,7 @@ import (
 // Processor is a component that processes deposits from a Receiver and sends them to a Sender
 type Processor interface {
 	Deposits() <-chan DepositInfo
+	Status() error
 }
 
 // ProcessRunner is a Processor that can be run
@@ -22,13 +23,15 @@ type ProcessRunner interface {
 
 // DirectBuy implements a Processor. All deposits are sent directly to the sender for processing.
 type DirectBuy struct {
-	log      logrus.FieldLogger
-	cfg      config.SkyExchanger
-	receiver Receiver
-	store    Storer
-	deposits chan DepositInfo
-	quit     chan struct{}
-	done     chan struct{}
+	log        logrus.FieldLogger
+	cfg        config.SkyExchanger
+	receiver   Receiver
+	store      Storer
+	deposits   chan DepositInfo
+	quit       chan struct{}
+	done       chan struct{}
+	statusLock sync.RWMutex
+	status     error
 }
 
 // NewDirectBuy creates DirectBuy
@@ -44,7 +47,7 @@ func NewDirectBuy(log logrus.FieldLogger, cfg config.SkyExchanger, store Storer,
 		receiver: receiver,
 		deposits: make(chan DepositInfo, 100),
 		quit:     make(chan struct{}),
-		done:     make(chan struct{}),
+		done:     make(chan struct{}, 1),
 	}, nil
 }
 
@@ -123,4 +126,17 @@ func (p *DirectBuy) updateStatus(di DepositInfo) (DepositInfo, error) {
 	}
 
 	return updatedDi, nil
+}
+
+func (p *DirectBuy) setStatus(err error) {
+	defer p.statusLock.Unlock()
+	p.statusLock.Lock()
+	p.status = err
+}
+
+// Status returns the last return value of the processing state
+func (p *DirectBuy) Status() error {
+	defer p.statusLock.RUnlock()
+	p.statusLock.RLock()
+	return p.status
 }

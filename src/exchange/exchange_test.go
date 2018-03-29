@@ -295,7 +295,7 @@ func checkExchangerStatus(t *testing.T, e Exchanger, expectedErr error) {
 	// hope that an error did not appear
 	if expectedErr == nil {
 		time.Sleep(statusCheckNilWait)
-		require.NoError(t, e.Status())
+		require.NoError(t, e.SenderStatus())
 		return
 	}
 
@@ -306,7 +306,7 @@ loop:
 	for {
 		select {
 		case <-time.Tick(statusCheckInterval):
-			err := e.Status()
+			err := e.SenderStatus()
 			if err == nil {
 				continue loop
 			}
@@ -583,7 +583,7 @@ func TestExchangeCreateTxFailure(t *testing.T) {
 		Deposit:        dn.Deposit,
 	}, di)
 
-	require.Error(t, e.Status())
+	require.Error(t, e.SenderStatus())
 }
 
 func TestExchangeTxConfirmFailure(t *testing.T) {

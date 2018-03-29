@@ -33,7 +33,7 @@
     - [Bind](#bind)
     - [Status](#status)
     - [Config](#config)
-    - [Exchange Status](#exchange-status)
+    - [Health](#health)
     - [Dummy](#dummy)
         - [Scanner](#scanner)
             - [Deposit](#deposit)
@@ -551,17 +551,19 @@ Response:
 }
 ```
 
-### Exchange Status
+### Health
 
 ```sh
 Method: GET
 Content-Type: application/json
-URI: /api/exchange-status
+URI: /api/health
 ```
 
-Return the exchanger's status.
-The exchanger's status is the last error seen while trying to send SKY, or nil if no last error was seen.
-Use this to detect if the OTC is temporarily offline or sold out.
+Return teller's status.
+
+Field `exchange_status`:
+The exchanger's status includes last error seen while trying to send SKY, or nil if no last error was seen.
+Use this to detect if the OTC is temporarily offline, sold out or there is a problem with OTC passthrough.
 
 The balance of the OTC wallet is included in the response.  The wallet may still be considered "sold out" even
 if there is a balance remaining. The wallet is considered "sold out" when there are not enough coins in the wallet
@@ -572,27 +574,45 @@ In this case, the "error" field will be set to some message string, and the bala
 Example:
 
 ```sh
-curl http://localhost:7071/api/exchange-status
+curl http://localhost:7071/api/health
 ```
 
 Response:
 
 ```json
 {
-    "error": "",
-    "balance": {
-        "coins": "100.000000",
-        "hours": "100",
+    "status": "OK",
+    "application": "teller",
+    "version": "6720f7c5183e01090e657cda88e4ca962969c874",
+    "uptime": "5m32s",
+    "exchange": {
+        "buy_method": "direct",
+        "processor_error": "",
+        "sender_error": "",
+        "deposit_error_count": 4,
+        "balance": {
+            "coins": "100.000000",
+            "hours": "100"
+        }
     }
 }
 ```
 
 ```json
 {
-    "error": "no unspents to spend",
-    "balance": {
-        "coins": "0.000000",
-        "hours": "0",
+    "status": "OK",
+    "application": "teller",
+    "version": "6720f7c5183e01090e657cda88e4ca962969c874",
+    "uptime": "5m32s",
+    "exchange": {
+        "buy_method": "passthrough",
+        "processor_error": "",
+        "sender_error": "no unspents to spend",
+        "deposit_error_count": 0,
+        "balance": {
+            "coins": "0.000000",
+            "hours": "0"
+        }
     }
 }
 ```

@@ -30,6 +30,10 @@ import (
 	"github.com/skycoin/teller/src/util/logger"
 )
 
+var (
+	gitCommit = ""
+)
+
 func main() {
 	if err := run(); err != nil {
 		os.Exit(1)
@@ -165,6 +169,9 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("Config error:\n%v", err)
 	}
+
+	cfg.GitCommit = gitCommit
+	cfg.StartTime = time.Now()
 
 	// Init logger
 	rusloggger, err := logger.NewLogger(cfg.LogFilename, cfg.Debug)

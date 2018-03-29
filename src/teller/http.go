@@ -285,7 +285,7 @@ func (s *HTTPServer) setupMux() *http.ServeMux {
 	handleAPI("/api/bind", ratelimit(httputil.LogHandler(s.log, BindHandler(s))))
 	handleAPI("/api/status", ratelimit(httputil.LogHandler(s.log, StatusHandler(s))))
 	handleAPI("/api/config", httputil.LogHandler(s.log, ConfigHandler(s)))
-	handleAPI("/api/exchange-status", httputil.LogHandler(s.log, ExchangeStatusHandler(s)))
+	handleAPI("/api/health", httputil.LogHandler(s.log, HealthHandler(s)))
 
 	// Static files
 	mux.Handle("/", gziphandler.GzipHandler(http.FileServer(http.Dir(s.cfg.Web.StaticDir))))
@@ -445,7 +445,7 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 			CoinType:       boundAddr.CoinType,
 			BuyMethod:      boundAddr.BuyMethod,
 		}); err != nil {
-			log.WithError(err).Error(err)
+			log.WithError(err).Error()
 		}
 	}
 }
@@ -506,7 +506,7 @@ func StatusHandler(s *HTTPServer) http.HandlerFunc {
 		if err := httputil.JSONResponse(w, StatusResponse{
 			Statuses: depositStatuses,
 		}); err != nil {
-			log.WithError(err).Error(err)
+			log.WithError(err).Error()
 		}
 	}
 }
@@ -600,10 +600,13 @@ func ConfigHandler(s *HTTPServer) http.HandlerFunc {
 	}
 }
 
-// ExchangeStatusResponse http response for /api/exchange-status
+// ExchangeStatusResponse includes the status of Exchange components
 type ExchangeStatusResponse struct {
-	Error   string                        `json:"error"`
-	Balance ExchangeStatusResponseBalance `json:"balance"`
+	BuyMethod         string                        `json:"buy_method"`
+	ProcessorError    string                        `json:"processor_error"`
+	SenderError       string                        `json:"sender_error"`
+	Balance           ExchangeStatusResponseBalance `json:"balance"`
+	DepositErrorCount int                           `json:"deposit_error_count"`
 }
 
 // ExchangeStatusResponseBalance is the balance field of ExchangeStatusResponse
@@ -612,10 +615,69 @@ type ExchangeStatusResponseBalance struct {
 	Hours string `json:"hours"`
 }
 
-// ExchangeStatusHandler returns the status of the exchanger
+func (s *HTTPServer) newExchangeStatusResponse(log logrus.FieldLogger) ExchangeStatusResponse {
+	senderErrMsg := ""
+	senderErr := s.exchanger.SenderStatus()
+
+	// If the status is an RPCError, the most likely cause is that the
+	// wallet has an insufficient balance (other causes could be a temporary
+	// application error, or a bug in the skycoin node).
+	// Errors that are not RPCErrors are transient and common, such as
+	// exchange.ErrNotConfirmed, which will happen frequently and temporarily.
+	switch senderErr.(type) {
+	case sender.RPCError:
+		senderErrMsg = senderErr.Error()
+	default:
+	}
+
+	processorErrMsg := ""
+	processorErr := s.exchanger.ProcessorStatus()
+	if processorErr != nil {
+		processorErrMsg = processorErr.Error()
+	}
+
+	// Get the wallet balance, but ignore any error. If an error occurs,
+	// return a balance of 0
+	bal, err := s.exchanger.Balance()
+	coins := "0.000000"
+	hours := "0"
+	if err != nil {
+		log.WithError(err).Error("s.exchanger.Balance failed")
+	} else {
+		coins = bal.Coins
+		hours = bal.Hours
+	}
+
+	erroredDeposits, err := s.exchanger.ErroredDeposits()
+	if err != nil {
+		log.WithError(err).Error("s.exchanger.DepositErrorCount failed")
+	}
+
+	return ExchangeStatusResponse{
+		BuyMethod:         s.cfg.SkyExchanger.BuyMethod,
+		SenderError:       senderErrMsg,
+		ProcessorError:    processorErrMsg,
+		DepositErrorCount: len(erroredDeposits),
+		Balance: ExchangeStatusResponseBalance{
+			Coins: coins,
+			Hours: hours,
+		},
+	}
+}
+
+// HealthResponse is returned by HealthHandler
+type HealthResponse struct {
+	Status         string                 `json:"status"`
+	Application    string                 `json:"application"`
+	Version        string                 `json:"version"`
+	Uptime         string                 `json:"uptime"`
+	ExchangeStatus ExchangeStatusResponse `json:"exchange"`
+}
+
+// HealthHandler returns the health status of teller
 // Method: GET
-// URI: /api/exchange-status
-func ExchangeStatusHandler(s *HTTPServer) http.HandlerFunc {
+// URI: /api/health
+func HealthHandler(s *HTTPServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := logger.FromContext(ctx)
@@ -624,44 +686,18 @@ func ExchangeStatusHandler(s *HTTPServer) http.HandlerFunc {
 			return
 		}
 
-		errorMsg := ""
-		err := s.exchanger.Status()
-
-		// If the status is an RPCError, the most likely cause is that the
-		// wallet has an insufficient balance (other causes could be a temporary
-		// application error, or a bug in the skycoin node).
-		// Errors that are not RPCErrors are transient and common, such as
-		// exchange.ErrNotConfirmed, which will happen frequently and temporarily.
-		switch err.(type) {
-		case sender.RPCError:
-			errorMsg = err.Error()
-		default:
-		}
-
-		// Get the wallet balance, but ignore any error. If an error occurs,
-		// return a balance of 0
-		bal, err := s.exchanger.Balance()
-		coins := "0.000000"
-		hours := "0"
-		if err != nil {
-			log.WithError(err).Error("s.exchange.Balance failed")
-		} else {
-			coins = bal.Coins
-			hours = bal.Hours
-		}
-
-		resp := ExchangeStatusResponse{
-			Error: errorMsg,
-			Balance: ExchangeStatusResponseBalance{
-				Coins: coins,
-				Hours: hours,
-			},
+		resp := HealthResponse{
+			Status:         "OK",
+			Application:    "teller",
+			Version:        s.cfg.GitCommit,
+			Uptime:         time.Since(s.cfg.StartTime).String(),
+			ExchangeStatus: s.newExchangeStatusResponse(log),
 		}
 
 		log.WithField("resp", resp).Info()
 
 		if err := httputil.JSONResponse(w, resp); err != nil {
-			log.WithError(err).Error(err)
+			log.WithError(err).Error()
 		}
 	}
 }

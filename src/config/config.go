@@ -51,6 +51,11 @@ type Config struct {
 	DBFilename  string `mapstructure:"dbfile"`
 	PidFilename string `mapstructure:"pidfile"`
 
+	// GitCommit is set after loading using ldflags, not parsed from a config file
+	GitCommit string `mapstructure:"-"`
+	// StartTime is set after loading, not parsed from a config file
+	StartTime time.Time `mapstructure:"-"`
+
 	// Path of BTC addresses JSON file
 	BtcAddresses string `mapstructure:"btc_addresses"`
 	// Path of ETH addresses JSON file
