@@ -95,7 +95,7 @@ func NewDirectExchange(log logrus.FieldLogger, cfg config.SkyExchanger, store St
 		store:     store,
 		cfg:       cfg,
 		quit:      make(chan struct{}),
-		done:      make(chan struct{}),
+		done:      make(chan struct{}, 1),
 		Receiver:  receiver,
 		Processor: processor,
 		Sender:    sender,
