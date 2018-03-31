@@ -13,6 +13,8 @@ import (
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
+	"strings"
+	"time"
 )
 
 var (
@@ -82,12 +84,14 @@ func (s *Teller) Backup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := s.db.View(func(tx *bolt.Tx) error {
 			w.Header().Set("Content-Type", "application/octet-stream")
-			w.Header().Set("Content-Disposition", `attachment; filename="teller.db"`)
+			w.Header().Set("Content-Disposition", `attachment; ` +
+			"teller-"+ strconv.Itoa(int(time.Now().Unix())) + ".db" )
 			w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
 			_, err := tx.WriteTo(w)
 			return err
 		})
 		if err != nil {
+			s.log.Errorf("Backup failed: %v", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
