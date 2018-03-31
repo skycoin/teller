@@ -18,7 +18,7 @@ func init() {
 		SkyEthExchangeRate: "2",
 		SkySkyExchangeRate: "3",
 	}
-	for _, ct := range scanner.GetCoinTypes() {
+	for _, ct := range config.CoinTypes {
 		rate, err := getRate(cfg, ct)
 		if err != nil {
 			panic(err)
@@ -200,15 +200,15 @@ func (r *Receive) getRate(coinType string) (string, error) {
 func getRate(cfg config.SkyExchanger, coinType string) (string, error) {
 
 	switch coinType {
-	case scanner.CoinTypeBTC:
+	case config.CoinTypeBTC:
 		return cfg.SkyBtcExchangeRate, nil
-	case scanner.CoinTypeETH:
+	case config.CoinTypeETH:
 		return cfg.SkyEthExchangeRate, nil
-	case scanner.CoinTypeSKY:
+	case config.CoinTypeSKY:
 		//NOTE: adjust this later
 		return cfg.SkySkyExchangeRate, nil
 	default:
-		return "", scanner.ErrUnsupportedCoinType
+		return "", config.ErrUnsupportedCoinType
 	}
 }
 

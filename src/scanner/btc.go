@@ -14,6 +14,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 	"github.com/sirupsen/logrus"
+	"github.com/skycoin/teller/src/config"
 )
 
 var (
@@ -32,7 +33,7 @@ type BTCScanner struct {
 
 // NewBTCScanner creates scanner instance
 func NewBTCScanner(log logrus.FieldLogger, store Storer, btc BtcRPCClient, cfg Config) (*BTCScanner, error) {
-	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.btc"), CoinTypeBTC, cfg)
+	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.btc"), config.CoinTypeBTC, cfg)
 
 	return &BTCScanner{
 		btcClient: btc,
@@ -64,7 +65,7 @@ func (s *BTCScanner) scanBlock(block *CommonBlock) (int, error) {
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.base.GetStorer().ScanBlock(block, CoinTypeBTC)
+	dvs, err := s.base.GetStorer().ScanBlock(block, config.CoinTypeBTC)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -248,7 +249,7 @@ func (s *BTCScanner) AddScanAddress(addr, coinType string) error {
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *BTCScanner) GetScanAddresses() ([]string, error) {
-	return s.base.GetStorer().GetScanAddresses(CoinTypeBTC)
+	return s.base.GetStorer().GetScanAddresses(config.CoinTypeBTC)
 }
 
 //GetDeposit returns channel of depositnote

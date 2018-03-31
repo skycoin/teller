@@ -10,7 +10,10 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/teller/src/addrs"
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
+	"github.com/skycoin/teller/src/util/dbutil"
 	"github.com/skycoin/teller/src/util/httputil"
 	"github.com/skycoin/teller/src/util/logger"
 )
@@ -26,50 +29,42 @@ const (
 	serverIdleTimeout  = time.Second * 120
 )
 
-// AddrManager interface provides apis to access resource of btc address
+// AddrManager interface provides an API to access deposit address statistics
 type AddrManager interface {
-	Remaining() uint64 // returns the rest number of btc address in the pool
+	Remaining(string) (uint64, error)
 }
 
-// DepositStatusGetter  interface provides api to access exchange resource
+// DepositStatusGetter interface provides an API to access exchange resource
 type DepositStatusGetter interface {
 	GetDepositStatusDetail(flt exchange.DepositFilter) ([]exchange.DepositStatusDetail, error)
 	GetDepositStats() (*exchange.DepositStats, error)
+	ErroredDeposits() ([]exchange.DepositInfo, error)
 }
 
 // ScanAddressGetter get scanning address interface
 type ScanAddressGetter interface {
-	GetScanAddresses() ([]string, error)
-}
-
-// Config configuration info for monitor service
-type Config struct {
-	Addr string
+	GetScanAddresses(string) ([]string, error)
 }
 
 // Monitor monitor service struct
 type Monitor struct {
-	log logrus.FieldLogger
-	AddrManager
-	EthAddrManager AddrManager
-	SkyAddrManager AddrManager
+	log               logrus.FieldLogger
+	addrManager       AddrManager
+	scanAddressGetter ScanAddressGetter
 	DepositStatusGetter
-	ScanAddressGetter
-	cfg  Config
+	cfg  config.Config
 	ln   *http.Server
 	quit chan struct{}
 }
 
 // New creates monitor service
-func New(log logrus.FieldLogger, cfg Config, addrManager, ethAddrManager, skyAddrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
+func New(log logrus.FieldLogger, cfg config.Config, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
 	return &Monitor{
 		log:                 log.WithField("prefix", "teller.monitor"),
 		cfg:                 cfg,
-		AddrManager:         addrManager,
-		EthAddrManager:      ethAddrManager,
-		SkyAddrManager:      skyAddrManager,
+		addrManager:         addrManager,
 		DepositStatusGetter: dpstget,
-		ScanAddressGetter:   sag,
+		scanAddressGetter:   sag,
 		quit:                make(chan struct{}),
 	}
 }
@@ -83,7 +78,7 @@ func (m *Monitor) Run() error {
 	mux := m.setupMux()
 
 	m.ln = &http.Server{
-		Addr:         m.cfg.Addr,
+		Addr:         m.cfg.AdminPanel.Host,
 		Handler:      mux,
 		ReadTimeout:  serverReadTimeout,
 		WriteTimeout: serverWriteTimeout,
@@ -104,9 +99,9 @@ func (m *Monitor) Run() error {
 func (m *Monitor) setupMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.Handle("/api/address", httputil.LogHandler(m.log, m.addressHandler()))
-	mux.Handle("/api/deposit_status", httputil.LogHandler(m.log, m.depositStatus()))
-	mux.Handle("/api/stats", httputil.LogHandler(m.log, m.statsHandler()))
+	mux.Handle("/api/deposit-addresses", httputil.LogHandler(m.log, m.depositAddressesHandler()))
+	mux.Handle("/api/deposits", httputil.LogHandler(m.log, m.depositsByStatusHandler()))
+	mux.Handle("/api/accounting", httputil.LogHandler(m.log, m.accountingHandler()))
 	return mux
 }
 
@@ -116,6 +111,7 @@ func (m *Monitor) Shutdown() {
 	defer log.Info("Shutdown monitor service")
 
 	close(m.quit)
+
 	if m.ln != nil {
 		log.Info("Shutting down monitor service")
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -126,15 +122,17 @@ func (m *Monitor) Shutdown() {
 	}
 }
 
-type addressUsage struct {
-	RestAddrNum   uint64   `json:"rest_address_num"`
-	ScanningAddrs []string `json:"scanning_addresses"`
+type depositAddressStats struct {
+	ScanningEnabled       bool     `json:"scanning_enabled"`
+	AddressManagerEnabled bool     `json:"address_manager_enabled"`
+	RemainingAddresses    uint64   `json:"remaining_addresses"`
+	ScanningAddresses     []string `json:"scanning_addresses"`
 }
 
-// addressHandler returns the btc address usage
+// depositAddressesHandler returns the btc address usage
 // Method: GET
 // URI: /api/address
-func (m *Monitor) addressHandler() http.HandlerFunc {
+func (m *Monitor) depositAddressesHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := logger.FromContext(ctx)
@@ -145,31 +143,73 @@ func (m *Monitor) addressHandler() http.HandlerFunc {
 			return
 		}
 
-		addrs, err := m.GetScanAddresses()
-		if err != nil {
-			log.WithError(err).Error("GetScanAddresses failed")
-			httputil.ErrResponse(w, http.StatusInternalServerError)
-			return
+		resp := make(map[string]depositAddressStats, len(config.CoinTypes))
+
+		for _, k := range config.CoinTypes {
+			scanningEnabled, err := m.cfg.IsScannerEnabled(k)
+			if err != nil {
+				log.WithField("coinType", k).WithError(err).Error("IsScannerEnabled failed")
+				httputil.ErrResponse(w, http.StatusInternalServerError)
+				return
+			}
+
+			a, err := m.scanAddressGetter.GetScanAddresses(config.CoinTypeBTC)
+			if err != nil {
+				// If the bucket doesn't exist, this is only an error if the scanner is enabled
+				// If the scanner was never enabled, the bucket won't exist.
+				ignoreErr := false
+				switch err.(type) {
+				case dbutil.BucketNotExistErr:
+					if !scanningEnabled {
+						ignoreErr = true
+						a = []string{}
+					}
+				}
+
+				if !ignoreErr {
+					log.WithField("coinType", k).WithError(err).Error("GetScanAddresses failed")
+					httputil.ErrResponse(w, http.StatusInternalServerError)
+					return
+				}
+			}
+
+			addrManagerEnabled := false
+			remaining, err := m.addrManager.Remaining(k)
+			switch err {
+			case nil:
+				addrManagerEnabled = true
+			case addrs.ErrCoinTypeNotRegistered:
+			default:
+				log.WithField("coinType", k).WithError(err).Error("Remaining failed")
+				httputil.ErrResponse(w, http.StatusInternalServerError)
+				return
+			}
+
+			resp[k] = depositAddressStats{
+				RemainingAddresses:    remaining,
+				ScanningAddresses:     a,
+				ScanningEnabled:       scanningEnabled,
+				AddressManagerEnabled: addrManagerEnabled,
+			}
 		}
 
-		addrUsage := addressUsage{
-			RestAddrNum:   m.Remaining(),
-			ScanningAddrs: addrs,
-		}
-
-		if err := httputil.JSONResponse(w, addrUsage); err != nil {
+		if err := httputil.JSONResponse(w, resp); err != nil {
 			log.WithError(err).Error("Write json response failed")
 			return
 		}
 	}
 }
 
-// depositStatus returns all deposit status
+type depositsByStatusResponse struct {
+	Deposits []exchange.DepositStatusDetail `json:"deposits"`
+}
+
+// depositsByStatusHandler returns all deposit status
 // Method: GET
 // URI: /api/deposit_status
 // Args:
-//     - status # available value("waiting_deposit", "waiting_send", "waiting_confirm", "done")
-func (m *Monitor) depositStatus() http.HandlerFunc {
+//    status - Optional, one of "waiting_deposit", "waiting_send", "waiting_confirm", "done", "waiting_decide", "waiting_passthrough", "waiting_passthrough_order_complete"
+func (m *Monitor) depositsByStatusHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := logger.FromContext(ctx)
@@ -182,7 +222,7 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 
 		status := r.FormValue("status")
 		if status == "" {
-			// returns all status
+			// Return all deposits
 			dpis, err := m.GetDepositStatusDetail(func(dpi exchange.DepositInfo) bool {
 				return true
 			})
@@ -191,7 +231,9 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 				httputil.ErrResponse(w, http.StatusInternalServerError)
 				return
 			}
-			if err := httputil.JSONResponse(w, dpis); err != nil {
+			if err := httputil.JSONResponse(w, depositsByStatusResponse{
+				Deposits: dpis,
+			}); err != nil {
 				log.WithError(err).Error("Write json response failed")
 				return
 			}
@@ -203,7 +245,7 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 		case exchange.StatusUnknown:
 			err := fmt.Sprintf("unknown status %v", status)
 			httputil.ErrResponse(w, http.StatusBadRequest, err)
-			log.WithField("depositStatus", status).Error("Unknown status")
+			log.WithField("depositsByStatusHandler", status).Error("Unknown status")
 			return
 		default:
 			dpis, err := m.GetDepositStatusDetail(func(dpi exchange.DepositInfo) bool {
@@ -215,7 +257,9 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 				return
 			}
 
-			if err := httputil.JSONResponse(w, dpis); err != nil {
+			if err := httputil.JSONResponse(w, depositsByStatusResponse{
+				Deposits: dpis,
+			}); err != nil {
 				log.WithError(err).Error("Write json response failed")
 				return
 			}
@@ -223,10 +267,15 @@ func (m *Monitor) depositStatus() http.HandlerFunc {
 	}
 }
 
-// stats returns all deposit stats, including total BTC received and total SKY sent.
+type accountingResponse struct {
+	Sent     string            `json:"sent"`
+	Received map[string]string `json:"received"`
+}
+
+// accountingHandler returns all deposit stats, including total BTC received and total SKY sent.
 // Method: GET
-// URI: /api/stats
-func (m *Monitor) statsHandler() http.HandlerFunc {
+// URI: /api/accounting
+func (m *Monitor) accountingHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		log := logger.FromContext(ctx)
@@ -237,14 +286,35 @@ func (m *Monitor) statsHandler() http.HandlerFunc {
 			return
 		}
 
-		ts, err := m.GetDepositStats()
+		stats, err := m.GetDepositStats()
 		if err != nil {
 			log.WithError(err).Error("GetDepositStats failed")
 			httputil.ErrResponse(w, http.StatusInternalServerError)
 			return
 		}
 
-		if err := httputil.JSONResponse(w, ts); err != nil {
+		skySent, err := exchange.SkyAmountToString(stats.Sent)
+		if err != nil {
+			log.WithError(err).Error("exchange.SkyAmountToString failed")
+			httputil.ErrResponse(w, http.StatusInternalServerError)
+			return
+		}
+
+		received := make(map[string]string, len(stats.Received))
+		for k, v := range stats.Received {
+			r, err := exchange.DepositAmountToString(k, v)
+			if err != nil {
+				log.WithError(err).Error("exchange.DepositAmountToString failed")
+				httputil.ErrResponse(w, http.StatusInternalServerError)
+				return
+			}
+			received[k] = r
+		}
+
+		if err := httputil.JSONResponse(w, accountingResponse{
+			Received: received,
+			Sent:     skySent,
+		}); err != nil {
 			log.WithError(err).Error("Write json response failed")
 			return
 		}

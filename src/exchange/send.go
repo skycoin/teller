@@ -13,7 +13,6 @@ import (
 	"github.com/skycoin/skycoin/src/util/droplet"
 
 	"github.com/skycoin/teller/src/config"
-	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/logger"
 	"github.com/skycoin/teller/src/util/mathutil"
@@ -419,13 +418,13 @@ func (s *Send) calculateSkyDroplets(di DepositInfo) (uint64, error) {
 
 	case config.BuyMethodDirect:
 		switch di.CoinType {
-		case scanner.CoinTypeBTC:
+		case config.CoinTypeBTC:
 			skyAmt, err = CalculateBtcSkyValue(di.DepositValue, di.ConversionRate, s.cfg.MaxDecimals)
 			if err != nil {
 				log.WithError(err).Error("CalculateBtcSkyValue failed")
 				return 0, err
 			}
-		case scanner.CoinTypeETH:
+		case config.CoinTypeETH:
 			//Gwei convert to wei, because stored-value is Gwei in case overflow of uint64
 			skyAmt, err = CalculateEthSkyValue(mathutil.Gwei2Wei(di.DepositValue), di.ConversionRate, s.cfg.MaxDecimals)
 			if err != nil {
@@ -433,8 +432,8 @@ func (s *Send) calculateSkyDroplets(di DepositInfo) (uint64, error) {
 				return 0, err
 			}
 		default:
-			log.WithError(scanner.ErrUnsupportedCoinType).Error()
-			return 0, scanner.ErrUnsupportedCoinType
+			log.WithError(config.ErrUnsupportedCoinType).Error()
+			return 0, config.ErrUnsupportedCoinType
 		}
 
 	default:

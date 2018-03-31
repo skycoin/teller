@@ -41,7 +41,6 @@ func main() {
 }
 
 func createBtcScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.BTCScanner, error) {
-	// create btc rpc client
 	certs, err := ioutil.ReadFile(cfg.BtcRPC.Cert)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to read cfg.BtcRPC.Cert %s: %v", cfg.BtcRPC.Cert, err)
@@ -63,9 +62,9 @@ func createBtcScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 
 	log.Info("Connect to btcd succeeded")
 
-	err = scanStore.AddSupportedCoin(scanner.CoinTypeBTC)
+	err = scanStore.AddSupportedCoin(config.CoinTypeBTC)
 	if err != nil {
-		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeBTC) failed")
+		log.WithError(err).Error("scanStore.AddSupportedCoin(config.CoinTypeBTC) failed")
 		return nil, err
 	}
 
@@ -88,9 +87,9 @@ func createEthScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 		return nil, err
 	}
 
-	err = scanStore.AddSupportedCoin(scanner.CoinTypeETH)
+	err = scanStore.AddSupportedCoin(config.CoinTypeETH)
 	if err != nil {
-		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeETH) failed")
+		log.WithError(err).Error("scanStore.AddSupportedCoin(config.CoinTypeETH) failed")
 		return nil, err
 	}
 
@@ -109,9 +108,9 @@ func createEthScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scan
 // createSkyScanner returns a new sky scanner instance
 func createSkyScanner(log logrus.FieldLogger, cfg config.Config, scanStore *scanner.Store) (*scanner.SKYScanner, error) {
 	skyrpc := scanner.NewSkyClient(cfg.SkyRPC.Address)
-	err := scanStore.AddSupportedCoin(scanner.CoinTypeSKY)
+	err := scanStore.AddSupportedCoin(config.CoinTypeSKY)
 	if err != nil {
-		log.WithError(err).Error("scanStore.AddSupportedCoin(scanner.CoinTypeSKY) failed")
+		log.WithError(err).Error("scanStore.AddSupportedCoin(config.CoinTypeSKY) failed")
 		return nil, err
 	}
 
@@ -249,7 +248,7 @@ func run() error {
 	if cfg.Dummy.Scanner {
 		log.Info("btcd disabled, running dummy scanner")
 		scanService = scanner.NewDummyScanner(log)
-		scanService.(*scanner.DummyScanner).RegisterCoinType(scanner.CoinTypeBTC)
+		scanService.(*scanner.DummyScanner).RegisterCoinType(config.CoinTypeBTC)
 		// TODO -- refactor dummy scanning to support multiple coin types
 		// scanEthService = scanner.NewDummyScanner(log)
 		scanService.(*scanner.DummyScanner).BindHandlers(dummyMux)
@@ -278,8 +277,8 @@ func run() error {
 
 			scanEthService = ethScanner
 
-			if err := multiplexer.AddScanner(scanEthService, scanner.CoinTypeETH); err != nil {
-				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeETH)
+			if err := multiplexer.AddScanner(scanEthService, config.CoinTypeETH); err != nil {
+				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", config.CoinTypeETH)
 				return err
 			}
 		}
@@ -295,15 +294,15 @@ func run() error {
 
 			scanSkyService = skyScanner
 
-			if err := multiplexer.AddScanner(scanSkyService, scanner.CoinTypeSKY); err != nil {
-				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeSKY)
+			if err := multiplexer.AddScanner(scanSkyService, config.CoinTypeSKY); err != nil {
+				log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", config.CoinTypeSKY)
 				return err
 			}
 		}
 	}
 
-	if err := multiplexer.AddScanner(scanService, scanner.CoinTypeBTC); err != nil {
-		log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", scanner.CoinTypeBTC)
+	if err := multiplexer.AddScanner(scanService, config.CoinTypeBTC); err != nil {
+		log.WithError(err).Errorf("multiplexer.AddScanner of %s failed", config.CoinTypeBTC)
 		return err
 	}
 
@@ -377,7 +376,7 @@ func run() error {
 			log.WithError(err).Error("Create BTC deposit address manager failed")
 			return err
 		}
-		if err := addrManager.PushGenerator(btcAddrMgr, scanner.CoinTypeBTC); err != nil {
+		if err := addrManager.PushGenerator(btcAddrMgr, config.CoinTypeBTC); err != nil {
 			log.WithError(err).Error("Add BTC address manager failed")
 			return err
 		}
@@ -390,7 +389,7 @@ func run() error {
 			log.WithError(err).Error("Create ETH deposit address manager failed")
 			return err
 		}
-		if err := addrManager.PushGenerator(ethAddrMgr, scanner.CoinTypeETH); err != nil {
+		if err := addrManager.PushGenerator(ethAddrMgr, config.CoinTypeETH); err != nil {
 			log.WithError(err).Error("Add ETH address manager failed")
 			return err
 		}
@@ -403,7 +402,7 @@ func run() error {
 			log.WithError(err).Error("Create SKY deposit address manager failed")
 			return err
 		}
-		if err := addrManager.PushGenerator(skyAddrMgr, scanner.CoinTypeSKY); err != nil {
+		if err := addrManager.PushGenerator(skyAddrMgr, config.CoinTypeSKY); err != nil {
 			log.WithError(err).Error("Add SKY address manager failed")
 			return err
 		}
@@ -413,11 +412,8 @@ func run() error {
 	// Run the service
 	background("tellerServer.Run", errC, tellerServer.Run)
 
-	// start monitor service
-	monitorCfg := monitor.Config{
-		Addr: cfg.AdminPanel.Host,
-	}
-	monitorService := monitor.New(log, monitorCfg, btcAddrMgr, ethAddrMgr, skyAddrMgr, exchangeClient, btcScanner)
+	// Start monitor service
+	monitorService := monitor.New(log, cfg, addrManager, exchangeClient, scanStore)
 
 	background("monitorService.Run", errC, monitorService.Run)
 

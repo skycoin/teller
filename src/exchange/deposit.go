@@ -125,8 +125,8 @@ type PassthroughOrder struct {
 
 // DepositStats records overall statistics about deposits
 type DepositStats struct {
-	TotalBTCReceived int64 `json:"total_btc_received"`
-	TotalSKYSent     int64 `json:"total_sky_sent"`
+	Received map[string]int64
+	Sent     int64
 }
 
 // ValidateForStatus does a consistency check of the data based upon the Status value
@@ -145,7 +145,7 @@ func (di DepositInfo) ValidateForStatus() error {
 		if di.DepositID == "" {
 			return errors.New("DepositID missing")
 		}
-		if di.CoinType == scanner.CoinTypeBTC && !isValidBtcTx(di.DepositID) {
+		if di.CoinType == config.CoinTypeBTC && !isValidBtcTx(di.DepositID) {
 			return fmt.Errorf("Invalid DepositID value \"%s\"", di.DepositID)
 		}
 		if di.DepositValue == 0 {

@@ -16,8 +16,8 @@ import (
 var (
 	// ErrDepositAddressEmpty represents all deposit addresses are used
 	ErrDepositAddressEmpty = errors.New("Deposit address pool is empty")
-	// ErrCoinTypeNotExists is returned when an unrecognized coin type is used
-	ErrCoinTypeNotExists = errors.New("Invalid coin type")
+	// ErrCoinTypeNotRegistered is returned when an unrecognized coin type is used
+	ErrCoinTypeNotRegistered = errors.New("Coin type is not registered")
 )
 
 const (
@@ -27,6 +27,7 @@ const (
 // AddrGenerator generate new deposit address
 type AddrGenerator interface {
 	NewAddress() (string, error)
+	Remaining() uint64
 }
 
 // Addrs manages deposit addresses
@@ -39,42 +40,55 @@ type Addrs struct {
 
 // AddrManager control all AddrGenerator according to coinType
 type AddrManager struct {
-	Mutex    sync.RWMutex
-	AGHolder map[string]AddrGenerator
-	AGcount  int
+	sync.RWMutex
+	generators map[string]AddrGenerator
 }
 
 // NewAddrManager create a Manager
 func NewAddrManager() *AddrManager {
-	return &AddrManager{AGcount: 0, AGHolder: make(map[string]AddrGenerator)}
+	return &AddrManager{
+		generators: make(map[string]AddrGenerator),
+	}
 }
 
 // PushGenerator add a AddrGenerater with coinType
 func (am *AddrManager) PushGenerator(ag AddrGenerator, coinType string) error {
-	am.Mutex.Lock()
-	defer am.Mutex.Unlock()
-	_, ok := am.AGHolder[coinType]
-	if ok {
+	am.Lock()
+	defer am.Unlock()
+
+	if _, ok := am.generators[coinType]; ok {
 		return errors.New("coinType already exists")
 	}
-	am.AGHolder[coinType] = ag
-	am.AGcount++
+
+	am.generators[coinType] = ag
+
 	return nil
 }
 
 // NewAddress return new address according to coinType
 func (am *AddrManager) NewAddress(coinType string) (string, error) {
-	am.Mutex.Lock()
-	defer am.Mutex.Unlock()
-	ag, ok := am.AGHolder[coinType]
+	am.Lock()
+	defer am.Unlock()
+
+	ag, ok := am.generators[coinType]
 	if !ok {
-		return "", ErrCoinTypeNotExists
+		return "", ErrCoinTypeNotRegistered
 	}
-	depositAddr, err := ag.NewAddress()
-	if err != nil {
-		return "", err
+
+	return ag.NewAddress()
+}
+
+// Remaining returns the number of remaining addresses for a given coin type
+func (am *AddrManager) Remaining(coinType string) (uint64, error) {
+	am.Lock()
+	defer am.Unlock()
+
+	ag, ok := am.generators[coinType]
+	if !ok {
+		return 0, ErrCoinTypeNotRegistered
 	}
-	return depositAddr, nil
+
+	return ag.Remaining(), nil
 }
 
 // NewAddrs creates Addrs instance, will load and verify the addresses

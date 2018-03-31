@@ -24,12 +24,39 @@ const (
 	BuyMethodDirect = "direct"
 	// BuyMethodPassthrough is used when coins are first bought from an exchange before sending from the local hot wallet
 	BuyMethodPassthrough = "passthrough"
+
+	// CoinTypeBTC is BTC coin type
+	CoinTypeBTC = "BTC"
+	// CoinTypeETH is ETH coin type
+	CoinTypeETH = "ETH"
+	// CoinTypeSKY is SKY coin type
+	CoinTypeSKY = "SKY"
 )
 
 var (
 	// ErrInvalidBuyMethod is returned if BindAddress is called with an invalid buy method
 	ErrInvalidBuyMethod = errors.New("Invalid buy method")
+
+	// ErrUnsupportedCoinType unsupported coin type
+	ErrUnsupportedCoinType = errors.New("unsupported coin type")
+
+	// CoinTypes is a list of supported coin types
+	CoinTypes = []string{
+		CoinTypeBTC,
+		CoinTypeETH,
+		CoinTypeSKY,
+	}
 )
+
+// ValidateCoinType returns an error if a coin type string is invalid
+func ValidateCoinType(coinType string) error {
+	for _, k := range CoinTypes {
+		if k == coinType {
+			return nil
+		}
+	}
+	return ErrUnsupportedCoinType
+}
 
 // ValidateBuyMethod returns an error if a buy method string is invalid
 func ValidateBuyMethod(m string) error {
@@ -290,6 +317,28 @@ type Dummy struct {
 	HTTPAddr string `mapstructure:"http_addr"`
 }
 
+// IsScannerEnabled returns whether or not a scanner is enabled for a given coin type
+func (c Config) IsScannerEnabled(coinType string) (bool, error) {
+	// TODO -- adjust this after adding multicoin dummy scanner support
+	// This check makes an assumption about cmd/teller/teller.go's initialization
+	// of the scanners, which ignores the individial scanner.Enabled setting
+	// if Dummy.Scanner is enabled
+	if c.Dummy.Scanner {
+		return false, nil
+	}
+
+	switch coinType {
+	case CoinTypeBTC:
+		return c.BtcScanner.Enabled, nil
+	case CoinTypeETH:
+		return c.EthScanner.Enabled, nil
+	case CoinTypeSKY:
+		return c.SkyScanner.Enabled, nil
+	default:
+		return false, ErrUnsupportedCoinType
+	}
+}
+
 // Redacted returns a copy of the config with sensitive information redacted
 func (c Config) Redacted() Config {
 	redacted := "<redacted>"
@@ -528,4 +577,18 @@ func Load(configName, appDir string) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func init() {
+	// Verify that the IsScannerEnabled switch handles all defined coin types
+	var c Config
+	for _, k := range CoinTypes {
+		enabled, err := c.IsScannerEnabled(k)
+		if err != nil {
+			panic(err)
+		}
+		if enabled {
+			panic(fmt.Sprintf("scanner for coin type %s is inexplicably enabled during empty config initialization", k))
+		}
+	}
 }

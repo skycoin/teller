@@ -280,15 +280,7 @@ func (e *Exchange) GetBindNum(skyAddr string) (int, error) {
 
 // GetDepositStats returns deposit status
 func (e *Exchange) GetDepositStats() (*DepositStats, error) {
-	tbr, tss, err := e.store.GetDepositStats()
-	if err != nil {
-		return nil, err
-	}
-
-	return &DepositStats{
-		TotalBTCReceived: tbr,
-		TotalSKYSent:     tss,
-	}, nil
+	return e.store.GetDepositStats()
 }
 
 // Balance returns the number of coins left in the OTC wallet

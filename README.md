@@ -28,18 +28,22 @@
     - [Using a reverse proxy to expose teller](#using-a-reverse-proxy-to-expose-teller)
     - [Setup geth](#setup-geth)
         - [Configure geth](#configure-geth)
-    - [you can using a reverse proxy to expose geth rpc port such as Using a reverse proxy to expose teller](#you-can-using-a-reverse-proxy-to-expose-geth-rpc-port-such-as-using-a-reverse-proxy-to-expose-teller)
-- [API](#api)
+- [Public API](#public-api)
     - [Bind](#bind)
     - [Status](#status)
     - [Config](#config)
     - [Health](#health)
-    - [Dummy](#dummy)
-        - [Scanner](#scanner)
-            - [Deposit](#deposit)
-        - [Sender](#sender)
-            - [Broadcasts](#broadcasts)
-            - [Confirm](#confirm)
+- [Dummy Scanner and Sender API](#dummy-scanner-and-sender-api)
+    - [Scanner](#scanner)
+        - [Deposit](#deposit)
+    - [Sender](#sender)
+        - [Broadcasts](#broadcasts)
+        - [Confirm](#confirm)
+- [Monitoring API](#monitoring-api)
+    - [Deposit Address Usage](#deposit-address-usage)
+    - [Deposits By Status](#deposits-by-status)
+    - [Deposit Errors](#deposit-errors)
+    - [Accounting](#accounting)
 - [Code linting](#code-linting)
 - [Run tests](#run-tests)
 - [Database structure](#database-structure)
@@ -347,45 +351,42 @@ These rules need to be duplicated for another port (e.g. 7072) for the HTTPS lis
 Follow the instructions from the geth wiki to install geth:
 https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum
 
-```
 Building geth requires both a Go (version 1.7 or later) and a C compiler.
-You can install them using your favourite package manager.
 Once the dependencies are installed, run
+
+```sh
 cd go-ethereum
 make geth
-copy geth to you system PATH, such as: cp build/bin/geth /usr/bin
-
 ```
+
+The `geth` binary is placed in `build/bin/geth`. Add geth to your `PATH` so that
+it can be invoked.
 
 #### Configure geth
 
-specified the following values:
+Specify the following values:
 
 * `--datadir` - set this to directory that store ethereum block chain data.
 * `--rpc` - Enable the HTTP-RPC server
-* --rpcaddr` - HTTP-RPC server listening interface (default: "localhost") Set this as the value of `eth_rpc.server` in the teller conf.
+* `--rpcaddr` - HTTP-RPC server listening interface (default: "localhost") Set this as the value of `eth_rpc.server` in the teller conf.
 * `--rpcport`- HTTP-RPC server listening port (default: 8545) Set this as the value of `eth_rpc.port` in the teller conf.
 
-```
 Please note, offering an API over the HTTP (rpc) or WebSocket (ws) interfaces will give
 everyone access to the APIs who can access this interface (DApps, browser tabs, etc). Be
 careful which APIs you enable. By default Geth enables all APIs over the IPC (ipc) interface
 and only the db, eth, net and web3 APIs over the HTTP and WebSocket interfaces.
 
-```
+See [Geth API docs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs) for more information.
 
-Ethereum Api See https://github.com/ethereum/go-ethereum/wiki/Management-APIs
+>Note: You can using a reverse proxy to expose geth rpc port such as [Using a reverse proxy to expose teller](#using-a-reverse-proxy-to-expose-teller)
 
-### you can using a reverse proxy to expose geth rpc port such as [Using a reverse proxy to expose teller](#using-a-reverse-proxy-to-expose-teller)
 Now, run `geth`:
 
 ```sh
 geth --datadir=xxx
-
-as a daemon
-nohup geth --datadir=xxxx > geth.log 2>&1 &
 ```
-## API
+
+## Public API
 
 The HTTP API service is provided by the proxy and serve on port 7071 by default.
 
@@ -621,14 +622,14 @@ Response:
 Possible statuses are:
 TODO
 
-### Dummy
+## Dummy Scanner and Sender API
 
 A dummy scanner and sender API is available over `dummy.http_addr` if
 `dummy.scanner` or `dummy.sender` are enabled.
 
-#### Scanner
+### Scanner
 
-##### Deposit
+#### Deposit
 
 ```sh
 Method: GET, POST
@@ -643,9 +644,9 @@ Example:
 curl http://localhost:4121/dummy/scanner/deposit?addr=1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB&value=100000000&height=494713&tx=edb29a9b561a8d6a6118eb1f724c87f853bf471d7e4f0e9ccb9e1d340235687b&n=0
 ```
 
-#### Sender
+### Sender
 
-##### Broadcasts
+#### Broadcasts
 
 ```sh
 Method: GET
@@ -678,7 +679,7 @@ Response:
 ]
 ```
 
-##### Confirm
+#### Confirm
 
 ```sh
 Method: GET, POST
@@ -691,6 +692,116 @@ Example:
 
 ```sh
 curl http://localhost:4121/dummy/sender/confirm?txid=4fc9743b04c2e3f5e467cde38c0872e3e3ad9ec05d59081ad1a8bd88045635de
+```
+
+## Monitoring API
+
+Admin monitoring APIs are exposed on `http://localhost:7711` by default.
+This is configured in the `admin_panel` section of the config file.
+
+### Deposit Address Usage
+
+```sh
+Method: GET
+URI: /api/deposit-addresses
+```
+
+Returns information about the deposit address list.
+
+Example:
+
+```sh
+curl http://localhost:7711/api/deposit-addresses
+```
+
+Response:
+
+```json
+{
+    "BTC": {
+        "remaining_addresses": 4,
+        "scanning_addresses": ["1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB"],
+        "scanning_enabled": true,
+        "address_manager_enabled": true
+    },
+    "ETH": {
+        "remaining_addresses": 5,
+        "scanning_addresses": [],
+        "scanning_enabled": false,
+        "address_manager_enabled": true
+    },
+    "SKY": {
+        "remaining_addresses": 0,
+        "scanning_addresses": [],
+        "scanning_enabled": false,
+        "address_manager_enabled": false
+    }
+}
+```
+
+### Deposits By Status
+
+```sh
+Method: GET
+URI: /api/deposits
+Args:
+    status - Optional, one of "waiting_deposit", "waiting_send", "waiting_confirm", "done", "waiting_decide", "waiting_passthrough", "waiting_passthrough_order_complete"
+```
+
+Returns all deposits with a given status, or all deposits if no status is given.
+
+Example:
+
+```sh
+curl http://localhost:7711/api/deposits?status=waiting_send
+```
+
+Response:
+
+```json
+{
+    "deposits": [
+        {
+            "seq": 1,
+            "updated_at": 1522489031,
+            "status": "waiting_send",
+            "skycoin_address": "2HTnQe3ZupkG6k8S81brNC3JycGV2Em71F2",
+            "deposit_address": "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
+            "coin_type": "BTC",
+            "txid": ""
+        }
+    ]
+}
+```
+
+### Deposit Errors
+
+### Accounting
+
+```sh
+Method: GET
+URI: /api/accounting
+```
+
+Returns the amounts received and sent.
+
+Example:
+
+```sh
+curl http://localhost:7711/api/accounting
+```
+
+Response:
+
+```json
+{
+    "sent": "102.943000",
+    "received": {
+        "BTC": "1.53420000",
+        "ETH": "0.000000000000000000",
+        "SKY": "0.000000"
+    }
+}
 ```
 
 ## Code linting

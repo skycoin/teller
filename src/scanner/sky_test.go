@@ -8,6 +8,7 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/util/dbutil"
 	"github.com/skycoin/teller/src/util/testutil"
 
@@ -137,7 +138,7 @@ func setupSkyScannerWithDB(t *testing.T, skyDB *bolt.DB, db *bolt.DB) *SKYScanne
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
 
-	err = store.AddSupportedCoin(CoinTypeSKY)
+	err = store.AddSupportedCoin(config.CoinTypeSKY)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -163,7 +164,7 @@ func setupSkyScannerWithNonExistInitHeight(t *testing.T, skyDB *bolt.DB, db *bol
 
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
-	err = store.AddSupportedCoin(CoinTypeSKY)
+	err = store.AddSupportedCoin(config.CoinTypeSKY)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -209,7 +210,7 @@ func testSkyScannerRunProcessedLoop(t *testing.T, scr *SKYScanner, nDeposits int
 				}
 
 				require.True(t, d.Processed)
-				require.Equal(t, CoinTypeSKY, d.CoinType)
+				require.Equal(t, config.CoinTypeSKY, d.CoinType)
 				require.NotEmpty(t, d.Address)
 				if d.Value != 0 {
 					require.NotEmpty(t, d.Value)
@@ -246,14 +247,14 @@ func testSkyScannerRun(t *testing.T, scr *SKYScanner) {
 
 	// This address has:
 	// 1 deposit, in block 176
-	err := scr.AddScanAddress("v4qF7Ceq276tZpTS3HKsZbDguMAcAGAG1q", CoinTypeSKY)
+	err := scr.AddScanAddress("v4qF7Ceq276tZpTS3HKsZbDguMAcAGAG1q", config.CoinTypeSKY)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 1
 
 	// This address has:
 	// 1 deposit in block 116
 	// 1 deposit in block 117
-	err = scr.AddScanAddress("8MQsjc5HYbSjPTZikFZYeHHDtLungBEHYS", CoinTypeSKY)
+	err = scr.AddScanAddress("8MQsjc5HYbSjPTZikFZYeHHDtLungBEHYS", config.CoinTypeSKY)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -311,7 +312,7 @@ func testSkyScannerProcessDepositError(t *testing.T, skyDB *bolt.DB) {
 	var nDeposits int64
 
 	// This address has deposits in: Block 52, 54, 59, 108, 134, 137, 141
-	err := scr.AddScanAddress("2J3rWX7pciQwmvcATSnxEeCHRs1mSkWmt4L", CoinTypeSKY)
+	err := scr.AddScanAddress("2J3rWX7pciQwmvcATSnxEeCHRs1mSkWmt4L", config.CoinTypeSKY)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 7
 
@@ -341,7 +342,7 @@ func testSkyScannerProcessDepositError(t *testing.T, skyDB *bolt.DB) {
 				}
 
 				//require.False(t, d.Processed)
-				require.Equal(t, CoinTypeSKY, d.CoinType)
+				require.Equal(t, config.CoinTypeSKY, d.CoinType)
 				require.Equal(t, "2J3rWX7pciQwmvcATSnxEeCHRs1mSkWmt4L", d.Address)
 				require.NotEmpty(t, d.Value)
 				require.NotEmpty(t, d.Height)
@@ -393,7 +394,7 @@ func testSkyScannerLoadUnprocessedDeposits(t *testing.T, skyDB *bolt.DB) {
 	// NOTE: This data is fake, but the addresses and Txid are valid
 	unprocessedDeposits := []Deposit{
 		{
-			CoinType:  CoinTypeSKY,
+			CoinType:  config.CoinTypeSKY,
 			Address:   "2J3rWX7pciQwmvcATSnxEeCHRs1mSkWmt4L",
 			Value:     1e8,
 			Height:    141,
@@ -402,7 +403,7 @@ func testSkyScannerLoadUnprocessedDeposits(t *testing.T, skyDB *bolt.DB) {
 			Processed: false,
 		},
 		{
-			CoinType:  CoinTypeSKY,
+			CoinType:  config.CoinTypeSKY,
 			Address:   "VD98Qt2f2UeUbUKcCJEaKxqEewExgCyiVh",
 			Value:     10e8,
 			Height:    115,
@@ -413,7 +414,7 @@ func testSkyScannerLoadUnprocessedDeposits(t *testing.T, skyDB *bolt.DB) {
 	}
 
 	processedDeposit := Deposit{
-		CoinType:  CoinTypeSKY,
+		CoinType:  config.CoinTypeSKY,
 		Address:   "2iJPqYVuQvFoG1pim4bjoyxWK8uwGmznWaV",
 		Value:     100e8,
 		Height:    163,
@@ -452,7 +453,7 @@ func testSkyScannerDuplicateDepositScans(t *testing.T, skyDB *bolt.DB) {
 	// This address has:
 	// 1 deposit in block 116
 	// 1 deposit in block 117
-	err := scr.AddScanAddress("8MQsjc5HYbSjPTZikFZYeHHDtLungBEHYS", CoinTypeSKY)
+	err := scr.AddScanAddress("8MQsjc5HYbSjPTZikFZYeHHDtLungBEHYS", config.CoinTypeSKY)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 

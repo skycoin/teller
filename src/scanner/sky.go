@@ -8,6 +8,7 @@ import (
 	"github.com/skycoin/skycoin/src/gui"
 	"github.com/skycoin/skycoin/src/util/droplet"
 	"github.com/skycoin/skycoin/src/visor"
+	"github.com/skycoin/teller/src/config"
 )
 
 // SKYScanner blockchain scanner to check if there're deposit coins
@@ -33,7 +34,7 @@ func NewSkyClient(addr string) *SkyClient {
 
 // NewSKYScanner creates scanner instance
 func NewSKYScanner(log logrus.FieldLogger, store Storer, sky SkyRPCClient, cfg Config) (*SKYScanner, error) {
-	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.sky"), CoinTypeSKY, cfg)
+	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.sky"), config.CoinTypeSKY, cfg)
 
 	return &SKYScanner{
 		skyClient: sky,
@@ -65,7 +66,7 @@ func (s *SKYScanner) scanBlock(block *CommonBlock) (int, error) {
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.base.GetStorer().ScanBlock(block, CoinTypeSKY)
+	dvs, err := s.base.GetStorer().ScanBlock(block, config.CoinTypeSKY)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -200,7 +201,7 @@ func (s *SKYScanner) AddScanAddress(addr, coinType string) error {
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *SKYScanner) GetScanAddresses() ([]string, error) {
-	return s.base.GetStorer().GetScanAddresses(CoinTypeSKY)
+	return s.base.GetStorer().GetScanAddresses(config.CoinTypeSKY)
 }
 
 //GetDeposit returns channel of depositnote

@@ -65,11 +65,11 @@ func (m *mockReceiver) BindAddress(a, b, c, d string) (*BoundAddress, error) {
 
 func createDepositStatusWaitDecide(t *testing.T, p *Passthrough, skyAddr string, n uint32) DepositInfo {
 	btcAddr := testutil.RandString(t, 16)
-	_, err := p.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC, config.BuyMethodPassthrough)
+	_, err := p.store.BindAddress(skyAddr, btcAddr, config.CoinTypeBTC, config.BuyMethodPassthrough)
 	require.NoError(t, err)
 
 	depositInfo, err := p.store.GetOrCreateDepositInfo(scanner.Deposit{
-		CoinType:  scanner.CoinTypeBTC,
+		CoinType:  config.CoinTypeBTC,
 		Address:   btcAddr,
 		Value:     1000000,
 		Height:    400000,
@@ -850,12 +850,12 @@ func TestPassthroughExchangeRunSend(t *testing.T) {
 
 	skyAddr := testSkyAddr
 	btcAddr := "foo-btc-addr"
-	_, err := e.store.BindAddress(skyAddr, btcAddr, scanner.CoinTypeBTC, config.BuyMethodPassthrough)
+	_, err := e.store.BindAddress(skyAddr, btcAddr, config.CoinTypeBTC, config.BuyMethodPassthrough)
 	require.NoError(t, err)
 
 	dn := scanner.DepositNote{
 		Deposit: scanner.Deposit{
-			CoinType: scanner.CoinTypeBTC,
+			CoinType: config.CoinTypeBTC,
 			Address:  btcAddr,
 			Value:    134000,
 			Height:   20,
@@ -897,7 +897,7 @@ func TestPassthroughExchangeRunSend(t *testing.T) {
 	txid := e.Sender.(*Send).sender.(*dummySender).predictTxid(t, skyAddr, skySent)
 
 	mp := e.Receiver.(*Receive).multiplexer
-	mp.GetScanner(scanner.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
+	mp.GetScanner(config.CoinTypeBTC).(*dummyScanner).addDeposit(dn)
 
 	// First loop calls saveIncomingDeposit
 	// Then, the passthrough order is made and completes
@@ -936,7 +936,7 @@ func TestPassthroughExchangeRunSend(t *testing.T) {
 
 	expectedDeposit := DepositInfo{
 		Seq:            1,
-		CoinType:       scanner.CoinTypeBTC,
+		CoinType:       config.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		Status:         StatusWaitConfirm,
 		SkyAddress:     skyAddr,
@@ -1000,7 +1000,7 @@ func TestPassthroughExchangeRunSend(t *testing.T) {
 
 	expectedDeposit = DepositInfo{
 		Seq:            1,
-		CoinType:       scanner.CoinTypeBTC,
+		CoinType:       config.CoinTypeBTC,
 		UpdatedAt:      di.UpdatedAt,
 		Status:         StatusDone,
 		SkyAddress:     skyAddr,

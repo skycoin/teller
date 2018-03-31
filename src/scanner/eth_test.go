@@ -11,6 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/util/dbutil"
 	"github.com/skycoin/teller/src/util/testutil"
 )
@@ -137,7 +138,7 @@ func setupEthScannerWithDB(t *testing.T, ethDB *bolt.DB, db *bolt.DB) *ETHScanne
 
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
-	err = store.AddSupportedCoin(CoinTypeETH)
+	err = store.AddSupportedCoin(config.CoinTypeETH)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -164,7 +165,7 @@ func setupEthScannerWithNonExistInitHeight(t *testing.T, ethDB *bolt.DB, db *bol
 
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
-	err = store.AddSupportedCoin(CoinTypeETH)
+	err = store.AddSupportedCoin(config.CoinTypeETH)
 	require.NoError(t, err)
 
 	// Block 2325204 doesn't exist in db
@@ -211,7 +212,7 @@ func testEthScannerRunProcessedLoop(t *testing.T, scr *ETHScanner, nDeposits int
 				}
 
 				require.True(t, d.Processed)
-				require.Equal(t, CoinTypeETH, d.CoinType)
+				require.Equal(t, config.CoinTypeETH, d.CoinType)
 				require.NotEmpty(t, d.Address)
 				if d.Value != 0 { // value(0x87b127ee022abcf9881b9bad6bb6aac25229dff0) = 0
 					require.NotEmpty(t, d.Value)
@@ -248,19 +249,19 @@ func testEthScannerRun(t *testing.T, scr *ETHScanner) {
 	nDeposits := 0
 
 	// This address has 0 deposits
-	err := scr.AddScanAddress("0x2cf014d432e92685ef1cf7bc7967a4e4debca092", CoinTypeETH)
+	err := scr.AddScanAddress("0x2cf014d432e92685ef1cf7bc7967a4e4debca092", config.CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 0
 
 	// This address has:
 	// 1 deposit, in block 2325212
-	err = scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", CoinTypeETH)
+	err = scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", config.CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
 	// This address has:
 	// 9 deposits in block 2325213
-	err = scr.AddScanAddress("0xbfc39b6f805a9e40e77291aff27aee3c96915bdd", CoinTypeETH)
+	err = scr.AddScanAddress("0xbfc39b6f805a9e40e77291aff27aee3c96915bdd", config.CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 9
 
@@ -316,7 +317,7 @@ func testEthScannerConfirmationsRequired(t *testing.T, ethDB *bolt.DB) {
 	// 2 deposits in block 2325212
 	// Only blocks 2325212  are processed, because blockCount is set
 	// to 2325214 and the confirmations required is set to 1
-	err := scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", CoinTypeETH)
+	err := scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", config.CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -362,7 +363,7 @@ func testEthScannerDuplicateDepositScans(t *testing.T, ethDB *bolt.DB) {
 	// This address has:
 	// 2 deposit, in block 2325212
 	scr := setupEthScannerWithDB(t, ethDB, db)
-	err := scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", CoinTypeETH)
+	err := scr.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", config.CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -382,7 +383,7 @@ func testEthScannerLoadUnprocessedDeposits(t *testing.T, ethDB *bolt.DB) {
 	// NOTE: This data is fake, but the addresses and Txid are valid
 	unprocessedDeposits := []Deposit{
 		{
-			CoinType:  CoinTypeETH,
+			CoinType:  config.CoinTypeETH,
 			Address:   "0x196736a260c6e7c86c88a73e2ffec400c9caef71",
 			Value:     1e8,
 			Height:    2325212,
@@ -391,7 +392,7 @@ func testEthScannerLoadUnprocessedDeposits(t *testing.T, ethDB *bolt.DB) {
 			Processed: false,
 		},
 		{
-			CoinType:  CoinTypeETH,
+			CoinType:  config.CoinTypeETH,
 			Address:   "0x2a5ee9b4307a0030982ed00ca7e904a20fc53a12",
 			Value:     10e8,
 			Height:    2325212,
@@ -402,7 +403,7 @@ func testEthScannerLoadUnprocessedDeposits(t *testing.T, ethDB *bolt.DB) {
 	}
 
 	processedDeposit := Deposit{
-		CoinType:  CoinTypeETH,
+		CoinType:  config.CoinTypeETH,
 		Address:   "0x87b127ee022abcf9881b9bad6bb6aac25229dff0",
 		Value:     100e8,
 		Height:    2325212,
@@ -438,7 +439,7 @@ func testEthScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 
 	// This address has:
 	// 9 deposits in block 2325213
-	err := scr.AddScanAddress("0xbfc39b6f805a9e40e77291aff27aee3c96915bdd", CoinTypeETH)
+	err := scr.AddScanAddress("0xbfc39b6f805a9e40e77291aff27aee3c96915bdd", config.CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 9
 
@@ -468,7 +469,7 @@ func testEthScannerProcessDepositError(t *testing.T, ethDB *bolt.DB) {
 				}
 
 				require.False(t, d.Processed)
-				require.Equal(t, CoinTypeETH, d.CoinType)
+				require.Equal(t, config.CoinTypeETH, d.CoinType)
 				require.Equal(t, "0xbfc39b6f805a9e40e77291aff27aee3c96915bdd", d.Address)
 				if d.Value != 0 { //value(0x87b127ee022abcf9881b9bad6bb6aac25229dff0) = 0
 					require.NotEmpty(t, d.Value)
