@@ -45,7 +45,7 @@ type Runner interface {
 type Exchanger interface {
 	BindAddress(skyAddr, depositAddr, coinType string) (*BoundAddress, error)
 	GetDepositStatuses(skyAddr string) ([]DepositStatus, error)
-	GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error)
+	GetDeposits(flt DepositFilter) ([]DepositInfo, error)
 	GetBindNum(skyAddr string) (int, error)
 	GetDepositStats() (*DepositStats, error)
 	SenderStatus() error
@@ -220,18 +220,7 @@ type DepositStatus struct {
 	CoinType  string `json:"coin_type"`
 }
 
-// DepositStatusDetail deposit status detail info
-type DepositStatusDetail struct {
-	Seq            uint64 `json:"seq"`
-	UpdatedAt      int64  `json:"updated_at"`
-	Status         string `json:"status"`
-	SkyAddress     string `json:"skycoin_address"`
-	DepositAddress string `json:"deposit_address"`
-	CoinType       string `json:"coin_type"`
-	Txid           string `json:"txid"`
-}
-
-// GetDepositStatuses returns deamon.DepositStatus array of given skycoin address
+// GetDepositStatuses returns DepositStatus array of given skycoin address
 func (e *Exchange) GetDepositStatuses(skyAddr string) ([]DepositStatus, error) {
 	dis, err := e.store.GetDepositInfoOfSkyAddress(skyAddr)
 	if err != nil {
@@ -243,33 +232,16 @@ func (e *Exchange) GetDepositStatuses(skyAddr string) ([]DepositStatus, error) {
 		dss = append(dss, DepositStatus{
 			Seq:       di.Seq,
 			UpdatedAt: di.UpdatedAt,
-			Status:    di.Status.String(),
+			Status:    di.Status,
 			CoinType:  di.CoinType,
 		})
 	}
 	return dss, nil
 }
 
-// GetDepositStatusDetail returns deposit status details
-func (e *Exchange) GetDepositStatusDetail(flt DepositFilter) ([]DepositStatusDetail, error) {
-	dis, err := e.store.GetDepositInfoArray(flt)
-	if err != nil {
-		return nil, err
-	}
-
-	dss := make([]DepositStatusDetail, 0, len(dis))
-	for _, di := range dis {
-		dss = append(dss, DepositStatusDetail{
-			Seq:            di.Seq,
-			UpdatedAt:      di.UpdatedAt,
-			Status:         di.Status.String(),
-			SkyAddress:     di.SkyAddress,
-			DepositAddress: di.DepositAddress,
-			Txid:           di.Txid,
-			CoinType:       di.CoinType,
-		})
-	}
-	return dss, nil
+// GetDeposits returns deposit status details
+func (e *Exchange) GetDeposits(flt DepositFilter) ([]DepositInfo, error) {
+	return e.store.GetDepositInfoArray(flt)
 }
 
 // GetBindNum returns the number of btc/eth address the given sky address binded

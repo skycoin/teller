@@ -54,19 +54,11 @@ type dummyDepositStatusGetter struct {
 	dpis []exchange.DepositInfo
 }
 
-func (dps dummyDepositStatusGetter) GetDepositStatusDetail(flt exchange.DepositFilter) ([]exchange.DepositStatusDetail, error) {
-	var ds []exchange.DepositStatusDetail
+func (dps dummyDepositStatusGetter) GetDeposits(flt exchange.DepositFilter) ([]exchange.DepositInfo, error) {
+	var ds []exchange.DepositInfo
 	for _, dpi := range dps.dpis {
 		if flt(dpi) {
-			ds = append(ds, exchange.DepositStatusDetail{
-				Seq:            dpi.Seq,
-				DepositAddress: dpi.DepositAddress,
-				SkyAddress:     dpi.SkyAddress,
-				Status:         dpi.Status.String(),
-				UpdatedAt:      dpi.UpdatedAt,
-				Txid:           dpi.Txid,
-				CoinType:       dpi.CoinType,
-			})
+			ds = append(ds, dpi)
 		}
 	}
 	return ds, nil
@@ -226,7 +218,7 @@ func TestRunMonitor(t *testing.T) {
 					dss = append(dss, exchange.DepositInfo{
 						Seq:            s.Seq,
 						UpdatedAt:      s.UpdatedAt,
-						Status:         exchange.NewStatusFromStr(s.Status),
+						Status:         s.Status,
 						DepositAddress: s.DepositAddress,
 						SkyAddress:     s.SkyAddress,
 						Txid:           s.Txid,

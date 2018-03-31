@@ -3,6 +3,7 @@ package exchange
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -1479,7 +1480,7 @@ func TestExchangeGetDepositStatuses(t *testing.T) {
 	require.NotEmpty(t, depositInfo.UpdatedAt)
 }
 
-func TestExchangeGetDepositStatusDetail(t *testing.T) {
+func TestExchangeGetDeposits(t *testing.T) {
 	// TODO
 }
 
@@ -1508,4 +1509,64 @@ func TestExchangeGetBindNum(t *testing.T) {
 	num, err = s.GetBindNum("a")
 	require.NoError(t, err)
 	require.Equal(t, num, 1)
+}
+
+func TestExchangeErroredDeposits(t *testing.T) {
+	db, shutdown := testutil.PrepareDB(t)
+	defer shutdown()
+
+	log, _ := testutil.NewLogger(t)
+	store, err := NewStore(log, db)
+	require.NoError(t, err)
+
+	bscr := newDummyScanner()
+	multiplexer := scanner.NewMultiplexer(log)
+	err = multiplexer.AddScanner(bscr, config.CoinTypeBTC)
+	require.NoError(t, err)
+
+	e, err := NewDirectExchange(log, defaultCfg, store, multiplexer, nil)
+	require.NoError(t, err)
+
+	dis := []DepositInfo{
+		{
+			Seq:            1,
+			Status:         StatusDone,
+			Error:          ErrEmptySendAmount.Error(),
+			SkyAddress:     testSkyAddr,
+			DepositAddress: "foo-deposit-addr",
+			DepositID:      "foo-deposit-id:1",
+			CoinType:       config.CoinTypeBTC,
+			DepositValue:   1,
+			ConversionRate: testSkyBtcRate,
+			BuyMethod:      config.BuyMethodDirect,
+		},
+		{
+			Seq:            2,
+			Status:         StatusDone,
+			Error:          "second error",
+			Txid:           "foo-txid",
+			SkyAddress:     testSkyAddr2,
+			DepositAddress: "foo-deposit-addr",
+			DepositID:      "foo-deposit-id:2",
+			CoinType:       config.CoinTypeBTC,
+			DepositValue:   100001232,
+			ConversionRate: testSkyBtcRate,
+			BuyMethod:      config.BuyMethodDirect,
+		},
+	}
+
+	for i, di := range dis {
+		updatedDi, err := e.store.(*Store).addDepositInfo(di)
+		require.NoError(t, err)
+		dis[i].UpdatedAt = updatedDi.UpdatedAt
+	}
+
+	erroredDis, err := e.ErroredDeposits()
+	require.NoError(t, err)
+
+	sort.Slice(erroredDis, func(i, j int) bool {
+		return erroredDis[i].Seq < erroredDis[j].Seq
+	})
+
+	require.Equal(t, dis, erroredDis)
 }

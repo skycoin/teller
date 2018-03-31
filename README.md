@@ -763,18 +763,109 @@ Response:
     "deposits": [
         {
             "seq": 1,
-            "updated_at": 1522489031,
+            "updated_at": 1522494557,
             "status": "waiting_send",
-            "skycoin_address": "2HTnQe3ZupkG6k8S81brNC3JycGV2Em71F2",
-            "deposit_address": "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
             "coin_type": "BTC",
-            "txid": ""
+            "sky_address": "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW",
+            "buy_method": "direct",
+            "deposit_address": "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
+            "deposit_id": "edb29a9b561a8d6a6118eb1f724c87f853bf471d7e4f0e9ccb9e1d340235687b:11",
+            "txid": "",
+            "conversion_rate": "500",
+            "deposit_value": 201234,
+            "sky_sent": 0,
+            "passthrough": {
+                "exchange_name": "",
+                "sky_bought": 0,
+                "deposit_value_spent": 0,
+                "requested_amount": "",
+                "order": {
+                    "customer_id": "",
+                    "order_id": "",
+                    "completed_amount": "",
+                    "price": "",
+                    "status": "",
+                    "final": false,
+                    "original": ""
+                }
+            },
+            "error": "",
+            "deposit": {
+                "coin_type": "BTC",
+                "address": "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
+                "value": 201234,
+                "height": 494713,
+                "tx": "edb29a9b561a8d6a6118eb1f724c87f853bf471d7e4f0e9ccb9e1d340235687b",
+                "n": 11,
+                "processed": false
+            }
         }
     ]
 }
 ```
 
 ### Deposit Errors
+
+```sh
+Method: GET
+URI: /api/deposits/errored
+```
+
+Returns all deposits that failed with a permanent error.
+
+Example:
+
+```sh
+curl http://localhost:7711/api/deposits/errored
+```
+
+Response:
+
+```json
+{
+    "deposits": [
+        {
+            "seq": 1,
+            "updated_at": 1522494557,
+            "status": "done",
+            "coin_type": "BTC",
+            "sky_address": "2Wbi4wvxC4fkTYMsS2f6HaFfW4pafDjXcQW",
+            "buy_method": "direct",
+            "deposit_address": "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
+            "deposit_id": "edb29a9b561a8d6a6118eb1f724c87f853bf471d7e4f0e9ccb9e1d340235687b:11",
+            "txid": "",
+            "conversion_rate": "500",
+            "deposit_value": 1,
+            "sky_sent": 0,
+            "passthrough": {
+                "exchange_name": "",
+                "sky_bought": 0,
+                "deposit_value_spent": 0,
+                "requested_amount": "",
+                "order": {
+                    "customer_id": "",
+                    "order_id": "",
+                    "completed_amount": "",
+                    "price": "",
+                    "status": "",
+                    "final": false,
+                    "original": ""
+                }
+            },
+            "error": "Skycoin send amount is 0",
+            "deposit": {
+                "coin_type": "BTC",
+                "address": "1PZ63K3G4gZP6A6E2TTbBwxT5bFQGL2TLB",
+                "value": 201234,
+                "height": 494713,
+                "tx": "edb29a9b561a8d6a6118eb1f724c87f853bf471d7e4f0e9ccb9e1d340235687b",
+                "n": 11,
+                "processed": false
+            }
+        }
+    ]
+}
+```
 
 ### Accounting
 

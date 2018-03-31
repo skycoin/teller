@@ -4,7 +4,6 @@ package monitor
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -36,7 +35,7 @@ type AddrManager interface {
 
 // DepositStatusGetter interface provides an API to access exchange resource
 type DepositStatusGetter interface {
-	GetDepositStatusDetail(flt exchange.DepositFilter) ([]exchange.DepositStatusDetail, error)
+	GetDeposits(flt exchange.DepositFilter) ([]exchange.DepositInfo, error)
 	GetDepositStats() (*exchange.DepositStats, error)
 	ErroredDeposits() ([]exchange.DepositInfo, error)
 }
@@ -48,13 +47,13 @@ type ScanAddressGetter interface {
 
 // Monitor monitor service struct
 type Monitor struct {
-	log               logrus.FieldLogger
-	addrManager       AddrManager
-	scanAddressGetter ScanAddressGetter
-	DepositStatusGetter
-	cfg  config.Config
-	ln   *http.Server
-	quit chan struct{}
+	log                 logrus.FieldLogger
+	addrManager         AddrManager
+	scanAddressGetter   ScanAddressGetter
+	depositStatusGetter DepositStatusGetter
+	cfg                 config.Config
+	ln                  *http.Server
+	quit                chan struct{}
 }
 
 // New creates monitor service
@@ -63,7 +62,7 @@ func New(log logrus.FieldLogger, cfg config.Config, addrManager AddrManager, dps
 		log:                 log.WithField("prefix", "teller.monitor"),
 		cfg:                 cfg,
 		addrManager:         addrManager,
-		DepositStatusGetter: dpstget,
+		depositStatusGetter: dpstget,
 		scanAddressGetter:   sag,
 		quit:                make(chan struct{}),
 	}
@@ -101,6 +100,7 @@ func (m *Monitor) setupMux() *http.ServeMux {
 
 	mux.Handle("/api/deposit-addresses", httputil.LogHandler(m.log, m.depositAddressesHandler()))
 	mux.Handle("/api/deposits", httputil.LogHandler(m.log, m.depositsByStatusHandler()))
+	mux.Handle("/api/deposits/errored", httputil.LogHandler(m.log, m.erroredDepositsHandler()))
 	mux.Handle("/api/accounting", httputil.LogHandler(m.log, m.accountingHandler()))
 	return mux
 }
@@ -162,7 +162,6 @@ func (m *Monitor) depositAddressesHandler() http.HandlerFunc {
 				case dbutil.BucketNotExistErr:
 					if !scanningEnabled {
 						ignoreErr = true
-						a = []string{}
 					}
 				}
 
@@ -171,6 +170,10 @@ func (m *Monitor) depositAddressesHandler() http.HandlerFunc {
 					httputil.ErrResponse(w, http.StatusInternalServerError)
 					return
 				}
+			}
+
+			if a == nil {
+				a = []string{}
 			}
 
 			addrManagerEnabled := false
@@ -194,14 +197,14 @@ func (m *Monitor) depositAddressesHandler() http.HandlerFunc {
 		}
 
 		if err := httputil.JSONResponse(w, resp); err != nil {
-			log.WithError(err).Error("Write json response failed")
+			log.WithError(err).Error("Write JSON response failed")
 			return
 		}
 	}
 }
 
 type depositsByStatusResponse struct {
-	Deposits []exchange.DepositStatusDetail `json:"deposits"`
+	Deposits []exchange.DepositInfo `json:"deposits"`
 }
 
 // depositsByStatusHandler returns all deposit status
@@ -221,48 +224,91 @@ func (m *Monitor) depositsByStatusHandler() http.HandlerFunc {
 		}
 
 		status := r.FormValue("status")
+
 		if status == "" {
 			// Return all deposits
-			dpis, err := m.GetDepositStatusDetail(func(dpi exchange.DepositInfo) bool {
+			dpis, err := m.depositStatusGetter.GetDeposits(func(dpi exchange.DepositInfo) bool {
 				return true
 			})
 			if err != nil {
-				log.WithError(err).Error("GetDepositStatusDetail failed")
+				log.WithError(err).Error("depositStatusGetter.GetDeposits failed")
 				httputil.ErrResponse(w, http.StatusInternalServerError)
 				return
 			}
+
+			if dpis == nil {
+				dpis = []exchange.DepositInfo{}
+			}
+
 			if err := httputil.JSONResponse(w, depositsByStatusResponse{
 				Deposits: dpis,
 			}); err != nil {
-				log.WithError(err).Error("Write json response failed")
+				log.WithError(err).Error("Write JSON response failed")
 				return
 			}
+		} else {
+			if err := exchange.ValidateStatus(status); err != nil {
+				httputil.ErrResponse(w, http.StatusBadRequest, "Invalid status")
+				return
+			}
+
+			dpis, err := m.depositStatusGetter.GetDeposits(func(dpi exchange.DepositInfo) bool {
+				return dpi.Status == status
+			})
+			if err != nil {
+				log.WithError(err).Error("depositStatusGetter.GetDeposits failed")
+				httputil.ErrResponse(w, http.StatusInternalServerError)
+				return
+			}
+
+			if dpis == nil {
+				dpis = []exchange.DepositInfo{}
+			}
+
+			if err := httputil.JSONResponse(w, depositsByStatusResponse{
+				Deposits: dpis,
+			}); err != nil {
+				log.WithError(err).Error("Write JSON response failed")
+				return
+			}
+		}
+	}
+}
+
+type erroredDepositsResponse struct {
+	Deposits []exchange.DepositInfo `json:"deposits"`
+}
+
+// erroredDepositsHandler returns all errored deposits
+// Method: GET
+// URI: /api/deposits/errored
+func (m *Monitor) erroredDepositsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		log := logger.FromContext(ctx)
+
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			httputil.ErrResponse(w, http.StatusMethodNotAllowed)
 			return
 		}
 
-		st := exchange.NewStatusFromStr(status)
-		switch st {
-		case exchange.StatusUnknown:
-			err := fmt.Sprintf("unknown status %v", status)
-			httputil.ErrResponse(w, http.StatusBadRequest, err)
-			log.WithField("depositsByStatusHandler", status).Error("Unknown status")
+		deposits, err := m.depositStatusGetter.ErroredDeposits()
+		if err != nil {
+			log.WithError(err).Error("depositStatusGetter.ErroredDeposits failed")
+			httputil.ErrResponse(w, http.StatusInternalServerError)
 			return
-		default:
-			dpis, err := m.GetDepositStatusDetail(func(dpi exchange.DepositInfo) bool {
-				return dpi.Status == st
-			})
-			if err != nil {
-				log.WithError(err).Error("GetDepositStatusDetail failed")
-				httputil.ErrResponse(w, http.StatusInternalServerError)
-				return
-			}
+		}
 
-			if err := httputil.JSONResponse(w, depositsByStatusResponse{
-				Deposits: dpis,
-			}); err != nil {
-				log.WithError(err).Error("Write json response failed")
-				return
-			}
+		if deposits == nil {
+			deposits = []exchange.DepositInfo{}
+		}
+
+		if err := httputil.JSONResponse(w, erroredDepositsResponse{
+			Deposits: deposits,
+		}); err != nil {
+			log.WithError(err).Error("Write JSON response failed")
+			return
 		}
 	}
 }
@@ -286,9 +332,9 @@ func (m *Monitor) accountingHandler() http.HandlerFunc {
 			return
 		}
 
-		stats, err := m.GetDepositStats()
+		stats, err := m.depositStatusGetter.GetDepositStats()
 		if err != nil {
-			log.WithError(err).Error("GetDepositStats failed")
+			log.WithError(err).Error("depositStatusGetter.GetDepositStats failed")
 			httputil.ErrResponse(w, http.StatusInternalServerError)
 			return
 		}
@@ -315,7 +361,7 @@ func (m *Monitor) accountingHandler() http.HandlerFunc {
 			Received: received,
 			Sent:     skySent,
 		}); err != nil {
-			log.WithError(err).Error("Write json response failed")
+			log.WithError(err).Error("Write JSON response failed")
 			return
 		}
 	}
