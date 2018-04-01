@@ -13,6 +13,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/util/dbutil"
 	"github.com/skycoin/teller/src/util/testutil"
 )
@@ -144,7 +145,7 @@ func setupBtcScannerWithDB(t *testing.T, btcDB *bolt.DB, db *bolt.DB) *BTCScanne
 
 	store, err := NewStore(log, db)
 	require.NoError(t, err)
-	err = store.AddSupportedCoin(CoinTypeBTC)
+	err = store.AddSupportedCoin(config.CoinTypeBTC)
 	require.NoError(t, err)
 
 	cfg := Config{
@@ -190,7 +191,7 @@ func testBtcScannerRunProcessedLoop(t *testing.T, scr *BTCScanner, nDeposits int
 				}
 
 				require.True(t, d.Processed)
-				require.Equal(t, CoinTypeBTC, d.CoinType)
+				require.Equal(t, config.CoinTypeBTC, d.CoinType)
 				require.NotEmpty(t, d.Address)
 				require.NotEmpty(t, d.Value)
 				require.NotEmpty(t, d.Height)
@@ -224,14 +225,14 @@ func testBtcScannerRun(t *testing.T, scr *BTCScanner) {
 	var nDeposits int64
 
 	// This address has 0 deposits
-	err := scr.AddScanAddress("1LcEkgX8DCrQczLMVh9LDTRnkdVV2oun3A", CoinTypeBTC)
+	err := scr.AddScanAddress("1LcEkgX8DCrQczLMVh9LDTRnkdVV2oun3A", config.CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 0
 
 	// This address has:
 	// 1 deposit, in block 235206
 	// 1 deposit, in block 235207
-	err = scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA", CoinTypeBTC)
+	err = scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA", config.CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -240,7 +241,7 @@ func testBtcScannerRun(t *testing.T, scr *BTCScanner) {
 	// 47 deposits in block 235206
 	// 22 deposits, in block 235207
 	// 26 deposits, in block 235214
-	err = scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", CoinTypeBTC)
+	err = scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", config.CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 126
 
@@ -303,7 +304,7 @@ func testBtcScannerConfirmationsRequired(t *testing.T, btcDB *bolt.DB) {
 	// 26 deposits, in block 235214
 	// Only blocks 235205 and 235206 are processed, because blockCount is set
 	// to 235208 and the confirmations required is set to 2
-	err := scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", CoinTypeBTC)
+	err := scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", config.CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 78
 
@@ -351,7 +352,7 @@ func testBtcScannerDuplicateDepositScans(t *testing.T, btcDB *bolt.DB) {
 	// 1 deposit, in block 235206
 	// 1 deposit, in block 235207
 	scr := setupBtcScannerWithDB(t, btcDB, db)
-	err := scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA", CoinTypeBTC)
+	err := scr.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA", config.CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -371,7 +372,7 @@ func testBtcScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 	// NOTE: This data is fake, but the addresses and Txid are valid
 	unprocessedDeposits := []Deposit{
 		{
-			CoinType:  CoinTypeBTC,
+			CoinType:  config.CoinTypeBTC,
 			Address:   "1LEkderht5M5yWj82M87bEd4XDBsczLkp9",
 			Value:     1e8,
 			Height:    23505,
@@ -380,7 +381,7 @@ func testBtcScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 			Processed: false,
 		},
 		{
-			CoinType:  CoinTypeBTC,
+			CoinType:  config.CoinTypeBTC,
 			Address:   "16Lr3Zhjjb7KxeDxGPUrh3DMo29Lstif7j",
 			Value:     10e8,
 			Height:    23505,
@@ -391,7 +392,7 @@ func testBtcScannerLoadUnprocessedDeposits(t *testing.T, btcDB *bolt.DB) {
 	}
 
 	processedDeposit := Deposit{
-		CoinType:  CoinTypeBTC,
+		CoinType:  config.CoinTypeBTC,
 		Address:   "1GH9ukgyetEJoWQFwUUeLcWQ8UgVgipLKb",
 		Value:     100e8,
 		Height:    23517,
@@ -430,7 +431,7 @@ func testBtcScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 	// 47 deposits in block 235206
 	// 22 deposits, in block 235207
 	// 26 deposits, in block 235214
-	err := scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", CoinTypeBTC)
+	err := scr.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", config.CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 126
 
@@ -460,7 +461,7 @@ func testBtcScannerProcessDepositError(t *testing.T, btcDB *bolt.DB) {
 				}
 
 				require.False(t, d.Processed)
-				require.Equal(t, CoinTypeBTC, d.CoinType)
+				require.Equal(t, config.CoinTypeBTC, d.CoinType)
 				require.Equal(t, "1LEkderht5M5yWj82M87bEd4XDBsczLkp9", d.Address)
 				require.NotEmpty(t, d.Value)
 				require.NotEmpty(t, d.Height)

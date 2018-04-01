@@ -234,5 +234,5 @@ func TestAddrManager(t *testing.T) {
 
 	//check not exists cointype
 	_, err = addrManager.NewAddress("OTHERTYPE")
-	require.Equal(t, ErrCoinTypeNotExists, err)
+	require.Equal(t, ErrCoinTypeNotRegistered, err)
 }

@@ -17,7 +17,6 @@ import (
 	"github.com/skycoin/skycoin/src/util/droplet"
 
 	"github.com/skycoin/teller/src/config"
-	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/util/logger"
 )
 
@@ -341,9 +340,9 @@ func (p *Passthrough) handleDepositInfoState(di DepositInfo) (DepositInfo, error
 		return di, err
 	}
 
-	if di.CoinType != scanner.CoinTypeBTC {
-		log.WithError(scanner.ErrUnsupportedCoinType).Error("Only CoinTypeBTC deposits are accepted for passthrough")
-		return di, scanner.ErrUnsupportedCoinType
+	if di.CoinType != config.CoinTypeBTC {
+		log.WithError(config.ErrUnsupportedCoinType).Error("Only CoinTypeBTC deposits are accepted for passthrough")
+		return di, config.ErrUnsupportedCoinType
 	}
 
 	switch di.Status {
@@ -541,9 +540,9 @@ func (p *Passthrough) fixUnrecordedOrders() ([]DepositInfo, error) {
 func (p *Passthrough) placeOrder(di DepositInfo) (c2cx.OrderID, error) {
 	log := p.log.WithField("depositInfo", di)
 
-	if di.CoinType != scanner.CoinTypeBTC {
-		log.WithError(scanner.ErrUnsupportedCoinType).Error()
-		return 0, scanner.ErrUnsupportedCoinType
+	if di.CoinType != config.CoinTypeBTC {
+		log.WithError(config.ErrUnsupportedCoinType).Error()
+		return 0, config.ErrUnsupportedCoinType
 	}
 
 	// The CustomerID should be saved on the DepositInfo prior to calling placeOrder

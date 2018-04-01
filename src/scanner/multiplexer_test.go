@@ -9,27 +9,28 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/util/testutil"
 )
 
 var (
-	ErrBtcScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeBTC)
-	ErrEthScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeETH)
-	ErrSkyScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", CoinTypeSKY)
-	ErrNilScanner              = errors.New("nil scanner")
+	errBtcScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", config.CoinTypeBTC)
+	errEthScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", config.CoinTypeETH)
+	errSkyScannerAlreadyExists = fmt.Errorf("scanner of coinType %s already exists", config.CoinTypeSKY)
+	errNilScanner              = errors.New("nil scanner")
 )
 
 func testAddBtcScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	var nDeposits int64
 	// This address has 0 deposits
-	err := m.AddScanAddress("1LcEkgX8DCrQczLMVh9LDTRnkdVV2oun3A", CoinTypeBTC)
+	err := m.AddScanAddress("1LcEkgX8DCrQczLMVh9LDTRnkdVV2oun3A", config.CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 0
 
 	// This address has:
 	// 1 deposit, in block 235206
 	// 1 deposit, in block 235207
-	err = m.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA", CoinTypeBTC)
+	err = m.AddScanAddress("1N8G4JM8krsHLQZjC51R7ZgwDyihmgsQYA", config.CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -38,7 +39,7 @@ func testAddBtcScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	// 47 deposits in block 235206
 	// 22 deposits, in block 235207
 	// 26 deposits, in block 235214
-	err = m.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", CoinTypeBTC)
+	err = m.AddScanAddress("1LEkderht5M5yWj82M87bEd4XDBsczLkp9", config.CoinTypeBTC)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 126
 
@@ -48,19 +49,19 @@ func testAddEthScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	var nDeposits int64
 
 	// This address has 0 deposits
-	err := m.AddScanAddress("0x2cf014d432e92685ef1cf7bc7967a4e4debca092", CoinTypeETH)
+	err := m.AddScanAddress("0x2cf014d432e92685ef1cf7bc7967a4e4debca092", config.CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 0
 
 	// This address has:
 	// 1 deposit, in block 2325212
-	err = m.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", CoinTypeETH)
+	err = m.AddScanAddress("0x87b127ee022abcf9881b9bad6bb6aac25229dff0", config.CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
 	// This address has:
 	// 9 deposits in block 2325213
-	err = m.AddScanAddress("0xbfc39b6f805a9e40e77291aff27aee3c96915bdd", CoinTypeETH)
+	err = m.AddScanAddress("0xbfc39b6f805a9e40e77291aff27aee3c96915bdd", config.CoinTypeETH)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 9
 
@@ -69,30 +70,30 @@ func testAddEthScanAddresses(t *testing.T, m *Multiplexer) int64 {
 
 func testAddBtcScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*BTCScanner, func()) {
 	scr, shutdown := setupBtcScanner(t, db)
-	err := m.AddScanner(scr, CoinTypeBTC)
+	err := m.AddScanner(scr, config.CoinTypeBTC)
 	require.NoError(t, err)
 	count := m.GetScannerCount()
 
 	//add btc again, should be error
-	err = m.AddScanner(scr, CoinTypeBTC)
-	require.Equal(t, ErrBtcScannerAlreadyExists, err)
+	err = m.AddScanner(scr, config.CoinTypeBTC)
+	require.Equal(t, errBtcScannerAlreadyExists, err)
 	//scanner count no change
 	require.Equal(t, count, m.GetScannerCount())
 
 	//add wrong scanner
-	err = m.AddScanner(nil, CoinTypeBTC)
-	require.Equal(t, ErrNilScanner, err)
+	err = m.AddScanner(nil, config.CoinTypeBTC)
+	require.Equal(t, errNilScanner, err)
 	return scr, shutdown
 }
 
 func testAddEthScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*ETHScanner, func()) {
 	ethscr, ethshutdown := setupEthScanner(t, db)
 
-	err := m.AddScanner(ethscr, CoinTypeETH)
+	err := m.AddScanner(ethscr, config.CoinTypeETH)
 	require.NoError(t, err)
 	//add eth again
-	err = m.AddScanner(ethscr, CoinTypeETH)
-	require.Equal(t, ErrEthScannerAlreadyExists, err)
+	err = m.AddScanner(ethscr, config.CoinTypeETH)
+	require.Equal(t, errEthScannerAlreadyExists, err)
 	return ethscr, ethshutdown
 }
 
@@ -100,12 +101,12 @@ func testAddSkyScanAddresses(t *testing.T, m *Multiplexer) int64 {
 	var nDeposits int64
 	// This address has 0 deposits
 	// 1 deposit, in block 176
-	err := m.AddScanAddress("v4qF7Ceq276tZpTS3HKsZbDguMAcAGAG1q", CoinTypeSKY)
+	err := m.AddScanAddress("v4qF7Ceq276tZpTS3HKsZbDguMAcAGAG1q", config.CoinTypeSKY)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 1
 
 	// 2 deposits in block 117
-	err = m.AddScanAddress("8MQsjc5HYbSjPTZikFZYeHHDtLungBEHYS", CoinTypeSKY)
+	err = m.AddScanAddress("8MQsjc5HYbSjPTZikFZYeHHDtLungBEHYS", config.CoinTypeSKY)
 	require.NoError(t, err)
 	nDeposits = nDeposits + 2
 
@@ -114,13 +115,13 @@ func testAddSkyScanAddresses(t *testing.T, m *Multiplexer) int64 {
 
 func testAddSkyScanner(t *testing.T, db *bolt.DB, m *Multiplexer) (*SKYScanner, func()) {
 	scr, shutdown := setupSkyScanner(t, db)
-	err := m.AddScanner(scr, CoinTypeSKY)
+	err := m.AddScanner(scr, config.CoinTypeSKY)
 	require.NoError(t, err)
 	count := m.GetScannerCount()
 
 	//add sky again, should be error
-	err = m.AddScanner(scr, CoinTypeSKY)
-	require.Equal(t, ErrSkyScannerAlreadyExists, err)
+	err = m.AddScanner(scr, config.CoinTypeSKY)
+	require.Equal(t, errSkyScannerAlreadyExists, err)
 	//scanner count no change
 	require.Equal(t, count, m.GetScannerCount())
 

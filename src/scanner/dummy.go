@@ -11,6 +11,7 @@ import (
 
 	"github.com/skycoin/skycoin/src/cipher"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/util/httputil"
 )
 
@@ -86,7 +87,7 @@ func (s *DummyScanner) BindHandlers(mux *http.ServeMux) {
 func (s *DummyScanner) addDepositHandler(w http.ResponseWriter, r *http.Request) {
 	coinType := r.FormValue("coin")
 	if coinType == "" {
-		coinType = CoinTypeBTC
+		coinType = config.CoinTypeBTC
 	}
 
 	addr := r.FormValue("addr")

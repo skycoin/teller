@@ -19,6 +19,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/util/mathutil"
 )
 
@@ -31,7 +32,7 @@ type ETHScanner struct {
 
 // NewETHScanner creates scanner instance
 func NewETHScanner(log logrus.FieldLogger, store Storer, eth EthRPCClient, cfg Config) (*ETHScanner, error) {
-	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.eth"), CoinTypeETH, cfg)
+	bs := NewBaseScanner(store, log.WithField("prefix", "scanner.eth"), config.CoinTypeETH, cfg)
 
 	return &ETHScanner{
 		ethClient: eth,
@@ -63,7 +64,7 @@ func (s *ETHScanner) scanBlock(block *CommonBlock) (int, error) {
 
 	log.Debug("Scanning block")
 
-	dvs, err := s.base.GetStorer().ScanBlock(block, CoinTypeETH)
+	dvs, err := s.base.GetStorer().ScanBlock(block, config.CoinTypeETH)
 	if err != nil {
 		log.WithError(err).Error("store.ScanBlock failed")
 		return 0, err
@@ -146,7 +147,7 @@ func (s *ETHScanner) AddScanAddress(addr, coinType string) error {
 
 // GetScanAddresses returns the deposit addresses that need to scan
 func (s *ETHScanner) GetScanAddresses() ([]string, error) {
-	return s.base.GetStorer().GetScanAddresses(CoinTypeETH)
+	return s.base.GetStorer().GetScanAddresses(config.CoinTypeETH)
 }
 
 // GetDeposit returns deposit value channel.

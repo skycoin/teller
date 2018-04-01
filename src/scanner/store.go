@@ -8,17 +8,11 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/sirupsen/logrus"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/util/dbutil"
 )
 
-const (
-	// CoinTypeBTC is BTC coin type
-	CoinTypeBTC = "BTC"
-	// CoinTypeETH is ETH coin type
-	CoinTypeETH = "ETH"
-	// CoinTypeSKY is SKY coin type
-	CoinTypeSKY = "SKY"
-)
+const scanMetaBktPrefix = "scan_meta"
 
 var (
 	// DepositBkt maps a BTC transaction to a Deposit
@@ -26,25 +20,20 @@ var (
 
 	// deposit address bucket
 	depositAddressesKey = "deposit_addresses"
-
-	// ErrUnsupportedCoinType unsupported coin type
-	ErrUnsupportedCoinType = errors.New("unsupported coin type")
 )
-
-const scanMetaBktPrefix = "scan_meta"
 
 // GetScanMetaBkt return the name of the scan_meta bucket for a given coin type
 func GetScanMetaBkt(coinType string) ([]byte, error) {
 	var suffix string
 	switch coinType {
-	case CoinTypeBTC:
+	case config.CoinTypeBTC:
 		suffix = "btc"
-	case CoinTypeETH:
+	case config.CoinTypeETH:
 		suffix = "eth"
-	case CoinTypeSKY:
+	case config.CoinTypeSKY:
 		suffix = "sky"
 	default:
-		return nil, ErrUnsupportedCoinType
+		return nil, config.ErrUnsupportedCoinType
 	}
 
 	bktName := fmt.Sprintf("%s_%s", scanMetaBktPrefix, suffix)
@@ -64,7 +53,7 @@ func MustGetScanMetaBkt(coinType string) []byte {
 func init() {
 	// Check that GetScanMetaBkt handles all possible coin types
 	// TODO -- do similar init checks for other switches over coinType
-	for _, ct := range GetCoinTypes() {
+	for _, ct := range config.CoinTypes {
 		name := MustGetScanMetaBkt(ct)
 		if len(name) == 0 {
 			panic(fmt.Sprintf("GetScanMetaBkt(%s) returned empty", ct))
@@ -136,7 +125,7 @@ func NewStore(log logrus.FieldLogger, db *bolt.DB) (*Store, error) {
 	}, nil
 }
 
-//AddSupportedCoin create scaninfo bucket and callback for specified coin
+// AddSupportedCoin create scaninfo bucket and callback for specified coin
 func (s *Store) AddSupportedCoin(coinType string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		scanBktFullName, err := GetScanMetaBkt(coinType)

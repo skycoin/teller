@@ -26,7 +26,6 @@ import (
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/scanner"
 	"github.com/skycoin/teller/src/sender"
 	"github.com/skycoin/teller/src/util/httputil"
 	"github.com/skycoin/teller/src/util/logger"
@@ -389,19 +388,19 @@ func BindHandler(s *HTTPServer) http.HandlerFunc {
 		}
 
 		switch bindReq.CoinType {
-		case scanner.CoinTypeBTC:
+		case config.CoinTypeBTC:
 			if !s.cfg.BtcScanner.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeBTC))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", config.CoinTypeBTC))
 				return
 			}
-		case scanner.CoinTypeETH:
+		case config.CoinTypeETH:
 			if !s.cfg.EthScanner.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeETH))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", config.CoinTypeETH))
 				return
 			}
-		case scanner.CoinTypeSKY:
+		case config.CoinTypeSKY:
 			if !s.cfg.SkyScanner.Enabled {
-				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", scanner.CoinTypeSKY))
+				errorResponse(ctx, w, http.StatusBadRequest, fmt.Errorf("%s not enabled", config.CoinTypeSKY))
 				return
 			}
 		case "":

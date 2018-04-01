@@ -11,66 +11,53 @@ import (
 	"github.com/skycoin/teller/src/util/mathutil"
 )
 
-// Status deposit Status
-type Status int8
-
 const (
 	// StatusWaitDeposit deposit has not occurred
-	StatusWaitDeposit Status = iota
-	// StatusWaitSend deposit is ready for send
-	StatusWaitSend
-	// StatusWaitConfirm coins sent, but not confirmed yet
-	StatusWaitConfirm
-	// StatusDone coins sent and confirmed
-	StatusDone
-	// StatusUnknown fallback value
-	StatusUnknown
+	StatusWaitDeposit = "waiting_deposit"
 	// StatusWaitDecide initial deposit receive state
-	StatusWaitDecide
+	StatusWaitDecide = "waiting_decide"
+	// StatusWaitSend deposit is ready for send
+	StatusWaitSend = "waiting_send"
+	// StatusWaitConfirm coins sent, but not confirmed yet
+	StatusWaitConfirm = "waiting_confirm"
 	// StatusWaitPassthrough wait to buy from 3rd party exchange
-	StatusWaitPassthrough
+	StatusWaitPassthrough = "waiting_passthrough"
 	// StatusWaitPassthroughOrderComplete wait for order placed on 3rd party exchange to complete
-	StatusWaitPassthroughOrderComplete
+	StatusWaitPassthroughOrderComplete = "waiting_passthrough_order_complete"
+	// StatusDone coins sent and confirmed
+	StatusDone = "done"
+	// StatusUnknown fallback value
+	StatusUnknown = "unknown"
 
 	// PassthroughExchangeC2CX for deposits using passthrough to c2cx.com
 	PassthroughExchangeC2CX = "c2cx"
 )
 
-var statusString = []string{
-	StatusWaitDeposit:                  "waiting_deposit",
-	StatusWaitSend:                     "waiting_send",
-	StatusWaitConfirm:                  "waiting_confirm",
-	StatusDone:                         "done",
-	StatusUnknown:                      "unknown",
-	StatusWaitDecide:                   "waiting_decide",
-	StatusWaitPassthrough:              "waiting_passthrough",
-	StatusWaitPassthroughOrderComplete: "waiting_passthrough_order_complete",
-}
+var (
+	// ErrInvalidStatus is returned for invalid statuses
+	ErrInvalidStatus = errors.New("Invalid status")
 
-func (s Status) String() string {
-	return statusString[s]
-}
-
-// NewStatusFromStr create status from string
-func NewStatusFromStr(st string) Status {
-	switch st {
-	case statusString[StatusWaitDeposit]:
-		return StatusWaitDeposit
-	case statusString[StatusWaitSend]:
-		return StatusWaitSend
-	case statusString[StatusWaitConfirm]:
-		return StatusWaitConfirm
-	case statusString[StatusDone]:
-		return StatusDone
-	case statusString[StatusWaitDecide]:
-		return StatusWaitDecide
-	case statusString[StatusWaitPassthrough]:
-		return StatusWaitPassthrough
-	case statusString[StatusWaitPassthroughOrderComplete]:
-		return StatusWaitPassthroughOrderComplete
-	default:
-		return StatusUnknown
+	// Statuses is all valid statuses
+	Statuses = []string{
+		StatusWaitDeposit,
+		StatusWaitSend,
+		StatusWaitConfirm,
+		StatusDone,
+		StatusWaitDecide,
+		StatusWaitPassthrough,
+		StatusWaitPassthroughOrderComplete,
 	}
+)
+
+// ValidateStatus returns an error if a status is invalid
+func ValidateStatus(s string) error {
+	for _, k := range Statuses {
+		if k == s {
+			return nil
+		}
+	}
+
+	return ErrInvalidStatus
 }
 
 // BoundAddress records information about an address binding
@@ -83,24 +70,24 @@ type BoundAddress struct {
 
 // DepositInfo records the deposit info
 type DepositInfo struct {
-	Seq            uint64
-	UpdatedAt      int64
-	Status         Status // TODO -- migrate to string statuses?
-	CoinType       string
-	SkyAddress     string
-	BuyMethod      string
-	DepositAddress string
-	DepositID      string
-	Txid           string
-	ConversionRate string // SKY per other coin, as a decimal string (allows integers, floats, fractions)
-	DepositValue   int64  // Deposit amount. Should be measured in the smallest unit possible (e.g. satoshis for BTC)
-	SkySent        uint64 // SKY sent, measured in droplets
-	Passthrough    PassthroughData
-	Error          string // An error that occurred during processing
+	Seq            uint64          `json:"seq"`
+	UpdatedAt      int64           `json:"updated_at"`
+	Status         string          `json:"status"`
+	CoinType       string          `json:"coin_type"`
+	SkyAddress     string          `json:"sky_address"`
+	BuyMethod      string          `json:"buy_method"`
+	DepositAddress string          `json:"deposit_address"`
+	DepositID      string          `json:"deposit_id"`
+	Txid           string          `json:"txid"`
+	ConversionRate string          `json:"conversion_rate"` // SKY per other coin, as a decimal string (allows integers, floats, fractions)
+	DepositValue   int64           `json:"deposit_value"`   // Deposit amount. Should be measured in the smallest unit possible (e.g. satoshis for BTC)
+	SkySent        uint64          `json:"sky_sent"`        // SKY sent, measured in droplets
+	Passthrough    PassthroughData `json:"passthrough"`
+	Error          string          `json:"error"` // An error that occurred during processing
 	// The original Deposit is saved for the records, in case there is a mistake.
 	// Do not use this data directly.  All necessary data is copied to the top level
 	// of DepositInfo (e.g. DepositID, DepositAddress, DepositValue, CoinType).
-	Deposit scanner.Deposit
+	Deposit scanner.Deposit `json:"deposit"`
 }
 
 // PassthroughData encapsulates data used for OTC passthrough
@@ -125,8 +112,8 @@ type PassthroughOrder struct {
 
 // DepositStats records overall statistics about deposits
 type DepositStats struct {
-	TotalBTCReceived int64 `json:"total_btc_received"`
-	TotalSKYSent     int64 `json:"total_sky_sent"`
+	Received map[string]int64 `json:"received"`
+	Sent     int64            `json:"sent"`
 }
 
 // ValidateForStatus does a consistency check of the data based upon the Status value
@@ -145,7 +132,7 @@ func (di DepositInfo) ValidateForStatus() error {
 		if di.DepositID == "" {
 			return errors.New("DepositID missing")
 		}
-		if di.CoinType == scanner.CoinTypeBTC && !isValidBtcTx(di.DepositID) {
+		if di.CoinType == config.CoinTypeBTC && !isValidBtcTx(di.DepositID) {
 			return fmt.Errorf("Invalid DepositID value \"%s\"", di.DepositID)
 		}
 		if di.DepositValue == 0 {
@@ -210,10 +197,13 @@ func (di DepositInfo) ValidateForStatus() error {
 
 		return checkWaitSend()
 
+	case "":
+		return errors.New("DepositInfo is missing status")
+
 	case StatusWaitDeposit, StatusUnknown:
 		fallthrough
 	default:
-		return fmt.Errorf("DepositInfo should not have status %s[%d]", di.Status.String(), di.Status)
+		return fmt.Errorf("DepositInfo should not have status %s", di.Status)
 	}
 }
 

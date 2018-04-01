@@ -83,6 +83,7 @@ func (p *DirectBuy) runUpdateStatus() {
 			return
 		case d := <-p.receiver.Deposits():
 			updatedDeposit, err := p.updateStatus(d)
+			p.setStatus(err)
 			if err != nil {
 				msg := "updateStatus failed. This deposit will not be reprocessed until teller is restarted."
 				log.WithFields(logrus.Fields{

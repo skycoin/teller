@@ -12,8 +12,8 @@ import (
 
 	"github.com/skycoin/skycoin/src/cipher"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
-	"github.com/skycoin/teller/src/scanner"
 )
 
 const usage = `dbfix <dbfile>
@@ -82,7 +82,7 @@ func fixBindAddressBkt(db *bolt.DB) error {
 
 	var invalidBtcAddrs [][]byte
 	if err := db.View(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(exchange.MustGetBindAddressBkt(scanner.CoinTypeBTC))
+		bkt := tx.Bucket(exchange.MustGetBindAddressBkt(config.CoinTypeBTC))
 		if bkt == nil {
 			return errors.New("BindAddressBkt not found in db")
 		}
@@ -102,7 +102,7 @@ func fixBindAddressBkt(db *bolt.DB) error {
 
 	fmt.Printf("Repairing BindAddressBkt, %d invalid addresses\n", len(invalidBtcAddrs))
 	return db.Update(func(tx *bolt.Tx) error {
-		bkt := tx.Bucket(exchange.MustGetBindAddressBkt(scanner.CoinTypeBTC))
+		bkt := tx.Bucket(exchange.MustGetBindAddressBkt(config.CoinTypeBTC))
 		for _, a := range invalidBtcAddrs {
 			v := bkt.Get(a)
 			if v == nil {

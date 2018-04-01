@@ -39,9 +39,9 @@ func (e *fakeExchanger) GetDepositStatuses(skyAddr string) ([]exchange.DepositSt
 	return args.Get(0).([]exchange.DepositStatus), args.Error(1)
 }
 
-func (e *fakeExchanger) GetDepositStatusDetail(flt exchange.DepositFilter) ([]exchange.DepositStatusDetail, error) {
+func (e *fakeExchanger) GetDeposits(flt exchange.DepositFilter) ([]exchange.DepositInfo, error) {
 	args := e.Called(flt)
-	return args.Get(0).([]exchange.DepositStatusDetail), args.Error(1)
+	return args.Get(0).([]exchange.DepositInfo), args.Error(1)
 }
 
 func (e *fakeExchanger) GetBindNum(skyAddr string) (int, error) {

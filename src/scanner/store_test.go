@@ -8,6 +8,7 @@ import (
 	"github.com/boltdb/bolt"
 	"github.com/stretchr/testify/require"
 
+	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/util/dbutil"
 	"github.com/skycoin/teller/src/util/testutil"
 )
@@ -29,11 +30,11 @@ func TestNewStore(t *testing.T) {
 
 	s, err := NewStore(log, db)
 	require.NoError(t, err)
-	err = s.AddSupportedCoin(CoinTypeBTC)
+	err = s.AddSupportedCoin(config.CoinTypeBTC)
 	require.NoError(t, err)
 
 	err = s.db.View(func(tx *bolt.Tx) error {
-		scanBktFullName := MustGetScanMetaBkt(CoinTypeBTC)
+		scanBktFullName := MustGetScanMetaBkt(config.CoinTypeBTC)
 		bkt := tx.Bucket(scanBktFullName)
 		require.NotNil(t, bkt)
 
@@ -52,7 +53,7 @@ func TestGetDepositAddresses(t *testing.T) {
 
 	s, err := NewStore(log, db)
 	require.NoError(t, err)
-	err = s.AddSupportedCoin(CoinTypeBTC)
+	err = s.AddSupportedCoin(config.CoinTypeBTC)
 	require.NoError(t, err)
 
 	var addrs = []string{
@@ -62,11 +63,11 @@ func TestGetDepositAddresses(t *testing.T) {
 	}
 
 	for _, a := range addrs {
-		err := s.AddScanAddress(a, CoinTypeBTC)
+		err := s.AddScanAddress(a, config.CoinTypeBTC)
 		require.NoError(t, err)
 	}
 
-	as, err := s.GetScanAddresses(CoinTypeBTC)
+	as, err := s.GetScanAddresses(config.CoinTypeBTC)
 	require.NoError(t, err)
 
 	sort.Strings(as)
@@ -77,7 +78,7 @@ func TestGetDepositAddresses(t *testing.T) {
 	// check db
 	err = s.db.View(func(tx *bolt.Tx) error {
 		var as []string
-		scanBktFullName := MustGetScanMetaBkt(CoinTypeBTC)
+		scanBktFullName := MustGetScanMetaBkt(config.CoinTypeBTC)
 		err := dbutil.GetBucketObject(tx, scanBktFullName, depositAddressesKey, &as)
 		require.NoError(t, err)
 
@@ -131,17 +132,17 @@ func TestAddDepositAddress(t *testing.T) {
 
 			s, err := NewStore(log, db)
 			require.NoError(t, err)
-			err = s.AddSupportedCoin(CoinTypeBTC)
+			err = s.AddSupportedCoin(config.CoinTypeBTC)
 			require.NoError(t, err)
 
 			err = db.Update(func(tx *bolt.Tx) error {
-				scanBktFullName := MustGetScanMetaBkt(CoinTypeBTC)
+				scanBktFullName := MustGetScanMetaBkt(config.CoinTypeBTC)
 				return dbutil.PutBucketValue(tx, scanBktFullName, depositAddressesKey, tc.initAddrs)
 			})
 			require.NoError(t, err)
 
 			for _, a := range tc.addAddrs {
-				if er := s.AddScanAddress(a, CoinTypeBTC); er != nil {
+				if er := s.AddScanAddress(a, config.CoinTypeBTC); er != nil {
 					err = er
 				}
 			}
@@ -181,7 +182,7 @@ func TestPushDeposit(t *testing.T) {
 
 	s, err := NewStore(log, db)
 	require.NoError(t, err)
-	err = s.AddSupportedCoin(CoinTypeBTC)
+	err = s.AddSupportedCoin(config.CoinTypeBTC)
 	require.NoError(t, err)
 
 	err = db.Update(func(tx *bolt.Tx) error {
