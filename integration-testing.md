@@ -1,5 +1,9 @@
 # Integration testing checklist
 
+A btcd simulator is available in `cmd/btcd/btcd.go`. See the [btcd simulator README](cmd/btcd/README.md).
+These tests should be performed with the btcd simulator,
+otherwise you cannot control the deposit conditions and would have to wait a long time for the real BTC network.
+
 ## If the BTC deposit is an exact multiple of the BTC/SKY rate, the SKY sent is exact
 
 * Start teller with a btcd node and skycoin node running
