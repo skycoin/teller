@@ -13,12 +13,11 @@ go run cmd/btcd/btcd.go
 The first time it is run, it generates self-signed certificates to use.
 You can reuse these with the `-cert` and `-key` parameters.
 
-Configure teller to use the cert file for its btcd RPC.
+## Configuring teller to use the btcd simulator
 
-Username and password are ignored by the simulated btcd.
-
-The teller config's `btc_scanner.initial_scan_height` must be set to `492478`.
-The btcd simulator begins returning blocks from this height.
+* `btc_scanner.initial_scan_height` must be set to `492478`. The btcd simulator begins returning blocks from this height.
+* `dummy.scanner` must be `false`
+* `btc_rpc.cert` must be the cert file used by the btcd simulator
 
 ## API
 
