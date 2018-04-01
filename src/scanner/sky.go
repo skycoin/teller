@@ -8,6 +8,7 @@ import (
 	"github.com/skycoin/skycoin/src/gui"
 	"github.com/skycoin/skycoin/src/util/droplet"
 	"github.com/skycoin/skycoin/src/visor"
+
 	"github.com/skycoin/teller/src/config"
 )
 

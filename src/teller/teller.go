@@ -10,11 +10,12 @@ import (
 
 	"github.com/boltdb/bolt"
 
+	"fmt"
+	"time"
+
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
-	"strings"
-	"time"
 )
 
 var (
@@ -80,12 +81,13 @@ func (s *Teller) Shutdown() {
 	<-s.done
 }
 
+// Backup starts a timestamped backup download
 func (s *Teller) Backup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := s.db.View(func(tx *bolt.Tx) error {
 			w.Header().Set("Content-Type", "application/octet-stream")
-			w.Header().Set("Content-Disposition", `attachment; ` +
-			"teller-"+ strconv.Itoa(int(time.Now().Unix())) + ".db" )
+			w.Header().Set("Content-Disposition",
+				fmt.Sprintf(`attachment; filename="%s"`, "teller-"+strconv.Itoa(int(time.Now().Unix()))+".db"))
 			w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
 			_, err := tx.WriteTo(w)
 			return err

@@ -44,6 +44,7 @@
     - [Deposits By Status](#deposits-by-status)
     - [Deposit Errors](#deposit-errors)
     - [Accounting](#accounting)
+    - [Backup](#backup)
 - [Code linting](#code-linting)
 - [Run tests](#run-tests)
 - [Database structure](#database-structure)
@@ -894,6 +895,20 @@ Response:
     }
 }
 ```
+
+### Backup
+```sh
+Method: GET
+URI: /api/backup
+```
+
+Starts a backup download
+
+Example:
+```sh
+curl -o teller-$(date +%s).db http://localhost:7711/api/backup
+```
+
 
 ## Code linting
 

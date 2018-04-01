@@ -40,6 +40,7 @@ type DepositStatusGetter interface {
 	ErroredDeposits() ([]exchange.DepositInfo, error)
 }
 
+// Backuper interface provides an API to access the backup func of teller
 type Backuper interface {
 	Backup() http.HandlerFunc
 }
@@ -58,7 +59,7 @@ type Monitor struct {
 	cfg                 config.Config
 	ln                  *http.Server
 	Backuper
-	quit                chan struct{}
+	quit chan struct{}
 }
 
 // New creates monitor service

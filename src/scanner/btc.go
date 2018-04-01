@@ -14,6 +14,7 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcutil"
 	"github.com/sirupsen/logrus"
+
 	"github.com/skycoin/teller/src/config"
 )
 
