@@ -4,11 +4,9 @@
 
 debug = true
 # logfile = "./teller.log"  # logfile can be an absolute path or relative to the working directory
-# dbfile = "teller.db"  # dbfile is saved inside ~/.teller-skycoin, do not include a path
-# pidfile = ""  # optional pidfile path
+dbfile = "teller-passthrough-test.db"  # dbfile is saved inside ~/.teller-skycoin, do not include a path
 btc_addresses = "example_btc_addresses.json" # REQUIRED: path to btc addresses file
 eth_addresses = "example_eth_addresses.json" # REQUIRED: path to eth addresses file
-sky_addresses = "example_sky_addresses.json" # REQUIRED: path to sky addresses file
 
 [teller]
 # max_bound_addrs = 5 # 0 means unlimited
@@ -18,50 +16,40 @@ sky_addresses = "example_sky_addresses.json" # REQUIRED: path to sky addresses f
 # address = "127.0.0.1:6430"
 
 [btc_rpc]
+# enabled = true
 # server = "127.0.0.1:8334"
-user = "" # REQUIRED if btc_scanner enabled
-pass = "" # REQUIRED if btc_scanner enabled
-cert = "" # REQUIRED if btc_scanner enabled
+user = "" # REQUIRED
+pass = "" # REQUIRED
+cert = "" # REQUIRED
 
 [eth_rpc]
 # enabled = false
-# server = "" # REQUIRED if eth_scanner enabled
-# port = "" # REQUIRED if eth_scanner enabled
+server = "" # REQUIRED
+port = "" # REQUIRED
 
 [btc_scanner]
-# enabled = true
 # scan_period = "20s"
 # initial_scan_height = 492478
 # confirmations_required = 1
-
 [eth_scanner]
-# enabled = false
 # scan_period = "5s"
-# initial_scan_height = 4654259
+# initial_scan_height =4654259
 # confirmations_required = 1
-
-[sky_scanner]
-# enabled = false
-# scan_period = "5s"
-# initial_scan_height = 17000
-# confirmations_required = 0
 
 [sky_exchanger]
 sky_btc_exchange_rate = "500" # REQUIRED: SKY/BTC exchange rate as a string, can be an int, float or a rational fraction
 sky_eth_exchange_rate = "100" # REQUIRED: SKY/ETH exchange rate as a string, can be an int, float or a rational fraction
-sky_sky_exchange_rate = "1" # REQUIRED: SKY/ETH exchange rate as a string, can be an int, float or a rational fraction
 wallet = "example.wlt" # REQUIRED: path to local hot wallet file
 # max_decimals = 3  # Number of decimal places to truncate SKY to
 # tx_confirmation_check_wait = "5s"
 # send_enabled = true # Disable this to disable sending of coins (all other processing functions normally)
-# buy_method = "direct" # Options are "direct" or "passthrough"
+buy_method = "passthrough" # Options are "direct" or "passthrough"
 
 [sky_exchanger.c2cx]
-key = "" # REQUIRED if buy_method = "passthrough"
-secret = "" # REQUIRED if buy_method = "passthrough"
-# request_failure_wait = "10s" # how long to wait after receiving a c2cx request error
-# ratelimit_wait = "30s" # how long to wait after being ratelimited by the c2cx API
-# check_order_wait = "2s" # how long to wait between requests to check order status on c2cx
+key = "AB26F5A7-12B0-433B-8620-993F763E5795" # REQUIRED if buy_method = "passthrough"
+secret = "A91BBA1B-5710-4A85-8330-85B41E557AEF" # REQUIRED if buy_method = "passthrough"
+# request_failure_wait = "10s"
+# ratelimit_wait = "30s"
 # btc_minimum_volume = "0.005"
 
 [web]
@@ -74,10 +62,10 @@ https_addr = "" # OPTIONAL: Serve on HTTPS
 auto_tls_host = "" # OPTIONAL: Hostname to use for automatic TLS certs. Used when tls_cert, tls_key unset
 tls_cert = ""
 tls_key = ""
-# cors_allowed = []  # Array of domains to allow in CORS requests
 
 [admin_panel]
 # host = "127.0.0.1:7711"
+
 
 [dummy]
 # fake sender and scanner with admin interface adding fake deposits,
