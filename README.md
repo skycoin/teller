@@ -50,6 +50,7 @@
 - [Database structure](#database-structure)
 - [Frontend development](#frontend-development)
 - [Integration testing](#integration-testing)
+    - [btcd simulator](#btcd-simulator)
 - [Monitoring logs](#monitoring-logs)
 - [Logrotate integration](#logrotate-integration)
 - [Passthrough notes](#passthrough-notes)
@@ -628,6 +629,8 @@ TODO
 A dummy scanner and sender API is available over `dummy.http_addr` if
 `dummy.scanner` or `dummy.sender` are enabled.
 
+The dummy API listens on `localhost:4121` by default.
+
 ### Scanner
 
 #### Deposit
@@ -1020,6 +1023,10 @@ Note: Maps a btc/eth txid:seq to scanner.Deposit struct
 See [frontend development README](./web/README.md)
 
 ## Integration testing
+
+### btcd simulator
+
+A btcd simulator is available in `cmd/btcd/btcd.go`. See the [btcd simulator README](cmd/btcd/README.md).
 
 See [integration testing checklist](./integration-testing.md)
 
