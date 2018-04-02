@@ -628,6 +628,8 @@ TODO
 A dummy scanner and sender API is available over `dummy.http_addr` if
 `dummy.scanner` or `dummy.sender` are enabled.
 
+The dummy API listens on `localhost:4121` by default.
+
 ### Scanner
 
 #### Deposit

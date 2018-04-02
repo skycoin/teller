@@ -19,14 +19,13 @@ sky_addresses = "example_sky_addresses.json" # REQUIRED: path to sky addresses f
 
 [btc_rpc]
 # server = "127.0.0.1:8334"
-user = "" # REQUIRED if btc_scanner enabled
-pass = "" # REQUIRED if btc_scanner enabled
-cert = "" # REQUIRED if btc_scanner enabled
+user = "" # REQUIRED
+pass = "" # REQUIRED
+cert = "" # REQUIRED
 
 [eth_rpc]
-# enabled = false
-# server = "" # REQUIRED if eth_scanner enabled
-# port = "" # REQUIRED if eth_scanner enabled
+server = "" # REQUIRED
+port = "" # REQUIRED
 
 [btc_scanner]
 # enabled = true
@@ -65,13 +64,13 @@ secret = "" # REQUIRED if buy_method = "passthrough"
 # btc_minimum_volume = "0.005"
 
 [web]
-# behind_proxy = false  # This must be set to true when behind a proxy for ratelimiting to work
-http_addr = "127.0.0.1:7071"
+behind_proxy = true  # This must be set to true when behind a proxy for ratelimiting to work
+http_addr = "127.0.0.1:7071" # assuming an SSH reverse proxy is bound to this port
 # static_dir = "./web/build"
-# throttle_max = 60
-# throttle_duration = "60s"
-https_addr = "" # OPTIONAL: Serve on HTTPS
-auto_tls_host = "" # OPTIONAL: Hostname to use for automatic TLS certs. Used when tls_cert, tls_key unset
+throttle_max = 60
+# throttle_duration = 60s
+https_addr = "127.0.0.1:7072" # assuming an SSH reverse proxy is bound to this port
+auto_tls_host = "otc.skycoin.net" # OPTIONAL: Hostname to use for automatic TLS certs. Used when tls_cert, tls_key unset
 tls_cert = ""
 tls_key = ""
 # cors_allowed = []  # Array of domains to allow in CORS requests
