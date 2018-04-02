@@ -14,6 +14,7 @@ import (
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
 	"github.com/skycoin/teller/src/util/testutil"
+	"github.com/boltdb/bolt"
 )
 
 type dummyBtcAddrMgr struct {
@@ -91,13 +92,6 @@ func (ds dummyScanAddrs) GetScanAddresses(string) ([]string, error) {
 	return []string{}, nil
 }
 
-type dummyBackuper struct {
-}
-
-func (bkper *dummyBackuper) Backup() http.HandlerFunc {
-	return nil
-}
-
 func TestRunMonitor(t *testing.T) {
 	dpis := []exchange.DepositInfo{
 		{
@@ -146,7 +140,7 @@ func TestRunMonitor(t *testing.T) {
 	err = addrMgr.PushGenerator(&dummySkyAddrMgr{12}, config.CoinTypeSKY)
 	require.NoError(t, err)
 
-	m := New(log, cfg, addrMgr, &dummyDps, &dummyScanAddrs{}, &dummyBackuper{})
+	m := New(log, cfg, addrMgr, &dummyDps, &dummyScanAddrs{}, &bolt.DB{})
 
 	done := make(chan struct{})
 	go func() {
