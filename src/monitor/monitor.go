@@ -9,6 +9,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"fmt"
+	"strconv"
+
+	"github.com/boltdb/bolt"
+
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
@@ -40,11 +45,6 @@ type DepositStatusGetter interface {
 	ErroredDeposits() ([]exchange.DepositInfo, error)
 }
 
-// Backuper interface provides an API to access the backup func of teller
-type Backuper interface {
-	Backup() http.HandlerFunc
-}
-
 // ScanAddressGetter get scanning address interface
 type ScanAddressGetter interface {
 	GetScanAddresses(string) ([]string, error)
@@ -58,19 +58,19 @@ type Monitor struct {
 	depositStatusGetter DepositStatusGetter
 	cfg                 config.Config
 	ln                  *http.Server
-	Backuper
-	quit chan struct{}
+	db                  *bolt.DB
+	quit                chan struct{}
 }
 
 // New creates monitor service
-func New(log logrus.FieldLogger, cfg config.Config, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter, bkper Backuper) *Monitor {
+func New(log logrus.FieldLogger, cfg config.Config, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter, db *bolt.DB) *Monitor {
 	return &Monitor{
 		log:                 log.WithField("prefix", "teller.monitor"),
 		cfg:                 cfg,
 		addrManager:         addrManager,
 		depositStatusGetter: dpstget,
 		scanAddressGetter:   sag,
-		Backuper:            bkper,
+		db:                  db,
 		quit:                make(chan struct{}),
 	}
 }
@@ -375,9 +375,22 @@ func (m *Monitor) accountingHandler() http.HandlerFunc {
 	}
 }
 
-// starts downloading a database backup
+// starts a timestamped database backup download
 // Method: GET
 // URI: /api/backup
 func (m *Monitor) backupHandler() http.HandlerFunc {
-	return m.Backup()
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := m.db.View(func(tx *bolt.Tx) error {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Disposition",
+				fmt.Sprintf(`attachment; filename="%s"`, "teller-"+strconv.Itoa(int(time.Now().Unix()))+".db"))
+			w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
+			_, err := tx.WriteTo(w)
+			return err
+		})
+		if err != nil {
+			m.log.Errorf("Backup failed: %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
 }

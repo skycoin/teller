@@ -407,12 +407,12 @@ func run() error {
 			return err
 		}
 	}
-	tellerServer := teller.New(log, exchangeClient, addrManager, cfg, db)
+	tellerServer := teller.New(log, exchangeClient, addrManager, cfg)
 
 	// Run the service
 	background("tellerServer.Run", errC, tellerServer.Run)
 	// Start monitor service
-	monitorService := monitor.New(log, cfg, addrManager, exchangeClient, scanStore, tellerServer)
+	monitorService := monitor.New(log, cfg, addrManager, exchangeClient, scanStore, db)
 	background("monitorService.Run", errC, monitorService.Run)
 
 	var finalErr error
