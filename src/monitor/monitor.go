@@ -9,6 +9,11 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"fmt"
+	"strconv"
+
+	"github.com/boltdb/bolt"
+
 	"github.com/skycoin/teller/src/addrs"
 	"github.com/skycoin/teller/src/config"
 	"github.com/skycoin/teller/src/exchange"
@@ -53,17 +58,19 @@ type Monitor struct {
 	depositStatusGetter DepositStatusGetter
 	cfg                 config.Config
 	ln                  *http.Server
+	db                  *bolt.DB
 	quit                chan struct{}
 }
 
 // New creates monitor service
-func New(log logrus.FieldLogger, cfg config.Config, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter) *Monitor {
+func New(log logrus.FieldLogger, cfg config.Config, addrManager AddrManager, dpstget DepositStatusGetter, sag ScanAddressGetter, db *bolt.DB) *Monitor {
 	return &Monitor{
 		log:                 log.WithField("prefix", "teller.monitor"),
 		cfg:                 cfg,
 		addrManager:         addrManager,
 		depositStatusGetter: dpstget,
 		scanAddressGetter:   sag,
+		db:                  db,
 		quit:                make(chan struct{}),
 	}
 }
@@ -102,6 +109,7 @@ func (m *Monitor) setupMux() *http.ServeMux {
 	mux.Handle("/api/deposits", httputil.LogHandler(m.log, m.depositsByStatusHandler()))
 	mux.Handle("/api/deposits/errored", httputil.LogHandler(m.log, m.erroredDepositsHandler()))
 	mux.Handle("/api/accounting", httputil.LogHandler(m.log, m.accountingHandler()))
+	mux.Handle("/api/backup", httputil.LogHandler(m.log, m.backupHandler()))
 	return mux
 }
 
@@ -363,6 +371,26 @@ func (m *Monitor) accountingHandler() http.HandlerFunc {
 		}); err != nil {
 			log.WithError(err).Error("Write JSON response failed")
 			return
+		}
+	}
+}
+
+// starts a timestamped database backup download
+// Method: GET
+// URI: /api/backup
+func (m *Monitor) backupHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := m.db.View(func(tx *bolt.Tx) error {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Disposition",
+				fmt.Sprintf(`attachment; filename="%s"`, "teller-"+strconv.Itoa(int(time.Now().Unix()))+".db"))
+			w.Header().Set("Content-Length", strconv.Itoa(int(tx.Size())))
+			_, err := tx.WriteTo(w)
+			return err
+		})
+		if err != nil {
+			m.log.Errorf("Backup failed: %v", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}
 }
