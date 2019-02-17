@@ -10,3 +10,8 @@ install:
 script:
   # The awk pipe removes duplicate lines from the log output, there can be many of them
   - make PARALLEL="-parallel=1" MIN_SHUTDOWN_WAIT="-min-shutdown-wait=12s" check | cut -d " " -f 2- | awk '!a[$0]++'
+
+notifications:
+  # https://github.com/kvld/travisci-telegram TravisCI Telegram Bot integration
+  webhooks: https://fathomless-fjord-24024.herokuapp.com/notify
+
